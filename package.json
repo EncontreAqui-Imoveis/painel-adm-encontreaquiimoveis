@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.11",
-    "axios": "^1.13.2",
+    "axios": "^1.13.5",
     "chart.js": "^4.5.1",
     "lucide-svelte": "^0.553.0",
     "svelte-routing": "^2.13.0",
