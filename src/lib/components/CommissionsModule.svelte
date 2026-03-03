@@ -214,6 +214,8 @@
       <label class="text-sm text-gray-700 dark:text-gray-200">
         Mês
         <select
+          id="commissions-month"
+          name="commissions_month"
           bind:value={selectedMonth}
           on:change={fetchCommissions}
           class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-950"
@@ -226,6 +228,8 @@
       <label class="text-sm text-gray-700 dark:text-gray-200">
         Ano
         <select
+          id="commissions-year"
+          name="commissions_year"
           bind:value={selectedYear}
           on:change={fetchCommissions}
           class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-950"
