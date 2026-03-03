@@ -1,8 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { baseURL } from './api';
-    import { authToken } from './store';
-    import { get } from 'svelte/store';
+    import { requestAdminDashboardStats } from './adminSessionService';
+    import { clearSessionToken, readSessionToken } from './sessionState';
     import KpiCard from './KpiCard.svelte';
 
     interface Stats {
@@ -13,24 +12,21 @@
 
     let stats: Stats | null = null;
     let isLoading = true;
-    const API_URL = baseURL;
     $: totalClients = stats ? Math.max(0, stats.totalUsers - stats.totalBrokers) : 0;
 
     onMount(async () => {
-        const token = get(authToken);
+        const token = readSessionToken();
         if (!token) {
-            authToken.set(null);
+            clearSessionToken();
             return;
         }
         try {
-            const response = await fetch(`${API_URL}/admin/dashboard/stats`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await requestAdminDashboardStats(token);
             if (!response.ok) throw new Error('Falha ao buscar estatísticas');
             stats = await response.json();
         } catch (error) {
             console.error(error);
-            authToken.set(null);
+            clearSessionToken();
         } finally {
             isLoading = false;
         }

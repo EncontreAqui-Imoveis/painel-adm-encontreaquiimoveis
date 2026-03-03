@@ -48,7 +48,10 @@
     sellerApprovalReason?: Record<string, unknown> | null;
     buyerApprovalReason?: Record<string, unknown> | null;
     commissionData?: Record<string, unknown> | null;
+    workflowMetadata?: Record<string, unknown> | null;
     documents?: ContractDocument[];
+    agencyName?: string | null;
+    agencyAddress?: string | null;
     createdAt?: string | null;
     updatedAt?: string | null;
   };
@@ -248,6 +251,47 @@
       default:
         return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
     }
+  }
+
+  function readWorkflowText(
+    contract: ContractItem | null,
+    key: string
+  ): string {
+    const metadata = contract?.workflowMetadata ?? null;
+    if (!metadata || typeof metadata !== 'object') {
+      return '';
+    }
+    const value = metadata[key];
+    return value == null ? '' : String(value).trim();
+  }
+
+  function hasInPersonSignatureChoice(contract: ContractItem | null): boolean {
+    return readWorkflowText(contract, 'signatureMethod').toLowerCase() === 'in_person';
+  }
+
+  function hasAgencySignedReceipt(contract: ContractItem | null): boolean {
+    return readWorkflowText(contract, 'agencySignedContractReceivedAt').length > 0;
+  }
+
+  function adminOverrideButtonLabel(): string {
+    return signedDocType === 'contrato_assinado'
+      ? 'Anexar Documento Físico Assinado (Admin Override)'
+      : 'Anexar Documento (Admin Override)';
+  }
+
+  function resolveAgencyAddress(contract: ContractItem | null): string {
+    const agencyName = String(contract?.agencyName ?? '').trim();
+    const agencyAddress = String(contract?.agencyAddress ?? '').trim();
+    if (agencyName && agencyAddress) {
+      return `${agencyName} - ${agencyAddress}`;
+    }
+    if (agencyAddress) {
+      return agencyAddress;
+    }
+    if (agencyName) {
+      return `${agencyName} (endereço não informado)`;
+    }
+    return 'Endereço da imobiliária não informado pela administração.';
   }
 
   function readReasonText(reasonPayload?: Record<string, unknown> | null): string {
@@ -878,9 +922,15 @@
     }}
     on:keydown={() => {}}
   >
-    <div class="my-8 w-full max-w-3xl max-h-[80vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900">
+    <div
+      class="my-8 w-full max-w-3xl max-h-[80vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="contract-modal-title"
+      aria-describedby="contract-modal-description"
+    >
       <div class="mb-4">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <h3 id="contract-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
           {modalMode === 'review_docs'
             ? 'Análise de Documentação'
             : modalMode === 'upload_draft'
@@ -889,7 +939,7 @@
             ? 'Finalizar Venda/Locação'
             : 'Contrato Finalizado'}
         </h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400">
+        <p id="contract-modal-description" class="text-sm text-gray-500 dark:text-gray-400">
           {selected.propertyCode ? selected.propertyCode : `#${selected.propertyId}`}
           {#if selected.propertyTitle}
             {' - '}{selected.propertyTitle}
@@ -987,11 +1037,14 @@
           {/if}
 
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+            <p
+              id="contract-doc-matrix-help"
+              class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
+            >
               Matriz de Documentos
             </p>
             <div class="mt-2 overflow-x-auto">
-              <table class="w-full min-w-[620px] text-sm">
+              <table class="w-full min-w-[620px] text-sm" aria-describedby="contract-doc-matrix-help">
                 <thead>
                   <tr class="border-b border-gray-200 dark:border-gray-700">
                     <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
@@ -1129,7 +1182,12 @@
 
           <div class="space-y-3 rounded-md border border-gray-200 p-3 dark:border-gray-700">
             {#if !isReadyToApprove}
-              <div class="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900/60 dark:bg-red-950/30">
+              <div
+                class="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900/60 dark:bg-red-950/30"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 <p class="text-sm font-medium text-red-700 dark:text-red-300">
                   Aprovação bloqueada.
                 </p>
@@ -1152,7 +1210,7 @@
                   disabled={sellerApprovalDisabled}
                   title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
                 >
-                  Aprovar
+                  Aprovar<span class="sr-only"> captador</span>
                 </Button>
                 <Button
                   size="sm"
@@ -1160,7 +1218,7 @@
                   className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
                   on:click={() => evaluateContractSide('seller', 'APPROVED_WITH_RES')}
                 >
-                  Aprovar c/ ressalvas
+                  Aprovar c/ ressalvas<span class="sr-only"> captador</span>
                 </Button>
                 <Button
                   size="sm"
@@ -1185,7 +1243,7 @@
                     disabled={evaluatingSide === 'buyer' || !isReadyToApprove}
                     title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
                   >
-                    Aprovar
+                    Aprovar<span class="sr-only"> vendedor</span>
                   </Button>
                   <Button
                     size="sm"
@@ -1193,7 +1251,7 @@
                     className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
                     on:click={() => evaluateContractSide('buyer', 'APPROVED_WITH_RES')}
                   >
-                    Aprovar c/ ressalvas
+                    Aprovar c/ ressalvas<span class="sr-only"> vendedor</span>
                   </Button>
                   <Button
                     size="sm"
@@ -1289,11 +1347,25 @@
           </div>
 
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            {#if hasInPersonSignatureChoice(selected) || hasAgencySignedReceipt(selected)}
+              <div class="mb-3 rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900/60 dark:bg-blue-950/30">
+                <p class="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  {#if hasAgencySignedReceipt(selected)}
+                    A imobiliária já registrou o recebimento do contrato físico assinado.
+                  {:else}
+                    O corretor informou que a assinatura será entregue presencialmente.
+                  {/if}
+                </p>
+                <p class="mt-2 text-sm text-blue-700 dark:text-blue-200">
+                  Endereço de referência: {resolveAgencyAddress(selected)}
+                </p>
+              </div>
+            {/if}
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-              Anexar Contrato Físico/Comprovantes
+              Admin Override: Contrato Físico/Comprovantes
             </p>
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-              Use esta área para anexar documentos físicos assinados diretamente pelo painel administrativo.
+              Use esta área para anexar documentos físicos assinados diretamente pelo painel administrativo, mesmo quando o corretor optar por entrega presencial.
             </p>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
               <label class="text-sm text-gray-700 dark:text-gray-200">
@@ -1331,7 +1403,7 @@
                 {#if uploadingSignedDoc}
                   <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                 {/if}
-                Anexar Documento Físico
+                {adminOverrideButtonLabel()}
               </Button>
             </div>
           </div>

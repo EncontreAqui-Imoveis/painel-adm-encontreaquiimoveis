@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
   import { exportToCsv } from '$lib/utils/exportUtils';
   import { api } from '$lib/apiClient';
   import { Input } from '$lib/components/ui/input';
@@ -8,7 +7,7 @@
   import { Loader2 } from 'lucide-svelte';
   import BrokerReviewModal from '$lib/components/BrokerReviewModal.svelte';
   import Pagination from '$lib/Pagination.svelte';
-  import { authToken } from './store';
+  import { clearSessionToken, hasSessionToken } from './sessionState';
   import { toast } from 'svelte-sonner';
   import type { Broker, BrokerDocuments, Property } from './types';
 
@@ -147,10 +146,9 @@
     isLoading = true;
     error = null;
 
-    const token = get(authToken);
-    if (!token) {
+    if (!hasSessionToken()) {
       error = 'Sessão expirada. Faca login novamente.';
-      authToken.set(null);
+      clearSessionToken();
       isLoading = false;
       return;
     }
@@ -182,7 +180,7 @@
       if (status === 401) {
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
         error = 'Sessão expirada. Faca login novamente.';
-        authToken.set(null);
+        clearSessionToken();
       } else {
         error =
           err instanceof Error
@@ -223,9 +221,9 @@
   }
 
   async function openPropertiesModal(broker: Broker) {
-    if (!get(authToken)) {
+    if (!hasSessionToken()) {
       showFeedback('error', 'Sessão expirada. Faca login novamente.');
-      authToken.set(null);
+      clearSessionToken();
       return;
     }
 
@@ -247,7 +245,7 @@
       if (status === 401) {
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
         propertiesError = 'Sessão expirada. Faca login novamente.';
-        authToken.set(null);
+        clearSessionToken();
       } else {
         propertiesError =
           err instanceof Error

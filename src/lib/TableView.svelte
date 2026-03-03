@@ -3,9 +3,10 @@
     import Pagination from './Pagination.svelte';
     import FilterControls from './FilterControls.svelte';
     import Modal from './Modal.svelte';
-    import { baseURL } from './api';
-    import { authToken } from './store';
-    import { get } from 'svelte/store';
+    import { fetchPlatformResponse } from './adminFetchService';
+    import { readErrorContext } from './httpError';
+    import { reportObservedError } from './observability';
+    import { clearSessionToken, hasSessionToken } from './sessionState';
     import { onMount } from 'svelte';
     import type { Property, Broker, User, View } from './types';
 
@@ -25,8 +26,6 @@
     let currentPage = 1;
     let totalItems = 0;
     let normalizedView: View = 'properties';
-
-    const API_URL = baseURL;
 
     const viewConfig = {
         properties: { 
@@ -73,9 +72,9 @@
     }
     async function fetchData() {
         isLoading = true;
-        const token = get(authToken);
-        if (!token) {
-            authToken.set(null);
+        if (!hasSessionToken()) {
+            clearSessionToken();
+            isLoading = false;
             return;
         }
         
@@ -88,10 +87,23 @@
         });
 
         try {
-            const response = await fetch(`${API_URL}${config.endpoint}?${params.toString()}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('Falha na autenticação');
+            const response = await fetchPlatformResponse(`${config.endpoint}?${params.toString()}`);
+            if (!response) {
+                isLoading = false;
+                return;
+            }
+            if (!response.ok) {
+                const errorContext = await readErrorContext(response);
+                console.error(`Erro ao buscar dados de ${view}:`, errorContext);
+                reportObservedError(new Error(errorContext.message || 'Falha na autenticação'), {
+                    module: 'table-view',
+                    status: errorContext.status,
+                    requestId: errorContext.requestId,
+                    url: config.endpoint,
+                    message: errorContext.message || 'Falha na autenticação',
+                });
+                throw new Error('Falha na autenticação');
+            }
             
             const { data, total } = await response.json();
             paginatedData = data;
@@ -99,7 +111,7 @@
             headers = config.headers;
         } catch (error) {
             console.error(`Erro ao buscar dados de ${view}:`, error);
-            authToken.set(null);
+            clearSessionToken();
         } finally {
             isLoading = false;
         }
@@ -107,14 +119,27 @@
 
     async function handleDeleteConfirm() {
         if (!itemToDelete) return;
-        const token = get(authToken);
         const { id, type } = itemToDelete;
         const endpoint = type === 'property' ? `/admin/properties/${id}` : `/admin/${type}s/${id}`;
         try {
-            await fetch(`${API_URL}${endpoint}`, {
+            const response = await fetchPlatformResponse(endpoint, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!response) {
+                return;
+            }
+            if (!response.ok) {
+                const errorContext = await readErrorContext(response);
+                console.error('Erro ao deletar item:', errorContext);
+                reportObservedError(new Error(errorContext.message || 'Falha ao excluir item'), {
+                    module: 'table-view',
+                    status: errorContext.status,
+                    requestId: errorContext.requestId,
+                    url: endpoint,
+                    message: errorContext.message || 'Falha ao excluir item',
+                });
+                throw new Error('Falha ao excluir item');
+            }
             fetchData();
         } catch (error) {
             console.error(`Erro ao deletar item:`, error);

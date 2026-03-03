@@ -1,6 +1,5 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { get } from 'svelte/store';
   import { toast } from 'svelte-sonner';
   import { Loader2 } from 'lucide-svelte';
   import * as Dialog from '$lib/components/ui/dialog';
@@ -11,8 +10,8 @@
   import { Input } from '$lib/components/ui/input';
   import FeaturedPropertiesPanel from '$lib/components/FeaturedPropertiesPanel.svelte';
   import Pagination from '$lib/Pagination.svelte';
-  import { baseURL } from './api';
-  import { authToken } from './store';
+  import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';
+  import { clearSessionToken, hasSessionToken } from './sessionState';
   import type { PropertyStatus, PropertyImage as PropertyImageType } from './types';
 
   interface PropertySummary {
@@ -280,10 +279,9 @@
     isLoading = true;
     error = null;
 
-    const token = get(authToken);
-    if (!token) {
+    if (!hasSessionToken()) {
       error = 'Sessão expirada. Faca login novamente.';
-      authToken.set(null);
+      clearSessionToken();
       isLoading = false;
       return;
     }
@@ -381,7 +379,7 @@
       if (status === 401) {
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
         error = 'Sessão expirada. Faça login novamente.';
-        authToken.set(null);
+        clearSessionToken();
       } else {
         error = err instanceof Error ? err.message : 'Erro inesperado ao carregar imóveis.';
       }
@@ -393,7 +391,11 @@
 
   async function fetchCities() {
     try {
-      const response = await fetch(`${baseURL}/properties/cities`);
+      const response = await fetchPlatformResponse('/properties/cities', { skipAuth: true });
+      if (!response) {
+        cities = [];
+        return;
+      }
       if (!response.ok) {
         const errorMsg = await response.text();
         toast.error('Erro ao buscar cidades.', {
@@ -532,7 +534,7 @@
     const cleaned = rawUrl.trim();
     if (/^https?:\/\//i.test(cleaned)) return cleaned;
     // fallback: assume relative path from API
-    return `${baseURL.replace(/\/+$/, '')}/${cleaned.replace(/^\/+/, '')}`;
+    return resolveApiAssetUrl(cleaned);
   }
 
   function splitImageTokens(raw: string): string[] {
@@ -822,7 +824,7 @@
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 401) {
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
-        authToken.set(null);
+        clearSessionToken();
       } else {
         toast.error('Nao foi possivel carregar os detalhes do imóvel.');
       }
@@ -872,7 +874,7 @@
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 401) {
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
-        authToken.set(null);
+        clearSessionToken();
       } else {
         toast.error('Falha ao atualizar o status.');
       }
@@ -902,7 +904,7 @@
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 401) {
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
-        authToken.set(null);
+        clearSessionToken();
       } else {
         toast.error('Falha ao excluir o imóvel.');
       }
@@ -1320,7 +1322,7 @@
       const status = err?.response?.status;
       if (status === 401) {
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
-        authToken.set(null);
+        clearSessionToken();
       }
       imageUploadError =
         err?.response?.data?.error ||
@@ -1351,7 +1353,7 @@
       const status = err?.response?.status;
       if (status === 401) {
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
-        authToken.set(null);
+        clearSessionToken();
       }
       imageDeleteError =
         err?.response?.data?.error ||
@@ -1378,7 +1380,7 @@
       const status = err?.response?.status;
       if (status === 401) {
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
-        authToken.set(null);
+        clearSessionToken();
       }
       videoDeleteError =
         err?.response?.data?.error ||

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { authToken } from './store';
+  import { clearSessionToken } from './sessionState';
   import { api } from './apiClient';
   import ThemeToggle from './ThemeToggle.svelte';
   import type { View } from './types';
@@ -200,7 +200,7 @@
     } catch {
       // Mesmo que a revogacao falhe, o token local precisa ser descartado.
     } finally {
-      authToken.set(null);
+      clearSessionToken();
     }
   }
 

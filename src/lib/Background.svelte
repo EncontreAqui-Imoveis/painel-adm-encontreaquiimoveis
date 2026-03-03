@@ -1,16 +1,9 @@
 <script lang="ts">
-    import { theme } from './store';
-
-    let isDark = false;
-    $: {
-        if (typeof window !== 'undefined') {
-            isDark = $theme === 'dark' || ($theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        }
-    }
+    import { isDarkTheme } from './themeState';
 </script>
 
 <div class="absolute inset-0 w-full h-full overflow-hidden -z-10">
-    <div class="absolute inset-0 w-full h-full transition-opacity duration-1000 {isDark ? 'opacity-100' : 'opacity-0'}">
+    <div class="absolute inset-0 w-full h-full transition-opacity duration-1000 {$isDarkTheme ? 'opacity-100' : 'opacity-0'}">
         <svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" class="w-full h-full">
             <defs>
                 <linearGradient id="grad-dark-sky" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -23,7 +16,7 @@
         </svg>
     </div>
 
-    <div class="absolute inset-0 w-full h-full transition-opacity duration-1000 {isDark ? 'opacity-0' : 'opacity-100'}">
+    <div class="absolute inset-0 w-full h-full transition-opacity duration-1000 {$isDarkTheme ? 'opacity-0' : 'opacity-100'}">
         <svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" class="w-full h-full">
             <defs>
                 <linearGradient id="grad-light-sky" x1="0%" y1="0%" x2="0%" y2="100%">

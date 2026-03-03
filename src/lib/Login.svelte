@@ -1,14 +1,14 @@
 <script lang="ts">
-    import { baseURL } from './api';
-    import { authToken } from './store';
+    import { requestAdminLogin } from './adminSessionService';
+    import { reportObservedError } from './observability';
+    import { readErrorContext } from './httpError';
+    import { setSessionToken } from './sessionState';
     import Logo from './Logo.svelte';
     
     let email = '';
     let password = '';
     let error = '';
     let isLoading = false;
-
-    const API_URL = baseURL;
 
     async function handleLogin() {
         isLoading = true;
@@ -21,15 +21,22 @@
         }
 
         try {
-            const response = await fetch(`${API_URL}/admin/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ email, password }),
-        });
+            const response = await requestAdminLogin(email, password);
 
             if (!response.ok) {
+                const errorContext = await readErrorContext(response);
+                console.error('Erro no login:', {
+                    status: errorContext.status,
+                    requestId: errorContext.requestId,
+                    message: errorContext.message,
+                });
+                reportObservedError(new Error(errorContext.message || 'Erro no login'), {
+                    module: 'admin-login',
+                    status: errorContext.status,
+                    requestId: errorContext.requestId,
+                    url: '/admin/login',
+                    message: errorContext.message,
+                });
                 if (response.status === 401) {
                     error = 'Email ou senha incorretos.';
                 } else {
@@ -39,10 +46,15 @@
             }
 
             const data = await response.json();
-            authToken.set(data.token);
+            setSessionToken(data.token);
             
         } catch (err) {
             error = 'Erro de conexão. Verifique sua internet.';
+            reportObservedError(err, {
+                module: 'admin-login',
+                url: '/admin/login',
+                message: 'Erro de conexão. Verifique sua internet.',
+            });
             console.error('Erro no login:', err);
         } finally {
             isLoading = false;
@@ -73,6 +85,7 @@
             </div>
             <form on:submit|preventDefault={handleLogin} class="space-y-6">
                 <div>
+                    <label class="sr-only" for="email">Email</label>
                     <input 
                         type="email" 
                         id="email" 
@@ -84,6 +97,7 @@
                     />
                 </div>
                 <div>
+                    <label class="sr-only" for="password">Senha</label>
                     <input 
                         type="password" 
                         id="password" 
@@ -95,12 +109,19 @@
                     />
                 </div>
                 {#if error}
-                    <p class="text-sm text-center text-red-500 dark:text-red-400 font-medium px-4 py-2 bg-red-50/50 dark:bg-red-900/20 rounded-lg">{error}</p>
+                    <p
+                        role="status"
+                        aria-live="polite"
+                        class="text-sm text-center text-red-500 dark:text-red-400 font-medium px-4 py-2 bg-red-50/50 dark:bg-red-900/20 rounded-lg"
+                    >
+                        {error}
+                    </p>
                 {/if}
                 
                 <button 
                     type="submit" 
                     disabled={isLoading}
+                    aria-busy={isLoading}
                     class="w-full px-4 py-3 font-semibold text-white bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-lg hover:from-green-600 hover:to-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all transform hover:scale-105 disabled:opacity-70 disabled:scale-100 disabled:cursor-not-allowed"
                 >
                     {#if isLoading}

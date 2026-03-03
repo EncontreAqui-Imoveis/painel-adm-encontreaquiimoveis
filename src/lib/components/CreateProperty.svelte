@@ -1,9 +1,9 @@
 <script lang="ts">
-  import axios from 'axios';
   import { onDestroy, onMount } from 'svelte';
   import { toast } from 'svelte-sonner';
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
+  import { uploadMultipartWithProgress } from '$lib/mediaUploadService';
   import type { Broker } from '$lib/types';
   import {
     formatCep,
@@ -580,16 +580,16 @@
     formData.append('max_file_size', String(signature.maxFileSize));
     formData.append('allowed_formats', signature.allowedFormats.join(','));
 
-    const response = await axios.post<{ secure_url?: string }>(signature.uploadUrl, formData, {
-      timeout: DIRECT_UPLOAD_TIMEOUT_MS,
-      headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: (event) => {
-        if (!event.total || !onProgress) return;
-        onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
-      },
-    });
+    const response = await uploadMultipartWithProgress<{ secure_url?: string }>(
+      signature.uploadUrl,
+      formData,
+      {
+        timeout: DIRECT_UPLOAD_TIMEOUT_MS,
+        onProgress,
+      }
+    );
 
-    const secureUrl = response.data?.secure_url;
+    const secureUrl = response.secure_url;
     if (!secureUrl) {
       throw new Error('Upload concluído sem URL de mídia.');
     }

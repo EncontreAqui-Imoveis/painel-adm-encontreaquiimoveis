@@ -1,9 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
   import { toast } from 'svelte-sonner';
   import { api } from '$lib/apiClient';
-  import { authToken } from '../store';
+  import { hasSessionToken } from '$lib/sessionState';
 
   interface Client {
     id: number;
@@ -144,8 +143,7 @@
 
     isSubmitting = true;
     try {
-      const token = get(authToken);
-      if (!token) {
+      if (!hasSessionToken()) {
         feedback = { type: 'error', text: 'Sessão expirada. Faça login novamente.' };
         isSubmitting = false;
         return;

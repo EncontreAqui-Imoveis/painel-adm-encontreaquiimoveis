@@ -7,9 +7,8 @@
     import FilterControls from './FilterControls.svelte';
     import KpiCard from './KpiCard.svelte';
     import VerificationTable from './VerificationTable.svelte';
-    import { baseURL, handleUnauthorizedResponse } from './api';
-    import { authToken } from './store';
-    import { get } from 'svelte/store';
+    import { fetchPlatformResponse } from './adminFetchService';
+    import { clearSessionToken, hasSessionToken } from './sessionState';
     import { onMount, onDestroy } from 'svelte';
     import type { Property, Broker, User, View, DataItem, ViewConfig } from './types';
     
@@ -185,8 +184,6 @@
     // Estado para dados de verificacao
     let pendingBrokers: Broker[] = [];
 
-    const API_URL = baseURL;
-
     const viewConfig: Record<View, ViewConfig> = {
         dashboard: { 
             title: 'Dashboard'
@@ -284,18 +281,16 @@
             return;
         }
 
-        const token = get(authToken);
-        if (!token) {
-            authToken.set(null);
+        if (!hasSessionToken()) {
+            clearSessionToken();
+            isLoading = false;
             return;
         }
         
         if (activeView === 'dashboard') {
             try {
-                const response = await fetch(`${API_URL}/admin/dashboard/stats`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (handleUnauthorizedResponse(response.status)) {
+                const response = await fetchPlatformResponse('/admin/dashboard/stats');
+                if (!response) {
                     isLoading = false;
                     return;
                 }
@@ -317,11 +312,8 @@
                     page: String(currentPage),
                     limit: String(itemsPerPage)
                 });
-                const response = await fetch(`${API_URL}/admin/brokers?${params.toString()}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (handleUnauthorizedResponse(response.status)) {
+                const response = await fetchPlatformResponse(`/admin/brokers?${params.toString()}`);
+                if (!response) {
                     isLoading = false;
                     return;
                 }
@@ -359,10 +351,8 @@
         }
 
         try {
-            const response = await fetch(`${API_URL}${config.endpoint}?${params.toString()}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (handleUnauthorizedResponse(response.status)) {
+            const response = await fetchPlatformResponse(`${config.endpoint}?${params.toString()}`);
+            if (!response) {
                 isLoading = false;
                 return;
             }
@@ -374,26 +364,23 @@
             headers = config.headers || [];
         } catch (error) {
             console.error(`Erro ao buscar dados de ${activeView}:`, error);
-            authToken.set(null);
+            clearSessionToken();
         } finally {
             isLoading = false;
         }
     }
 
     async function fetchPendingCounts() {
-        const token = get(authToken);
-        if (!token) {
+        if (!hasSessionToken()) {
             pendingCounts = { propertyRequests: 0, brokerRequests: 0 };
-            authToken.set(null);
+            clearSessionToken();
             return;
         }
 
         async function fetchCount(endpoint: string): Promise<number> {
-            const response = await fetch(`${API_URL}${endpoint}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (handleUnauthorizedResponse(response.status)) {
-                authToken.set(null);
+            const response = await fetchPlatformResponse(endpoint);
+            if (!response) {
+                clearSessionToken();
                 return 0;
             }
             if (!response.ok) {
@@ -421,19 +408,15 @@
         isChartLoading = true;
         chartError = null;
 
-        const token = get(authToken);
-        if (!token) {
-            authToken.set(null);
+        if (!hasSessionToken()) {
+            clearSessionToken();
             isChartLoading = false;
             return;
         }
 
         try {
-            const response = await fetch(`${API_URL}/admin/stats/dashboard`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (handleUnauthorizedResponse(response.status)) {
+            const response = await fetchPlatformResponse('/admin/stats/dashboard');
+            if (!response) {
                 isChartLoading = false;
                 return;
             }
@@ -528,7 +511,6 @@
 
     async function handleDeleteConfirm() {
         if (!itemToDelete) return;
-        const token = get(authToken);
         const { id, type } = itemToDelete;
         
         const endpoint = type === 'property' 
@@ -536,10 +518,12 @@
             : `/admin/${type}s/${id}`;
 
         try {
-            await fetch(`${API_URL}${endpoint}`, {
+            const response = await fetchPlatformResponse(endpoint, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!response) {
+                return;
+            }
             fetchData();
             fetchPendingCounts();
         } catch (error) {
@@ -552,7 +536,6 @@
 
     async function handleSave(event: CustomEvent<{ id: number; data: Partial<DataItem>, type: string }>) {
         const { id, data, type } = event.detail;
-        const token = get(authToken);
 
         isSaving = true;
 
@@ -563,11 +546,14 @@
             : `/admin/clients/${id}`;
 
         try {
-            const response = await fetch(`${API_URL}${endpoint}`, {
+            const response = await fetchPlatformResponse(endpoint, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
+            if (!response) {
+                throw new Error('Falha ao salvar.');
+            }
 
             if (!response.ok) {
                 const errorText = await response.text();

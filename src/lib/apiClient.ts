@@ -2,12 +2,27 @@ import axios, { AxiosHeaders, type AxiosRequestConfig } from 'axios';
 import { toast } from 'svelte-sonner';
 import { get } from 'svelte/store';
 import { baseURL, handleUnauthorizedResponse } from './api';
+import { reportObservedError } from './observability';
 import { authToken } from './store';
 
 const SENSITIVE_KEYS = ['authorization', 'token', 'password', 'senha', 'cookie', 'email', 'phone', 'telefone', 'cep'];
 const BEARER_REGEX = /Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi;
 const JWT_REGEX = /eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+/g;
 const EMAIL_REGEX = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+type RequestIdAwareError = Record<string, unknown> & {
+  requestId?: string;
+  response?: {
+    status?: number;
+    data?: Record<string, unknown>;
+    headers?: unknown;
+  };
+  config?: {
+    url?: string;
+    method?: string;
+  };
+  message?: string;
+};
 
 function shouldRedactKey(key: string): boolean {
   const lower = key.toLowerCase();
@@ -51,6 +66,35 @@ function sanitizeErrorForLogging(error: unknown): unknown {
     source.message = redactString(source.message);
   }
   return source;
+}
+
+function extractRequestId(error: RequestIdAwareError): string | undefined {
+  const headerSource = error.response?.headers;
+  let headerValue: unknown;
+
+  if (headerSource && typeof headerSource === 'object' && !Array.isArray(headerSource)) {
+    const headers = headerSource as Record<string, unknown>;
+    headerValue =
+      headers['x-request-id'] ??
+      headers['X-Request-Id'] ??
+      headers['x-request-id'.toLowerCase()];
+  }
+
+  const normalizedHeader =
+    typeof headerValue === 'string' && headerValue.trim().length > 0
+      ? headerValue.trim()
+      : undefined;
+  if (normalizedHeader) return normalizedHeader;
+
+  const data = error.response?.data;
+  const payloadRequestId =
+    typeof data?.requestId === 'string'
+      ? data.requestId.trim()
+      : typeof data?.request_id === 'string'
+        ? data.request_id.trim()
+        : '';
+
+  return payloadRequestId || undefined;
 }
 
 type RequestOptions = {
@@ -131,13 +175,32 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const requestId = extractRequestId(error as RequestIdAwareError);
+    if (requestId) {
+      (error as RequestIdAwareError).requestId = requestId;
+    }
+
     sanitizeErrorForLogging(error);
+    const safeResponseData = redactValue(error.response?.data) as Record<string, unknown> | undefined;
+
+    console.info('API client request failed', {
+      requestId,
+      status: (error as RequestIdAwareError).response?.status,
+      method: (error as RequestIdAwareError).config?.method,
+      url: (error as RequestIdAwareError).config?.url,
+    });
+    reportObservedError(error, {
+      module: 'api-client',
+      requestId,
+      status: (error as RequestIdAwareError).response?.status,
+      url: (error as RequestIdAwareError).config?.url,
+      message: typeof safeResponseData?.message === 'string' ? safeResponseData.message : error.message,
+    });
 
     if (handleUnauthorizedResponse(error.response?.status)) {
       return Promise.reject(error);
     }
 
-    const safeResponseData = redactValue(error.response?.data) as Record<string, unknown> | undefined;
     const fallbackMessage =
       (typeof safeResponseData?.message === 'string' ? safeResponseData.message : undefined) ||
       error.message ||
