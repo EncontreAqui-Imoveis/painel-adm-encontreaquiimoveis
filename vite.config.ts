@@ -20,7 +20,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('node_modules/xlsx')) return 'vendor-xlsx';
             if (id.includes('node_modules/chart.js')) return 'vendor-chartjs';
             if (id.includes('node_modules/lucide-svelte')) return 'vendor-icons';
             if (id.includes('node_modules/axios')) return 'vendor-axios';

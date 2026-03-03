@@ -1,5 +1,3 @@
-﻿import * as XLSX from 'xlsx';
-
 /**
  * Exporta um array de dados para um arquivo CSV.
  * @param data O array de objetos a ser exportado.
@@ -11,9 +9,32 @@ export function exportToCsv(data: any[], fileName: string) {
     return;
   }
 
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Dados');
+  const headers = Array.from(
+    new Set(data.flatMap((item) => Object.keys(item ?? {}))),
+  );
 
-  XLSX.writeFile(workbook, fileName, { bookType: 'csv' });
+  const escapeCell = (value: unknown) => {
+    const normalized = value == null ? '' : String(value);
+    return `"${normalized.replace(/"/g, '""')}"`;
+  };
+
+  const rows = [
+    headers.map((header) => escapeCell(header)).join(';'),
+    ...data.map((item) =>
+      headers.map((header) => escapeCell(item?.[header])).join(';'),
+    ),
+  ];
+
+  const csvContent = `\uFEFF${rows.join('\n')}`;
+  const blob = new Blob([csvContent], {
+    type: 'text/csv;charset=utf-8;',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName.endsWith('.csv') ? fileName : `${fileName}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
