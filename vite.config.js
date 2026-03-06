@@ -27,7 +27,7 @@ export default defineConfig({
                         if (id.includes('node_modules/svelte') || id.includes('node_modules/@sveltejs')) {
                             return 'vendor-svelte';
                         }
-                        return 'vendor-misc';
+                        return undefined;
                     }
                     return undefined;
                 },
