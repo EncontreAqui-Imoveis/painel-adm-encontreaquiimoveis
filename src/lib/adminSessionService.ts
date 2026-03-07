@@ -85,7 +85,21 @@ export async function requestAdminSreStats(token: string): Promise<any> {
             sloCurrent: 99.88,
             budgetTotalRaw: 43.2,
             budgetSpentRaw: 48.5
-          }
+          },
+          availability: {
+            uptimeCurrent: 99.92,
+            downtimeMinutes: 34.5
+          },
+          toil: {
+            automatedCount: 88,
+            manualCount: 12
+          },
+          releases: [
+            { version: '1.4.2', date: 'Hoje', time: '08:30', status: 'success', impact: 'Nenhum' },
+            { version: '1.4.1', date: 'Ontem', time: '14:15', status: 'rollback', impact: 'Picos de Latência' },
+            { version: '1.4.0', date: '12 Fev', time: '22:00', status: 'stable', impact: 'Baixo' },
+            { version: '1.3.9', date: '05 Fev', time: '04:00', status: 'stable', impact: 'Nenhum' }
+          ]
         })
       });
     }, 400); // Simulate network delay

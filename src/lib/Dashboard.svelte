@@ -10,7 +10,9 @@
     import SreSignalCard from "./components/SreSignalCard.svelte";
     import SreTimeSeriesChart from "./components/charts/SreTimeSeriesChart.svelte";
     import SreActionableAlerts from "./components/SreActionableAlerts.svelte";
-    import SreErrorBudget from "./components/SreErrorBudget.svelte";
+    import SreAvailability from "./components/SreAvailability.svelte";
+    import SreToilChart from "./components/SreToilChart.svelte";
+    import SreReleaseHealth from "./components/SreReleaseHealth.svelte";
     import { requestAdminSreStats } from "./adminSessionService";
     import { fetchPlatformResponse } from "./adminFetchService";
     import { clearSessionToken, hasSessionToken } from "./sessionState";
@@ -806,13 +808,11 @@
                                 />
                             </div>
                             <div class="lg:col-span-1">
-                                <SreErrorBudget
-                                    sloTarget={sreStats.budget?.sloTarget}
-                                    sloCurrent={sreStats.budget?.sloCurrent}
-                                    budgetTotalRaw={sreStats.budget
-                                        ?.budgetTotalRaw}
-                                    budgetSpentRaw={sreStats.budget
-                                        ?.budgetSpentRaw}
+                                <SreAvailability
+                                    uptimeCurrent={sreStats.availability
+                                        ?.uptimeCurrent || 99.95}
+                                    downtimeMinutes={sreStats.availability
+                                        ?.downtimeMinutes || 12.5}
                                 />
                             </div>
                         </div>
@@ -905,6 +905,25 @@
                                     data={sreStats.errors.history}
                                     borderColor="#EF4444"
                                     backgroundColor="rgba(239, 68, 68, 0.1)"
+                                />
+                            </div>
+                        </section>
+
+                        <!-- SRE Phase 3: Toil and Release Health -->
+                        <section
+                            class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2"
+                        >
+                            <div class="h-80">
+                                <SreToilChart
+                                    automatedCount={sreStats.toil
+                                        ?.automatedCount || 0}
+                                    manualCount={sreStats.toil?.manualCount ||
+                                        0}
+                                />
+                            </div>
+                            <div class="h-80">
+                                <SreReleaseHealth
+                                    releases={sreStats.releases || []}
                                 />
                             </div>
                         </section>
