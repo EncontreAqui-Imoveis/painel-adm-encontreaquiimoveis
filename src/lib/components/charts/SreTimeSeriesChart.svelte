@@ -121,7 +121,7 @@
             </button>
         {/each}
     </div>
-    <div class="w-full h-40 flex-1 relative">
+    <div class="w-full h-48 relative">
         <canvas bind:this={chartContainer} id={chartId}></canvas>
     </div>
 </div>
