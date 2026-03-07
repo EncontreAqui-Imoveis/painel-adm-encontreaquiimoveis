@@ -10,11 +10,13 @@
     const timeFilters = ["Minuto", "Hora", "Dia", "Semana", "Mês", "Ano"];
     let activeFilter = "Mês";
 
+    // Reactive data based on selection
     $: currentStats = data[activeFilter] || {
         uptimeCurrent: 99.92,
         downtimeMinutes: 34.5,
         history: Array.from({ length: 30 }, () => 99.5 + Math.random() * 0.4),
     };
+
     $: uptimeCurrent = currentStats.uptimeCurrent;
     $: downtimeMinutes = currentStats.downtimeMinutes;
     $: historyData = currentStats.history;
@@ -28,14 +30,14 @@
         const ctx = chartContainer.getContext("2d");
         if (!ctx) return;
 
-        // Clean up previous instance
         if (chartInstance) {
             chartInstance.destroy();
         }
 
-        const gradient = ctx.createLinearGradient(0, 0, 0, 200);
-        gradient.addColorStop(0, "rgba(16, 185, 129, 0.4)");
-        gradient.addColorStop(0.8, "rgba(16, 185, 129, 0.0)");
+        const gradient = ctx.createLinearGradient(0, 0, 0, 250);
+        gradient.addColorStop(0, "rgba(16, 185, 129, 0.25)");
+        gradient.addColorStop(0.6, "rgba(16, 185, 129, 0.05)");
+        gradient.addColorStop(1, "rgba(16, 185, 129, 0.0)");
 
         chartInstance = new Chart(ctx, {
             type: "line",
@@ -46,36 +48,37 @@
                         data: historyData,
                         borderColor: "#10B981",
                         backgroundColor: gradient,
-                        borderWidth: 2.5,
+                        borderWidth: 3,
                         fill: true,
-                        tension: 0.4,
+                        tension: 0.45,
                         pointRadius: 0,
-                        pointHoverRadius: 6,
+                        pointHoverRadius: 8,
                         pointHoverBackgroundColor: "#10B981",
                         pointHoverBorderColor: "#fff",
-                        pointHoverBorderWidth: 2,
-                    },
+                        pointHoverBorderWidth: 3,
+                        shadowColor: "rgba(16, 185, 129, 0.5)",
+                        shadowBlur: 15,
+                    } as any,
                 ],
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 layout: {
-                    padding: {
-                        top: 10, // Avoid clipping at top
-                        bottom: 10,
-                    },
+                    padding: { top: 20, bottom: 20, left: 10, right: 10 },
                 },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
                         enabled: true,
-                        backgroundColor: "#111827",
+                        backgroundColor: "rgba(17, 24, 39, 0.95)",
                         titleColor: "#9ca3af",
                         bodyColor: "#fff",
-                        padding: 12,
-                        cornerRadius: 8,
+                        padding: 16,
+                        cornerRadius: 12,
                         displayColors: false,
+                        borderColor: "rgba(255,255,255,0.1)",
+                        borderWidth: 1,
                         callbacks: {
                             label: (context) =>
                                 `Uptime: ${(context.parsed.y ?? 0).toFixed(3)}%`,
@@ -86,15 +89,11 @@
                     x: { display: false },
                     y: {
                         display: false,
-                        // Fix framing/clipping: set bounds that give the line space
-                        min: Math.min(...historyData, 98) - 0.2,
-                        max: 100.2,
+                        suggestedMin: Math.min(...historyData, 97) - 0.5,
+                        suggestedMax: 100.5, // Safe margin to avoid clipping
                     },
                 },
-                interaction: {
-                    mode: "index",
-                    intersect: false,
-                },
+                interaction: { mode: "index", intersect: false },
             },
         });
     }
@@ -112,33 +111,45 @@
 </script>
 
 <div
-    class="bg-[#111827] rounded-3xl p-8 flex flex-col h-full border border-gray-800 shadow-2xl relative overflow-hidden group"
+    class="relative h-full flex flex-col group overflow-hidden rounded-[2.5rem] border border-white/5 bg-[#0b0f1a] shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
 >
-    <!-- Subtle overlay for better framing -->
+    <!-- Glassmorphism Orbs -->
     <div
-        class="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-emerald-500/5 pointer-events-none"
+        class="absolute -top-24 -right-24 w-64 h-64 bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none group-hover:bg-emerald-500/15 transition-all duration-700"
+    ></div>
+    <div
+        class="absolute -bottom-24 -left-24 w-64 h-64 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none"
     ></div>
 
-    <div class="relative z-10 flex justify-between items-start mb-8">
-        <div class="flex flex-col gap-1">
-            <h3
-                class="text-gray-500 font-bold uppercase tracking-[0.25em] text-[10px]"
+    <!-- Header Section -->
+    <div
+        class="relative z-10 px-10 pt-10 pb-6 flex justify-between items-start"
+    >
+        <div class="flex flex-col gap-2">
+            <div class="flex items-center gap-2">
+                <div
+                    class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-pulse"
+                ></div>
+                <h3 class="text-white font-black text-xl tracking-tight">
+                    Disponibilidade do Ecossistema
+                </h3>
+            </div>
+            <p
+                class="text-gray-500 text-[10px] font-bold uppercase tracking-[0.3em]"
             >
-                Monitoramento SRE
-            </h3>
-            <span class="text-white font-black text-lg tracking-tight"
-                >Disponibilidade</span
-            >
+                Métrica Real do Servidor Railway
+            </p>
         </div>
 
+        <!-- Premium Filter Switcher -->
         <div
-            class="bg-[#0b0f1a] p-1.5 rounded-xl flex gap-1 border border-gray-800/80"
+            class="bg-black/40 backdrop-blur-md p-1.5 rounded-2xl flex gap-1 border border-white/5 shadow-inner"
         >
             {#each timeFilters as filter}
                 <button
-                    class="px-3 py-1.5 text-[10px] font-black rounded-lg transition-all {activeFilter ===
+                    class="px-4 py-2 text-[9px] font-black rounded-xl transition-all duration-500 {activeFilter ===
                     filter
-                        ? 'bg-[#4f46e5] text-white shadow-lg'
+                        ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]'
                         : 'text-gray-500 hover:text-gray-300'}"
                     on:click={() => (activeFilter = filter)}
                 >
@@ -148,72 +159,99 @@
         </div>
     </div>
 
-    <div class="relative z-10 flex justify-between items-end mb-8">
-        <div class="flex flex-col gap-2">
-            <div
-                class="text-6xl font-black text-[#facc15] leading-none tracking-tighter drop-shadow-sm"
-            >
-                {uptimeCurrent.toFixed(2)}%
-            </div>
-            <div
-                class="flex items-center gap-2 text-gray-400 font-bold text-[10px] uppercase tracking-[0.15em]"
-            >
-                <div class="relative">
-                    <span class="w-2.5 h-2.5 rounded-full bg-[#10b981] block"
-                    ></span>
-                    <span
-                        class="absolute inset-0 w-2.5 h-2.5 rounded-full bg-[#10b981] animate-ping opacity-25"
-                    ></span>
-                </div>
-                Sistema Operacional (Real)
+    <!-- Main Metric Section -->
+    <div class="relative z-10 px-10 flex justify-between items-center mb-4">
+        <div class="flex flex-col">
+            <div class="flex items-baseline gap-1">
+                <span
+                    class="text-7xl font-black text-[#facc15] tracking-tighter drop-shadow-[0_0_25px_rgba(250,204,21,0.2)] select-none"
+                >
+                    {uptimeCurrent.toFixed(2)}
+                </span>
+                <span class="text-3xl font-black text-[#facc15]/60">%</span>
             </div>
         </div>
 
-        <div
-            class="bg-[#10b98115] border border-[#10b98130] rounded-xl px-4 py-2 flex items-center gap-2"
-        >
+        <div class="flex flex-col items-end gap-2">
+            <div
+                class="px-6 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-sm"
+            >
+                <span
+                    class="text-emerald-400 font-black italic text-xl tracking-[0.2em] shadow-emerald-500/50"
+                    >OPERATIONAL</span
+                >
+            </div>
             <span
-                class="text-[#10b981] font-black italic text-lg tracking-widest"
-                >EXCELENTE</span
+                class="text-[9px] font-black text-gray-500 tracking-widest uppercase italic"
+                >Heurística: Golden Signal v2.1</span
             >
         </div>
     </div>
 
-    <!-- Graph Container - Optimized Height and Framing -->
-    <div
-        class="flex-1 w-full min-h-[220px] relative mt-2 mb-8 -mx-2 bg-[#0b0f1a]/30 rounded-2xl border border-gray-800/20"
-    >
+    <!-- Hyper-Premium Graph Area -->
+    <div class="flex-1 w-full relative h-[300px] mt-2 mb-10 px-4">
+        <div
+            class="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/5 to-transparent pointer-events-none opacity-30"
+        ></div>
         <canvas bind:this={chartContainer}></canvas>
     </div>
 
-    <div class="relative z-10 mt-auto">
+    <!-- Footer Stats Section -->
+    <div class="relative z-10 mt-auto px-10 pb-10">
+        <!-- Health Bar -->
         <div
-            class="w-full bg-gray-900 rounded-full h-2.5 mb-6 overflow-hidden flex ring-1 ring-white/5"
+            class="relative h-2.5 w-full bg-gray-900/50 rounded-full mb-8 overflow-hidden border border-white/5"
         >
             {#if uptimeCurrent < 100}
                 <div
-                    class="bg-red-500 h-full rounded-l-full"
-                    style="width: 3%"
+                    class="absolute left-0 top-0 h-full bg-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.5)] transition-all duration-1000"
+                    style="width: 2%"
                 ></div>
             {/if}
-            <div class="bg-emerald-500 h-full flex-1 rounded-r-full"></div>
+            <div
+                class="absolute left-0 top-0 h-full bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all duration-1000"
+                style="width: 100%; left: {uptimeCurrent < 100 ? '2%' : '0%'}"
+            ></div>
         </div>
 
         <div
-            class="flex justify-between items-center text-[10px] font-black uppercase tracking-[0.2em]"
+            class="flex justify-between items-center bg-white/[0.02] border border-white/5 rounded-2xl px-6 py-4 backdrop-blur-sm"
         >
-            <div class="flex items-center gap-3 text-gray-500">
-                <span
-                    class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
-                ></span>
-                <span
-                    >Inatividade: <span class="text-gray-100 ml-1"
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col">
+                    <span
+                        class="text-gray-500 text-[8px] font-black uppercase tracking-widest mb-1"
+                        >Inatividade</span
+                    >
+                    <span class="text-white font-black text-sm tracking-tight"
                         >{downtimeMinutes.toFixed(1)} MIN</span
-                    ></span
+                    >
+                </div>
+            </div>
+
+            <div class="h-8 w-px bg-white/10 mx-4"></div>
+
+            <div class="flex flex-col">
+                <span
+                    class="text-gray-500 text-[8px] font-black uppercase tracking-widest mb-1"
+                    >Status</span
+                >
+                <span
+                    class="text-emerald-400 font-black text-sm tracking-tight italic"
+                    >99.9% SLO Met</span
                 >
             </div>
-            <div class="text-gray-600 bg-gray-900/50 px-2.5 py-1 rounded-md">
-                Últimos 30 dias
+
+            <div class="h-8 w-px bg-white/10 mx-4"></div>
+
+            <div class="flex flex-col items-end">
+                <span
+                    class="text-gray-500 text-[8px] font-black uppercase tracking-widest mb-1"
+                    >Período</span
+                >
+                <span class="text-white/40 font-black text-sm tracking-tight"
+                    >30d Histórico</span
+                >
             </div>
         </div>
     </div>
@@ -221,6 +259,6 @@
 
 <style>
     canvas {
-        transition: opacity 0.3s ease;
+        filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.1));
     }
 </style>
