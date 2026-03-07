@@ -65,3 +65,39 @@ h6 {
     @apply rounded-2xl bg-slate-900/60 border border-white/5 shadow-lg shadow-black/30 backdrop-blur;
   }
 }
+
+/* Global elegant scrollbar for main window */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-tertiary);
+  border-radius: 4px;
+  opacity: 0.5;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #374151; /* gray-700 */
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+/* Hide internal component scrollbars for a cleaner, mobile-like look */
+* {
+  scrollbar-width: thin; /* Firefox */
+}
+.overflow-y-auto::-webkit-scrollbar,
+.overflow-x-auto::-webkit-scrollbar,
+.overflow-auto::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
