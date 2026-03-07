@@ -78,7 +78,7 @@
                         displayColors: false,
                         callbacks: {
                             label: (context) =>
-                                `Uptime: ${context.parsed.y.toFixed(3)}%`,
+                                `Uptime: ${(context.parsed.y ?? 0).toFixed(3)}%`,
                         },
                     },
                 },
