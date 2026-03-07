@@ -1,7 +1,7 @@
 <script lang="ts">
     export let alerts: {
         id: string;
-        severity: "critical" | "high" | "warning";
+        severity: "critical" | "high" | "warning" | "info" | "success";
         message: string;
         service: string;
         duration: string;
@@ -14,6 +14,9 @@
         high: "border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-300",
         warning:
             "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-900 dark:text-yellow-300",
+        info: "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-300",
+        success:
+            "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-300",
     };
 
     const severityIcons = {
@@ -22,7 +25,14 @@
         high: '<svg class="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
         warning:
             '<svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+        info: '<svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+        success:
+            '<svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>',
     };
+
+    $: criticalCount = alerts.filter(
+        (a) => a.severity === "critical" || a.severity === "high",
+    ).length;
 </script>
 
 <div
@@ -36,7 +46,7 @@
                 class="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2"
             >
                 <svg
-                    class="w-5 h-5 text-red-500"
+                    class="w-5 h-5 text-blue-500"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -51,14 +61,20 @@
                 Alertas Acionáveis
             </h3>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Incidentes ativos requerendo inteligência humana imediata
+                Incidentes e notificações requerendo atenção
             </p>
         </div>
-        {#if alerts.length > 0}
+        {#if criticalCount > 0}
             <span
-                class="bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300 text-xs font-bold px-2.5 py-1 rounded-full animate-pulse"
+                class="bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse"
             >
-                {alerts.length} Críticos
+                {criticalCount} Críticos
+            </span>
+        {:else if alerts.length > 0}
+            <span
+                class="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded-full"
+            >
+                {alerts.length} Notificações
             </span>
         {/if}
     </div>

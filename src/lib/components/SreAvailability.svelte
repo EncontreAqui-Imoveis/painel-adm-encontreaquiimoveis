@@ -78,7 +78,11 @@
                         },
                         scales: {
                             x: { display: false },
-                            y: { display: false, min: 98, max: 100 },
+                            y: {
+                                display: false,
+                                min: Math.min(...historyData, 99.0) - 0.1,
+                                max: 100,
+                            },
                         },
                         interaction: {
                             mode: "nearest",
