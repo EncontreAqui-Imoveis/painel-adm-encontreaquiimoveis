@@ -18,11 +18,4 @@ export async function requestAdminDashboardStats(token: string): Promise<Respons
   });
 }
 
-export async function requestAdminSreStats(token: string): Promise<any> {
-  return fetch(`${baseURL}/admin/dashboard/sre`, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  });
-}
 

@@ -13,7 +13,6 @@
     import SreAvailability from "./components/SreAvailability.svelte";
     import SreReleaseHealth from "./components/SreReleaseHealth.svelte";
     import SreExternalServices from "./components/SreExternalServices.svelte";
-    import { requestAdminSreStats } from "./adminSessionService";
     import { fetchPlatformResponse } from "./adminFetchService";
     import { clearSessionToken, hasSessionToken } from "./sessionState";
     import { onMount, onDestroy } from "svelte";
@@ -370,14 +369,12 @@
                     throw new Error("Falha ao buscar estatísticas");
                 stats = await response.json();
 
-                // Fetch SRE stats from session service mock
-                if (hasSessionToken()) {
-                    const sreResponse = await requestAdminSreStats(
-                        localStorage.getItem("session_token") || "",
-                    );
-                    if (sreResponse?.ok) {
-                        sreStats = await sreResponse.json();
-                    }
+                // Fetch SRE stats using the standard platform fetch service
+                const sreResponse = await fetchPlatformResponse(
+                    "/admin/dashboard/sre",
+                );
+                if (sreResponse && sreResponse.ok) {
+                    sreStats = await sreResponse.json();
                 }
             } catch (error) {
                 console.error(
