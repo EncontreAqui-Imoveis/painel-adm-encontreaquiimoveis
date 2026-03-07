@@ -904,10 +904,7 @@
                             </div>
                             <div class="lg:col-span-1">
                                 <SreAvailability
-                                    uptimeCurrent={sreStats.availability
-                                        ?.uptimeCurrent || 99.95}
-                                    downtimeMinutes={sreStats.availability
-                                        ?.downtimeMinutes || 12.5}
+                                    data={sreStats.availability || {}}
                                 />
                             </div>
                         </section>
