@@ -813,7 +813,7 @@
                                 >
                                     Monitoramento de saúde e telemetria da
                                     plataforma (Latência, Tráfego, Erros e
-                                    Utilização).
+                                    Utilização da Nuvem).
                                 </p>
                             </div>
 
@@ -845,7 +845,7 @@
                                     trendValue={sreStats.errors.trendValue}
                                 />
                                 <SreSignalCard
-                                    title="Utilização"
+                                    title="Utilização (CPU da Nuvem)"
                                     value={sreStats.saturation.cpu}
                                     unit={sreStats.saturation.unit}
                                     status={sreStats.saturation.status}

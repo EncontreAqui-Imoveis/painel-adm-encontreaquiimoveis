@@ -4,7 +4,13 @@
         provider: string;
         status: "operational" | "degraded" | "outage";
         latency?: string;
+        cost?: number;
     }[] = [];
+
+    $: totalCost = services.reduce(
+        (sum, service) => sum + (service.cost || 0),
+        0,
+    );
 
     const statusColors = {
         operational: "text-green-500 bg-green-100 dark:bg-green-900/30",
@@ -51,10 +57,10 @@
     </div>
 
     <div class="p-5 flex-1 overflow-y-auto">
-        <ul class="space-y-4">
+        <ul class="space-y-3">
             {#each services as service}
                 <li
-                    class="flex items-center justify-between p-3 rounded-lg border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+                    class="flex items-center justify-between p-3 rounded-lg border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                     <div class="flex items-center gap-3">
                         <div
@@ -96,7 +102,17 @@
                             <p
                                 class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5"
                             >
-                                {service.latency}
+                                {service.latency} &bull; R$ {(service.cost || 0)
+                                    .toFixed(2)
+                                    .replace(".", ",")}
+                            </p>
+                        {:else}
+                            <p
+                                class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5"
+                            >
+                                R$ {(service.cost || 0)
+                                    .toFixed(2)
+                                    .replace(".", ",")}
                             </p>
                         {/if}
                     </div>
@@ -106,6 +122,18 @@
         {#if services.length === 0}
             <div class="text-center text-sm text-gray-500 py-4">
                 Nenhum serviço externo configurado.
+            </div>
+        {/if}
+        {#if services.length > 0}
+            <div
+                class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center text-sm"
+            >
+                <span class="font-medium text-gray-600 dark:text-gray-400"
+                    >Total Mensal Estimado</span
+                >
+                <span class="font-bold text-gray-900 dark:text-white text-base"
+                    >R$ {totalCost.toFixed(2).replace(".", ",")}</span
+                >
             </div>
         {/if}
     </div>

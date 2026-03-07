@@ -111,11 +111,11 @@ export async function requestAdminSreStats(token: string): Promise<any> {
             { version: '1.3.6', date: '25 Jan', time: '02:00', status: 'stable', impact: 'Nenhum' }
           ],
           externalServices: [
-            { name: 'Railway App', provider: 'Railway (Node.js Core)', status: 'operational', latency: '45ms' },
-            { name: 'Vercel Edge', provider: 'Vercel (Frontend Svelte)', status: 'operational', latency: '12ms' },
-            { name: 'Firebase Auth', provider: 'Google Cloud', status: 'operational', latency: '110ms' },
-            { name: 'Cloudflare R2', provider: 'Cloudflare (Docs Storage)', status: 'degraded', latency: '850ms' },
-            { name: 'Cloudinary CDN', provider: 'Cloudinary (Imagens)', status: 'operational', latency: '35ms' }
+            { name: 'Railway App', provider: 'Railway (Node.js Core)', status: 'operational', latency: '45ms', cost: 120.50 },
+            { name: 'Vercel Edge', provider: 'Vercel (Frontend Svelte)', status: 'operational', latency: '12ms', cost: 100.00 },
+            { name: 'Firebase Auth', provider: 'Google Cloud', status: 'operational', latency: '110ms', cost: 0 },
+            { name: 'Cloudflare R2', provider: 'Cloudflare (Docs Storage)', status: 'degraded', latency: '850ms', cost: 25.90 },
+            { name: 'Cloudinary CDN', provider: 'Cloudinary (Imagens)', status: 'operational', latency: '35ms', cost: 45.00 }
           ]
         })
       });
