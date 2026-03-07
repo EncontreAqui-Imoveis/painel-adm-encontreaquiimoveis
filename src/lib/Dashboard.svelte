@@ -912,13 +912,13 @@
                             class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6"
                         >
                             <div class="lg:col-span-2">
-                                <SreActionableAlerts
-                                    alerts={sreStats.alerts || []}
+                                <SreAvailability
+                                    data={sreStats.availability || {}}
                                 />
                             </div>
                             <div class="lg:col-span-1">
-                                <SreAvailability
-                                    data={sreStats.availability || {}}
+                                <SreActionableAlerts
+                                    alerts={sreStats.alerts || []}
                                 />
                             </div>
                         </section>
