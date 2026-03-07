@@ -11,7 +11,6 @@
     import SreTimeSeriesChart from "./components/charts/SreTimeSeriesChart.svelte";
     import SreActionableAlerts from "./components/SreActionableAlerts.svelte";
     import SreAvailability from "./components/SreAvailability.svelte";
-    import SreToilChart from "./components/SreToilChart.svelte";
     import SreReleaseHealth from "./components/SreReleaseHealth.svelte";
     import { requestAdminSreStats } from "./adminSessionService";
     import { fetchPlatformResponse } from "./adminFetchService";
@@ -800,23 +799,7 @@
             {:else if activeView === "dashboard"}
                 <div class="space-y-6">
                     {#if sreStats}
-                        <!-- SRE Phase 2: Alerts and Error Budget -->
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                            <div class="lg:col-span-2">
-                                <SreActionableAlerts
-                                    alerts={sreStats.alerts || []}
-                                />
-                            </div>
-                            <div class="lg:col-span-1">
-                                <SreAvailability
-                                    uptimeCurrent={sreStats.availability
-                                        ?.uptimeCurrent || 99.95}
-                                    downtimeMinutes={sreStats.availability
-                                        ?.downtimeMinutes || 12.5}
-                                />
-                            </div>
-                        </div>
-                        <!-- Golden Signals Section -->
+                        <!-- Golden Signals Section (Top Level) -->
                         <section>
                             <div class="mb-4">
                                 <h2
@@ -829,7 +812,7 @@
                                 >
                                     Monitoramento de saúde e telemetria da
                                     plataforma (Latência, Tráfego, Erros e
-                                    Saturação).
+                                    Utilização).
                                 </p>
                             </div>
 
@@ -861,7 +844,7 @@
                                     trendValue={sreStats.errors.trendValue}
                                 />
                                 <SreSignalCard
-                                    title="Saturação"
+                                    title="Utilização"
                                     value={sreStats.saturation.cpu}
                                     unit={sreStats.saturation.unit}
                                     status={sreStats.saturation.status}
@@ -871,7 +854,7 @@
                             </div>
                         </section>
 
-                        <!-- SRE Charts Section -->
+                        <!-- SRE Charts Section (Directly Below Signals) -->
                         <section
                             class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2"
                         >
@@ -909,19 +892,29 @@
                             </div>
                         </section>
 
-                        <!-- SRE Phase 3: Toil and Release Health -->
+                        <!-- SRE Phase 2 & 3: Alerts, Availability, and Release Health -->
+                        <section
+                            class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6"
+                        >
+                            <div class="lg:col-span-2">
+                                <SreActionableAlerts
+                                    alerts={sreStats.alerts || []}
+                                />
+                            </div>
+                            <div class="lg:col-span-1">
+                                <SreAvailability
+                                    uptimeCurrent={sreStats.availability
+                                        ?.uptimeCurrent || 99.95}
+                                    downtimeMinutes={sreStats.availability
+                                        ?.downtimeMinutes || 12.5}
+                                />
+                            </div>
+                        </section>
+
                         <section
                             class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2"
                         >
-                            <div class="h-80">
-                                <SreToilChart
-                                    automatedCount={sreStats.toil
-                                        ?.automatedCount || 0}
-                                    manualCount={sreStats.toil?.manualCount ||
-                                        0}
-                                />
-                            </div>
-                            <div class="h-80">
+                            <div class="lg:col-span-2 h-80">
                                 <SreReleaseHealth
                                     releases={sreStats.releases || []}
                                 />

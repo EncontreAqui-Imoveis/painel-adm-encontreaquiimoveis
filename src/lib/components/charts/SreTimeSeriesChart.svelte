@@ -1,41 +1,80 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    import Chart from 'chart.js/auto';
+    import { onMount } from "svelte";
+    import Chart from "chart.js/auto";
 
     export let title: string;
     export let labels: string[] = [];
     export let data: number[] = [];
-    export let borderColor: string = '#3B82F6';
-    export let backgroundColor: string = 'rgba(59, 130, 246, 0.1)';
+    export let borderColor: string = "#3B82F6";
+    export let backgroundColor: string = "rgba(59, 130, 246, 0.1)";
     export let chartId: string = `chart-${Math.random().toString(36).substr(2, 9)}`;
+
+    const timeFilters = ["Minuto", "Hora", "Dia", "Mês", "Ano", "Total"];
+    let activeFilter = "Hora";
 
     let chartContainer: HTMLCanvasElement;
     let chartInstance: Chart | null = null;
 
-    $: if (chartInstance && data.length > 0) {
-        chartInstance.data.labels = labels;
-        chartInstance.data.datasets[0].data = data;
-        chartInstance.update('none'); // Update without full animation
+    // Simulate different ranges by slicing the mock data
+    $: filteredData = getFilteredData(data, activeFilter);
+    $: filteredLabels = getFilteredLabels(labels, activeFilter);
+
+    function getFilteredData(baseData: number[], filter: string) {
+        if (!baseData || baseData.length === 0) return [];
+        // In a real app, this would trigger an API call.
+        // Here we just mock zooming in by taking slices of the array.
+        const ratios: Record<string, number> = {
+            Minuto: 0.1,
+            Hora: 0.3,
+            Dia: 0.5,
+            Mês: 0.7,
+            Ano: 0.9,
+            Total: 1.0,
+        };
+        const sliceIndex = Math.floor(baseData.length * (1 - ratios[filter]));
+        return baseData.slice(sliceIndex);
+    }
+
+    function getFilteredLabels(baseLabels: string[], filter: string) {
+        if (!baseLabels || baseLabels.length === 0) return [];
+        const ratios: Record<string, number> = {
+            Minuto: 0.1,
+            Hora: 0.3,
+            Dia: 0.5,
+            Mês: 0.7,
+            Ano: 0.9,
+            Total: 1.0,
+        };
+        const sliceIndex = Math.floor(baseLabels.length * (1 - ratios[filter]));
+        return baseLabels.slice(sliceIndex);
+    }
+
+    $: if (chartInstance && filteredData.length > 0) {
+        chartInstance.data.labels = filteredLabels;
+        chartInstance.data.datasets[0].data = filteredData;
+        chartInstance.update("none"); // Update without full animation
     }
 
     onMount(() => {
-        const ctx = chartContainer.getContext('2d');
+        const ctx = chartContainer.getContext("2d");
         if (ctx) {
             chartInstance = new Chart(ctx, {
-                type: 'line',
+                type: "line",
                 data: {
-                    labels: labels,
-                    datasets: [{
-                        label: title,
-                        data: data,
-                        borderColor: borderColor,
-                        backgroundColor: backgroundColor,
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0, // Hide points for sparkline effect
-                        pointHoverRadius: 4
-                    }]
+                    labels: filteredLabels,
+                    datasets: [
+                        {
+                            label: title,
+                            data: filteredData,
+                            borderColor: borderColor,
+                            backgroundColor: backgroundColor,
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0, // Hide points for sparkline effect
+                            pointHoverRadius: 4,
+                        },
+                    ],
                 },
                 options: {
                     responsive: true,
@@ -43,25 +82,25 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            mode: 'index',
+                            mode: "index",
                             intersect: false,
-                        }
+                        },
                     },
                     scales: {
                         x: { display: false }, // Hide axes for cleaner look
-                        y: { 
-                            display: true, 
-                            position: 'right',
+                        y: {
+                            display: true,
+                            position: "right",
                             border: { display: false },
-                            grid: { color: 'rgba(156, 163, 175, 0.1)' }
-                        }
+                            grid: { color: "rgba(156, 163, 175, 0.1)" },
+                        },
                     },
                     interaction: {
-                        mode: 'nearest',
-                        axis: 'x',
-                        intersect: false
-                    }
-                }
+                        mode: "nearest",
+                        axis: "x",
+                        intersect: false,
+                    },
+                },
             });
         }
 
@@ -71,6 +110,18 @@
     });
 </script>
 
-<div class="w-full h-40">
-    <canvas bind:this={chartContainer} id={chartId}></canvas>
+<div class="flex flex-col h-full w-full">
+    <div class="flex flex-wrap gap-1 mb-4">
+        {#each timeFilters as filter}
+            <button
+                class={`px-2 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition-colors ${activeFilter === filter ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400" : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"}`}
+                on:click={() => (activeFilter = filter)}
+            >
+                {filter}
+            </button>
+        {/each}
+    </div>
+    <div class="w-full h-40 flex-1 relative">
+        <canvas bind:this={chartContainer} id={chartId}></canvas>
+    </div>
 </div>
