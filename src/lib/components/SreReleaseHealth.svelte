@@ -59,7 +59,7 @@
         </div>
     </div>
 
-    <div class="p-5 flex-1">
+    <div class="p-5 flex-1 overflow-y-auto">
         <div
             class="relative border-l border-gray-200 dark:border-gray-700 ml-3 space-y-6"
         >

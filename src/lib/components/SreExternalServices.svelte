@@ -129,7 +129,7 @@
                 class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center text-sm"
             >
                 <span class="font-medium text-gray-600 dark:text-gray-400"
-                    >Custo Total Mensal das dependências estimado</span
+                    >Custo Total Mensal das Dependências Estimado:</span
                 >
                 <span class="font-bold text-gray-900 dark:text-white text-base"
                     >R$ {totalCost.toFixed(2).replace(".", ",")}</span
