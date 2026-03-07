@@ -61,6 +61,30 @@ export async function requestAdminSreStats(token: string): Promise<any> {
             trend: 'neutral',
             trendValue: '0%',
             history: Array.from({ length: 12 }, () => Math.floor(Math.random() * 30) + 50)
+          },
+          alerts: [
+            {
+              id: 'err-8902',
+              severity: 'critical',
+              service: 'PDF Generation Service (Go)',
+              message: 'Pod restarting continuously (OOMKilled). Contract generation failing.',
+              duration: '12m',
+              time: '12:12'
+            },
+            {
+              id: 'err-8903',
+              severity: 'warning',
+              service: 'MySQL TiDB connection pool',
+              message: 'Connection pool usage approaching 85% capacity limits.',
+              duration: '45m',
+              time: '11:38'
+            }
+          ],
+          budget: {
+            sloTarget: 99.9,
+            sloCurrent: 99.88,
+            budgetTotalRaw: 43.2,
+            budgetSpentRaw: 48.5
           }
         })
       });

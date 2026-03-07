@@ -9,6 +9,8 @@
     import VerificationTable from "./VerificationTable.svelte";
     import SreSignalCard from "./components/SreSignalCard.svelte";
     import SreTimeSeriesChart from "./components/charts/SreTimeSeriesChart.svelte";
+    import SreActionableAlerts from "./components/SreActionableAlerts.svelte";
+    import SreErrorBudget from "./components/SreErrorBudget.svelte";
     import { requestAdminSreStats } from "./adminSessionService";
     import { fetchPlatformResponse } from "./adminFetchService";
     import { clearSessionToken, hasSessionToken } from "./sessionState";
@@ -796,6 +798,24 @@
             {:else if activeView === "dashboard"}
                 <div class="space-y-6">
                     {#if sreStats}
+                        <!-- SRE Phase 2: Alerts and Error Budget -->
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                            <div class="lg:col-span-2">
+                                <SreActionableAlerts
+                                    alerts={sreStats.alerts || []}
+                                />
+                            </div>
+                            <div class="lg:col-span-1">
+                                <SreErrorBudget
+                                    sloTarget={sreStats.budget?.sloTarget}
+                                    sloCurrent={sreStats.budget?.sloCurrent}
+                                    budgetTotalRaw={sreStats.budget
+                                        ?.budgetTotalRaw}
+                                    budgetSpentRaw={sreStats.budget
+                                        ?.budgetSpentRaw}
+                                />
+                            </div>
+                        </div>
                         <!-- Golden Signals Section -->
                         <section>
                             <div class="mb-4">
