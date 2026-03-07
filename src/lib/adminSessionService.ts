@@ -95,10 +95,27 @@ export async function requestAdminSreStats(token: string): Promise<any> {
             manualCount: 12
           },
           releases: [
-            { version: '1.4.2', date: 'Hoje', time: '08:30', status: 'success', impact: 'Nenhum' },
-            { version: '1.4.1', date: 'Ontem', time: '14:15', status: 'rollback', impact: 'Picos de Latência' },
-            { version: '1.4.0', date: '12 Fev', time: '22:00', status: 'stable', impact: 'Baixo' },
-            { version: '1.3.9', date: '05 Fev', time: '04:00', status: 'stable', impact: 'Nenhum' }
+            { version: '1.4.9', date: 'Hoje', time: '18:10', status: 'success', impact: 'Nenhum' },
+            { version: '1.4.8', date: 'Hoje', time: '14:20', status: 'stable', impact: 'Nenhum' },
+            { version: '1.4.7', date: 'Hoje', time: '11:05', status: 'stable', impact: 'Nenhum' },
+            { version: '1.4.6', date: 'Hoje', time: '09:00', status: 'rollback', impact: 'Erro no Checkout' },
+            { version: '1.4.5', date: 'Hoje', time: '08:30', status: 'success', impact: 'Nenhum' },
+            { version: '1.4.4', date: 'Ontem', time: '18:15', status: 'stable', impact: 'Nenhum' },
+            { version: '1.4.3', date: 'Ontem', time: '16:00', status: 'stable', impact: 'Nenhum' },
+            { version: '1.4.2', date: 'Ontem', time: '10:30', status: 'stable', impact: 'Baixo' },
+            { version: '1.4.1', date: '12 Fev', time: '14:15', status: 'rollback', impact: 'Picos de Latência' },
+            { version: '1.4.0', date: '12 Fev', time: '10:00', status: 'stable', impact: 'Baixo' },
+            { version: '1.3.9', date: '05 Fev', time: '04:00', status: 'stable', impact: 'Nenhum' },
+            { version: '1.3.8', date: '01 Fev', time: '23:00', status: 'stable', impact: 'Nenhum' },
+            { version: '1.3.7', date: '28 Jan', time: '01:00', status: 'stable', impact: 'Nenhum' },
+            { version: '1.3.6', date: '25 Jan', time: '02:00', status: 'stable', impact: 'Nenhum' }
+          ],
+          externalServices: [
+            { name: 'Railway App', provider: 'Railway (Node.js Core)', status: 'operational', latency: '45ms' },
+            { name: 'Vercel Edge', provider: 'Vercel (Frontend Svelte)', status: 'operational', latency: '12ms' },
+            { name: 'Firebase Auth', provider: 'Google Cloud', status: 'operational', latency: '110ms' },
+            { name: 'Cloudflare R2', provider: 'Cloudflare (Docs Storage)', status: 'degraded', latency: '850ms' },
+            { name: 'Cloudinary CDN', provider: 'Cloudinary (Imagens)', status: 'operational', latency: '35ms' }
           ]
         })
       });

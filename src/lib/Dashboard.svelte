@@ -12,6 +12,7 @@
     import SreActionableAlerts from "./components/SreActionableAlerts.svelte";
     import SreAvailability from "./components/SreAvailability.svelte";
     import SreReleaseHealth from "./components/SreReleaseHealth.svelte";
+    import SreExternalServices from "./components/SreExternalServices.svelte";
     import { requestAdminSreStats } from "./adminSessionService";
     import { fetchPlatformResponse } from "./adminFetchService";
     import { clearSessionToken, hasSessionToken } from "./sessionState";
@@ -914,9 +915,14 @@
                         <section
                             class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2"
                         >
-                            <div class="lg:col-span-2 h-80">
+                            <div class="h-96">
                                 <SreReleaseHealth
                                     releases={sreStats.releases || []}
+                                />
+                            </div>
+                            <div class="h-96">
+                                <SreExternalServices
+                                    services={sreStats.externalServices || []}
                                 />
                             </div>
                         </section>

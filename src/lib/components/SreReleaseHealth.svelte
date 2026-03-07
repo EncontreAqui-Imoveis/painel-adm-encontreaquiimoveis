@@ -22,6 +22,10 @@
         rollback:
             '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>',
     };
+
+    let showAll = false;
+    $: visibleReleases = showAll ? releases : releases.slice(0, 10);
+    $: hasMore = releases.length > 10;
 </script>
 
 <div
@@ -59,7 +63,7 @@
         <div
             class="relative border-l border-gray-200 dark:border-gray-700 ml-3 space-y-6"
         >
-            {#each releases as release, i}
+            {#each visibleReleases as release, i}
                 <div class="relative pl-6">
                     <div
                         class="absolute w-3 h-3 bg-white dark:bg-gray-800 border-2 {release.status ===
@@ -103,6 +107,26 @@
         {#if releases.length === 0}
             <div class="text-center text-sm text-gray-500 py-4">
                 Nenhum deploy recente.
+            </div>
+        {/if}
+        {#if hasMore && !showAll}
+            <div class="mt-6 text-center">
+                <button
+                    on:click={() => (showAll = true)}
+                    class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2 rounded-full"
+                >
+                    Mostrar Mais Histórico ({releases.length - 10})
+                </button>
+            </div>
+        {/if}
+        {#if hasMore && showAll}
+            <div class="mt-6 text-center">
+                <button
+                    on:click={() => (showAll = false)}
+                    class="text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 transition-colors bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-full"
+                >
+                    Mostrar Menos
+                </button>
             </div>
         {/if}
     </div>
