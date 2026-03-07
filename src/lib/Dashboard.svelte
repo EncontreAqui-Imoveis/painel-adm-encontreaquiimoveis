@@ -67,6 +67,12 @@
         totalUsers: number;
     }
     let stats: Stats | null = null;
+    let sreStats: any = null;
+    let timeLabels = Array.from(
+        { length: 12 },
+        (_, i) => `${i * 2}h atrás`,
+    ).reverse();
+
     $: totalClients = stats
         ? Math.max(0, stats.totalUsers - stats.totalBrokers)
         : 0;
@@ -359,12 +365,23 @@
                 if (!response.ok)
                     throw new Error("Falha ao buscar estatísticas");
                 stats = await response.json();
+
+                // Fetch SRE stats from session service mock
+                if (hasSessionToken()) {
+                    const sreResponse = await requestAdminSreStats(
+                        localStorage.getItem("session_token") || "",
+                    );
+                    if (sreResponse?.ok) {
+                        sreStats = await sreResponse.json();
+                    }
+                }
             } catch (error) {
                 console.error(
                     "Erro ao buscar estatísticas do dashboard:",
                     error,
                 );
                 stats = null;
+                sreStats = null;
             } finally {
                 isLoading = false;
             }
