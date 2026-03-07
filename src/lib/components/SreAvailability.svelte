@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onMount, afterUpdate } from "svelte";
     import Chart from "chart.js/auto";
 
     export let data: Record<
@@ -19,99 +19,89 @@
     $: downtimeMinutes = currentStats.downtimeMinutes;
     $: historyData = currentStats.history;
 
-    $: uptimeStatusColor =
-        uptimeCurrent >= 99.9
-            ? "bg-green-500"
-            : uptimeCurrent >= 99.0
-              ? "bg-yellow-500"
-              : "bg-red-500";
-
-    $: uptimeStatusText =
-        uptimeCurrent >= 99.9
-            ? "text-green-600 dark:text-green-400"
-            : uptimeCurrent >= 99.0
-              ? "text-yellow-600 dark:text-yellow-400"
-              : "text-red-600 dark:text-red-400";
+    // High-fidelity Colors (matching references)
+    const brandGold = "#FACC15"; // Yellow-400
+    const brandGreen = "#10B981"; // Emerald-500
+    const brandRed = "#EF4444"; // Red-500
 
     let chartContainer: HTMLCanvasElement;
     let chartInstance: Chart | null = null;
     let chartId: string = `availability-chart-${Math.random().toString(36).substr(2, 9)}`;
 
     function updateChart() {
-        if (!chartInstance && chartContainer) {
-            const ctx = chartContainer.getContext("2d");
-            if (ctx) {
-                chartInstance = new Chart(ctx, {
-                    type: "line",
-                    data: {
-                        labels: historyData.map((_, i) => `${i + 1}`),
-                        datasets: [
-                            {
-                                label: "Uptime (%)",
-                                data: historyData,
-                                borderColor:
-                                    uptimeCurrent >= 99.9
-                                        ? "#10B981"
-                                        : uptimeCurrent >= 99.0
-                                          ? "#F59E0B"
-                                          : "#EF4444",
-                                backgroundColor:
-                                    uptimeCurrent >= 99.9
-                                        ? "rgba(16, 185, 129, 0.1)"
-                                        : uptimeCurrent >= 99.0
-                                          ? "rgba(245, 158, 11, 0.1)"
-                                          : "rgba(239, 68, 68, 0.1)",
-                                borderWidth: 2,
-                                fill: true,
-                                tension: 0.4,
-                                pointRadius: 0,
-                                pointHoverRadius: 4,
-                            },
-                        ],
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: { mode: "index", intersect: false },
+        if (!chartContainer) return;
+
+        const ctx = chartContainer.getContext("2d");
+        if (!ctx) return;
+
+        // Create gradient
+        const gradient = ctx.createLinearGradient(0, 0, 0, 80);
+        gradient.addColorStop(0, "rgba(16, 185, 129, 0.4)");
+        gradient.addColorStop(1, "rgba(16, 185, 129, 0.0)");
+
+        if (!chartInstance) {
+            chartInstance = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: historyData.map((_, i) => `${i + 1}`),
+                    datasets: [
+                        {
+                            data: historyData,
+                            borderColor: brandGreen,
+                            backgroundColor: gradient,
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
                         },
-                        scales: {
-                            x: { display: false },
-                            y: {
-                                display: false,
-                                min: Math.min(...historyData, 99.0) - 0.1,
-                                max: 100,
-                            },
-                        },
-                        interaction: {
-                            mode: "nearest",
-                            axis: "x",
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            mode: "index",
                             intersect: false,
+                            displayColors: false,
+                            backgroundColor: "#1f2937", // Darker gray
+                            titleColor: "#9ca3af",
+                            bodyColor: "#fff",
+                            callbacks: {
+                                label: (context) =>
+                                    `Uptime: ${context.parsed.y}%`,
+                            },
                         },
                     },
-                });
-            }
-        } else if (chartInstance) {
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            display: false,
+                            min: Math.max(
+                                90,
+                                Math.min(...historyData, 99.0) - 0.5,
+                            ),
+                            max: 100.1,
+                        },
+                    },
+                    interaction: {
+                        mode: "nearest",
+                        axis: "x",
+                        intersect: false,
+                    },
+                },
+            });
+        } else {
             chartInstance.data.labels = historyData.map((_, i) => `${i + 1}`);
             chartInstance.data.datasets[0].data = historyData;
-            chartInstance.data.datasets[0].borderColor =
-                uptimeCurrent >= 99.9
-                    ? "#10B981"
-                    : uptimeCurrent >= 99.0
-                      ? "#F59E0B"
-                      : "#EF4444";
-            chartInstance.data.datasets[0].backgroundColor =
-                uptimeCurrent >= 99.9
-                    ? "rgba(16, 185, 129, 0.1)"
-                    : uptimeCurrent >= 99.0
-                      ? "rgba(245, 158, 11, 0.1)"
-                      : "rgba(239, 68, 68, 0.1)";
+            chartInstance.data.datasets[0].backgroundColor = gradient;
             chartInstance.update("none");
         }
     }
 
-    // Reactively update the chart when the data or filter changes
     $: if (historyData && chartContainer) {
         updateChart();
     }
@@ -134,21 +124,28 @@
 </script>
 
 <div
-    class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 pb-5 flex flex-col justify-between h-full"
+    class="bg-[#1a1f2e] dark:bg-[#1a1f2e] rounded-2xl border border-gray-700/50 shadow-2xl p-7 pb-6 flex flex-col justify-between h-full relative overflow-hidden"
 >
-    <div>
+    <!-- Background subtle glow -->
+    <div
+        class="absolute -top-24 -right-24 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl"
+    ></div>
+
+    <div class="relative z-10">
         <div
-            class="flex flex-col sm:flex-row justify-between items-start mb-4 gap-2"
+            class="flex flex-col sm:flex-row justify-between items-start mb-6 gap-2"
         >
             <h3
-                class="text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                class="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400/80"
             >
                 Disponibilidade
             </h3>
-            <div class="flex flex-wrap gap-1">
+            <div
+                class="flex flex-wrap gap-1 bg-gray-900/40 p-1 rounded-lg border border-gray-700/30"
+            >
                 {#each timeFilters as filter}
                     <button
-                        class={`px-2 py-1 text-[10px] font-semibold rounded-md transition-colors ${activeFilter === filter ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400" : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"}`}
+                        class={`px-3 py-1 text-[9px] font-bold rounded-md transition-all duration-200 ${activeFilter === filter ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
                         on:click={() => (activeFilter = filter)}
                     >
                         {filter}
@@ -157,59 +154,72 @@
             </div>
         </div>
 
-        <div class="flex items-end justify-between mb-4">
-            <div
-                class={`text-4xl font-black tracking-tight ${uptimeStatusText}`}
-            >
-                {uptimeCurrent.toFixed(2)}%
+        <div class="flex items-center justify-between mb-2">
+            <div class="flex flex-col">
+                <div
+                    class="text-[44px] font-black tracking-tighter text-[#FACC15] leading-none"
+                >
+                    {uptimeCurrent.toFixed(2)}%
+                </div>
+                <div
+                    class="text-[10px] font-bold text-gray-400 mt-2 flex items-center gap-1.5"
+                >
+                    <span
+                        class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"
+                    ></span>
+                    SISTEMA OPERACIONAL
+                </div>
             </div>
             <div class="text-right">
-                <div class="text-sm font-bold text-gray-900 dark:text-gray-100">
-                    {uptimeStatusColor === "bg-green-500"
-                        ? "Excelente"
-                        : uptimeStatusColor === "bg-yellow-500"
-                          ? "Atenção"
-                          : "Crítico"}
+                <div
+                    class={`text-[13px] font-black italic tracking-wider px-3 py-1 rounded-md border border-emerald-500/20 bg-emerald-500/5 text-emerald-400`}
+                >
+                    EXCELENTE
                 </div>
             </div>
         </div>
     </div>
 
     <!-- The interactive Sparkline Chart -->
-    <div class="w-full h-16 relative mb-4">
+    <div class="w-full h-24 relative mt-2 mb-4 -mx-2">
         <canvas bind:this={chartContainer} id={chartId}></canvas>
     </div>
 
-    <div>
-        <!-- Progress bar mimicking the historical single-bar design -->
+    <div class="relative z-10">
+        <!-- Health Bar -->
         <div
-            class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2 overflow-hidden flex"
+            class="w-full bg-gray-800/80 rounded-full h-[6px] mb-3 overflow-hidden flex gap-[2px]"
         >
-            <!-- Downtime slice -->
+            {#if uptimeCurrent < 100}
+                <div
+                    class="bg-red-500 h-full rounded-l-full"
+                    style="width: {Math.max(2, (100 - uptimeCurrent) * 10)}%"
+                ></div>
+            {/if}
             <div
-                class="bg-red-400 dark:bg-red-500 h-2"
-                style="width: {Math.min(100, (100 - uptimeCurrent) * 100)}%"
-            ></div>
-            <!-- Uptime slice -->
-            <div
-                class="{uptimeStatusColor} h-2 flex-1 transition-all duration-500"
+                class="bg-emerald-500 h-full flex-1 rounded-full transition-all duration-700"
             ></div>
         </div>
 
         <div
-            class="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400 mt-2"
+            class="flex justify-between items-center text-[10px] text-gray-400/80 font-bold uppercase tracking-widest"
         >
-            <span class="flex items-center gap-1">
+            <span class="flex items-center gap-2">
                 <span
-                    class="w-2 h-2 rounded-full {downtimeMinutes > 0
-                        ? 'bg-red-500'
-                        : 'bg-green-500'} inline-block"
+                    class={`w-1.5 h-1.5 rounded-full ${downtimeMinutes > 0 ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-emerald-500"} `}
                 ></span>
-                Inatividade: {downtimeMinutes.toFixed(1)} min
+                Inatividade:
+                <span class="text-gray-200 ml-1"
+                    >{downtimeMinutes.toFixed(1)} min</span
+                >
             </span>
-            <span class="opacity-80 font-medium"
-                >{filterLabels[activeFilter]}</span
-            >
+            <span class="opacity-60">{filterLabels[activeFilter]}</span>
         </div>
     </div>
 </div>
+
+<style>
+    canvas {
+        filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+    }
+</style>

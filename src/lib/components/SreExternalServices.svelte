@@ -1,4 +1,7 @@
 <script lang="ts">
+    import { createEventDispatcher } from "svelte";
+    const dispatch = createEventDispatcher();
+
     export let services: {
         name: string;
         provider: string;
@@ -6,6 +9,9 @@
         latency?: string;
         cost?: number;
     }[] = [];
+
+    let editingName: string | null = null;
+    let editValue: string = "";
 
     $: totalCost = services.reduce(
         (sum, service) => sum + (service.cost || 0),
@@ -23,6 +29,25 @@
         degraded: "bg-yellow-500 animate-pulse",
         outage: "bg-red-500 animate-pulse",
     };
+
+    function startEdit(service: any) {
+        editingName = service.name;
+        editValue = (service.cost || 0).toString();
+    }
+
+    function cancelEdit() {
+        editingName = null;
+    }
+
+    function saveEdit() {
+        if (editingName) {
+            dispatch("updatePrice", {
+                name: editingName,
+                cost: parseFloat(editValue) || 0,
+            });
+            editingName = null;
+        }
+    }
 </script>
 
 <div
@@ -51,7 +76,8 @@
                 Dependências Externas (SaaS/PaaS)
             </h3>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Status de serviços críticos de terceiros
+                Status de serviços críticos de terceiros (Clique no preço para
+                editar)
             </p>
         </div>
     </div>
@@ -98,23 +124,77 @@
                                   ? "Instável"
                                   : "Indisponível"}
                         </p>
-                        {#if service.latency && service.status === "operational"}
-                            <p
-                                class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5"
-                            >
-                                {service.latency} &bull; R$ {(service.cost || 0)
-                                    .toFixed(2)
-                                    .replace(".", ",")}
-                            </p>
-                        {:else}
-                            <p
-                                class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5"
-                            >
-                                R$ {(service.cost || 0)
-                                    .toFixed(2)
-                                    .replace(".", ",")}
-                            </p>
-                        {/if}
+
+                        <div class="mt-1 flex items-center justify-end gap-2">
+                            {#if editingName === service.name}
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    bind:value={editValue}
+                                    class="w-20 text-[10px] bg-white dark:bg-gray-900 border border-indigo-500 rounded px-1 py-0.5 text-right focus:ring-1 focus:ring-indigo-500"
+                                />
+                                <button
+                                    on:click={saveEdit}
+                                    class="text-green-500 hover:text-green-600"
+                                    aria-label="Salvar preço"
+                                >
+                                    <svg
+                                        class="w-3 h-3"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        ><path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M5 13l4 4L19 7"
+                                        /></svg
+                                    >
+                                </button>
+                                <button
+                                    on:click={cancelEdit}
+                                    class="text-red-500 hover:text-red-600"
+                                    aria-label="Cancelar edição"
+                                >
+                                    <svg
+                                        class="w-3 h-3"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        ><path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12"
+                                        /></svg
+                                    >
+                                </button>
+                            {:else}
+                                <button
+                                    class="text-[10px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-indigo-400 dark:hover:text-indigo-400 transition-colors flex items-center gap-1 group bg-transparent border-none p-0"
+                                    on:click={() => startEdit(service)}
+                                    aria-label={`Editar preço de ${service.name}`}
+                                >
+                                    {#if service.latency && service.status === "operational"}
+                                        <span>{service.latency} &bull;</span>
+                                    {/if}
+                                    <span
+                                        class="font-bold text-gray-600 dark:text-gray-300"
+                                        >R$ {(service.cost || 0)
+                                            .toFixed(2)
+                                            .replace(".", ",")}</span
+                                    >
+                                    <svg
+                                        class="w-2 h-2 opacity-50 group-hover:opacity-100"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                        ><path
+                                            d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"
+                                        /></svg
+                                    >
+                                </button>
+                            {/if}
+                        </div>
                     </div>
                 </li>
             {/each}

@@ -769,6 +769,23 @@
 
     $: paginatedData = allData;
     $: totalPages = Math.ceil(totalItems / itemsPerPage);
+    async function handleUpdatePrice(
+        event: CustomEvent<{ name: string; cost: number }>,
+    ) {
+        const { name, cost } = event.detail;
+        const response = await fetchPlatformResponse(
+            `/admin/dashboard/sre/external-services/${name}`,
+            {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ cost }),
+            },
+        );
+
+        if (response && response.ok) {
+            await fetchData(); // Refresh data using the existing fetchData function
+        }
+    }
 </script>
 
 <div
@@ -818,7 +835,7 @@
                                 class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
                             >
                                 <SreSignalCard
-                                    title="Latência (p99)"
+                                    title="Latência (p99) (estimativa)"
                                     value={sreStats.latency.p99}
                                     unit={sreStats.latency.unit}
                                     status={sreStats.latency.status}
@@ -834,7 +851,7 @@
                                     trendValue={sreStats.traffic.trendValue}
                                 />
                                 <SreSignalCard
-                                    title="Erros"
+                                    title="Erros (estimativa)"
                                     value={sreStats.errors.rate}
                                     unit={sreStats.errors.unit}
                                     status={sreStats.errors.status}
@@ -911,12 +928,13 @@
                         >
                             <div class="h-96">
                                 <SreReleaseHealth
-                                    releases={sreStats.releases || []}
+                                    releases={sreStats.releases || {}}
                                 />
                             </div>
                             <div class="h-96">
                                 <SreExternalServices
                                     services={sreStats.externalServices || []}
+                                    on:updatePrice={handleUpdatePrice}
                                 />
                             </div>
                         </section>
