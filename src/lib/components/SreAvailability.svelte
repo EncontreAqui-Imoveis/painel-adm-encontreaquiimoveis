@@ -13,7 +13,7 @@
     $: currentStats = data[activeFilter] || {
         uptimeCurrent: 99.92,
         downtimeMinutes: 34.5,
-        history: Array.from({ length: 30 }, () => 99 + Math.random()),
+        history: Array.from({ length: 30 }, () => 99.5 + Math.random() * 0.4),
     };
     $: uptimeCurrent = currentStats.uptimeCurrent;
     $: downtimeMinutes = currentStats.downtimeMinutes;
@@ -28,13 +28,14 @@
         const ctx = chartContainer.getContext("2d");
         if (!ctx) return;
 
-        const gradient = ctx.createLinearGradient(0, 0, 0, 160);
-        gradient.addColorStop(0, "rgba(16, 185, 129, 0.5)");
-        gradient.addColorStop(1, "rgba(16, 185, 129, 0.0)");
-
+        // Clean up previous instance
         if (chartInstance) {
             chartInstance.destroy();
         }
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+        gradient.addColorStop(0, "rgba(16, 185, 129, 0.4)");
+        gradient.addColorStop(0.8, "rgba(16, 185, 129, 0.0)");
 
         chartInstance = new Chart(ctx, {
             type: "line",
@@ -45,28 +46,54 @@
                         data: historyData,
                         borderColor: "#10B981",
                         backgroundColor: gradient,
-                        borderWidth: 3,
+                        borderWidth: 2.5,
                         fill: true,
                         tension: 0.4,
                         pointRadius: 0,
                         pointHoverRadius: 6,
+                        pointHoverBackgroundColor: "#10B981",
+                        pointHoverBorderColor: "#fff",
+                        pointHoverBorderWidth: 2,
                     },
                 ],
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 10, // Avoid clipping at top
+                        bottom: 10,
+                    },
+                },
                 plugins: {
                     legend: { display: false },
-                    tooltip: { enabled: true },
+                    tooltip: {
+                        enabled: true,
+                        backgroundColor: "#111827",
+                        titleColor: "#9ca3af",
+                        bodyColor: "#fff",
+                        padding: 12,
+                        cornerRadius: 8,
+                        displayColors: false,
+                        callbacks: {
+                            label: (context) =>
+                                `Uptime: ${context.parsed.y.toFixed(3)}%`,
+                        },
+                    },
                 },
                 scales: {
                     x: { display: false },
                     y: {
                         display: false,
-                        min: Math.min(...historyData) - 0.1,
-                        max: 100.1,
+                        // Fix framing/clipping: set bounds that give the line space
+                        min: Math.min(...historyData, 98) - 0.2,
+                        max: 100.2,
                     },
+                },
+                interaction: {
+                    mode: "index",
+                    intersect: false,
                 },
             },
         });
@@ -78,25 +105,40 @@
 
     onMount(() => {
         updateChart();
+        return () => {
+            if (chartInstance) chartInstance.destroy();
+        };
     });
 </script>
 
 <div
-    class="bg-[#1e2533] rounded-3xl p-8 flex flex-col h-full border border-gray-800 shadow-2xl"
+    class="bg-[#111827] rounded-3xl p-8 flex flex-col h-full border border-gray-800 shadow-2xl relative overflow-hidden group"
 >
-    <div class="flex justify-between items-start mb-8">
-        <h3 class="text-gray-400 font-bold uppercase tracking-[0.2em] text-xs">
-            Disponibilidade
-        </h3>
+    <!-- Subtle overlay for better framing -->
+    <div
+        class="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-emerald-500/5 pointer-events-none"
+    ></div>
+
+    <div class="relative z-10 flex justify-between items-start mb-8">
+        <div class="flex flex-col gap-1">
+            <h3
+                class="text-gray-500 font-bold uppercase tracking-[0.25em] text-[10px]"
+            >
+                Monitoramento SRE
+            </h3>
+            <span class="text-white font-black text-lg tracking-tight"
+                >Disponibilidade</span
+            >
+        </div>
 
         <div
-            class="bg-[#161b26] p-1.5 rounded-xl flex gap-1 border border-gray-800"
+            class="bg-[#0b0f1a] p-1.5 rounded-xl flex gap-1 border border-gray-800/80"
         >
             {#each timeFilters as filter}
                 <button
-                    class="px-4 py-2 text-[11px] font-bold rounded-lg transition-all {activeFilter ===
+                    class="px-3 py-1.5 text-[10px] font-black rounded-lg transition-all {activeFilter ===
                     filter
-                        ? 'bg-[#5850ec] text-white shadow-lg'
+                        ? 'bg-[#4f46e5] text-white shadow-lg'
                         : 'text-gray-500 hover:text-gray-300'}"
                     on:click={() => (activeFilter = filter)}
                 >
@@ -106,25 +148,29 @@
         </div>
     </div>
 
-    <div class="flex justify-between items-end mb-6">
-        <div>
+    <div class="relative z-10 flex justify-between items-end mb-8">
+        <div class="flex flex-col gap-2">
             <div
-                class="text-[64px] font-black text-[#facc15] leading-none mb-4 tracking-tighter"
+                class="text-6xl font-black text-[#facc15] leading-none tracking-tighter drop-shadow-sm"
             >
                 {uptimeCurrent.toFixed(2)}%
             </div>
             <div
-                class="flex items-center gap-2 text-gray-400 font-bold text-xs uppercase tracking-wider"
+                class="flex items-center gap-2 text-gray-400 font-bold text-[10px] uppercase tracking-[0.15em]"
             >
-                <span
-                    class="w-2.5 h-2.5 rounded-full bg-[#10b981] shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-                ></span>
-                Sistema Operacional
+                <div class="relative">
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#10b981] block"
+                    ></span>
+                    <span
+                        class="absolute inset-0 w-2.5 h-2.5 rounded-full bg-[#10b981] animate-ping opacity-25"
+                    ></span>
+                </div>
+                Sistema Operacional (Real)
             </div>
         </div>
 
         <div
-            class="bg-[#10b9811a] border border-[#10b98133] rounded-xl px-4 py-2"
+            class="bg-[#10b98115] border border-[#10b98130] rounded-xl px-4 py-2 flex items-center gap-2"
         >
             <span
                 class="text-[#10b981] font-black italic text-lg tracking-widest"
@@ -133,37 +179,48 @@
         </div>
     </div>
 
-    <!-- Graph - Height increased for visibility -->
-    <div class="flex-1 min-h-[180px] w-full relative -mx-2 mb-6">
+    <!-- Graph Container - Optimized Height and Framing -->
+    <div
+        class="flex-1 w-full min-h-[220px] relative mt-2 mb-8 -mx-2 bg-[#0b0f1a]/30 rounded-2xl border border-gray-800/20"
+    >
         <canvas bind:this={chartContainer}></canvas>
     </div>
 
-    <div>
+    <div class="relative z-10 mt-auto">
         <div
-            class="w-full bg-gray-800 rounded-full h-2 mb-6 overflow-hidden flex"
+            class="w-full bg-gray-900 rounded-full h-2.5 mb-6 overflow-hidden flex ring-1 ring-white/5"
         >
-            <div class="bg-red-500 h-full" style="width: 2%"></div>
-            <div class="bg-[#10b981] h-full flex-1"></div>
+            {#if uptimeCurrent < 100}
+                <div
+                    class="bg-red-500 h-full rounded-l-full"
+                    style="width: 3%"
+                ></div>
+            {/if}
+            <div class="bg-emerald-500 h-full flex-1 rounded-r-full"></div>
         </div>
 
         <div
-            class="flex justify-between items-center text-xs font-bold uppercase tracking-[0.15em]"
+            class="flex justify-between items-center text-[10px] font-black uppercase tracking-[0.2em]"
         >
-            <div class="flex items-center gap-3 text-gray-400">
-                <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+            <div class="flex items-center gap-3 text-gray-500">
                 <span
-                    >Inatividade: <span class="text-white ml-2"
-                        >{downtimeMinutes} MIN</span
+                    class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                ></span>
+                <span
+                    >Inatividade: <span class="text-gray-100 ml-1"
+                        >{downtimeMinutes.toFixed(1)} MIN</span
                     ></span
                 >
             </div>
-            <div class="text-gray-500 opacity-60">Últimos 30 dias</div>
+            <div class="text-gray-600 bg-gray-900/50 px-2.5 py-1 rounded-md">
+                Últimos 30 dias
+            </div>
         </div>
     </div>
 </div>
 
 <style>
     canvas {
-        filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.2));
+        transition: opacity 0.3s ease;
     }
 </style>
