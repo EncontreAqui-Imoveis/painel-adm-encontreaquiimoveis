@@ -9,8 +9,6 @@
     import VerificationTable from "./VerificationTable.svelte";
     import SreSignalCard from "./components/SreSignalCard.svelte";
     import SreTimeSeriesChart from "./components/charts/SreTimeSeriesChart.svelte";
-    import SreActionableAlerts from "./components/SreActionableAlerts.svelte";
-    import SreAvailability from "./components/SreAvailability.svelte";
     import SreReleaseHealth from "./components/SreReleaseHealth.svelte";
     import SreExternalServices from "./components/SreExternalServices.svelte";
     import { fetchPlatformResponse } from "./adminFetchService";
@@ -907,22 +905,6 @@
                                         trendValue={sreStats.saturation
                                             .trendValue}
                                     />
-                                </div>
-
-                                <!-- Middle Section: Availability and Alerts -->
-                                <div
-                                    class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6"
-                                >
-                                    <div class="lg:col-span-2 h-96">
-                                        <SreAvailability
-                                            data={sreStats.availability || {}}
-                                        />
-                                    </div>
-                                    <div class="lg:col-span-1 h-96">
-                                        <SreActionableAlerts
-                                            alerts={sreStats.alerts || []}
-                                        />
-                                    </div>
                                 </div>
 
                                 <!-- Bottom Section: Releases and External Services -->
