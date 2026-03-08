@@ -8,11 +8,11 @@
 
     const statusColors = {
         healthy:
-            "bg-[#0b0f1a] text-gray-100 border-emerald-500/20 shadow-[0_4px_20px_rgba(16,185,129,0.05)]",
+            "bg-white dark:bg-[#0b0f1a] text-gray-900 dark:text-gray-100 border-emerald-200 dark:border-emerald-500/20 shadow-sm dark:shadow-[0_4px_20px_rgba(16,185,129,0.05)]",
         warning:
-            "bg-yellow-900/10 text-yellow-100 border-yellow-500/30 shadow-[0_4px_20px_rgba(234,179,8,0.1)]",
+            "bg-yellow-50 dark:bg-yellow-900/10 text-yellow-900 dark:text-yellow-100 border-yellow-300 dark:border-yellow-500/30 shadow-sm dark:shadow-[0_4px_20px_rgba(234,179,8,0.1)]",
         critical:
-            "bg-red-900/10 text-red-100 border-red-500/30 shadow-[0_4px_20px_rgba(239,68,68,0.15)]",
+            "bg-red-50 dark:bg-red-900/10 text-red-900 dark:text-red-100 border-red-300 dark:border-red-500/30 shadow-sm dark:shadow-[0_4px_20px_rgba(239,68,68,0.15)]",
     };
 
     const statusIndicatorColors = {
@@ -39,7 +39,7 @@
                 ></span>
             </div>
             <h3
-                class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400 group-hover:text-gray-300 transition-colors"
+                class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-300 transition-colors"
             >
                 {title}
             </h3>
@@ -47,12 +47,12 @@
 
         {#if trendValue}
             <div
-                class={`text-[10px] font-black flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-900/50 border border-white/5 backdrop-blur-sm ${
+                class={`text-[10px] font-black flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-900/50 border border-gray-200 dark:border-white/5 backdrop-blur-sm ${
                     trendDirection === "down" && status === "healthy"
-                        ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]"
+                        ? "text-emerald-600 dark:text-emerald-400 dark:drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]"
                         : trendDirection === "up" && status === "critical"
-                          ? "text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]"
-                          : "text-gray-400"
+                          ? "text-red-600 dark:text-red-400 dark:drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]"
+                          : "text-gray-600 dark:text-gray-400"
                 }`}
             >
                 {#if trendDirection === "up"}
@@ -91,13 +91,13 @@
 
     <div class="flex items-baseline gap-1.5 mt-2">
         <span
-            class="text-4xl font-black tracking-tighter text-white group-hover:text-emerald-400 transition-colors drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] group-hover:drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]"
+            class="text-4xl font-black tracking-tighter text-gray-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] dark:group-hover:drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]"
         >
             {value}
         </span>
         {#if unit}
             <span
-                class="text-xs font-black text-gray-500 uppercase tracking-widest mb-1 opacity-80"
+                class="text-xs font-black text-gray-600 dark:text-gray-500 uppercase tracking-widest mb-1 opacity-80"
             >
                 {unit}
             </span>

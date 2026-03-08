@@ -907,29 +907,52 @@
                                     />
                                 </div>
 
-                                <!-- Middle Section: Time Series Chart (Full Width) -->
+                                <!-- Middle Section: Quick Railway Status Link -->
                                 <div
-                                    class="mb-6 h-[250px] bg-[#0b0f1a] rounded-3xl border border-gray-800 p-6 flex flex-col justify-center items-center relative overflow-hidden group"
+                                    class="mb-6 h-[80px] bg-white dark:bg-[#0b0f1a] rounded-3xl border border-gray-200 dark:border-gray-800 px-6 py-4 flex flex-row justify-between items-center relative overflow-hidden group shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
                                 >
                                     <div
-                                        class="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent z-0"
+                                        class="absolute inset-0 bg-gradient-to-r from-indigo-50 dark:from-indigo-500/5 to-transparent z-0"
                                     ></div>
-                                    <h3
-                                        class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4 z-10 w-full text-left"
-                                    >
-                                        Gráficos de Telemetria
-                                    </h3>
                                     <div
-                                        class="w-full flex-1 z-10 flex flex-col justify-center opacity-80 group-hover:opacity-100 transition-opacity"
+                                        class="relative z-10 flex flex-col justify-center"
                                     >
-                                        <SreTimeSeriesChart
-                                            title="Latência Global"
-                                            labels={timeLabels}
-                                            data={sreStats.latency.history}
-                                            borderColor="#6366f1"
-                                            backgroundColor="rgba(99, 102, 241, 0.1)"
-                                        />
+                                        <h3
+                                            class="text-[12px] font-black uppercase tracking-[0.2em] text-gray-900 dark:text-white"
+                                        >
+                                            Status Global do Ecossistema
+                                        </h3>
+                                        <p
+                                            class="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 mt-1"
+                                        >
+                                            Monitoramento contínuo de
+                                            disponibilidade gerido pela Railway
+                                        </p>
                                     </div>
+                                    <a
+                                        href="https://status.railway.com/"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="relative z-10 flex items-center gap-2 px-6 py-3 rounded-xl bg-gray-900 dark:bg-emerald-500/10 text-white dark:text-emerald-400 font-black text-[10px] sm:text-xs uppercase tracking-widest border border-transparent dark:border-emerald-500/20 hover:bg-gray-800 dark:hover:bg-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-md dark:shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                                    >
+                                        <div
+                                            class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"
+                                        ></div>
+                                        Acessar Railway Status
+                                        <svg
+                                            class="w-4 h-4 ml-1 opacity-80 group-hover:translate-x-1 transition-transform"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="3"
+                                                d="M14 5l7 7m0 0l-7 7m7-7H3"
+                                            />
+                                        </svg>
+                                    </a>
                                 </div>
 
                                 <!-- Bottom Section: Releases and External Services -->
