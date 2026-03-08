@@ -260,7 +260,7 @@
                     disabled={isSubmitting}
                   />
                   <span>
-                    {(client.name && client.name.trim()) ? client.name : 'Usuario sem nome'}
+                    {(client.name && client.name.trim()) ? client.name : 'Usuário sem nome'}
                     {#if client.email} ({client.email}){/if}
                     {#if client.role}
                       <span class="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-gray-600 dark:bg-gray-800 dark:text-gray-300">

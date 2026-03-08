@@ -23,8 +23,14 @@
         {
             name: "Vercel",
             url: "https://vercel.com/ctrshift-pms-projects/painel-adm-maisimoveis",
-            icon: `<path d="M256 32L20 464h472L256 32z" />`,
+            icon: `<path fill-rule="evenodd" clip-rule="evenodd" d="M12 2L24 22H0L12 2Z" />`,
             color: "hover:bg-[#000]",
+        },
+        {
+            name: "Cloudflare",
+            url: "https://dash.cloudflare.com",
+            icon: `<path d="M16 7.009c-.29-.011-.58.006-.867.05a6.002 6.002 0 00-11.08 2.503C1.786 9.873.011 11.838.011 14.18c0 2.658 2.155 4.814 4.814 4.814h14.364c2.657 0 4.811-2.156 4.811-4.814 0-2.486-1.89-4.529-4.316-4.789a5.003 5.003 0 00-3.684-2.38z" />`,
+            color: "hover:bg-[#f38020] hover:text-white dark:hover:text-white dark:hover:bg-[#f38020]",
         },
         {
             name: "Railway",
@@ -113,14 +119,17 @@
                         <svg
                             class="w-4 h-4"
                             fill={link.name === "Vercel" ||
-                            link.name === "Github"
+                            link.name === "Github" ||
+                            link.name === "Cloudflare"
                                 ? "currentColor"
                                 : "none"}
                             stroke={link.name === "Railway" ||
                             link.name === "TiDB"
                                 ? "currentColor"
                                 : "none"}
-                            viewBox="0 0 24 24"
+                            viewBox={link.name === "Cloudflare"
+                                ? "0 0 24 24"
+                                : "0 0 24 24"}
                         >
                             {@html link.icon}
                         </svg>

@@ -85,6 +85,7 @@
     contrato_assinado: 'Contrato Assinado',
     comprovante_pagamento: 'Comprovante de Pagamento',
     boleto_vistoria: 'Boleto de Vistoria',
+    outro: 'Outro',
   };
 
   const signedReviewDocTypes = new Set([
@@ -371,7 +372,13 @@
     if (!integer && !decimal) {
       return '';
     }
-    return decimal ? `${integer || '0'},${decimal}` : integer || '0';
+    const composed = decimal ? `${integer || '0'},${decimal}` : integer || '0';
+    const parsed = Number(composed.replace(',', '.'));
+    if (!Number.isFinite(parsed)) {
+      return '';
+    }
+    const bounded = Math.min(100, Math.max(0, parsed));
+    return formatPercentageValue(bounded);
   }
 
   function parsePercentage(value: string): number | null {
@@ -498,6 +505,19 @@
     };
   }
 
+  function hasExactSaleSplit(
+    values: NonNullable<ReturnType<typeof resolveFinalizeCommissionAmounts>>
+  ): boolean {
+    const total = Number(
+      (
+        values.comissaoCaptador +
+        values.comissaoVendedor +
+        values.taxaPlataforma
+      ).toFixed(2)
+    );
+    return Math.abs(total - values.valorVenda) <= 0.01;
+  }
+
   function getDocumentsForFinalize(contract: ContractItem): ContractDocument[] {
     return (contract.documents ?? []).filter((doc) =>
       signedReviewDocTypes.has((doc.documentType ?? '').trim().toLowerCase())
@@ -516,6 +536,12 @@
     const capturing = Number(contract.capturingBrokerId ?? 0);
     const selling = Number(contract.sellingBrokerId ?? 0);
     return capturing > 0 && selling > 0 && capturing === selling;
+  }
+
+  function requiresExactSaleSplit(contract: ContractItem | null): boolean {
+    const purpose = String(contract?.propertyPurpose ?? '').trim().toLowerCase();
+    const isRentalOnly = purpose.includes('alug') && !purpose.includes('venda');
+    return !isRentalOnly;
   }
 
   function getRequiredDocTypes(contract: ContractItem): string[] {
@@ -875,6 +901,18 @@
 
     const { valorVenda, comissaoCaptador, comissaoVendedor, taxaPlataforma } =
       resolvedCommissionAmounts;
+
+    if (
+      requiresExactSaleSplit(selected) &&
+      !hasExactSaleSplit(resolvedCommissionAmounts)
+    ) {
+      toast.error(
+        finalizeSplitMode === 'percentage'
+          ? 'Na venda, a soma dos percentuais precisa fechar exatamente 100% do valor.'
+          : 'Na venda, a soma dos valores precisa fechar exatamente 100% do valor.'
+      );
+      return;
+    }
 
     finalizingContract = true;
     try {
@@ -1663,6 +1701,7 @@
                   <option value="contrato_assinado">Contrato Assinado</option>
                   <option value="comprovante_pagamento">Comprovante de Pagamento</option>
                   <option value="boleto_vistoria">Boleto/Vistoria</option>
+                  <option value="outro">Outro</option>
                 </select>
               </label>
               <label class="text-sm text-gray-700 dark:text-gray-200">

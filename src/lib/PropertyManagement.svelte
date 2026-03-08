@@ -826,7 +826,7 @@
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
         clearSessionToken();
       } else {
-        toast.error('Nao foi possivel carregar os detalhes do imóvel.');
+        toast.error('Não foi possível carregar os detalhes do imóvel.');
       }
     } finally {
       isDetailLoading = false;
@@ -888,7 +888,7 @@
       toast.error('Erro de estado: o imóvel selecionado esta nulo. Tente fechar e reabrir o modal.');
       return;
     }
-    const confirmed = window.confirm('Tem certeza que deseja excluir este imóvel? Esta acao nao pode ser desfeita.');
+    const confirmed = window.confirm('Tem certeza que deseja excluir este imóvel? Esta ação não pode ser desfeita.');
     if (!confirmed) return;
     isProcessing = true;
     try {
@@ -1219,7 +1219,7 @@
       } else {
         editError =
           err?.response?.data?.error ||
-          (err instanceof Error ? err.message : 'Não foi possivel salvar o imóvel.');
+          (err instanceof Error ? err.message : 'Não foi possível salvar o imóvel.');
       }
     } finally {
       isSavingEdit = false;
@@ -2497,7 +2497,7 @@
               <p><strong>Telefone do proprietário:</strong> {selectedProperty.owner_phone ?? '-'}</p>
               <p><strong>Anunciante:</strong> {selectedProperty.broker_name ?? '-'}</p>
               <p><strong>Telefone:</strong> {selectedProperty.broker_phone ?? '-'}</p>
-              <p><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Nao'}</p>
+              <p><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Não'}</p>
               {#if isBrokerCredenciado(selectedProperty)}
                 <p><strong>CRECI:</strong> {selectedProperty.broker_creci ?? '-'}</p>
               {/if}
@@ -2523,7 +2523,7 @@
               <li><strong>Telefone do proprietário:</strong> {selectedProperty.owner_phone ?? '-'}</li>
               <li><strong>Anunciante:</strong> {selectedProperty.broker_name ?? '-'}</li>
               <li><strong>Telefone:</strong> {selectedProperty.broker_phone ?? '-'}</li>
-              <li><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Nao'}</li>
+              <li><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Não'}</li>
               {#if isBrokerCredenciado(selectedProperty)}
                 <li><strong>CRECI:</strong> {selectedProperty.broker_creci ?? '-'}</li>
               {/if}
@@ -2569,7 +2569,7 @@
                 { label: 'Mobiliada', value: selectedProperty.eh_mobiliada }
               ] as amenity}
                 <span class={`rounded-full px-3 py-1 ${amenity.value ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>
-                  {amenity.label}: {amenity.value ? 'Sim' : 'Nao'}
+                  {amenity.label}: {amenity.value ? 'Sim' : 'Não'}
                 </span>
               {/each}
             {/if}

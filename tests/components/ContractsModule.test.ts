@@ -361,6 +361,7 @@ describe('ContractsModule', () => {
       name: 'Anexar Documento Físico Assinado (Admin Override)',
     });
     expect(adminOverrideButton).toBeDisabled();
+    expect(screen.getByRole('option', { name: 'Outro' })).toBeInTheDocument();
   });
 
   it('lista todos os documentos existentes no modal de minuta em IN_DRAFT', async () => {
@@ -592,14 +593,14 @@ describe('ContractsModule', () => {
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (R$)') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '123456' } });
-    await fireEvent.input(captadorInput, { target: { value: '10000' } });
-    await fireEvent.input(vendedorInput, { target: { value: '25000' } });
-    await fireEvent.input(taxaInput, { target: { value: '5000' } });
+    await fireEvent.input(captadorInput, { target: { value: '50000' } });
+    await fireEvent.input(vendedorInput, { target: { value: '50000' } });
+    await fireEvent.input(taxaInput, { target: { value: '23456' } });
 
     expect(valorInput.value).toContain('1.234,56');
-    expect(captadorInput.value).toContain('100,00');
-    expect(vendedorInput.value).toContain('250,00');
-    expect(taxaInput.value).toContain('50,00');
+    expect(captadorInput.value).toContain('500,00');
+    expect(vendedorInput.value).toContain('500,00');
+    expect(taxaInput.value).toContain('234,56');
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',
@@ -610,9 +611,9 @@ describe('ContractsModule', () => {
       expect(apiPostMock).toHaveBeenCalledWith('/admin/contracts/contract-test-sign-2/finalize', {
         commission_data: {
           valorVenda: 1234.56,
-          comissaoCaptador: 100,
-          comissaoVendedor: 250,
-          taxaPlataforma: 50,
+          comissaoCaptador: 500,
+          comissaoVendedor: 500,
+          taxaPlataforma: 234.56,
         },
       });
     });
@@ -679,13 +680,89 @@ describe('ContractsModule', () => {
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (%)') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '100000' } });
-    await fireEvent.input(captadorInput, { target: { value: '5' } });
-    await fireEvent.input(vendedorInput, { target: { value: '2,5' } });
-    await fireEvent.input(taxaInput, { target: { value: '1' } });
+    await fireEvent.input(captadorInput, { target: { value: '50' } });
+    await fireEvent.input(vendedorInput, { target: { value: '250' } });
+    await fireEvent.input(taxaInput, { target: { value: '25' } });
 
-    expect(captadorInput.value).toBe('5');
-    expect(vendedorInput.value).toBe('2,5');
-    expect(taxaInput.value).toBe('1');
+    expect(captadorInput.value).toBe('50');
+    expect(vendedorInput.value).toBe('100');
+    expect(taxaInput.value).toBe('25');
+
+    const submitFinalizeButton = screen.getAllByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    })[1];
+    await fireEvent.click(submitFinalizeButton);
+
+    expect(apiPostMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Na venda, a soma dos percentuais precisa fechar exatamente 100% do valor.'
+    );
+  });
+
+  it('converte percentuais válidos e exatos em valores reais na finalização', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_SIGNATURES')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-sign-4',
+              status: 'AWAITING_SIGNATURES',
+              negotiationId: 'neg-test-sign-4',
+              propertyId: 605,
+              propertyCode: 'RV-605',
+              propertyTitle: 'Casa Percentual Exato',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6051,
+                  documentType: 'contrato_assinado',
+                  originalFileName: 'contrato_assinado.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-4/documents/6051/download',
+                  createdAt: '2026-03-02T10:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-02T11:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+    apiPostMock.mockResolvedValue({});
+
+    render(ContractsModule);
+
+    const signaturesTab = await screen.findByRole('button', {
+      name: 'Aguardando Assinaturas',
+    });
+    await fireEvent.click(signaturesTab);
+
+    const openFinalizeButton = await screen.findByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    });
+    await fireEvent.click(openFinalizeButton);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Percentual (%)' }));
+
+    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const captadorInput = screen.getByLabelText('Comissão Captador (%)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão Vendedor (%)') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (%)') as HTMLInputElement;
+
+    await fireEvent.input(valorInput, { target: { value: '100000' } });
+    await fireEvent.input(captadorInput, { target: { value: '50' } });
+    await fireEvent.input(vendedorInput, { target: { value: '25' } });
+    await fireEvent.input(taxaInput, { target: { value: '25' } });
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',
@@ -693,12 +770,12 @@ describe('ContractsModule', () => {
     await fireEvent.click(submitFinalizeButton);
 
     await waitFor(() => {
-      expect(apiPostMock).toHaveBeenCalledWith('/admin/contracts/contract-test-sign-3/finalize', {
+      expect(apiPostMock).toHaveBeenCalledWith('/admin/contracts/contract-test-sign-4/finalize', {
         commission_data: {
           valorVenda: 1000,
-          comissaoCaptador: 50,
-          comissaoVendedor: 25,
-          taxaPlataforma: 10,
+          comissaoCaptador: 500,
+          comissaoVendedor: 250,
+          taxaPlataforma: 250,
         },
       });
     });

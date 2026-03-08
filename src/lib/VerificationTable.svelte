@@ -136,7 +136,7 @@
                                     </a>
                                 {:else}
                                     <span class="text-xs text-gray-400 italic">
-                                        {creciFrontUrl ? 'URL nao acessivel' : 'Frente do CRECI nao enviada'}
+                                        {creciFrontUrl ? 'URL não acessível' : 'Frente do CRECI não enviada'}
                                     </span>
                                 {/if}
 
@@ -150,7 +150,7 @@
                                     </a>
                                 {:else}
                                     <span class="text-xs text-gray-400 italic">
-                                        {creciBackUrl ? 'URL nao acessivel' : 'Verso do CRECI nao enviado'}
+                                        {creciBackUrl ? 'URL não acessível' : 'Verso do CRECI não enviado'}
                                     </span>
                                 {/if}
 
@@ -164,7 +164,7 @@
                                     </a>
                                 {:else}
                                     <span class="text-xs text-gray-400 italic">
-                                        {selfieUrl ? 'URL nao acessivel' : 'Selfie nao enviada'}
+                                        {selfieUrl ? 'URL não acessível' : 'Selfie não enviada'}
                                     </span>
                                 {/if}
                             </div>

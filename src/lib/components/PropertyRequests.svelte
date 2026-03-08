@@ -82,7 +82,7 @@
     try {
       if (newStatus === 'approved') {
         await api.patch(`/admin/properties/${propertyId}/approve`, {});
-        toast.success('Imovel aprovado.');
+        toast.success('Imóvel aprovado.');
       } else {
         await api.patch(`/admin/properties/${propertyId}/reject`, {});
         toast.success('Imóvel rejeitado e removido.');

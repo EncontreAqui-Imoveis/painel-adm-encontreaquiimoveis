@@ -219,13 +219,13 @@
         clientDetailError = null;
       } else {
         clientDetail = null;
-        clientDetailError = 'Nao foi possivel carregar os dados do cliente.';
+        clientDetailError = 'Não foi possível carregar os dados do cliente.';
       }
     } catch (err) {
       console.error('Erro ao buscar detalhes do cliente:', err);
       clientDetail = null;
       clientDetailError =
-        err instanceof Error ? err.message : 'Nao foi possivel carregar os dados do cliente.';
+        err instanceof Error ? err.message : 'Não foi possível carregar os dados do cliente.';
     } finally {
       isClientDetailLoading = false;
     }
@@ -247,7 +247,7 @@
     } catch (err) {
       console.error('Erro ao buscar imoveis do cliente:', err);
       propertiesError =
-        err instanceof Error ? err.message : 'Nao foi possivel carregar os imoveis do cliente.';
+        err instanceof Error ? err.message : 'Não foi possível carregar os imóveis do cliente.';
       clientProperties = [];
     } finally {
       isPropertiesLoading = false;
@@ -409,7 +409,7 @@
               <td class="px-6 py-4 text-right">
                 <div class="flex justify-end gap-2">
                   <Button size="sm" variant="outline" on:click={() => openClientProperties(client)}>
-                    Ver Imoveis
+                    Ver Imóveis
                   </Button>
                   <Button size="sm" variant="outline" on:click={() => openClientModal(client)}>
                     Revisar
@@ -541,7 +541,7 @@
   <Dialog.Content className="max-w-lg">
     {#if selectedClientForProperties}
       <Dialog.Header>
-        <Dialog.Title>Imoveis do cliente</Dialog.Title>
+        <Dialog.Title>Imóveis do cliente</Dialog.Title>
         <Dialog.Description>
           {selectedClientForProperties.name} · {selectedClientForProperties.email}
         </Dialog.Description>

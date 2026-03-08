@@ -72,13 +72,13 @@
         detailError = null;
       } else {
         brokerDetail = null;
-        detailError = 'Nao foi possivel carregar os dados do corretor.';
+        detailError = 'Não foi possível carregar os dados do corretor.';
       }
     } catch (error) {
       console.error('Erro ao buscar detalhes do corretor:', error);
       brokerDetail = null;
       detailError =
-        error instanceof Error ? error.message : 'Nao foi possivel carregar os dados do corretor.';
+        error instanceof Error ? error.message : 'Não foi possível carregar os dados do corretor.';
     } finally {
       isDetailLoading = false;
     }

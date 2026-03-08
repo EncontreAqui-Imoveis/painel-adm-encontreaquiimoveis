@@ -14,6 +14,7 @@
     import { fetchPlatformResponse } from "./adminFetchService";
     import { clearSessionToken, hasSessionToken } from "./sessionState";
     import { onMount, onDestroy } from "svelte";
+    import { fade, slide } from "svelte/transition";
     import type {
         Property,
         Broker,
@@ -33,6 +34,7 @@
     let showModal = false;
     let itemToDelete: { id: number; type: string } | null = null;
     let isSidebarOpen = false;
+    let showGoldenSignalsHelp = false;
 
     let searchTerm = "";
     let searchColumn = "all";
@@ -234,18 +236,18 @@
             title: "Gerenciamento de Imóveis",
             headers: [
                 "ID",
-                "Codigo",
-                "Titulo",
+                "Código",
+                "Título",
                 "Tipo",
                 "Status",
-                "Preco",
+                "Preço",
                 "Cidade",
                 "Anunciante",
             ],
             filterOptions: [
                 { value: "p.id", label: "ID" },
-                { value: "p.code", label: "Codigo" },
-                { value: "p.title", label: "Titulo" },
+                { value: "p.code", label: "Código" },
+                { value: "p.title", label: "Título" },
             ],
             sortColumn: "p.title",
         },
@@ -282,7 +284,7 @@
                 "Email",
                 "CRECI",
                 "Criado em",
-                "Total de Imoveis",
+                "Total de Imóveis",
             ],
             filterOptions: [
                 { value: "name", label: "Nome" },
@@ -306,7 +308,7 @@
         verification: {
             endpoint: "/admin/brokers/pending",
             title: "Solicitações de Corretores",
-            headers: ["ID", "Nome", "CRECI", "Documentos", "Acoes"],
+            headers: ["ID", "Nome", "CRECI", "Documentos", "Ações"],
             filterOptions: [],
         },
     };
@@ -548,7 +550,7 @@
             };
         } catch (error) {
             console.error("Erro ao buscar estatísticas do dashboard:", error);
-            chartError = "Não foi possivel carregar os gráficos.";
+            chartError = "Não foi possível carregar os gráficos.";
             chartData = null;
         } finally {
             isChartLoading = false;
@@ -826,14 +828,43 @@
 
                             <div class="relative z-10">
                                 <div
-                                    class="mb-8 flex items-center justify-between"
+                                    class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4"
                                 >
                                     <div>
-                                        <h2
-                                            class="text-2xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-3"
+                                        <div class="flex items-center gap-3">
+                                            <h2
+                                                class="text-2xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-3"
+                                            >
+                                                <svg
+                                                    class="w-6 h-6 text-emerald-400"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    stroke="currentColor"
+                                                >
+                                                    <path
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                                                    />
+                                                </svg>
+                                                Central de Comando SRE
+                                            </h2>
+                                            <p
+                                                class="text-[11px] text-gray-500 mt-1 font-bold tracking-[0.2em] uppercase"
+                                            >
+                                                Telemetria & Continuidade de
+                                                Negócios
+                                            </p>
+                                        </div>
+                                        <button
+                                            on:click={() =>
+                                                (showGoldenSignalsHelp = true)}
+                                            class="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all font-bold text-xs uppercase tracking-widest border border-indigo-200 dark:border-indigo-500/20"
+                                            aria-label="O que são os 4 Golden Signals?"
                                         >
                                             <svg
-                                                class="w-6 h-6 text-emerald-400"
+                                                class="w-4 h-4"
                                                 fill="none"
                                                 viewBox="0 0 24 24"
                                                 stroke="currentColor"
@@ -842,17 +873,11 @@
                                                     stroke-linecap="round"
                                                     stroke-linejoin="round"
                                                     stroke-width="2"
-                                                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                                                 />
                                             </svg>
-                                            Central de Comando SRE
-                                        </h2>
-                                        <p
-                                            class="text-[11px] text-gray-500 mt-1 font-bold tracking-[0.2em] uppercase"
-                                        >
-                                            Telemetria & Continuidade de
-                                            Negócios
-                                        </p>
+                                            Como ler este painel?
+                                        </button>
                                     </div>
                                 </div>
 
@@ -898,13 +923,13 @@
 
                                 <!-- Middle Section: Quick Railway Status Link -->
                                 <div
-                                    class="mb-6 h-[80px] bg-white dark:bg-[#0b0f1a] rounded-3xl border border-gray-200 dark:border-gray-800 px-6 py-4 flex flex-row justify-between items-center relative overflow-hidden group shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+                                    class="mb-6 py-4 bg-white dark:bg-[#0b0f1a] rounded-3xl border border-gray-200 dark:border-gray-800 px-6 flex flex-col md:flex-row justify-between items-center relative overflow-hidden group shadow-sm dark:shadow-[0_4px_20px_rgba(0,0,0,0.5)] gap-4"
                                 >
                                     <div
                                         class="absolute inset-0 bg-gradient-to-r from-indigo-50 dark:from-indigo-500/5 to-transparent z-0"
                                     ></div>
                                     <div
-                                        class="relative z-10 flex flex-col justify-center"
+                                        class="relative z-10 flex flex-col justify-center text-center md:text-left"
                                     >
                                         <h3
                                             class="text-[12px] font-black uppercase tracking-[0.2em] text-gray-900 dark:text-white"
@@ -915,33 +940,61 @@
                                             class="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 mt-1"
                                         >
                                             Monitoramento contínuo de
-                                            disponibilidade gerido pela Railway
+                                            disponibilidade de provedores
                                         </p>
                                     </div>
-                                    <a
-                                        href="https://status.railway.com/"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="relative z-10 flex items-center gap-2 px-6 py-3 rounded-xl bg-gray-900 dark:bg-emerald-500/10 text-white dark:text-emerald-400 font-black text-[10px] sm:text-xs uppercase tracking-widest border border-transparent dark:border-emerald-500/20 hover:bg-gray-800 dark:hover:bg-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-md dark:shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                                    <div
+                                        class="relative z-10 flex flex-col sm:flex-row gap-3 w-full md:w-auto"
                                     >
-                                        <div
-                                            class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"
-                                        ></div>
-                                        Acessar Railway Status
-                                        <svg
-                                            class="w-4 h-4 ml-1 opacity-80 group-hover:translate-x-1 transition-transform"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
+                                        <a
+                                            href="https://status.railway.com/"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gray-900 dark:bg-emerald-500/10 text-white dark:text-emerald-400 font-black text-[10px] sm:text-xs uppercase tracking-widest border border-transparent dark:border-emerald-500/20 hover:bg-gray-800 dark:hover:bg-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-md dark:shadow-[0_0_15px_rgba(16,185,129,0.3)] w-full sm:w-auto"
                                         >
-                                            <path
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                                stroke-width="3"
-                                                d="M14 5l7 7m0 0l-7 7m7-7H3"
-                                            />
-                                        </svg>
-                                    </a>
+                                            <div
+                                                class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"
+                                            ></div>
+                                            Railway Status
+                                            <svg
+                                                class="w-4 h-4 ml-1 opacity-80 group-hover:translate-x-1 transition-transform"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="3"
+                                                    d="M14 5l7 7m0 0l-7 7m7-7H3"
+                                                />
+                                            </svg>
+                                        </a>
+                                        <a
+                                            href="https://www.vercel-status.com/"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white dark:bg-black text-gray-900 dark:text-white font-black text-[10px] sm:text-xs uppercase tracking-widest border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-sm dark:shadow-[0_0_15px_rgba(255,255,255,0.05)] w-full sm:w-auto"
+                                        >
+                                            <div
+                                                class="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.8)]"
+                                            ></div>
+                                            Vercel Status
+                                            <svg
+                                                class="w-4 h-4 ml-1 opacity-80 group-hover:translate-x-1 transition-transform"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="3"
+                                                    d="M14 5l7 7m0 0l-7 7m7-7H3"
+                                                />
+                                            </svg>
+                                        </a>
+                                    </div>
                                 </div>
 
                                 <!-- Bottom Section: Releases and External Services -->
@@ -965,6 +1018,475 @@
                                 </div>
                             </div>
                         </section>
+                    {/if}
+
+                    <!-- Golden Signals Help Modal -->
+                    {#if showGoldenSignalsHelp}
+                        <div
+                            class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+                            transition:fade={{ duration: 200 }}
+                        >
+                            <div
+                                class="absolute inset-0 bg-gray-900/60 dark:bg-black/60 backdrop-blur-sm"
+                                role="presentation"
+                                on:click={() => (showGoldenSignalsHelp = false)}
+                            ></div>
+                            <div
+                                class="relative bg-white dark:bg-[#0b0f1a] rounded-3xl border border-gray-200 dark:border-gray-800 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden custom-scrollbar"
+                                transition:slide={{ duration: 300, axis: "y" }}
+                            >
+                                <!-- Modal Header -->
+                                <div
+                                    class="px-6 py-5 border-b border-gray-200 dark:border-gray-800/60 sticky top-0 bg-white/95 dark:bg-[#0b0f1a]/95 backdrop-blur-md z-10 flex justify-between items-center"
+                                >
+                                    <div>
+                                        <h3
+                                            class="font-black text-gray-900 dark:text-white flex items-center gap-3 text-lg tracking-tight"
+                                        >
+                                            <svg
+                                                class="w-5 h-5 text-indigo-500"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                                                />
+                                            </svg>
+                                            Guia: Os 4 Golden Signals
+                                        </h3>
+                                        <p
+                                            class="text-[10px] text-gray-500 dark:text-gray-400 font-bold tracking-[0.2em] uppercase mt-2"
+                                        >
+                                            A métrica padrão do Google SRE para
+                                            leigos
+                                        </p>
+                                    </div>
+                                    <button
+                                        on:click={() =>
+                                            (showGoldenSignalsHelp = false)}
+                                        class="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-all"
+                                        aria-label="Fechar Guia"
+                                    >
+                                        <svg
+                                            class="w-5 h-5"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M6 18L18 6M6 6l12 12"
+                                            />
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                <!-- Modal Body -->
+                                <div class="p-6 sm:p-8 space-y-8">
+                                    <p
+                                        class="text-gray-600 dark:text-gray-300 text-sm leading-relaxed"
+                                    >
+                                        A <span
+                                            class="font-black text-gray-900 dark:text-white"
+                                            >Central de Comando SRE (Site
+                                            Reliability Engineering)</span
+                                        > monitora e exibe dados críticos e dependências
+                                        automáticas em tempo real para garantir que
+                                        seus serviços parceiros e métricas vitais
+                                        de saúde estejam 100% operacionais.
+                                    </p>
+
+                                    <!-- Golden Signals Section -->
+                                    <div class="space-y-4">
+                                        <h4
+                                            class="text-lg font-black dark:text-white border-b border-gray-200 dark:border-gray-800 pb-3 flex items-center gap-3"
+                                        >
+                                            <span
+                                                class="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black"
+                                                >1</span
+                                            >
+                                            Os 4 Sinais de Ouro (Métricas Mestra)
+                                        </h4>
+                                        <div
+                                            class="grid grid-cols-1 md:grid-cols-2 gap-6"
+                                        >
+                                            <!-- Latência -->
+                                            <div
+                                                class="bg-gray-50 dark:bg-[#111827] p-5 rounded-2xl border border-gray-200 dark:border-gray-800"
+                                            >
+                                                <div
+                                                    class="flex items-center gap-3 mb-3"
+                                                >
+                                                    <div
+                                                        class="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center"
+                                                    >
+                                                        <svg
+                                                            class="w-4 h-4"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                            ><path
+                                                                stroke-linecap="round"
+                                                                stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                            /></svg
+                                                        >
+                                                    </div>
+                                                    <h4
+                                                        class="font-black text-gray-900 dark:text-white tracking-tight"
+                                                    >
+                                                        Latência (Tempo de
+                                                        Resposta)
+                                                    </h4>
+                                                </div>
+                                                <p
+                                                    class="text-xs text-gray-600 dark:text-gray-400 leading-relaxed"
+                                                >
+                                                    <strong
+                                                        class="text-gray-900 dark:text-gray-300"
+                                                        >O que é:</strong
+                                                    >
+                                                    O tempo que o servidor demora
+                                                    para atender uma solicitação
+                                                    do cliente.
+                                                    <br /><br />
+                                                    <strong
+                                                        class="text-gray-900 dark:text-gray-300"
+                                                        >Como ler:</strong
+                                                    >
+                                                    Aqui medimos o
+                                                    <span
+                                                        class="italic font-bold text-indigo-500"
+                                                        >p99</span
+                                                    > (percentil 99). Isso significa
+                                                    que se o valor for "1ms", 99%
+                                                    dos seus clientes estão sendo
+                                                    atendidos num piscar de olhos
+                                                    (1 milissegundo). Quanto menor,
+                                                    melhor.
+                                                </p>
+                                            </div>
+
+                                            <!-- Tráfego -->
+                                            <div
+                                                class="bg-gray-50 dark:bg-[#111827] p-5 rounded-2xl border border-gray-200 dark:border-gray-800"
+                                            >
+                                                <div
+                                                    class="flex items-center gap-3 mb-3"
+                                                >
+                                                    <div
+                                                        class="w-8 h-8 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center"
+                                                    >
+                                                        <svg
+                                                            class="w-4 h-4"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                            ><path
+                                                                stroke-linecap="round"
+                                                                stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                                                            /></svg
+                                                        >
+                                                    </div>
+                                                    <h4
+                                                        class="font-black text-gray-900 dark:text-white tracking-tight"
+                                                    >
+                                                        Tráfego (Demanda)
+                                                    </h4>
+                                                </div>
+                                                <p
+                                                    class="text-xs text-gray-600 dark:text-gray-400 leading-relaxed"
+                                                >
+                                                    <strong
+                                                        class="text-gray-900 dark:text-gray-300"
+                                                        >O que é:</strong
+                                                    >
+                                                    O volume total de uso do sistema
+                                                    em um determinado momento.<br
+                                                    /><br />
+                                                    <strong
+                                                        class="text-gray-900 dark:text-gray-300"
+                                                        >Como ler:</strong
+                                                    >
+                                                    Medido em
+                                                    <span
+                                                        class="italic font-bold text-indigo-500"
+                                                        >req/s</span
+                                                    > (Requisições por Segundo).
+                                                    São quantas ações os clientes
+                                                    estão pedindo ao servidor a cada
+                                                    segundo (ex: navegar por páginas,
+                                                    fazer login, buscar imóveis).
+                                                </p>
+                                            </div>
+
+                                            <!-- Erros -->
+                                            <div
+                                                class="bg-gray-50 dark:bg-[#111827] p-5 rounded-2xl border border-gray-200 dark:border-gray-800"
+                                            >
+                                                <div
+                                                    class="flex items-center gap-3 mb-3"
+                                                >
+                                                    <div
+                                                        class="w-8 h-8 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center"
+                                                    >
+                                                        <svg
+                                                            class="w-4 h-4"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                            ><path
+                                                                stroke-linecap="round"
+                                                                stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                                            /></svg
+                                                        >
+                                                    </div>
+                                                    <h4
+                                                        class="font-black text-gray-900 dark:text-white tracking-tight"
+                                                    >
+                                                        Taxa de Erros
+                                                    </h4>
+                                                </div>
+                                                <p
+                                                    class="text-xs text-gray-600 dark:text-gray-400 leading-relaxed"
+                                                >
+                                                    <strong
+                                                        class="text-gray-900 dark:text-gray-300"
+                                                        >O que é:</strong
+                                                    >
+                                                    A porcentagem de requisições
+                                                    que estão falhando e não entregando
+                                                    o que o cliente pediu.<br
+                                                    /><br />
+                                                    <strong
+                                                        class="text-gray-900 dark:text-gray-300"
+                                                        >Como ler:</strong
+                                                    >
+                                                    Idealmente deve estar perto de
+                                                    <span
+                                                        class="italic font-bold text-indigo-500"
+                                                        >0%</span
+                                                    >. Se começar a subir,
+                                                    significa que seus clientes
+                                                    estão enfrentando telas de
+                                                    erro ou não conseguem
+                                                    carregar os dados.
+                                                </p>
+                                            </div>
+
+                                            <!-- Saturação -->
+                                            <div
+                                                class="bg-gray-50 dark:bg-[#111827] p-5 rounded-2xl border border-gray-200 dark:border-gray-800"
+                                            >
+                                                <div
+                                                    class="flex items-center gap-3 mb-3"
+                                                >
+                                                    <div
+                                                        class="w-8 h-8 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center"
+                                                    >
+                                                        <svg
+                                                            class="w-4 h-4"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                            ><path
+                                                                stroke-linecap="round"
+                                                                stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                                                            /></svg
+                                                        >
+                                                    </div>
+                                                    <h4
+                                                        class="font-black text-gray-900 dark:text-white tracking-tight"
+                                                    >
+                                                        Saturação (Gargalo)
+                                                    </h4>
+                                                </div>
+                                                <p
+                                                    class="text-xs text-gray-600 dark:text-gray-400 leading-relaxed"
+                                                >
+                                                    <strong
+                                                        class="text-gray-900 dark:text-gray-300"
+                                                        >O que é:</strong
+                                                    >
+                                                    O quão "cheio" os componentes
+                                                    de infraestrutura estão.<br
+                                                    /><br />
+                                                    <strong
+                                                        class="text-gray-900 dark:text-gray-300"
+                                                        >Como ler:</strong
+                                                    >
+                                                    Mede o uso de RAM ou Processador
+                                                    (o que estiver mais crítico).
+                                                    Se este valor chegar perto dos
+                                                    <span
+                                                        class="italic font-bold text-indigo-500"
+                                                        >100%</span
+                                                    >, o servidor irá travar ou
+                                                    engasgar, causando piora
+                                                    instantânea na Latência e
+                                                    nos Erros.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Section 2: Timeline & Infrastructure -->
+                                    <div class="space-y-4">
+                                        <h4
+                                            class="text-lg font-black dark:text-white border-b border-gray-200 dark:border-gray-800 pb-3 flex items-center gap-3"
+                                        >
+                                            <span
+                                                class="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black"
+                                                >2</span
+                                            >
+                                            Linha do Tempo e Estrutura
+                                        </h4>
+                                        <div
+                                            class="text-xs text-gray-600 dark:text-gray-400 leading-relaxed bg-gray-50 dark:bg-[#111827] p-5 rounded-2xl border border-gray-200 dark:border-gray-800"
+                                        >
+                                            As pílulas de <strong
+                                                ><span
+                                                    class="text-gray-900 dark:text-gray-200"
+                                                    >Acesso Rápido</span
+                                                ></strong
+                                            >
+                                            na esquerda o direcionam instantaneamente
+                                            para as telas mestres das nossas gigantes
+                                            da nuvem e armazenamento. <br /><br
+                                            />
+                                            Abaixo disso, a
+                                            <strong
+                                                ><span
+                                                    class="text-gray-900 dark:text-gray-200"
+                                                    >Linha do Tempo de
+                                                    Lançamentos</span
+                                                ></strong
+                                            >
+                                            espelha os "Commits/Deploys" (atualizações
+                                            que os desenvolvedores injetam no Github
+                                            para a plataforma). Ela serve para que
+                                            os administradores entendam exatamente
+                                            o que acabou de mudar no painel e funciona
+                                            assim:
+                                            <ul
+                                                class="list-none mt-4 space-y-3"
+                                            >
+                                                <li
+                                                    class="flex items-center gap-3"
+                                                >
+                                                    <span
+                                                        class="w-3 h-3 rounded-full bg-purple-500 animate-pulse border-2 border-purple-500/30"
+                                                    ></span>
+                                                    Uma bolinha
+                                                    <strong
+                                                        >Roxa Piscante</strong
+                                                    > significa que o servidor contendo
+                                                    a inovação está sendo construído
+                                                    (building). Não afeta quem navega.
+                                                </li>
+                                                <li
+                                                    class="flex items-center gap-3"
+                                                >
+                                                    <span
+                                                        class="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"
+                                                    ></span>
+                                                    Uma bolinha
+                                                    <strong
+                                                        >Azul ou Verde</strong
+                                                    > atesta que a atualização é
+                                                    um sucesso, não quebrou nada
+                                                    e já está ao vivo para todos
+                                                    sadios e salvos.
+                                                </li>
+                                                <li
+                                                    class="flex items-center gap-3"
+                                                >
+                                                    <span
+                                                        class="w-3 h-3 rounded-full bg-red-500 shadow-sm shadow-red-500/50"
+                                                    ></span>
+                                                    Uma bolinha
+                                                    <strong>Vermelha</strong> expõe
+                                                    que um erro crítico da equipe
+                                                    interceptou as coisas (failed).
+                                                    Uma equipe já está sendo alertada
+                                                    via pager.
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <!-- Section 3: External Services -->
+                                    <div class="space-y-4">
+                                        <h4
+                                            class="text-lg font-black dark:text-white border-b border-gray-200 dark:border-gray-800 pb-3 flex items-center gap-3"
+                                        >
+                                            <span
+                                                class="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black"
+                                                >3</span
+                                            >
+                                            Dependências Externas (SaaS/PaaS)
+                                        </h4>
+                                        <p
+                                            class="text-xs text-gray-600 dark:text-gray-400 leading-relaxed bg-gray-50 dark:bg-[#111827] p-5 rounded-2xl border border-gray-200 dark:border-gray-800"
+                                        >
+                                            No último bloco abaixo, o painel
+                                            lista de maneira compacta todos os
+                                            seus <strong
+                                                class="text-gray-900 dark:text-gray-300"
+                                                >Terceirizados Tecnológicos</strong
+                                            >, ou seja, se a AWS (Amazon),
+                                            OpenAI ou Meta (Whatsapp) caírem
+                                            globalmente num apagão subitamente,
+                                            você saberá graças ao selo
+                                            "Instável/Critico" na caixinha
+                                            lateral.<br /><br />
+                                            Neste painel interativo,
+                                            <strong
+                                                ><span class="text-indigo-500"
+                                                    >você é quem dita os valores
+                                                    do mês</span
+                                                ></strong
+                                            >. Basta clicar diretamente no preço
+                                            em R$ associado a um serviço e
+                                            digitar a fatura ou limite de
+                                            faturamento estipulado para ele
+                                            neste mês. O sistema salvará dentro
+                                            do próprio navegador localmente e
+                                            dará o Somatório Operacional ali no
+                                            rodapé instantaneamente.
+                                        </p>
+                                    </div>
+
+                                    <div
+                                        class="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 border border-emerald-200 dark:border-emerald-500/20"
+                                    >
+                                        <p
+                                            class="text-xs font-bold text-emerald-800 dark:text-emerald-400"
+                                        >
+                                            💡 Dica: No SRE da EncontreAqui,
+                                            utilizamos as cores para facilitar:
+                                            Verde (Excelente), Amarelo
+                                            (Atenção/Degradado) e Vermelho
+                                            (Incidente Crítico). Apenas fique
+                                            atento se algum card mudar de cor.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     {/if}
 
                     <section class="opacity-90">

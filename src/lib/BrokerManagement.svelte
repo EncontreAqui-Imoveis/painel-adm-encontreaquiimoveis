@@ -212,7 +212,7 @@
       Boolean(selectedDocuments?.creci_back_url) ||
       Boolean(selectedDocuments?.selfie_url);
 
-    docsError = hasDocs ? null : 'Documentos não disponiveis para este corretor.';
+    docsError = hasDocs ? null : 'Documentos não disponíveis para este corretor.';
     isDocumentsModalOpen = true;
   }
 
@@ -673,7 +673,7 @@
               >
                 <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p class="text-sm font-semibold text-gray-900 dark:text-white">{property.title ?? `Imovel #${property.id}`}</p>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-white">{property.title ?? `Imóvel #${property.id}`}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">
                       {property.city ?? '-'}{#if property.state} / {property.state}{/if}
                     </p>

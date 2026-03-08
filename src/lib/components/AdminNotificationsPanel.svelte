@@ -7,7 +7,7 @@
   const PAGE_SIZES = [10, 20, 50, 100];
   const TYPE_FILTERS: Array<{ value: 'all' | Notification['related_entity_type']; label: string }> = [
     { value: 'all', label: 'Todos' },
-    { value: 'property', label: 'Imoveis' },
+    { value: 'property', label: 'Imóveis' },
     { value: 'announcement', label: 'Aviso' },
     { value: 'broker', label: 'Corretor' },
     { value: 'user', label: 'Cliente' }
@@ -59,7 +59,7 @@
   }
 
   function badgeLabel(type: Notification['related_entity_type']): string {
-    if (type == 'property') return 'Imoveis';
+    if (type == 'property') return 'Imóveis';
     if (type == 'broker') return 'Corretor';
     if (type == 'user') return 'Cliente';
     return 'Aviso';
