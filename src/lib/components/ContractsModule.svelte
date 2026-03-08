@@ -4,7 +4,10 @@
   import { toast } from 'svelte-sonner';
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
+  import { formatCurrencyInput, parseCurrency } from '$lib/components/create-property-helpers';
   import Pagination from '$lib/Pagination.svelte';
+
+  type FinalizeSplitMode = 'amount' | 'percentage';
 
   type ContractStatus =
     | 'AWAITING_DOCS'
@@ -142,6 +145,7 @@
   let approvalLockReasons: string[] = [];
   let isReadyToApprove = false;
   let sellerApprovalDisabled = false;
+  let finalizeSplitMode: FinalizeSplitMode = 'amount';
   let finalizeForm = {
     valorVenda: '',
     comissaoCaptador: '',
@@ -339,11 +343,12 @@
     if (value == null) return '';
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return '';
-    return parsed.toFixed(2);
+    return formatCurrencyInput(String(Math.round(parsed * 100)));
   }
 
   function hydrateFinalizeForm(contract: ContractItem | null): void {
     const data = contract?.commissionData ?? null;
+    finalizeSplitMode = 'amount';
     finalizeForm = {
       valorVenda: readCommissionValue(data, 'valorVenda'),
       comissaoCaptador: readCommissionValue(data, 'comissaoCaptador'),
@@ -353,11 +358,144 @@
   }
 
   function parseMoney(value: string): number | null {
-    const normalized = value.replace(',', '.').trim();
+    const parsed = parseCurrency(value);
+    if (parsed == null || !Number.isFinite(parsed)) return null;
+    return Number(parsed.toFixed(2));
+  }
+
+  function sanitizePercentageInput(raw: string): string {
+    const normalized = String(raw ?? '').replace(/[^\d.,]/g, '').replace(/\./g, ',');
+    const [integerPart, ...rest] = normalized.split(',');
+    const integer = integerPart.replace(/^0+(?=\d)/, '');
+    const decimal = rest.join('').slice(0, 2);
+    if (!integer && !decimal) {
+      return '';
+    }
+    return decimal ? `${integer || '0'},${decimal}` : integer || '0';
+  }
+
+  function parsePercentage(value: string): number | null {
+    const normalized = String(value ?? '').replace('%', '').replace(',', '.').trim();
     if (!normalized) return null;
     const parsed = Number(normalized);
-    if (!Number.isFinite(parsed)) return null;
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return null;
     return Number(parsed.toFixed(2));
+  }
+
+  function formatPercentageValue(value: number): string {
+    return value.toLocaleString('pt-BR', {
+      minimumFractionDigits: value % 1 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  function convertAmountFieldToPercentage(
+    rawAmount: string,
+    saleValue: number | null
+  ): string {
+    if (saleValue == null || saleValue <= 0) return '';
+    const amount = parseMoney(rawAmount);
+    if (amount == null) return '';
+    const percentage = Number(((amount / saleValue) * 100).toFixed(2));
+    return formatPercentageValue(percentage);
+  }
+
+  function convertPercentageFieldToAmount(
+    rawPercentage: string,
+    saleValue: number | null
+  ): string {
+    if (saleValue == null || saleValue <= 0) return '';
+    const percentage = parsePercentage(rawPercentage);
+    if (percentage == null) return '';
+    const amount = Number(((saleValue * percentage) / 100).toFixed(2));
+    return formatCurrencyInput(String(Math.round(amount * 100)));
+  }
+
+  function handleFinalizeMoneyInput(
+    field: keyof typeof finalizeForm,
+    event: Event
+  ): void {
+    const target = event.currentTarget as HTMLInputElement;
+    finalizeForm = {
+      ...finalizeForm,
+      [field]: formatCurrencyInput(target.value),
+    };
+  }
+
+  function handleFinalizePercentageInput(
+    field: keyof typeof finalizeForm,
+    event: Event
+  ): void {
+    const target = event.currentTarget as HTMLInputElement;
+    finalizeForm = {
+      ...finalizeForm,
+      [field]: sanitizePercentageInput(target.value),
+    };
+  }
+
+  function switchFinalizeSplitMode(mode: FinalizeSplitMode): void {
+    if (mode === finalizeSplitMode) return;
+
+    const saleValue = parseMoney(finalizeForm.valorVenda);
+    if (mode === 'percentage') {
+      finalizeForm = {
+        ...finalizeForm,
+        comissaoCaptador: convertAmountFieldToPercentage(finalizeForm.comissaoCaptador, saleValue),
+        comissaoVendedor: convertAmountFieldToPercentage(finalizeForm.comissaoVendedor, saleValue),
+        taxaPlataforma: convertAmountFieldToPercentage(finalizeForm.taxaPlataforma, saleValue),
+      };
+    } else {
+      finalizeForm = {
+        ...finalizeForm,
+        comissaoCaptador: convertPercentageFieldToAmount(finalizeForm.comissaoCaptador, saleValue),
+        comissaoVendedor: convertPercentageFieldToAmount(finalizeForm.comissaoVendedor, saleValue),
+        taxaPlataforma: convertPercentageFieldToAmount(finalizeForm.taxaPlataforma, saleValue),
+      };
+    }
+
+    finalizeSplitMode = mode;
+  }
+
+  function resolveFinalizeCommissionAmounts() {
+    const valorVenda = parseMoney(finalizeForm.valorVenda);
+    if (valorVenda == null) return null;
+
+    if (finalizeSplitMode === 'amount') {
+      const comissaoCaptador = parseMoney(finalizeForm.comissaoCaptador);
+      const comissaoVendedor = parseMoney(finalizeForm.comissaoVendedor);
+      const taxaPlataforma = parseMoney(finalizeForm.taxaPlataforma);
+      if (
+        comissaoCaptador == null ||
+        comissaoVendedor == null ||
+        taxaPlataforma == null
+      ) {
+        return null;
+      }
+      return {
+        valorVenda,
+        comissaoCaptador,
+        comissaoVendedor,
+        taxaPlataforma,
+      };
+    }
+
+    const percentualCaptador = parsePercentage(finalizeForm.comissaoCaptador);
+    const percentualVendedor = parsePercentage(finalizeForm.comissaoVendedor);
+    const percentualPlataforma = parsePercentage(finalizeForm.taxaPlataforma);
+    if (
+      percentualCaptador == null ||
+      percentualVendedor == null ||
+      percentualPlataforma == null
+    ) {
+      return null;
+    }
+
+    return {
+      valorVenda,
+      comissaoCaptador: Number(((valorVenda * percentualCaptador) / 100).toFixed(2)),
+      comissaoVendedor: Number(((valorVenda * percentualVendedor) / 100).toFixed(2)),
+      taxaPlataforma: Number(((valorVenda * percentualPlataforma) / 100).toFixed(2)),
+    };
   }
 
   function getDocumentsForFinalize(contract: ContractItem): ContractDocument[] {
@@ -728,20 +866,15 @@
   async function submitFinalize() {
     if (!selected) return;
 
-    const valorVenda = parseMoney(finalizeForm.valorVenda);
-    const comissaoCaptador = parseMoney(finalizeForm.comissaoCaptador);
-    const comissaoVendedor = parseMoney(finalizeForm.comissaoVendedor);
-    const taxaPlataforma = parseMoney(finalizeForm.taxaPlataforma);
+    const resolvedCommissionAmounts = resolveFinalizeCommissionAmounts();
 
-    if (
-      valorVenda == null ||
-      comissaoCaptador == null ||
-      comissaoVendedor == null ||
-      taxaPlataforma == null
-    ) {
+    if (resolvedCommissionAmounts == null) {
       toast.error('Preencha todos os campos de comissão com valores válidos.');
       return;
     }
+
+    const { valorVenda, comissaoCaptador, comissaoVendedor, taxaPlataforma } =
+      resolvedCommissionAmounts;
 
     finalizingContract = true;
     try {
@@ -1565,44 +1698,85 @@
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
               Formulário de Comissões
             </p>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                Comissões em:
+              </span>
+              <button
+                type="button"
+                class={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                  finalizeSplitMode === 'amount'
+                    ? 'bg-emerald-600 text-white'
+                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
+                }`}
+                on:click={() => switchFinalizeSplitMode('amount')}
+              >
+                Valor real (R$)
+              </button>
+              <button
+                type="button"
+                class={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                  finalizeSplitMode === 'percentage'
+                    ? 'bg-emerald-600 text-white'
+                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
+                }`}
+                on:click={() => switchFinalizeSplitMode('percentage')}
+              >
+                Percentual (%)
+              </button>
+            </div>
+            {#if finalizeSplitMode === 'percentage'}
+              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Os percentuais abaixo serão calculados sobre o valor de venda/locação.
+              </p>
+            {/if}
             <div class="mt-3 grid gap-3 md:grid-cols-2">
               <label class="text-sm text-gray-700 dark:text-gray-200">
                 Valor de Venda/Locação (R$)
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  bind:value={finalizeForm.valorVenda}
+                  type="text"
+                  inputmode="decimal"
+                  value={finalizeForm.valorVenda}
+                  on:input={(event) => handleFinalizeMoneyInput('valorVenda', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                 />
               </label>
               <label class="text-sm text-gray-700 dark:text-gray-200">
-                Comissão Captador (R$)
+                Comissão Captador {finalizeSplitMode === 'amount' ? '(R$)' : '(%)'}
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  bind:value={finalizeForm.comissaoCaptador}
+                  type="text"
+                  inputmode="decimal"
+                  value={finalizeForm.comissaoCaptador}
+                  on:input={(event) =>
+                    finalizeSplitMode === 'amount'
+                      ? handleFinalizeMoneyInput('comissaoCaptador', event)
+                      : handleFinalizePercentageInput('comissaoCaptador', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                 />
               </label>
               <label class="text-sm text-gray-700 dark:text-gray-200">
-                Comissão Vendedor (R$)
+                Comissão Vendedor {finalizeSplitMode === 'amount' ? '(R$)' : '(%)'}
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  bind:value={finalizeForm.comissaoVendedor}
+                  type="text"
+                  inputmode="decimal"
+                  value={finalizeForm.comissaoVendedor}
+                  on:input={(event) =>
+                    finalizeSplitMode === 'amount'
+                      ? handleFinalizeMoneyInput('comissaoVendedor', event)
+                      : handleFinalizePercentageInput('comissaoVendedor', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                 />
               </label>
               <label class="text-sm text-gray-700 dark:text-gray-200">
-                Taxa Encontre Aqui (R$)
+                Taxa Encontre Aqui {finalizeSplitMode === 'amount' ? '(R$)' : '(%)'}
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  bind:value={finalizeForm.taxaPlataforma}
+                  type="text"
+                  inputmode="decimal"
+                  value={finalizeForm.taxaPlataforma}
+                  on:input={(event) =>
+                    finalizeSplitMode === 'amount'
+                      ? handleFinalizeMoneyInput('taxaPlataforma', event)
+                      : handleFinalizePercentageInput('taxaPlataforma', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                 />
               </label>

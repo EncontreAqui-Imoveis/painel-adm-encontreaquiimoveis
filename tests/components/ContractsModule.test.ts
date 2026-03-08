@@ -533,6 +533,177 @@ describe('ContractsModule', () => {
     expect(screen.getByText('Contrato (Minuta)')).toBeInTheDocument();
   });
 
+  it('aplica máscara monetária nos campos de comissão em AWAITING_SIGNATURES e envia números no payload', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_SIGNATURES')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-sign-2',
+              status: 'AWAITING_SIGNATURES',
+              negotiationId: 'neg-test-sign-2',
+              propertyId: 603,
+              propertyCode: 'RV-603',
+              propertyTitle: 'Casa Comissões',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6031,
+                  documentType: 'contrato_assinado',
+                  originalFileName: 'contrato_assinado.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-2/documents/6031/download',
+                  createdAt: '2026-03-02T10:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-02T11:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+    apiPostMock.mockResolvedValue({});
+
+    render(ContractsModule);
+
+    const signaturesTab = await screen.findByRole('button', {
+      name: 'Aguardando Assinaturas',
+    });
+    await fireEvent.click(signaturesTab);
+
+    const finalizeButton = await screen.findByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    });
+    await fireEvent.click(finalizeButton);
+
+    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const captadorInput = screen.getByLabelText('Comissão Captador (R$)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão Vendedor (R$)') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (R$)') as HTMLInputElement;
+
+    await fireEvent.input(valorInput, { target: { value: '123456' } });
+    await fireEvent.input(captadorInput, { target: { value: '10000' } });
+    await fireEvent.input(vendedorInput, { target: { value: '25000' } });
+    await fireEvent.input(taxaInput, { target: { value: '5000' } });
+
+    expect(valorInput.value).toContain('1.234,56');
+    expect(captadorInput.value).toContain('100,00');
+    expect(vendedorInput.value).toContain('250,00');
+    expect(taxaInput.value).toContain('50,00');
+
+    const submitFinalizeButton = screen.getAllByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    })[1];
+    await fireEvent.click(submitFinalizeButton);
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith('/admin/contracts/contract-test-sign-2/finalize', {
+        commission_data: {
+          valorVenda: 1234.56,
+          comissaoCaptador: 100,
+          comissaoVendedor: 250,
+          taxaPlataforma: 50,
+        },
+      });
+    });
+  });
+
+  it('permite escolher percentual e converte as comissões para valor real no payload', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_SIGNATURES')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-sign-3',
+              status: 'AWAITING_SIGNATURES',
+              negotiationId: 'neg-test-sign-3',
+              propertyId: 604,
+              propertyCode: 'RV-604',
+              propertyTitle: 'Casa Percentual',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6041,
+                  documentType: 'contrato_assinado',
+                  originalFileName: 'contrato_assinado.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-3/documents/6041/download',
+                  createdAt: '2026-03-02T10:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-02T11:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+    apiPostMock.mockResolvedValue({});
+
+    render(ContractsModule);
+
+    const signaturesTab = await screen.findByRole('button', {
+      name: 'Aguardando Assinaturas',
+    });
+    await fireEvent.click(signaturesTab);
+
+    const openFinalizeButton = await screen.findByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    });
+    await fireEvent.click(openFinalizeButton);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Percentual (%)' }));
+
+    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const captadorInput = screen.getByLabelText('Comissão Captador (%)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão Vendedor (%)') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (%)') as HTMLInputElement;
+
+    await fireEvent.input(valorInput, { target: { value: '100000' } });
+    await fireEvent.input(captadorInput, { target: { value: '5' } });
+    await fireEvent.input(vendedorInput, { target: { value: '2,5' } });
+    await fireEvent.input(taxaInput, { target: { value: '1' } });
+
+    expect(captadorInput.value).toBe('5');
+    expect(vendedorInput.value).toBe('2,5');
+    expect(taxaInput.value).toBe('1');
+
+    const submitFinalizeButton = screen.getAllByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    })[1];
+    await fireEvent.click(submitFinalizeButton);
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith('/admin/contracts/contract-test-sign-3/finalize', {
+        commission_data: {
+          valorVenda: 1000,
+          comissaoCaptador: 50,
+          comissaoVendedor: 25,
+          taxaPlataforma: 10,
+        },
+      });
+    });
+  });
+
   it('lista documentos bloqueados quando um documento está pendente de revisão', async () => {
     apiGetMock.mockResolvedValue({
       data: [
