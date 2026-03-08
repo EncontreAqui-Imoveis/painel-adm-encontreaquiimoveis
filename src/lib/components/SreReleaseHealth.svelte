@@ -5,7 +5,7 @@
             version: string;
             date: string;
             time: string;
-            status: "success" | "rollback" | "stable";
+            status: "success" | "rollback" | "stable" | "building" | "failed";
             impact: string;
         }[]
     > = {};
@@ -52,9 +52,19 @@
             icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />',
         },
         rollback: {
-            color: "bg-red-500/10 text-red-500 border-red-500/20",
+            color: "bg-orange-500/10 text-orange-500 border-orange-500/20",
             label: "ROLLBACK",
             icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />',
+        },
+        failed: {
+            color: "bg-red-500/10 text-red-500 border-red-500/20 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]",
+            label: "FALHA",
+            icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />',
+        },
+        building: {
+            color: "bg-purple-500/10 text-purple-400 border-purple-500/20 animate-pulse",
+            label: "BUILDING",
+            icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />',
         },
     };
 </script>
@@ -170,9 +180,11 @@
                         <!-- Timeline Dot -->
                         <div
                             class="absolute left-0 top-[6px] w-[15px] h-[15px] rounded-full border-[3px] bg-[#0b0f1a] transition-all duration-300 group-hover/item:scale-125 {release.status ===
-                            'rollback'
-                                ? 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
-                                : 'border-indigo-500 shadow-[0_0_10px_rgba(79,70,229,0.3)]'}"
+                            'failed'
+                                ? 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'
+                                : release.status === 'building'
+                                  ? 'border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)] animate-pulse'
+                                  : 'border-indigo-500 shadow-[0_0_10px_rgba(79,70,229,0.3)]'}"
                         ></div>
 
                         <div
