@@ -183,9 +183,11 @@
                                     <a
                                         href="https://github.com/EncontreAqui-Imoveis/servidor-encontreaqui-imoveis/commit/{release.version}"
                                         target="_blank"
-                                        class="text-xl font-black tracking-tighter text-white hover:text-indigo-400 transition-colors"
+                                        class="text-xl font-black tracking-tighter text-white hover:text-indigo-400 transition-colors flex items-center gap-1.5"
                                     >
-                                        v{release.version}
+                                        <span class="text-indigo-500 opacity-50"
+                                            >#</span
+                                        >{release.version}
                                     </a>
                                     <span
                                         class="flex items-center gap-1.5 px-3 py-1 rounded-lg border text-[9px] font-black tracking-widest {statusConfig[
