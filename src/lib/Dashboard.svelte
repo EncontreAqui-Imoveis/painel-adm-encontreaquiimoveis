@@ -814,128 +814,160 @@
             {:else if activeView === "dashboard"}
                 <div class="space-y-6">
                     {#if sreStats}
-                        <!-- Golden Signals Section (Top Level) -->
-                        <section>
-                            <div class="mb-4">
-                                <h2
-                                    class="text-xl font-semibold text-gray-900 dark:text-gray-100"
-                                >
-                                    Sinais de Ouro SRE
-                                </h2>
-                                <p
-                                    class="text-sm text-gray-500 dark:text-gray-400"
-                                >
-                                    Monitoramento de saúde e telemetria da
-                                    plataforma (Latência, Tráfego, Erros e
-                                    Utilização da Nuvem).
-                                </p>
-                            </div>
-
-                            <div
-                                class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-                            >
-                                <SreSignalCard
-                                    title="Latência (p99) (estimativa)"
-                                    value={sreStats.latency.p99}
-                                    unit={sreStats.latency.unit}
-                                    status={sreStats.latency.status}
-                                    trendDirection={sreStats.latency.trend}
-                                    trendValue={sreStats.latency.trendValue}
-                                />
-                                <SreSignalCard
-                                    title="Tráfego"
-                                    value={sreStats.traffic.rps}
-                                    unit={sreStats.traffic.unit}
-                                    status={sreStats.traffic.status}
-                                    trendDirection={sreStats.traffic.trend}
-                                    trendValue={sreStats.traffic.trendValue}
-                                />
-                                <SreSignalCard
-                                    title="Erros (estimativa)"
-                                    value={sreStats.errors.rate}
-                                    unit={sreStats.errors.unit}
-                                    status={sreStats.errors.status}
-                                    trendDirection={sreStats.errors.trend}
-                                    trendValue={sreStats.errors.trendValue}
-                                />
-                                <SreSignalCard
-                                    title="Utilização (CPU da Nuvem)"
-                                    value={sreStats.saturation.cpu}
-                                    unit={sreStats.saturation.unit}
-                                    status={sreStats.saturation.status}
-                                    trendDirection={sreStats.saturation.trend}
-                                    trendValue={sreStats.saturation.trendValue}
-                                />
-                            </div>
-                        </section>
-
-                        <!-- SRE Charts Section (Directly Below Signals) -->
+                        <!-- SRE Command Center Enclosure -->
                         <section
-                            class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2"
+                            class="bg-[#05070a] rounded-[2.5rem] p-6 lg:p-8 shadow-[0_30px_60px_rgba(0,0,0,0.4)] border border-gray-800/60 relative overflow-hidden"
                         >
+                            <!-- Background Elements -->
                             <div
-                                class="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm"
-                            >
-                                <h3
-                                    class="text-sm font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-4 opacity-80"
-                                >
-                                    Latência Histórica
-                                </h3>
-                                <SreTimeSeriesChart
-                                    title="Latência (ms)"
-                                    labels={timeLabels}
-                                    data={sreStats.latency.history}
-                                    borderColor="#3B82F6"
-                                    backgroundColor="rgba(59, 130, 246, 0.1)"
-                                />
-                            </div>
+                                class="absolute top-0 right-0 w-96 h-96 bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none"
+                            ></div>
                             <div
-                                class="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm"
-                            >
-                                <h3
-                                    class="text-sm font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-4 opacity-80"
+                                class="absolute bottom-0 left-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none"
+                            ></div>
+
+                            <div class="relative z-10">
+                                <div
+                                    class="mb-8 flex items-center justify-between"
                                 >
-                                    Taxa de Erros
-                                </h3>
-                                <SreTimeSeriesChart
-                                    title="Erros (%)"
-                                    labels={timeLabels}
-                                    data={sreStats.errors.history}
-                                    borderColor="#EF4444"
-                                    backgroundColor="rgba(239, 68, 68, 0.1)"
-                                />
-                            </div>
-                        </section>
+                                    <div>
+                                        <h2
+                                            class="text-2xl font-black text-white tracking-tight flex items-center gap-3"
+                                        >
+                                            <svg
+                                                class="w-6 h-6 text-emerald-400"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                                                />
+                                            </svg>
+                                            Central de Comando SRE
+                                        </h2>
+                                        <p
+                                            class="text-[11px] text-gray-500 mt-1 font-bold tracking-[0.2em] uppercase"
+                                        >
+                                            Telemetria & Continuidade de
+                                            Negócios
+                                        </p>
+                                    </div>
+                                    <div
+                                        class="flex items-center gap-2 bg-[#111827] px-4 py-2 rounded-xl border border-gray-800"
+                                    >
+                                        <div
+                                            class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-pulse"
+                                        ></div>
+                                        <span
+                                            class="text-[10px] font-black text-emerald-400 tracking-widest uppercase"
+                                            >Live</span
+                                        >
+                                    </div>
+                                </div>
 
-                        <!-- SRE Phase 2 & 3: Alerts, Availability, and Release Health -->
-                        <section
-                            class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6"
-                        >
-                            <div class="lg:col-span-2">
-                                <SreAvailability
-                                    data={sreStats.availability || {}}
-                                />
-                            </div>
-                            <div class="lg:col-span-1">
-                                <SreActionableAlerts
-                                    alerts={sreStats.alerts || []}
-                                />
-                            </div>
-                        </section>
+                                <!-- Four Golden Signals Grid -->
+                                <div
+                                    class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
+                                >
+                                    <SreSignalCard
+                                        title="Latência (p99)"
+                                        value={sreStats.latency.p99}
+                                        unit={sreStats.latency.unit}
+                                        status={sreStats.latency.status}
+                                        trendDirection={sreStats.latency.trend}
+                                        trendValue={sreStats.latency.trendValue}
+                                    />
+                                    <SreSignalCard
+                                        title="Tráfego"
+                                        value={sreStats.traffic.rps}
+                                        unit={sreStats.traffic.unit}
+                                        status={sreStats.traffic.status}
+                                        trendDirection={sreStats.traffic.trend}
+                                        trendValue={sreStats.traffic.trendValue}
+                                    />
+                                    <SreSignalCard
+                                        title="Erros"
+                                        value={sreStats.errors.rate}
+                                        unit={sreStats.errors.unit}
+                                        status={sreStats.errors.status}
+                                        trendDirection={sreStats.errors.trend}
+                                        trendValue={sreStats.errors.trendValue}
+                                    />
+                                    <SreSignalCard
+                                        title="Saturação (CPU/MEM)"
+                                        value={sreStats.saturation.cpu}
+                                        unit={sreStats.saturation.unit}
+                                        status={sreStats.saturation.status}
+                                        trendDirection={sreStats.saturation
+                                            .trend}
+                                        trendValue={sreStats.saturation
+                                            .trendValue}
+                                    />
+                                </div>
 
-                        <section
-                            class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2"
-                        >
-                            <div class="h-96">
-                                <SreReleaseHealth
-                                    releases={sreStats.releases || {}}
-                                />
-                            </div>
-                            <div class="h-96">
-                                <SreExternalServices
-                                    services={sreStats.externalServices || []}
-                                    on:updatePrice={handleUpdatePrice}
-                                />
+                                <!-- Middle Section: Availability and Alerts -->
+                                <div
+                                    class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6"
+                                >
+                                    <div class="lg:col-span-2 h-96">
+                                        <SreAvailability
+                                            data={sreStats.availability || {}}
+                                        />
+                                    </div>
+                                    <div class="lg:col-span-1 h-96">
+                                        <SreActionableAlerts
+                                            alerts={sreStats.alerts || []}
+                                        />
+                                    </div>
+                                </div>
+
+                                <!-- Bottom Section: Releases and External Services -->
+                                <div
+                                    class="grid grid-cols-1 lg:grid-cols-2 gap-6"
+                                >
+                                    <div class="h-[400px]">
+                                        <SreReleaseHealth
+                                            releases={sreStats.releases || {}}
+                                        />
+                                    </div>
+                                    <div class="h-[400px] flex flex-col gap-6">
+                                        <div
+                                            class="flex-1 bg-[#0b0f1a] rounded-3xl border border-gray-800 p-6 flex flex-col justify-center items-center relative overflow-hidden group"
+                                        >
+                                            <div
+                                                class="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent z-0"
+                                            ></div>
+                                            <h3
+                                                class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-4 z-10"
+                                            >
+                                                Gráficos de Telemetria
+                                            </h3>
+                                            <div
+                                                class="w-full flex-1 z-10 flex flex-col justify-center opacity-80 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <SreTimeSeriesChart
+                                                    title="Latência Global"
+                                                    labels={timeLabels}
+                                                    data={sreStats.latency
+                                                        .history}
+                                                    borderColor="#6366f1"
+                                                    backgroundColor="rgba(99, 102, 241, 0.1)"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div class="flex-1">
+                                            <SreExternalServices
+                                                services={sreStats.externalServices ||
+                                                    []}
+                                                on:updatePrice={handleUpdatePrice}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </section>
                     {/if}

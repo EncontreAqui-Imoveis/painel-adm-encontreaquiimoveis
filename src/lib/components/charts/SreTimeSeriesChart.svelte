@@ -111,10 +111,10 @@
 </script>
 
 <div class="flex flex-col h-full w-full">
-    <div class="flex flex-wrap gap-1 mb-4">
+    <div class="flex flex-wrap gap-1 mb-4 z-20">
         {#each timeFilters as filter}
             <button
-                class={`px-2 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition-colors ${activeFilter === filter ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400" : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"}`}
+                class={`px-3 py-1 text-[10px] font-black rounded-lg transition-all duration-300 ${activeFilter === filter ? "bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.2)]" : "text-gray-500 hover:text-gray-300 hover:bg-white/5"}`}
                 on:click={() => (activeFilter = filter)}
             >
                 {filter}

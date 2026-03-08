@@ -137,19 +137,19 @@
             <p
                 class="text-gray-500 text-[10px] font-bold uppercase tracking-[0.3em]"
             >
-                Métrica Real do Servidor Railway
+                Uptime Gateway & Services
             </p>
         </div>
 
         <!-- Premium Filter Switcher -->
         <div
-            class="bg-black/40 backdrop-blur-md p-1.5 rounded-2xl flex gap-1 border border-white/5 shadow-inner"
+            class="bg-[#111827] p-1.5 rounded-2xl flex gap-1 border border-gray-800 shadow-inner"
         >
             {#each timeFilters as filter}
                 <button
-                    class="px-4 py-2 text-[9px] font-black rounded-xl transition-all duration-500 {activeFilter ===
+                    class="px-4 py-2 text-[9px] font-black rounded-xl transition-all duration-300 {activeFilter ===
                     filter
-                        ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.2)]'
+                        ? 'bg-gray-800 text-white shadow-[0_0_15px_rgba(0,0,0,0.5)] border border-gray-700'
                         : 'text-gray-500 hover:text-gray-300'}"
                     on:click={() => (activeFilter = filter)}
                 >
@@ -177,7 +177,7 @@
                 class="px-6 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-sm"
             >
                 <span
-                    class="text-emerald-400 font-black italic text-xl tracking-[0.2em] shadow-emerald-500/50"
+                    class="text-emerald-400 font-black italic text-xl tracking-[0.2em] drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]"
                     >OPERATIONAL</span
                 >
             </div>
@@ -200,11 +200,11 @@
     <div class="relative z-10 mt-auto px-10 pb-10">
         <!-- Health Bar -->
         <div
-            class="relative h-2.5 w-full bg-gray-900/50 rounded-full mb-8 overflow-hidden border border-white/5"
+            class="relative h-2.5 w-full bg-gray-900 rounded-full mb-8 overflow-hidden border border-gray-800"
         >
             {#if uptimeCurrent < 100}
                 <div
-                    class="absolute left-0 top-0 h-full bg-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.5)] transition-all duration-1000"
+                    class="absolute left-0 top-0 h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)] transition-all duration-1000"
                     style="width: 2%"
                 ></div>
             {/if}
@@ -215,7 +215,7 @@
         </div>
 
         <div
-            class="flex justify-between items-center bg-white/[0.02] border border-white/5 rounded-2xl px-6 py-4 backdrop-blur-sm"
+            class="flex justify-between items-center bg-[#111827] border border-gray-800 rounded-2xl px-6 py-4"
         >
             <div class="flex items-center gap-4">
                 <div class="flex flex-col">

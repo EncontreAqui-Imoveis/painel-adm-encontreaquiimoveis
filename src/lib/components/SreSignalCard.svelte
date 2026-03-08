@@ -8,17 +8,17 @@
 
     const statusColors = {
         healthy:
-            "bg-white dark:bg-[#111827] text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-800 shadow-[0_4px_20px_rgba(0,0,0,0.05)]",
+            "bg-[#0b0f1a] text-gray-100 border-emerald-500/20 shadow-[0_4px_20px_rgba(16,185,129,0.05)]",
         warning:
-            "bg-yellow-50 dark:bg-yellow-900/10 text-yellow-900 dark:text-yellow-100 border-yellow-300 dark:border-yellow-700/50 shadow-[0_4px_20px_rgba(234,179,8,0.1)]",
+            "bg-yellow-900/10 text-yellow-100 border-yellow-500/30 shadow-[0_4px_20px_rgba(234,179,8,0.1)]",
         critical:
-            "bg-red-50 dark:bg-red-900/10 text-red-900 dark:text-red-100 border-red-300 dark:border-red-700/50 shadow-[0_4px_20px_rgba(239,68,68,0.1)]",
+            "bg-red-900/10 text-red-100 border-red-500/30 shadow-[0_4px_20px_rgba(239,68,68,0.15)]",
     };
 
     const statusIndicatorColors = {
-        healthy: "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]",
-        warning: "bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]",
-        critical: "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]",
+        healthy: "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.6)]",
+        warning: "bg-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.6)]",
+        critical: "bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.6)]",
     };
 
     $: currentStatusClasses = statusColors[status];
@@ -47,11 +47,11 @@
 
         {#if trendValue}
             <div
-                class={`text-[10px] font-black flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-800/50 ${
+                class={`text-[10px] font-black flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-900/50 border border-white/5 backdrop-blur-sm ${
                     trendDirection === "down" && status === "healthy"
-                        ? "text-emerald-500"
+                        ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]"
                         : trendDirection === "up" && status === "critical"
-                          ? "text-red-500"
+                          ? "text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]"
                           : "text-gray-400"
                 }`}
             >
@@ -91,13 +91,13 @@
 
     <div class="flex items-baseline gap-1.5 mt-2">
         <span
-            class="text-4xl font-black tracking-tighter dark:text-white group-hover:text-indigo-400 transition-colors"
+            class="text-4xl font-black tracking-tighter text-white group-hover:text-emerald-400 transition-colors drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] group-hover:drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]"
         >
             {value}
         </span>
         {#if unit}
             <span
-                class="text-xs font-black text-gray-400 uppercase tracking-widest mb-1 opacity-60"
+                class="text-xs font-black text-gray-500 uppercase tracking-widest mb-1 opacity-80"
             >
                 {unit}
             </span>

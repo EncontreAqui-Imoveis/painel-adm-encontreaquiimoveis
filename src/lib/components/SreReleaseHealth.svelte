@@ -69,9 +69,7 @@
     };
 </script>
 
-<div
-    class="bg-[#0b0f1a] rounded-3xl border border-gray-800 shadow-2xl flex flex-col h-full overflow-hidden"
->
+<div class="bg-transparent flex flex-col h-full overflow-hidden">
     <!-- Header: Links de Infraestrutura -->
     <div class="px-8 py-6 border-b border-gray-800/50">
         <div
@@ -147,7 +145,10 @@
     </div>
 
     <!-- Timeline Body: Backend Releases Only -->
-    <div class="p-8 flex-1 overflow-y-auto custom-scrollbar">
+    <div class="p-8 flex-1 overflow-y-auto custom-scrollbar relative">
+        <div
+            class="absolute inset-0 bg-gradient-to-t from-[#05070a]/80 to-transparent pointer-events-none z-10 h-12 top-auto"
+        ></div>
         <div class="flex items-center gap-3 mb-8">
             <svg
                 class="w-4 h-4 text-emerald-500"

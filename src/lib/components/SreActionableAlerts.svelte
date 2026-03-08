@@ -10,13 +10,13 @@
 
     const severityColors = {
         critical:
-            "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-300",
-        high: "border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-300",
+            "border-red-500/50 bg-red-900/20 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.15)]",
+        high: "border-orange-500/50 bg-orange-900/20 text-orange-300 shadow-[0_0_15px_rgba(249,115,22,0.15)]",
         warning:
-            "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-900 dark:text-yellow-300",
-        info: "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-300",
+            "border-yellow-500/50 bg-yellow-900/20 text-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.15)]",
+        info: "border-blue-500/50 bg-blue-900/20 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.15)]",
         success:
-            "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-300",
+            "border-green-500/50 bg-green-900/20 text-green-300 shadow-[0_0_15px_rgba(34,197,94,0.15)]",
     };
 
     const severityIcons = {
@@ -36,59 +36,56 @@
 </script>
 
 <div
-    class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col h-full"
+    class="bg-[#0b0f1a] rounded-[2.5rem] border border-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col h-full relative"
 >
+    <!-- Background element -->
     <div
-        class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50"
+        class="absolute top-0 right-0 w-64 h-64 bg-red-500/5 rounded-full blur-[80px] pointer-events-none"
+    ></div>
+
+    <div
+        class="px-8 pt-8 pb-6 border-b border-gray-800/50 flex justify-between items-start z-10"
     >
-        <div>
+        <div class="flex flex-col gap-2">
             <h3
-                class="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2"
+                class="font-black text-white text-xl flex items-center gap-3 tracking-tight"
             >
-                <svg
-                    class="w-5 h-5 text-blue-500"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                    />
-                </svg>
-                Alertas Acionáveis
+                <div
+                    class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse"
+                ></div>
+                Incidentes
             </h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Incidentes e notificações requerendo atenção
+            <p
+                class="text-[10px] text-gray-500 font-bold tracking-[0.3em] uppercase"
+            >
+                Ações Imediatas & Alertas
             </p>
         </div>
         {#if criticalCount > 0}
             <span
-                class="bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse"
+                class="bg-red-500/10 text-red-500 border border-red-500/20 text-[10px] font-black px-3 py-1.5 rounded-xl animate-pulse tracking-widest uppercase shadow-[0_0_15px_rgba(239,68,68,0.2)]"
             >
                 {criticalCount} Críticos
             </span>
         {:else if alerts.length > 0}
             <span
-                class="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                class="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-black px-3 py-1.5 rounded-xl tracking-widest uppercase"
             >
-                {alerts.length} Notificações
+                {alerts.length} Ativos
             </span>
         {/if}
     </div>
 
-    <div class="p-5 flex-1 overflow-auto">
+    <div class="p-8 flex-1 overflow-y-auto custom-scrollbar z-10">
         {#if alerts.length === 0}
             <div
-                class="flex flex-col items-center justify-center h-full text-center py-8"
+                class="flex flex-col items-center justify-center h-full text-center py-8 opacity-40"
             >
                 <div
-                    class="bg-green-100 dark:bg-green-900/30 p-3 rounded-full mb-3"
+                    class="bg-emerald-500/10 p-4 rounded-3xl mb-4 border border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.1)]"
                 >
                     <svg
-                        class="w-8 h-8 text-green-600 dark:text-green-400"
+                        class="w-10 h-10 text-emerald-500"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -96,43 +93,55 @@
                         <path
                             stroke-linecap="round"
                             stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M5 13l4 4L19 7"
+                            stroke-width="1.5"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                         />
                     </svg>
                 </div>
-                <p class="font-medium text-gray-900 dark:text-gray-100">
-                    Nenhum evento crítico
+                <p class="font-black text-white text-lg tracking-tight">
+                    Tudo Operacional
                 </p>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Sistemas operando normalmente sem requerer intervenção.
+                <p
+                    class="text-xs text-gray-500 font-bold mt-2 uppercase tracking-widest"
+                >
+                    Zero Incidentes Ativos
                 </p>
             </div>
         {:else}
-            <div class="space-y-3">
+            <div class="space-y-4">
                 {#each alerts as alert}
                     <div
-                        class={`border-l-4 rounded-r-lg p-3 ${severityColors[alert.severity]}`}
+                        class={`border-l-4 rounded-xl p-4 backdrop-blur-sm transition-all duration-300 hover:scale-[1.01] hover:shadow-lg ${severityColors[alert.severity]}`}
                     >
-                        <div class="flex items-start gap-3">
-                            <div class="mt-0.5">
+                        <div class="flex items-start gap-4">
+                            <div class="mt-1 opacity-80">
                                 {@html severityIcons[alert.severity]}
                             </div>
                             <div class="flex-1">
-                                <div class="flex justify-between items-start">
-                                    <h4 class="text-sm font-bold">
+                                <div
+                                    class="flex justify-between items-start mb-1"
+                                >
+                                    <h4
+                                        class="text-[13px] font-black uppercase tracking-wider text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+                                    >
                                         {alert.service}
                                     </h4>
                                     <span
-                                        class="text-xs font-semibold opacity-70"
+                                        class="text-[10px] font-black tracking-widest opacity-60 bg-black/20 px-2 py-0.5 rounded-md"
                                         >{alert.time}</span
                                     >
                                 </div>
-                                <p class="text-sm mt-1">{alert.message}</p>
-                                <div
-                                    class="flex items-center gap-4 mt-2 text-xs font-medium opacity-80"
+                                <p
+                                    class="text-sm mt-1.5 opacity-90 font-medium leading-relaxed"
                                 >
-                                    <span class="flex items-center gap-1">
+                                    {alert.message}
+                                </p>
+                                <div
+                                    class="flex items-center gap-4 mt-4 text-[10px] font-black tracking-widest uppercase opacity-70"
+                                >
+                                    <span
+                                        class="flex items-center gap-1.5 bg-black/20 px-2.5 py-1 rounded-lg"
+                                    >
                                         <svg
                                             class="w-3.5 h-3.5"
                                             fill="none"
@@ -148,18 +157,18 @@
                                         Duração: {alert.duration}
                                     </span>
                                     <button
-                                        class="hover:underline flex items-center gap-1"
+                                        class="hover:text-white hover:bg-white/10 px-2.5 py-1 rounded-lg transition-all duration-300 flex items-center gap-1.5"
                                     >
-                                        Reconhecer (ACK)
+                                        ACK (PULL)
                                         <svg
-                                            class="w-3 h-3"
+                                            class="w-3.5 h-3.5"
                                             fill="none"
                                             viewBox="0 0 24 24"
                                             stroke="currentColor"
                                             ><path
                                                 stroke-linecap="round"
                                                 stroke-linejoin="round"
-                                                stroke-width="2"
+                                                stroke-width="2.5"
                                                 d="M9 5l7 7-7 7"
                                             /></svg
                                         >
@@ -173,3 +182,19 @@
         {/if}
     </div>
 </div>
+
+<style>
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #1f2937;
+        border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #374151;
+    }
+</style>
