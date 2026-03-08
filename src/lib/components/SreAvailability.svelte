@@ -178,13 +178,9 @@
             >
                 <span
                     class="text-emerald-400 font-black italic text-xl tracking-[0.2em] shadow-emerald-500/50"
-                    >OPERATIONAL</span
+                    >OPERACIONAL</span
                 >
             </div>
-            <span
-                class="text-[9px] font-black text-gray-500 tracking-widest uppercase italic"
-                >Heurística: Golden Signal v2.1</span
-            >
         </div>
     </div>
 
@@ -238,7 +234,7 @@
                 >
                 <span
                     class="text-emerald-400 font-black text-sm tracking-tight italic"
-                    >99.9% SLO Met</span
+                    >99.9%</span
                 >
             </div>
 
