@@ -814,7 +814,7 @@
                     {#if sreStats}
                         <!-- SRE Command Center Enclosure -->
                         <section
-                            class="bg-[#05070a] rounded-[2.5rem] p-6 lg:p-8 shadow-[0_30px_60px_rgba(0,0,0,0.4)] border border-gray-800/60 relative overflow-hidden"
+                            class="bg-white dark:bg-[#05070a] rounded-[2.5rem] p-6 lg:p-8 shadow-sm dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)] border border-gray-200 dark:border-gray-800/60 relative overflow-hidden"
                         >
                             <!-- Background Elements -->
                             <div
@@ -830,7 +830,7 @@
                                 >
                                     <div>
                                         <h2
-                                            class="text-2xl font-black text-white tracking-tight flex items-center gap-3"
+                                            class="text-2xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-3"
                                         >
                                             <svg
                                                 class="w-6 h-6 text-emerald-400"
@@ -855,7 +855,7 @@
                                         </p>
                                     </div>
                                     <div
-                                        class="flex items-center gap-2 bg-[#111827] px-4 py-2 rounded-xl border border-gray-800"
+                                        class="flex items-center gap-2 bg-gray-50 dark:bg-[#111827] px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-800"
                                     >
                                         <div
                                             class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-pulse"
@@ -960,7 +960,7 @@
                                     class="grid grid-cols-1 lg:grid-cols-2 gap-6"
                                 >
                                     <div
-                                        class="h-[400px] relative overflow-hidden bg-[#0b0f1a]/50 rounded-3xl border border-gray-800/50"
+                                        class="h-[400px] relative overflow-hidden bg-white/50 dark:bg-[#0b0f1a]/50 rounded-3xl border border-gray-200 dark:border-gray-800/50"
                                     >
                                         <SreReleaseHealth
                                             releases={sreStats.releases || {}}

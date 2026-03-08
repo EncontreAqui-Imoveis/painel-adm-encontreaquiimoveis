@@ -54,19 +54,19 @@
 </script>
 
 <div
-    class="bg-[#0b0f1a] rounded-3xl border border-gray-800 shadow-[0_10px_30px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col h-full relative"
+    class="bg-white dark:bg-[#0b0f1a] rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm dark:shadow-[0_10px_30px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col h-full relative"
 >
     <!-- Subtle glassmorphism glow -->
     <div
-        class="absolute -top-24 -right-24 w-64 h-64 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none"
+        class="absolute -top-24 -right-24 w-64 h-64 bg-indigo-50 dark:bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none"
     ></div>
 
     <div
-        class="px-6 py-5 border-b border-gray-800/60 bg-[#05070a]/50 flex justify-between items-center relative z-10"
+        class="px-6 py-5 border-b border-gray-200 dark:border-gray-800/60 bg-white/50 dark:bg-[#05070a]/50 flex justify-between items-center relative z-10"
     >
         <div>
             <h3
-                class="font-black text-white flex items-center gap-3 text-lg tracking-tight"
+                class="font-black text-gray-900 dark:text-white flex items-center gap-3 text-lg tracking-tight"
             >
                 <svg
                     class="w-5 h-5 text-blue-500"
@@ -96,7 +96,7 @@
         <ul class="space-y-4">
             {#each services as service}
                 <li
-                    class="flex items-center justify-between p-4 rounded-2xl bg-[#111827]/40 border border-gray-800 hover:bg-[#1f2937]/40 hover:border-gray-700 transition-all duration-300 group"
+                    class="flex items-center justify-between p-4 rounded-2xl bg-gray-50 dark:bg-[#111827]/40 border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-[#1f2937]/40 hover:border-gray-300 dark:hover:border-gray-700 transition-all duration-300 group"
                 >
                     <div class="flex items-center gap-3">
                         <div
@@ -108,7 +108,7 @@
                         </div>
                         <div>
                             <p
-                                class="text-sm font-black text-gray-200 leading-tight mb-1"
+                                class="text-sm font-black text-gray-900 dark:text-gray-200 leading-tight mb-1"
                             >
                                 {service.name}
                             </p>
@@ -189,7 +189,7 @@
                                         <span>{service.latency} &bull;</span>
                                     {/if}
                                     <span
-                                        class="font-black text-white group-hover:text-indigo-400 transition-colors"
+                                        class="font-black text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors"
                                         >R$ {(service.cost || 0)
                                             .toFixed(2)
                                             .replace(".", ",")}</span
@@ -218,13 +218,14 @@
         {/if}
         {#if services.length > 0}
             <div
-                class="mt-6 pt-6 border-t border-gray-800 flex justify-between items-center text-sm"
+                class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-800 flex justify-between items-center text-sm"
             >
                 <span
                     class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500"
                     >Custo Mensal (SaaS/PaaS)</span
                 >
-                <span class="font-black text-white text-lg tracking-tight"
+                <span
+                    class="font-black text-gray-900 dark:text-white text-lg tracking-tight"
                     >R$ {totalCost.toFixed(2).replace(".", ",")}</span
                 >
             </div>

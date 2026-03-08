@@ -23,6 +23,7 @@
     type?: string | null;
     documentType?: string | null;
     status?: ContractApprovalStatus | null;
+    metadata?: Record<string, unknown> | null;
     side?: 'seller' | 'buyer' | null;
     originalFileName?: string | null;
     downloadUrl?: string | null;
@@ -186,7 +187,17 @@
   }
 
   function normalizeDocumentStatus(doc?: ContractDocument | null): string {
-    return String(doc?.status ?? '').trim().toUpperCase();
+    const direct = String(doc?.status ?? '').trim().toUpperCase();
+    if (direct.length > 0) {
+      return direct;
+    }
+
+    const metadata = doc?.metadata ?? null;
+    return String(
+      metadata?.status ?? metadata?.reviewStatus ?? metadata?.validationStatus ?? ''
+    )
+      .trim()
+      .toUpperCase();
   }
 
   function hasDocumentReviewStatus(doc?: ContractDocument | null): boolean {
@@ -214,6 +225,25 @@
       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
     }
     return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+  }
+
+  function documentSideLabel(doc?: ContractDocument | null): string {
+    const side = doc ? getDocumentSide(doc) : null;
+    if (side === 'seller') return 'Captador';
+    if (side === 'buyer') return 'Vendedor';
+    return '';
+  }
+
+  function documentFileName(doc?: ContractDocument | null): string {
+    const original = String(doc?.originalFileName ?? '').trim();
+    if (original.length > 0) {
+      return original;
+    }
+    const type = String(doc?.documentType ?? '').trim();
+    if (type.length > 0) {
+      return `${type}.pdf`;
+    }
+    return 'documento.pdf';
   }
 
   function tableActionLabel(status: ContractStatus): string {
@@ -368,6 +398,17 @@
     return (contract.documents ?? []).filter((doc) => {
       const documentType = String(doc.documentType ?? '').trim().toLowerCase();
       return documentType !== 'proposal';
+    });
+  }
+
+  function getAllContractDocuments(contract: ContractItem): ContractDocument[] {
+    return [...getNonProposalDocuments(contract)].sort((left, right) => {
+      const leftDate = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+      const rightDate = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+      if (leftDate !== rightDate) {
+        return rightDate - leftDate;
+      }
+      return Number(right.id ?? 0) - Number(left.id ?? 0);
     });
   }
 
@@ -1277,6 +1318,62 @@
             <span class="font-semibold"> Aguardando Assinaturas</span>.
           </p>
 
+          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+              Documentos do contrato
+            </p>
+            {#if getAllContractDocuments(selected).length === 0}
+              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Nenhum documento do contrato anexado até o momento.
+              </p>
+            {:else}
+              <div class="mt-2 space-y-2">
+                {#each getAllContractDocuments(selected) as doc (doc.id)}
+                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="font-medium text-gray-900 dark:text-gray-100">
+                          {documentLabel(doc.documentType)}
+                        </p>
+                        {#if documentSideLabel(doc)}
+                          <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                            {documentSideLabel(doc)}
+                          </span>
+                        {/if}
+                        {#if hasDocumentReviewStatus(doc)}
+                          <span
+                            class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
+                              doc
+                            )}`}
+                          >
+                            {documentStatusLabel(doc)}
+                          </span>
+                        {/if}
+                      </div>
+                      <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                        {documentFileName(doc)}
+                      </p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Enviado em {formatDate(doc.createdAt)}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      on:click={() => selected && viewDocument(doc, selected)}
+                      disabled={downloadingDocumentId === doc.id}
+                    >
+                      {#if downloadingDocumentId === doc.id}
+                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                      {/if}
+                      Baixar/Visualizar
+                    </Button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
           <div class="rounded-md border border-dashed border-gray-300 p-4 dark:border-gray-700">
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200" for="draft-pdf">
               PDF da minuta
@@ -1328,6 +1425,62 @@
                     <div>
                       <p class="font-medium text-gray-900 dark:text-gray-100">{documentLabel(doc.documentType)}</p>
                       <p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(doc.createdAt)}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      on:click={() => selected && viewDocument(doc, selected)}
+                      disabled={downloadingDocumentId === doc.id}
+                    >
+                      {#if downloadingDocumentId === doc.id}
+                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                      {/if}
+                      Baixar/Visualizar
+                    </Button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+              Todos os documentos do contrato
+            </p>
+            {#if getAllContractDocuments(selected).length === 0}
+              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Nenhum documento do contrato anexado até o momento.
+              </p>
+            {:else}
+              <div class="mt-2 space-y-2">
+                {#each getAllContractDocuments(selected) as doc (doc.id)}
+                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="font-medium text-gray-900 dark:text-gray-100">
+                          {documentLabel(doc.documentType)}
+                        </p>
+                        {#if documentSideLabel(doc)}
+                          <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                            {documentSideLabel(doc)}
+                          </span>
+                        {/if}
+                        {#if hasDocumentReviewStatus(doc)}
+                          <span
+                            class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
+                              doc
+                            )}`}
+                          >
+                            {documentStatusLabel(doc)}
+                          </span>
+                        {/if}
+                      </div>
+                      <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                        {documentFileName(doc)}
+                      </p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Enviado em {formatDate(doc.createdAt)}
+                      </p>
                     </div>
                     <Button
                       size="sm"

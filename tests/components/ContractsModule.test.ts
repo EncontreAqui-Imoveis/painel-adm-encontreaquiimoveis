@@ -363,6 +363,176 @@ describe('ContractsModule', () => {
     expect(adminOverrideButton).toBeDisabled();
   });
 
+  it('lista todos os documentos existentes no modal de minuta em IN_DRAFT', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=IN_DRAFT')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-draft-1',
+              status: 'IN_DRAFT',
+              negotiationId: 'neg-test-draft-1',
+              propertyId: 601,
+              propertyCode: 'RV-601',
+              propertyTitle: 'Casa Minuta',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6011,
+                  documentType: 'doc_identidade',
+                  side: 'seller',
+                  status: 'APPROVED',
+                  originalFileName: 'identidade_captador.pdf',
+                  downloadUrl: '/negotiations/neg-test-draft-1/documents/6011/download',
+                  createdAt: '2026-03-01T10:00:00.000Z',
+                },
+                {
+                  id: 6012,
+                  documentType: 'comprovante_endereco',
+                  side: 'buyer',
+                  status: 'APPROVED',
+                  originalFileName: 'endereco_vendedor.pdf',
+                  downloadUrl: '/negotiations/neg-test-draft-1/documents/6012/download',
+                  createdAt: '2026-03-01T11:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-01T12:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+
+    render(ContractsModule);
+
+    const draftTab = await screen.findByRole('button', {
+      name: 'Em Confecção',
+    });
+    await fireEvent.click(draftTab);
+
+    await waitFor(() => {
+      expect(apiGetMock).toHaveBeenCalledWith(
+        expect.stringContaining('/admin/contracts?status=IN_DRAFT')
+      );
+    });
+
+    const openDraftButton = await screen.findByRole('button', {
+      name: 'Anexar Minuta',
+    });
+    await fireEvent.click(openDraftButton);
+
+    expect(await screen.findByText('Documentos do contrato')).toBeInTheDocument();
+    expect(screen.getByText('identidade_captador.pdf')).toBeInTheDocument();
+    expect(screen.getByText('endereco_vendedor.pdf')).toBeInTheDocument();
+    expect(screen.getAllByText('Captador').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Vendedor').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('button', { name: 'Baixar/Visualizar' }).length
+    ).toBeGreaterThan(0);
+  });
+
+  it('mantém documentação anterior e minuta visíveis em AWAITING_SIGNATURES', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_SIGNATURES')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-sign-1',
+              status: 'AWAITING_SIGNATURES',
+              negotiationId: 'neg-test-sign-1',
+              propertyId: 602,
+              propertyCode: 'RV-602',
+              propertyTitle: 'Casa Assinaturas',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6021,
+                  documentType: 'doc_identidade',
+                  side: 'seller',
+                  status: 'APPROVED',
+                  originalFileName: 'identidade_captador.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-1/documents/6021/download',
+                  createdAt: '2026-03-01T09:00:00.000Z',
+                },
+                {
+                  id: 6022,
+                  documentType: 'doc_identidade',
+                  side: 'buyer',
+                  status: 'APPROVED',
+                  originalFileName: 'identidade_vendedor.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-1/documents/6022/download',
+                  createdAt: '2026-03-01T09:10:00.000Z',
+                },
+                {
+                  id: 6023,
+                  documentType: 'contrato_minuta',
+                  originalFileName: 'contrato_minuta.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-1/documents/6023/download',
+                  createdAt: '2026-03-02T08:00:00.000Z',
+                },
+                {
+                  id: 6024,
+                  documentType: 'contrato_assinado',
+                  originalFileName: 'contrato_assinado.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-1/documents/6024/download',
+                  createdAt: '2026-03-02T10:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-02T10:30:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+
+    render(ContractsModule);
+
+    const signaturesTab = await screen.findByRole('button', {
+      name: 'Aguardando Assinaturas',
+    });
+    await fireEvent.click(signaturesTab);
+
+    await waitFor(() => {
+      expect(apiGetMock).toHaveBeenCalledWith(
+        expect.stringContaining('/admin/contracts?status=AWAITING_SIGNATURES')
+      );
+    });
+
+    const finalizeButton = await screen.findByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    });
+    await fireEvent.click(finalizeButton);
+
+    expect(await screen.findByText('Documentos para conferência')).toBeInTheDocument();
+    expect(await screen.findByText('Todos os documentos do contrato')).toBeInTheDocument();
+    expect(screen.getByText('contrato_minuta.pdf')).toBeInTheDocument();
+    expect(screen.getByText('identidade_captador.pdf')).toBeInTheDocument();
+    expect(screen.getByText('identidade_vendedor.pdf')).toBeInTheDocument();
+    expect(screen.getByText('Contrato (Minuta)')).toBeInTheDocument();
+  });
+
   it('lista documentos bloqueados quando um documento está pendente de revisão', async () => {
     apiGetMock.mockResolvedValue({
       data: [

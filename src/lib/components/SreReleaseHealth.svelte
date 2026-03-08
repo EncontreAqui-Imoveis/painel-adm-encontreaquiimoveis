@@ -71,13 +71,13 @@
 
 <div class="bg-transparent flex flex-col h-full overflow-hidden">
     <!-- Header: Links de Infraestrutura -->
-    <div class="px-8 py-6 border-b border-gray-800/50">
+    <div class="px-8 py-6 border-b border-gray-200 dark:border-gray-800/50">
         <div
             class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6"
         >
             <div>
                 <h3
-                    class="font-black text-white text-lg flex items-center gap-3"
+                    class="font-black text-gray-900 dark:text-white text-lg flex items-center gap-3"
                 >
                     <svg
                         class="w-6 h-6 text-indigo-500"
@@ -107,7 +107,7 @@
                         href={link.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="flex items-center gap-2.5 px-4 py-2 rounded-xl border border-gray-800 bg-[#111827] text-gray-400 hover:text-white transition-all duration-300 font-black text-[10px] uppercase tracking-wider {link.color} hover:border-gray-600 hover:shadow-[0_0_15px_rgba(0,0,0,0.3)]"
+                        class="flex items-center gap-2.5 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#111827] text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all duration-300 font-black text-[10px] uppercase tracking-wider {link.color} hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm dark:hover:shadow-[0_0_15px_rgba(0,0,0,0.3)]"
                         title="Ver no {link.name}"
                     >
                         <svg
@@ -147,7 +147,7 @@
     <!-- Timeline Body: Backend Releases Only -->
     <div class="p-8 flex-1 overflow-y-auto custom-scrollbar relative">
         <div
-            class="absolute inset-0 bg-gradient-to-t from-[#05070a]/80 to-transparent pointer-events-none z-10 h-12 top-auto"
+            class="absolute inset-0 bg-gradient-to-t from-white/80 dark:from-[#05070a]/80 to-transparent pointer-events-none z-10 h-12 top-auto"
         ></div>
         <div class="flex items-center gap-3 mb-8">
             <svg
@@ -172,7 +172,7 @@
         <div class="relative ml-2">
             <!-- Central Line -->
             <div
-                class="absolute left-[7px] top-2 bottom-2 w-[1.5px] bg-gray-800/80"
+                class="absolute left-[7px] top-2 bottom-2 w-[1.5px] bg-gray-200 dark:bg-gray-800/80"
             ></div>
 
             <div class="space-y-12">
@@ -180,7 +180,7 @@
                     <div class="relative pl-10 group/item">
                         <!-- Timeline Dot -->
                         <div
-                            class="absolute left-0 top-[6px] w-[15px] h-[15px] rounded-full border-[3px] bg-[#0b0f1a] transition-all duration-300 group-hover/item:scale-125 {release.status ===
+                            class="absolute left-0 top-[6px] w-[15px] h-[15px] rounded-full border-[3px] bg-white dark:bg-[#0b0f1a] transition-all duration-300 group-hover/item:scale-125 {release.status ===
                             'failed'
                                 ? 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'
                                 : release.status === 'building'
@@ -196,7 +196,7 @@
                                     <a
                                         href="https://github.com/EncontreAqui-Imoveis/servidor-encontreaqui-imoveis/commit/{release.version}"
                                         target="_blank"
-                                        class="text-xl font-black tracking-tighter text-white hover:text-indigo-400 transition-colors flex items-center gap-1.5"
+                                        class="text-xl font-black tracking-tighter text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1.5"
                                     >
                                         <span class="text-indigo-500 opacity-50"
                                             >#</span
@@ -223,10 +223,11 @@
                                     class="mt-3 text-xs text-gray-400 font-bold leading-relaxed line-clamp-3"
                                 >
                                     <span
-                                        class="text-indigo-400 mr-2 opacity-80 uppercase tracking-tighter"
+                                        class="text-indigo-600 dark:text-indigo-400 mr-2 opacity-80 uppercase tracking-tighter"
                                         >Impacto:</span
                                     >
-                                    <span class="text-gray-300 italic"
+                                    <span
+                                        class="text-gray-600 dark:text-gray-300 italic"
                                         >"{release.impact}"</span
                                     >
                                 </div>
@@ -235,11 +236,11 @@
                                 class="text-right flex flex-col items-end gap-1"
                             >
                                 <span
-                                    class="text-[10px] font-black text-gray-400 uppercase tracking-widest block"
+                                    class="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block"
                                     >Hoje &bull; {release.time}</span
                                 >
                                 <div
-                                    class="w-12 h-0.5 bg-gray-800 group-hover/item:w-16 transition-all duration-300"
+                                    class="w-12 h-0.5 bg-gray-200 dark:bg-gray-800 group-hover/item:w-16 transition-all duration-300"
                                 ></div>
                             </div>
                         </div>
@@ -281,11 +282,18 @@
     .custom-scrollbar::-webkit-scrollbar-track {
         background: transparent;
     }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
+    :global(.dark) .custom-scrollbar::-webkit-scrollbar-thumb {
         background: #1f2937;
         border-radius: 10px;
     }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    :global(.dark) .custom-scrollbar::-webkit-scrollbar-thumb:hover {
         background: #374151;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #e5e7eb;
+        border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #d1d5db;
     }
 </style>
