@@ -854,17 +854,6 @@
                                             Negócios
                                         </p>
                                     </div>
-                                    <div
-                                        class="flex items-center gap-2 bg-gray-50 dark:bg-[#111827] px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-800"
-                                    >
-                                        <div
-                                            class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-pulse"
-                                        ></div>
-                                        <span
-                                            class="text-[10px] font-black text-emerald-400 tracking-widest uppercase"
-                                            >Live</span
-                                        >
-                                    </div>
                                 </div>
 
                                 <!-- Four Golden Signals Grid -->
