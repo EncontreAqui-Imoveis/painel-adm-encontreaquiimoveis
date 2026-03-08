@@ -95,7 +95,7 @@
                     Infra & Lançamentos
                 </h3>
                 <p
-                    class="text-[11px] text-gray-500 mt-1 font-bold tracking-wide uppercase opacity-60"
+                    class="text-[11px] text-gray-400 mt-1 font-bold tracking-wide uppercase opacity-80"
                 >
                     Acesso rápido ao Github, Vercel, Railway e TiDB
                 </p>
@@ -220,10 +220,10 @@
                                     </span>
                                 </div>
                                 <div
-                                    class="mt-3 text-xs text-gray-500 font-bold leading-relaxed"
+                                    class="mt-3 text-xs text-gray-400 font-bold leading-relaxed line-clamp-3"
                                 >
                                     <span
-                                        class="text-gray-600 mr-2 opacity-50 uppercase tracking-tighter"
+                                        class="text-indigo-400 mr-2 opacity-80 uppercase tracking-tighter"
                                         >Impacto:</span
                                     >
                                     <span class="text-gray-300 italic"
@@ -235,7 +235,7 @@
                                 class="text-right flex flex-col items-end gap-1"
                             >
                                 <span
-                                    class="text-[10px] font-black text-gray-600 uppercase tracking-widest block"
+                                    class="text-[10px] font-black text-gray-400 uppercase tracking-widest block"
                                     >Hoje &bull; {release.time}</span
                                 >
                                 <div

@@ -19,15 +19,18 @@
     );
 
     const statusColors = {
-        operational: "text-green-500 bg-green-100 dark:bg-green-900/30",
-        degraded: "text-yellow-500 bg-yellow-100 dark:bg-yellow-900/30",
-        outage: "text-red-500 bg-red-100 dark:bg-red-900/30",
+        operational:
+            "text-emerald-500 bg-emerald-500/10 border border-emerald-500/20",
+        degraded:
+            "text-yellow-500 bg-yellow-500/10 border border-yellow-500/20",
+        outage: "text-red-500 bg-red-500/10 border border-red-500/20",
     };
 
     const dotColors = {
-        operational: "bg-green-500",
-        degraded: "bg-yellow-500 animate-pulse",
-        outage: "bg-red-500 animate-pulse",
+        operational: "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]",
+        degraded:
+            "bg-yellow-500 animate-pulse shadow-[0_0_8px_rgba(234,179,8,0.8)]",
+        outage: "bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]",
     };
 
     function startEdit(service: any) {
@@ -51,14 +54,19 @@
 </script>
 
 <div
-    class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col h-full"
+    class="bg-[#0b0f1a] rounded-3xl border border-gray-800 shadow-[0_10px_30px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col h-full relative"
 >
+    <!-- Subtle glassmorphism glow -->
     <div
-        class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center"
+        class="absolute -top-24 -right-24 w-64 h-64 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none"
+    ></div>
+
+    <div
+        class="px-6 py-5 border-b border-gray-800/60 bg-[#05070a]/50 flex justify-between items-center relative z-10"
     >
         <div>
             <h3
-                class="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2"
+                class="font-black text-white flex items-center gap-3 text-lg tracking-tight"
             >
                 <svg
                     class="w-5 h-5 text-blue-500"
@@ -75,18 +83,20 @@
                 </svg>
                 Dependências Externas (SaaS/PaaS)
             </h3>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <p
+                class="text-[10px] text-gray-400 font-bold tracking-[0.2em] uppercase mt-2"
+            >
                 Status de serviços críticos de terceiros (Clique no preço para
                 editar)
             </p>
         </div>
     </div>
 
-    <div class="p-5 flex-1 overflow-y-auto">
-        <ul class="space-y-3">
+    <div class="p-6 flex-1 overflow-y-auto relative z-10">
+        <ul class="space-y-4">
             {#each services as service}
                 <li
-                    class="flex items-center justify-between p-3 rounded-lg border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    class="flex items-center justify-between p-4 rounded-2xl bg-[#111827]/40 border border-gray-800 hover:bg-[#1f2937]/40 hover:border-gray-700 transition-all duration-300 group"
                 >
                     <div class="flex items-center gap-3">
                         <div
@@ -98,12 +108,12 @@
                         </div>
                         <div>
                             <p
-                                class="text-sm font-bold text-gray-900 dark:text-white leading-tight"
+                                class="text-sm font-black text-gray-200 leading-tight mb-1"
                             >
                                 {service.name}
                             </p>
                             <p
-                                class="text-xs text-gray-500 dark:text-gray-400 font-medium"
+                                class="text-[10px] text-gray-400 font-bold uppercase tracking-widest"
                             >
                                 {service.provider}
                             </p>
@@ -111,12 +121,12 @@
                     </div>
                     <div class="text-right">
                         <p
-                            class="text-xs font-bold uppercase tracking-wider {service.status ===
+                            class="text-[10px] font-black uppercase tracking-[0.2em] {service.status ===
                             'operational'
-                                ? 'text-green-600 dark:text-green-400'
+                                ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]'
                                 : service.status === 'degraded'
-                                  ? 'text-yellow-600 dark:text-yellow-400'
-                                  : 'text-red-600 dark:text-red-400'}"
+                                  ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]'
+                                  : 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]'}"
                         >
                             {service.status === "operational"
                                 ? "Operacional"
@@ -179,13 +189,13 @@
                                         <span>{service.latency} &bull;</span>
                                     {/if}
                                     <span
-                                        class="font-bold text-gray-600 dark:text-gray-300"
+                                        class="font-black text-white group-hover:text-indigo-400 transition-colors"
                                         >R$ {(service.cost || 0)
                                             .toFixed(2)
                                             .replace(".", ",")}</span
                                     >
                                     <svg
-                                        class="w-2 h-2 opacity-50 group-hover:opacity-100"
+                                        class="w-3 h-3 text-indigo-400 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0 transition-all duration-300"
                                         fill="currentColor"
                                         viewBox="0 0 20 20"
                                         ><path
@@ -200,18 +210,21 @@
             {/each}
         </ul>
         {#if services.length === 0}
-            <div class="text-center text-sm text-gray-500 py-4">
+            <div
+                class="text-center text-xs text-gray-500 py-8 font-bold uppercase tracking-widest"
+            >
                 Nenhum serviço externo configurado.
             </div>
         {/if}
         {#if services.length > 0}
             <div
-                class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center text-sm"
+                class="mt-6 pt-6 border-t border-gray-800 flex justify-between items-center text-sm"
             >
-                <span class="font-medium text-gray-600 dark:text-gray-400"
-                    >Custo Total Mensal das Dependências Estimado:</span
+                <span
+                    class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500"
+                    >Custo Mensal (SaaS/PaaS)</span
                 >
-                <span class="font-bold text-gray-900 dark:text-white text-base"
+                <span class="font-black text-white text-lg tracking-tight"
                     >R$ {totalCost.toFixed(2).replace(".", ",")}</span
                 >
             </div>

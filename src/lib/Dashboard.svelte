@@ -907,47 +907,48 @@
                                     />
                                 </div>
 
+                                <!-- Middle Section: Time Series Chart (Full Width) -->
+                                <div
+                                    class="mb-6 h-[250px] bg-[#0b0f1a] rounded-3xl border border-gray-800 p-6 flex flex-col justify-center items-center relative overflow-hidden group"
+                                >
+                                    <div
+                                        class="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent z-0"
+                                    ></div>
+                                    <h3
+                                        class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4 z-10 w-full text-left"
+                                    >
+                                        Gráficos de Telemetria
+                                    </h3>
+                                    <div
+                                        class="w-full flex-1 z-10 flex flex-col justify-center opacity-80 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <SreTimeSeriesChart
+                                            title="Latência Global"
+                                            labels={timeLabels}
+                                            data={sreStats.latency.history}
+                                            borderColor="#6366f1"
+                                            backgroundColor="rgba(99, 102, 241, 0.1)"
+                                        />
+                                    </div>
+                                </div>
+
                                 <!-- Bottom Section: Releases and External Services -->
                                 <div
                                     class="grid grid-cols-1 lg:grid-cols-2 gap-6"
                                 >
-                                    <div class="h-[400px]">
+                                    <div
+                                        class="h-[400px] relative overflow-hidden bg-[#0b0f1a]/50 rounded-3xl border border-gray-800/50"
+                                    >
                                         <SreReleaseHealth
                                             releases={sreStats.releases || {}}
                                         />
                                     </div>
-                                    <div class="h-[400px] flex flex-col gap-6">
-                                        <div
-                                            class="flex-1 bg-[#0b0f1a] rounded-3xl border border-gray-800 p-6 flex flex-col justify-center items-center relative overflow-hidden group"
-                                        >
-                                            <div
-                                                class="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent z-0"
-                                            ></div>
-                                            <h3
-                                                class="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-4 z-10"
-                                            >
-                                                Gráficos de Telemetria
-                                            </h3>
-                                            <div
-                                                class="w-full flex-1 z-10 flex flex-col justify-center opacity-80 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <SreTimeSeriesChart
-                                                    title="Latência Global"
-                                                    labels={timeLabels}
-                                                    data={sreStats.latency
-                                                        .history}
-                                                    borderColor="#6366f1"
-                                                    backgroundColor="rgba(99, 102, 241, 0.1)"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div class="flex-1">
-                                            <SreExternalServices
-                                                services={sreStats.externalServices ||
-                                                    []}
-                                                on:updatePrice={handleUpdatePrice}
-                                            />
-                                        </div>
+                                    <div class="h-[400px]">
+                                        <SreExternalServices
+                                            services={sreStats.externalServices ||
+                                                []}
+                                            on:updatePrice={handleUpdatePrice}
+                                        />
                                     </div>
                                 </div>
                             </div>
