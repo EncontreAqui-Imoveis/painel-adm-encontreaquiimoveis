@@ -443,6 +443,52 @@ describe('ContractsModule', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('permite voltar de IN_DRAFT para a etapa anterior pelo modal', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=IN_DRAFT')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-draft-back-1',
+              status: 'IN_DRAFT',
+              negotiationId: 'neg-test-draft-back-1',
+              propertyId: 611,
+              propertyCode: 'RV-611',
+              propertyTitle: 'Casa Voltar Minuta',
+              propertyPurpose: 'Venda',
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-01T12:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+    apiPutMock.mockResolvedValue({});
+
+    render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Em Confecção' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Voltar' }));
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledWith(
+        '/admin/contracts/contract-test-draft-back-1/transition',
+        { direction: 'previous' }
+      );
+    });
+    expect(toastSuccessMock).toHaveBeenCalledWith('Contrato movido para a etapa anterior.');
+  });
+
   it('mantém documentação anterior e minuta visíveis em AWAITING_SIGNATURES', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_SIGNATURES')) {
@@ -536,6 +582,52 @@ describe('ContractsModule', () => {
     expect(screen.getByText('identidade_captador.pdf')).toBeInTheDocument();
     expect(screen.getByText('identidade_vendedor.pdf')).toBeInTheDocument();
     expect(screen.getByText('Contrato (Minuta)')).toBeInTheDocument();
+  });
+
+  it('permite voltar de AWAITING_SIGNATURES para a etapa anterior pelo modal', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_SIGNATURES')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-sign-back-1',
+              status: 'AWAITING_SIGNATURES',
+              negotiationId: 'neg-test-sign-back-1',
+              propertyId: 612,
+              propertyCode: 'RV-612',
+              propertyTitle: 'Casa Voltar Assinatura',
+              propertyPurpose: 'Venda',
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-02T10:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+    apiPutMock.mockResolvedValue({});
+
+    render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Aguardando Assinaturas' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Finalizar Venda/Locação' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Voltar' }));
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledWith(
+        '/admin/contracts/contract-test-sign-back-1/transition',
+        { direction: 'previous' }
+      );
+    });
+    expect(toastSuccessMock).toHaveBeenCalledWith('Contrato movido para a etapa anterior.');
   });
 
   it('aplica máscara monetária nos campos de comissão em AWAITING_SIGNATURES e envia números no payload', async () => {

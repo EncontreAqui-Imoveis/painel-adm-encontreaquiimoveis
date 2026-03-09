@@ -160,6 +160,7 @@
   let deletingContract = false;
   let deletingFinalizedDocumentId: number | null = null;
   let downloadingAllDocuments = false;
+  let movingToPreviousStage = false;
   let approvalLockReasons: string[] = [];
   let isReadyToApprove = false;
   let sellerApprovalDisabled = false;
@@ -1142,19 +1143,48 @@
   }
 
   async function downloadAllDocuments(contract: ContractItem) {
-    const docs = getAllContractDocuments(contract);
-    if (docs.length === 0) {
-      toast.error('Nenhum documento disponível para download.');
-      return;
-    }
-
     downloadingAllDocuments = true;
     try {
-      for (const doc of docs) {
-        await viewDocument(doc, contract);
-      }
+      const response = await apiClient.get(`/admin/contracts/${contract.id}/documents.zip`, {
+        responseType: 'blob',
+      });
+      const blob =
+        response.data instanceof Blob
+          ? response.data
+          : new Blob([response.data], { type: 'application/zip' });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `${contract.propertyCode ?? contract.propertyId}_documentos.zip`;
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 15_000);
+    } catch (error) {
+      console.error('Erro ao baixar ZIP do contrato:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível gerar o ZIP dos documentos.'));
     } finally {
       downloadingAllDocuments = false;
+    }
+  }
+
+  async function moveContractToPreviousStage() {
+    if (!selected) return;
+
+    movingToPreviousStage = true;
+    try {
+      await api.put(`/admin/contracts/${selected.id}/transition`, {
+        direction: 'previous',
+      });
+      toast.success('Contrato movido para a etapa anterior.');
+      closeModal(true);
+      refresh();
+    } catch (error) {
+      console.error('Erro ao voltar contrato para a etapa anterior:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível voltar o contrato.'));
+    } finally {
+      movingToPreviousStage = false;
     }
   }
 
@@ -1798,13 +1828,27 @@
           </div>
 
           <div class="flex justify-end gap-2">
-            <Button variant="outline" on:click={() => closeModal()} disabled={uploadingDraft}>
+            <Button
+              variant="outline"
+              on:click={moveContractToPreviousStage}
+              disabled={uploadingDraft || movingToPreviousStage}
+            >
+              {#if movingToPreviousStage}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Voltar
+            </Button>
+            <Button
+              variant="outline"
+              on:click={() => closeModal()}
+              disabled={uploadingDraft || movingToPreviousStage}
+            >
               Fechar
             </Button>
             <Button
               className="bg-green-600 text-white hover:bg-green-700"
               on:click={submitDraft}
-              disabled={uploadingDraft || !selectedDraftFile}
+              disabled={uploadingDraft || movingToPreviousStage || !selectedDraftFile}
             >
               {#if uploadingDraft}
                 <Loader2 class="mr-2 h-4 w-4 animate-spin" />
@@ -2059,15 +2103,25 @@
           <div class="flex justify-end gap-2">
             <Button
               variant="outline"
+              on:click={moveContractToPreviousStage}
+              disabled={finalizingContract || uploadingSignedDoc || movingToPreviousStage}
+            >
+              {#if movingToPreviousStage}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Voltar
+            </Button>
+            <Button
+              variant="outline"
               on:click={() => closeModal()}
-              disabled={finalizingContract || uploadingSignedDoc}
+              disabled={finalizingContract || uploadingSignedDoc || movingToPreviousStage}
             >
               Fechar
             </Button>
             <Button
               className="bg-green-600 text-white hover:bg-green-700"
               on:click={submitFinalize}
-              disabled={finalizingContract || uploadingSignedDoc}
+              disabled={finalizingContract || uploadingSignedDoc || movingToPreviousStage}
             >
               {#if finalizingContract}
                 <Loader2 class="mr-2 h-4 w-4 animate-spin" />
@@ -2102,7 +2156,7 @@
                 {#if downloadingAllDocuments}
                   <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                 {/if}
-                Baixar tudo
+                Baixar tudo (.zip)
               </Button>
             </div>
             {#if getAllContractDocuments(selected).length === 0}
