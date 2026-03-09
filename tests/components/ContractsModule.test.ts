@@ -933,6 +933,152 @@ describe('ContractsModule', () => {
     expect(screen.queryByText('pagamento_outro_contrato.pdf')).not.toBeInTheDocument();
   });
 
+  it('mostra Editar e Excluir para contratos finalizados', async () => {
+    apiGetMock.mockResolvedValue({
+      data: [
+        {
+          id: 'contract-final-1',
+          status: 'FINALIZED',
+          negotiationId: 'neg-final-1',
+          propertyId: 701,
+          propertyCode: 'RV-701',
+          propertyTitle: 'Casa Finalizada',
+          propertyPurpose: 'Venda',
+          capturingBrokerName: 'Captador',
+          sellingBrokerName: 'Vendedor',
+          documents: [],
+          createdAt: '2026-03-01T10:00:00.000Z',
+          updatedAt: '2026-03-03T10:00:00.000Z',
+        },
+      ],
+      total: 1,
+    });
+
+    render(ContractsModule);
+
+    const finalizedTab = await screen.findByRole('button', {
+      name: 'Finalizados',
+    });
+    await fireEvent.click(finalizedTab);
+
+    expect(await screen.findByRole('button', { name: 'Editar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Excluir' })).toBeInTheDocument();
+  });
+
+  it('reinicia contrato finalizado e remove da aba de finalizados', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=FINALIZED')) {
+        return {
+          data: [
+            {
+              id: 'contract-final-2',
+              status: 'FINALIZED',
+              negotiationId: 'neg-final-2',
+              propertyId: 702,
+              propertyCode: 'RV-702',
+              propertyTitle: 'Casa Reabrir',
+              propertyPurpose: 'Venda',
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-03T10:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return { data: [], total: 0 };
+    });
+    apiPutMock.mockResolvedValue({});
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Finalizados' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Reiniciar Contrato' }));
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledWith('/admin/contracts/contract-final-2/reopen', {});
+    });
+    expect(toastSuccessMock).toHaveBeenCalledWith('Contrato reiniciado com sucesso.');
+    confirmSpy.mockRestore();
+  });
+
+  it('remove documento individual no editor de contrato finalizado', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=FINALIZED')) {
+        return {
+          data: [
+            {
+              id: 'contract-final-3',
+              status: 'FINALIZED',
+              negotiationId: 'neg-final-3',
+              propertyId: 703,
+              propertyCode: 'RV-703',
+              propertyTitle: 'Casa Documento Final',
+              propertyPurpose: 'Venda',
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 7031,
+                  documentType: 'contrato_assinado',
+                  originalFileName: 'contrato_assinado.pdf',
+                  metadata: { contractId: 'contract-final-3' },
+                  downloadUrl: '/negotiations/neg-final-3/documents/7031/download',
+                  createdAt: '2026-03-03T10:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-03T10:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint === '/contracts/contract-final-3') {
+        return {
+          contract: {
+            id: 'contract-final-3',
+            status: 'FINALIZED',
+            negotiationId: 'neg-final-3',
+            propertyId: 703,
+            propertyCode: 'RV-703',
+            propertyTitle: 'Casa Documento Final',
+            propertyPurpose: 'Venda',
+            capturingBrokerName: 'Captador',
+            sellingBrokerName: 'Vendedor',
+          },
+          documents: [],
+        };
+      }
+
+      return { data: [], total: 0 };
+    });
+    apiDeleteMock.mockResolvedValue({});
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Finalizados' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+
+    expect(await screen.findByText('contrato_assinado.pdf')).toBeInTheDocument();
+
+    const deleteButtons = screen.getAllByRole('button', { name: 'Excluir' });
+    await fireEvent.click(deleteButtons[1]);
+
+    await waitFor(() => {
+      expect(apiDeleteMock).toHaveBeenCalledWith('/admin/contracts/contract-final-3/finalized-docs/7031');
+    });
+    expect(toastSuccessMock).toHaveBeenCalledWith('Documento removido com sucesso.');
+    confirmSpy.mockRestore();
+  });
+
   it('lista documentos bloqueados quando um documento está pendente de revisão', async () => {
     apiGetMock.mockResolvedValue({
       data: [

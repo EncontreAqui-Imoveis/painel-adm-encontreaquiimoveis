@@ -65,7 +65,12 @@
     label: string;
   };
 
-  type ModalMode = 'review_docs' | 'upload_draft' | 'finalize' | 'view';
+  type ModalMode = 'review_docs' | 'upload_draft' | 'finalize' | 'edit_finalized';
+
+  type ContractDetailResponse = {
+    contract?: ContractItem;
+    documents?: ContractDocument[];
+  };
 
   const tabs: { key: ContractStatus; label: string }[] = [
     { key: 'AWAITING_DOCS', label: 'Aguardando Documentação' },
@@ -149,7 +154,12 @@
   let uploadingSignedDoc = false;
   let signedDocType = 'contrato_assinado';
   let selectedSignedFile: File | null = null;
+  let selectedSignedDocSide: 'seller' | 'buyer' = 'seller';
   let finalizingContract = false;
+  let reopeningContract = false;
+  let deletingContract = false;
+  let deletingFinalizedDocumentId: number | null = null;
+  let downloadingAllDocuments = false;
   let approvalLockReasons: string[] = [];
   let isReadyToApprove = false;
   let sellerApprovalDisabled = false;
@@ -262,7 +272,7 @@
     if (status === 'AWAITING_DOCS') return 'Analisar Documentação';
     if (status === 'IN_DRAFT') return 'Anexar Minuta';
     if (status === 'AWAITING_SIGNATURES') return 'Finalizar Venda/Locação';
-    return 'Visualizar';
+    return 'Editar';
   }
 
   function statusLabel(status: ContractStatus): string {
@@ -528,6 +538,17 @@
   function getDocumentsForFinalize(contract: ContractItem): ContractDocument[] {
     return getAllContractDocuments(contract).filter((doc) =>
       signedReviewDocTypes.has((doc.documentType ?? '').trim().toLowerCase())
+    );
+  }
+
+  function finalizedDocumentRequiresSide(documentType: string): boolean {
+    const normalized = documentType.trim().toLowerCase();
+    return (
+      normalized !== 'contrato_minuta' &&
+      normalized !== 'contrato_assinado' &&
+      normalized !== 'comprovante_pagamento' &&
+      normalized !== 'boleto_vistoria' &&
+      normalized !== 'outro'
     );
   }
 
@@ -802,6 +823,21 @@
     return requestId ? `${backendMessage} (Req: ${requestId})` : backendMessage;
   }
 
+  async function reloadSelectedContract(contractId: string): Promise<void> {
+    const payload = await api.get<ContractDetailResponse>(`/contracts/${contractId}`);
+    if (!payload?.contract || !selected || selected.id !== contractId) {
+      return;
+    }
+
+    selected = {
+      ...selected,
+      ...payload.contract,
+      documents: Array.isArray(payload.documents)
+        ? payload.documents
+        : selected.documents ?? [],
+    };
+  }
+
   function changeTab(status: ContractStatus) {
     if (activeTab === status) return;
     activeTab = status;
@@ -813,7 +849,7 @@
     if (item.status === 'AWAITING_DOCS') return 'review_docs';
     if (item.status === 'IN_DRAFT') return 'upload_draft';
     if (item.status === 'AWAITING_SIGNATURES') return 'finalize';
-    return 'view';
+    return 'edit_finalized';
   }
 
   function openModal(item: ContractItem) {
@@ -823,8 +859,13 @@
     selectedDraftFile = null;
     selectedSignedFile = null;
     signedDocType = 'contrato_assinado';
+    selectedSignedDocSide = 'seller';
     uploadingDraft = false;
     uploadingSignedDoc = false;
+    reopeningContract = false;
+    deletingContract = false;
+    deletingFinalizedDocumentId = null;
+    downloadingAllDocuments = false;
     evaluatingSide = null;
     finalizingContract = false;
     hydrateFinalizeForm(item);
@@ -835,6 +876,8 @@
       !force &&
       (uploadingDraft ||
         uploadingSignedDoc ||
+        reopeningContract ||
+        deletingContract ||
         finalizingContract ||
         evaluatingSide !== null)
     ) {
@@ -844,6 +887,7 @@
     selected = null;
     selectedDraftFile = null;
     selectedSignedFile = null;
+    selectedSignedDocSide = 'seller';
     modalMode = 'review_docs';
   }
 
@@ -925,6 +969,45 @@
     }
   }
 
+  async function uploadFinalizedDocument() {
+    if (!selected) return;
+    if (!selectedSignedFile) {
+      toast.error('Selecione um arquivo para enviar.');
+      return;
+    }
+
+    if (
+      finalizedDocumentRequiresSide(signedDocType) &&
+      !selectedSignedDocSide
+    ) {
+      toast.error('Selecione se o documento pertence ao Captador ou ao Vendedor.');
+      return;
+    }
+
+    uploadingSignedDoc = true;
+    try {
+      const form = new FormData();
+      form.append('documentType', signedDocType);
+      if (finalizedDocumentRequiresSide(signedDocType)) {
+        form.append('side', selectedSignedDocSide);
+      }
+      form.append('file', selectedSignedFile);
+
+      await apiClient.post(`/admin/contracts/${selected.id}/finalized-docs`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Documento anexado ao contrato finalizado.');
+      selectedSignedFile = null;
+      await reloadSelectedContract(selected.id);
+      await fetchContracts();
+    } catch (error) {
+      console.error('Erro ao anexar documento ao contrato finalizado:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível anexar o documento.'));
+    } finally {
+      uploadingSignedDoc = false;
+    }
+  }
+
   async function submitDraft() {
     if (!selected) return;
     if (!selectedDraftFile) {
@@ -993,6 +1076,85 @@
       toast.error(resolveApiErrorMessage(error, 'Não foi possível finalizar o contrato.'));
     } finally {
       finalizingContract = false;
+    }
+  }
+
+  async function deleteFinalizedDocument(doc: ContractDocument) {
+    if (!selected) return;
+    const confirmed = window.confirm(
+      `Tem certeza que deseja excluir o documento "${documentLabel(doc.documentType)}"?`
+    );
+    if (!confirmed) return;
+
+    deletingFinalizedDocumentId = doc.id;
+    try {
+      await api.delete(`/admin/contracts/${selected.id}/finalized-docs/${doc.id}`);
+      toast.success('Documento removido com sucesso.');
+      await reloadSelectedContract(selected.id);
+      await fetchContracts();
+    } catch (error) {
+      console.error('Erro ao remover documento do contrato finalizado:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível remover o documento.'));
+    } finally {
+      deletingFinalizedDocumentId = null;
+    }
+  }
+
+  async function reopenFinalizedContract() {
+    if (!selected) return;
+    const confirmed = window.confirm(
+      'Tem certeza que deseja reiniciar este contrato? Ele voltará para AWAITING_SIGNATURES.'
+    );
+    if (!confirmed) return;
+
+    reopeningContract = true;
+    try {
+      await api.put(`/admin/contracts/${selected.id}/reopen`, {});
+      toast.success('Contrato reiniciado com sucesso.');
+      closeModal(true);
+      refresh();
+    } catch (error) {
+      console.error('Erro ao reiniciar contrato finalizado:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível reiniciar o contrato.'));
+    } finally {
+      reopeningContract = false;
+    }
+  }
+
+  async function deleteFinalizedContract(contract: ContractItem) {
+    const confirmed = window.confirm(
+      `Tem certeza que deseja excluir o contrato finalizado do imóvel ${contract.propertyCode ?? contract.propertyId}?`
+    );
+    if (!confirmed) return;
+
+    deletingContract = true;
+    try {
+      await api.delete(`/admin/contracts/${contract.id}`);
+      toast.success('Contrato finalizado excluído com sucesso.');
+      closeModal(true);
+      refresh();
+    } catch (error) {
+      console.error('Erro ao excluir contrato finalizado:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível excluir o contrato.'));
+    } finally {
+      deletingContract = false;
+    }
+  }
+
+  async function downloadAllDocuments(contract: ContractItem) {
+    const docs = getAllContractDocuments(contract);
+    if (docs.length === 0) {
+      toast.error('Nenhum documento disponível para download.');
+      return;
+    }
+
+    downloadingAllDocuments = true;
+    try {
+      for (const doc of docs) {
+        await viewDocument(doc, contract);
+      }
+    } finally {
+      downloadingAllDocuments = false;
     }
   }
 
@@ -1168,9 +1330,20 @@
                 {formatDate(item.updatedAt ?? item.createdAt)}
               </td>
               <td class="px-6 py-4 text-right">
-                <Button size="sm" variant="outline" on:click={() => openModal(item)}>
-                  {tableActionLabel(item.status)}
-                </Button>
+                <div class="flex justify-end gap-2">
+                  <Button size="sm" variant="outline" on:click={() => openModal(item)}>
+                    {tableActionLabel(item.status)}
+                  </Button>
+                  {#if item.status === 'FINALIZED'}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      on:click={() => deleteFinalizedContract(item)}
+                    >
+                      Excluir
+                    </Button>
+                  {/if}
+                </div>
               </td>
             </tr>
           {/each}
@@ -1210,7 +1383,7 @@
             ? 'Anexar Minuta'
             : modalMode === 'finalize'
             ? 'Finalizar Venda/Locação'
-            : 'Contrato Finalizado'}
+            : 'Editar Contrato Finalizado'}
         </h3>
         <p id="contract-modal-description" class="text-sm text-gray-500 dark:text-gray-400">
           {selected.propertyCode ? selected.propertyCode : `#${selected.propertyId}`}
@@ -1903,10 +2076,10 @@
             </Button>
           </div>
         </div>
-      {:else}
+      {:else if modalMode === 'edit_finalized'}
         <div class="space-y-4">
           <p class="text-sm text-gray-600 dark:text-gray-300">
-            Este contrato já está finalizado e está disponível apenas para consulta.
+            Gerencie os documentos e o ciclo final deste contrato.
           </p>
 
           <div class="rounded-md border border-gray-200 p-3 text-sm dark:border-gray-700">
@@ -1915,8 +2088,173 @@
             <p><span class="font-semibold">Valor:</span> {readCommissionValue(selected.commissionData ?? null, 'valorVenda') || '-'}</p>
           </div>
 
-          <div class="flex justify-end">
-            <Button variant="outline" on:click={() => closeModal()}>Fechar</Button>
+          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                Documentos do contrato finalizado
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                on:click={() => selected && downloadAllDocuments(selected)}
+                disabled={downloadingAllDocuments || getAllContractDocuments(selected).length === 0}
+              >
+                {#if downloadingAllDocuments}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                Baixar tudo
+              </Button>
+            </div>
+            {#if getAllContractDocuments(selected).length === 0}
+              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Nenhum documento vinculado a este contrato.
+              </p>
+            {:else}
+              <div class="mt-2 space-y-2">
+                {#each getAllContractDocuments(selected) as doc (doc.id)}
+                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="font-medium text-gray-900 dark:text-gray-100">
+                          {documentLabel(doc.documentType)}
+                        </p>
+                        {#if documentSideLabel(doc)}
+                          <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                            {documentSideLabel(doc)}
+                          </span>
+                        {/if}
+                        {#if hasDocumentReviewStatus(doc)}
+                          <span
+                            class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
+                              doc
+                            )}`}
+                          >
+                            {documentStatusLabel(doc)}
+                          </span>
+                        {/if}
+                      </div>
+                      <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                        {documentFileName(doc)}
+                      </p>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Enviado em {formatDate(doc.createdAt)}
+                      </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        on:click={() => selected && viewDocument(doc, selected)}
+                        disabled={downloadingDocumentId === doc.id}
+                      >
+                        {#if downloadingDocumentId === doc.id}
+                          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                        {/if}
+                        Baixar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        on:click={() => deleteFinalizedDocument(doc)}
+                        disabled={deletingFinalizedDocumentId === doc.id}
+                      >
+                        {#if deletingFinalizedDocumentId === doc.id}
+                          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                        {/if}
+                        Excluir
+                      </Button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+              Adicionar documento
+            </p>
+            <div class="mt-3 grid gap-3 md:grid-cols-3">
+              <label class="text-sm text-gray-700 dark:text-gray-200">
+                Tipo do Documento
+                <select
+                  bind:value={signedDocType}
+                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                >
+                  {#each Object.entries(documentTypeLabels) as [value, label]}
+                    <option value={value}>{label}</option>
+                  {/each}
+                </select>
+              </label>
+              {#if finalizedDocumentRequiresSide(signedDocType)}
+                <label class="text-sm text-gray-700 dark:text-gray-200">
+                  Lado
+                  <select
+                    bind:value={selectedSignedDocSide}
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                  >
+                    <option value="seller">Captador</option>
+                    <option value="buyer">Vendedor</option>
+                  </select>
+                </label>
+              {/if}
+              <label class="text-sm text-gray-700 dark:text-gray-200">
+                Arquivo
+                <input
+                  type="file"
+                  accept="application/pdf,image/png,image/jpeg,image/webp"
+                  on:change={handleSignedFileChange}
+                  class="mt-1 block w-full text-sm text-gray-700 dark:text-gray-200"
+                />
+              </label>
+            </div>
+            {#if selectedSignedFile}
+              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Selecionado: {selectedSignedFile.name}
+              </p>
+            {/if}
+            <div class="mt-3 flex justify-end">
+              <Button
+                className="bg-blue-600 text-white hover:bg-blue-700"
+                on:click={uploadFinalizedDocument}
+                disabled={uploadingSignedDoc || !selectedSignedFile}
+              >
+                {#if uploadingSignedDoc}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                Adicionar documento
+              </Button>
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              on:click={() => closeModal()}
+              disabled={reopeningContract || deletingContract || uploadingSignedDoc}
+            >
+              Fechar
+            </Button>
+            <Button
+              variant="outline"
+              on:click={reopenFinalizedContract}
+              disabled={reopeningContract || deletingContract || uploadingSignedDoc}
+            >
+              {#if reopeningContract}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Reiniciar Contrato
+            </Button>
+              <Button
+                variant="destructive"
+                on:click={() => selected && deleteFinalizedContract(selected)}
+                disabled={reopeningContract || deletingContract || uploadingSignedDoc}
+              >
+              {#if deletingContract}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Excluir
+            </Button>
           </div>
         </div>
       {/if}

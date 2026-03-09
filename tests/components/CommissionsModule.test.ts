@@ -1,0 +1,155 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const {
+  apiGetMock,
+  apiPutMock,
+  apiDeleteMock,
+  toastErrorMock,
+  toastSuccessMock,
+} = vi.hoisted(() => ({
+  apiGetMock: vi.fn(),
+  apiPutMock: vi.fn(),
+  apiDeleteMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+  toastSuccessMock: vi.fn(),
+}));
+
+vi.mock('$lib/apiClient', () => ({
+  api: {
+    get: apiGetMock,
+    put: apiPutMock,
+    delete: apiDeleteMock,
+  },
+}));
+
+vi.mock('svelte-sonner', () => ({
+  toast: {
+    error: toastErrorMock,
+    success: toastSuccessMock,
+  },
+}));
+
+import CommissionsModule from '../../src/lib/components/CommissionsModule.svelte';
+
+describe('CommissionsModule', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiGetMock.mockResolvedValue({
+      month: 3,
+      year: 2026,
+      summary: {
+        totalVGV: 100000,
+        totalCaptadores: 30000,
+        totalVendedores: 20000,
+        totalPlataforma: 50000,
+      },
+      transactions: [
+        {
+          contractId: 'contract-final-1',
+          negotiationId: 'neg-final-1',
+          propertyId: 900,
+          propertyTitle: 'Casa Centro',
+          propertyCode: 'RV-900',
+          propertyPurpose: 'Venda',
+          finalizedAt: '2026-03-09T12:00:00.000Z',
+          commissionData: {
+            valorVenda: 100000,
+            comissaoCaptador: 30000,
+            comissaoVendedor: 20000,
+            taxaPlataforma: 50000,
+          },
+        },
+      ],
+    });
+  });
+
+  it('mostra Editar e Excluir na tabela de VGV', async () => {
+    render(CommissionsModule);
+
+    expect(await screen.findByText(/Casa Centro/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Excluir' })).toBeInTheDocument();
+  });
+
+  it('edita VGV em valor real e envia commission_data numérico', async () => {
+    apiPutMock.mockResolvedValue({});
+
+    render(CommissionsModule);
+
+    await screen.findByText(/Casa Centro/);
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+
+    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const captadorInput = screen.getByLabelText('Comissão Captador (R$)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão Vendedor (R$)') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (R$)') as HTMLInputElement;
+
+    await fireEvent.input(valorInput, { target: { value: '100000' } });
+    await fireEvent.input(captadorInput, { target: { value: '40000' } });
+    await fireEvent.input(vendedorInput, { target: { value: '30000' } });
+    await fireEvent.input(taxaInput, { target: { value: '30000' } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledWith('/admin/contracts/contract-final-1/commission-data', {
+        commission_data: {
+          valorVenda: 1000,
+          comissaoCaptador: 400,
+          comissaoVendedor: 300,
+          taxaPlataforma: 300,
+        },
+      });
+    });
+  });
+
+  it('edita VGV em percentual e converte para valor real', async () => {
+    apiPutMock.mockResolvedValue({});
+
+    render(CommissionsModule);
+
+    await screen.findByText(/Casa Centro/);
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Percentual (%)' }));
+
+    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const captadorInput = screen.getByLabelText('Comissão Captador (%)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão Vendedor (%)') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (%)') as HTMLInputElement;
+
+    await fireEvent.input(valorInput, { target: { value: '100000' } });
+    await fireEvent.input(captadorInput, { target: { value: '40' } });
+    await fireEvent.input(vendedorInput, { target: { value: '30' } });
+    await fireEvent.input(taxaInput, { target: { value: '30' } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledWith('/admin/contracts/contract-final-1/commission-data', {
+        commission_data: {
+          valorVenda: 1000,
+          comissaoCaptador: 400,
+          comissaoVendedor: 300,
+          taxaPlataforma: 300,
+        },
+      });
+    });
+  });
+
+  it('exclui VGV sem remover o contrato finalizado da origem', async () => {
+    apiDeleteMock.mockResolvedValue({});
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(CommissionsModule);
+
+    await screen.findByText(/Casa Centro/);
+    await fireEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+
+    await waitFor(() => {
+      expect(apiDeleteMock).toHaveBeenCalledWith('/admin/contracts/contract-final-1/commission-data');
+    });
+
+    confirmSpy.mockRestore();
+  });
+});
