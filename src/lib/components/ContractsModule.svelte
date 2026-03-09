@@ -741,6 +741,41 @@
     refreshKey += 1;
   }
 
+  function resolveApiErrorMessage(error: unknown, fallback: string): string {
+    if (!error || typeof error !== 'object') {
+      return fallback;
+    }
+
+    const source = error as {
+      requestId?: unknown;
+      response?: {
+        headers?: Record<string, unknown>;
+        data?: Record<string, unknown>;
+      };
+    };
+    const data = source.response?.data ?? {};
+    const backendMessage =
+      typeof data.error === 'string'
+        ? data.error.trim()
+        : typeof data.message === 'string'
+          ? data.message.trim()
+          : '';
+    const requestId =
+      typeof source.requestId === 'string'
+        ? source.requestId.trim()
+        : typeof data.requestId === 'string'
+          ? data.requestId.trim()
+          : typeof data.request_id === 'string'
+            ? data.request_id.trim()
+            : '';
+
+    if (!backendMessage) {
+      return fallback;
+    }
+
+    return requestId ? `${backendMessage} (Req: ${requestId})` : backendMessage;
+  }
+
   function changeTab(status: ContractStatus) {
     if (activeTab === status) return;
     activeTab = status;
@@ -929,7 +964,7 @@
       refresh();
     } catch (error) {
       console.error('Erro ao finalizar contrato:', error);
-      toast.error('Não foi possível finalizar o contrato.');
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível finalizar o contrato.'));
     } finally {
       finalizingContract = false;
     }

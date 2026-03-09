@@ -781,6 +781,89 @@ describe('ContractsModule', () => {
     });
   });
 
+  it('mostra a mensagem real do backend ao falhar a finalização', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_SIGNATURES')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-sign-5',
+              status: 'AWAITING_SIGNATURES',
+              negotiationId: 'neg-test-sign-5',
+              propertyId: 606,
+              propertyCode: 'RV-606',
+              propertyTitle: 'Casa Erro Finalização',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6061,
+                  documentType: 'contrato_assinado',
+                  originalFileName: 'contrato_assinado.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-5/documents/6061/download',
+                  createdAt: '2026-03-02T10:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-02T11:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+    apiPostMock.mockRejectedValue({
+      response: {
+        data: {
+          error: 'Na venda, a soma de comissões e taxa precisa fechar exatamente 100% do valor.',
+          requestId: 'req-finalize-123',
+        },
+      },
+      requestId: 'req-finalize-123',
+    });
+
+    render(ContractsModule);
+
+    const signaturesTab = await screen.findByRole('button', {
+      name: 'Aguardando Assinaturas',
+    });
+    await fireEvent.click(signaturesTab);
+
+    const openFinalizeButton = await screen.findByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    });
+    await fireEvent.click(openFinalizeButton);
+
+    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const captadorInput = screen.getByLabelText('Comissão Captador (R$)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão Vendedor (R$)') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (R$)') as HTMLInputElement;
+
+    await fireEvent.input(valorInput, { target: { value: '100000' } });
+    await fireEvent.input(captadorInput, { target: { value: '50000' } });
+    await fireEvent.input(vendedorInput, { target: { value: '30000' } });
+    await fireEvent.input(taxaInput, { target: { value: '20000' } });
+
+    const submitFinalizeButton = screen.getAllByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    })[1];
+    await fireEvent.click(submitFinalizeButton);
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        'Na venda, a soma de comissões e taxa precisa fechar exatamente 100% do valor. (Req: req-finalize-123)'
+      );
+    });
+  });
+
   it('lista documentos bloqueados quando um documento está pendente de revisão', async () => {
     apiGetMock.mockResolvedValue({
       data: [
