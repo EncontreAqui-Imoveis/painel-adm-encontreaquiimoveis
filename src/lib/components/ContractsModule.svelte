@@ -280,6 +280,16 @@
     return tabs.find((tab) => tab.key === status)?.label ?? status;
   }
 
+  function previousStageLabel(currentStatus: ContractStatus): string {
+    if (currentStatus === 'IN_DRAFT') {
+      return 'a aba de documentos pendentes';
+    }
+    if (currentStatus === 'AWAITING_SIGNATURES') {
+      return 'a aba de confecção da minuta';
+    }
+    return 'a etapa anterior';
+  }
+
   function approvalLabel(status?: ContractApprovalStatus | null): string {
     switch (String(status ?? '').toUpperCase()) {
       case 'APPROVED':
@@ -351,6 +361,54 @@
     if (!reasonPayload) return '';
     const reason = reasonPayload.reason;
     return reason == null ? '' : String(reason).trim();
+  }
+
+  function getApprovalSummaries(contract: ContractItem | null | undefined): Array<{
+    key: string;
+    label: string;
+    status: ContractApprovalStatus | null | undefined;
+    reason: string;
+  }> {
+    if (!contract) return [];
+
+    if (isDoubleEndedDeal(contract)) {
+      return [
+        {
+          key: 'seller',
+          label: 'Corretor',
+          status: contract.sellerApprovalStatus,
+          reason: readReasonText(contract.sellerApprovalReason),
+        },
+      ];
+    }
+
+    return [
+      {
+        key: 'seller',
+        label: 'Captador',
+        status: contract.sellerApprovalStatus,
+        reason: readReasonText(contract.sellerApprovalReason),
+      },
+      {
+        key: 'buyer',
+        label: 'Vendedor',
+        status: contract.buyerApprovalStatus,
+        reason: readReasonText(contract.buyerApprovalReason),
+      },
+    ];
+  }
+
+  function getApprovalRemarkSummaries(
+    contract: ContractItem | null | undefined
+  ): Array<{
+    key: string;
+    label: string;
+    status: ContractApprovalStatus | null | undefined;
+    reason: string;
+  }> {
+    return getApprovalSummaries(contract).filter(
+      (item) => String(item.status ?? '').toUpperCase() === 'APPROVED_WITH_RES'
+    );
   }
 
   function readCommissionValue(
@@ -1104,7 +1162,7 @@
   async function reopenFinalizedContract() {
     if (!selected) return;
     const confirmed = window.confirm(
-      'Tem certeza que deseja reiniciar este contrato? Ele voltará para AWAITING_DOCS e removerá todos os documentos vinculados.'
+      'Tem certeza que deseja reiniciar este contrato? Ele voltará para a aba de documentos pendentes e removerá todos os documentos vinculados.'
     );
     if (!confirmed) return;
 
@@ -1177,13 +1235,14 @@
 
   async function moveContractToPreviousStage() {
     if (!selected) return;
+    const destinationLabel = previousStageLabel(selected.status);
 
     movingToPreviousStage = true;
     try {
       await api.put(`/admin/contracts/${selected.id}/transition`, {
         direction: 'previous',
       });
-      toast.success('Contrato movido para a etapa anterior.');
+      toast.success(`Contrato voltou para ${destinationLabel}.`);
       closeModal(true);
       refresh();
     } catch (error) {
@@ -1355,6 +1414,15 @@
                 <div class="text-xs text-gray-500 dark:text-gray-400">
                   {item.propertyTitle ?? '-'}
                 </div>
+                {#if getApprovalRemarkSummaries(item).length > 0}
+                  <div class="mt-2 flex flex-wrap gap-2">
+                    {#each getApprovalRemarkSummaries(item) as summary (summary.key)}
+                      <span class="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                        {summary.label} com ressalvas
+                      </span>
+                    {/each}
+                  </div>
+                {/if}
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                 {item.capturingBrokerName ?? '-'}
@@ -1431,6 +1499,31 @@
           Etapa: {statusLabel(selected.status)}
         </p>
       </div>
+
+      {#if modalMode !== 'review_docs' && getApprovalRemarkSummaries(selected).length > 0}
+        <div class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+          <p class="text-xs font-semibold uppercase text-amber-800 dark:text-amber-300">
+            Aprovação com ressalvas
+          </p>
+          <div class="mt-2 space-y-2">
+            {#each getApprovalRemarkSummaries(selected) as summary (summary.key)}
+              <div class="rounded-md border border-amber-200/80 bg-white/70 px-3 py-2 text-sm dark:border-amber-900/40 dark:bg-gray-900/30">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-semibold text-gray-900 dark:text-gray-100">{summary.label}</span>
+                  <span class={`rounded-full px-2 py-1 text-xs font-semibold ${approvalBadgeClass(summary.status)}`}>
+                    {approvalLabel(summary.status)}
+                  </span>
+                </div>
+                {#if summary.reason}
+                  <p class="mt-1 text-sm text-amber-900 dark:text-amber-200">
+                    {summary.reason}
+                  </p>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
 
       {#if modalMode === 'review_docs'}
         <div class="space-y-4">

@@ -491,7 +491,9 @@ describe('ContractsModule', () => {
         { direction: 'previous' }
       );
     });
-    expect(toastSuccessMock).toHaveBeenCalledWith('Contrato movido para a etapa anterior.');
+    expect(toastSuccessMock).toHaveBeenCalledWith(
+      'Contrato voltou para a aba de documentos pendentes.'
+    );
   });
 
   it('mantém documentação anterior e minuta visíveis em AWAITING_SIGNATURES', async () => {
@@ -637,7 +639,9 @@ describe('ContractsModule', () => {
         { direction: 'previous' }
       );
     });
-    expect(toastSuccessMock).toHaveBeenCalledWith('Contrato movido para a etapa anterior.');
+    expect(toastSuccessMock).toHaveBeenCalledWith(
+      'Contrato voltou para a aba de confecção da minuta.'
+    );
   });
 
   it('aplica máscara monetária nos campos de comissão em AWAITING_SIGNATURES e envia números no payload', async () => {
@@ -1065,6 +1069,47 @@ describe('ContractsModule', () => {
 
     expect(await screen.findByRole('button', { name: 'Editar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Excluir' })).toBeInTheDocument();
+  });
+
+  it('mantém a sinalização de aprovado com ressalvas até o contrato finalizado', async () => {
+    apiGetMock.mockResolvedValue({
+      data: [
+        {
+          id: 'contract-final-remarks-1',
+          status: 'FINALIZED',
+          negotiationId: 'neg-final-remarks-1',
+          propertyId: 711,
+          propertyCode: 'RV-711',
+          propertyTitle: 'Casa com Ressalvas',
+          propertyPurpose: 'Venda',
+          capturingBrokerName: 'Captador',
+          sellingBrokerName: 'Vendedor',
+          sellerApprovalStatus: 'APPROVED_WITH_RES',
+          sellerApprovalReason: {
+            reason: 'Atualizar CPF e reenviar certidão na próxima revisão.',
+          },
+          buyerApprovalStatus: 'APPROVED',
+          buyerApprovalReason: null,
+          documents: [],
+          createdAt: '2026-03-01T10:00:00.000Z',
+          updatedAt: '2026-03-03T10:00:00.000Z',
+        },
+      ],
+      total: 1,
+    });
+
+    render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Finalizados' }));
+
+    expect(await screen.findByText('Captador com ressalvas')).toBeInTheDocument();
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+
+    expect(await screen.findByText('Aprovação com ressalvas')).toBeInTheDocument();
+    expect(
+      screen.getByText('Atualizar CPF e reenviar certidão na próxima revisão.')
+    ).toBeInTheDocument();
   });
 
   it('reinicia contrato finalizado e remove da aba de finalizados', async () => {
