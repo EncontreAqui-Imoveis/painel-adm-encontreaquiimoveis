@@ -1104,14 +1104,20 @@
   async function reopenFinalizedContract() {
     if (!selected) return;
     const confirmed = window.confirm(
-      'Tem certeza que deseja reiniciar este contrato? Ele voltará para AWAITING_SIGNATURES.'
+      'Tem certeza que deseja reiniciar este contrato? Ele voltará para AWAITING_DOCS e removerá todos os documentos vinculados.'
     );
     if (!confirmed) return;
 
     reopeningContract = true;
     try {
-      await api.put(`/admin/contracts/${selected.id}/reopen`, {});
-      toast.success('Contrato reiniciado com sucesso.');
+      const response = (await api.put(`/admin/contracts/${selected.id}/reopen`, {})) as {
+        message?: string;
+        data?: { message?: string };
+      };
+      toast.success(
+        String(response?.message ?? response?.data?.message ?? '').trim() ||
+          'Contrato reiniciado com sucesso.'
+      );
       closeModal(true);
       refresh();
     } catch (error) {

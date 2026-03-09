@@ -472,7 +472,12 @@ describe('ContractsModule', () => {
         total: 0,
       };
     });
-    apiPutMock.mockResolvedValue({});
+    apiPutMock.mockResolvedValue({
+      data: {
+        message:
+          'Contrato reiniciado com sucesso. Todos os documentos vinculados foram removidos.',
+      },
+    });
 
     render(ContractsModule);
 
@@ -613,7 +618,12 @@ describe('ContractsModule', () => {
         total: 0,
       };
     });
-    apiPutMock.mockResolvedValue({});
+    apiPutMock.mockResolvedValue({
+      data: {
+        message:
+          'Contrato reiniciado com sucesso. Todos os documentos vinculados foram removidos.',
+      },
+    });
 
     render(ContractsModule);
 
@@ -1083,7 +1093,12 @@ describe('ContractsModule', () => {
 
       return { data: [], total: 0 };
     });
-    apiPutMock.mockResolvedValue({});
+    apiPutMock.mockResolvedValue({
+      data: {
+        message:
+          'Contrato reiniciado com sucesso. Todos os documentos vinculados foram removidos.',
+      },
+    });
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(ContractsModule);
@@ -1095,7 +1110,9 @@ describe('ContractsModule', () => {
     await waitFor(() => {
       expect(apiPutMock).toHaveBeenCalledWith('/admin/contracts/contract-final-2/reopen', {});
     });
-    expect(toastSuccessMock).toHaveBeenCalledWith('Contrato reiniciado com sucesso.');
+    expect(toastSuccessMock).toHaveBeenCalledWith(
+      'Contrato reiniciado com sucesso. Todos os documentos vinculados foram removidos.'
+    );
     confirmSpy.mockRestore();
   });
 
