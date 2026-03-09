@@ -93,6 +93,13 @@
     'comprovante_pagamento',
     'boleto_vistoria',
   ]);
+  const contractScopedDocumentTypes = new Set([
+    'contrato_minuta',
+    'contrato_assinado',
+    'comprovante_pagamento',
+    'boleto_vistoria',
+    'outro',
+  ]);
   const saleRequiredDocTypes = [
     'doc_identidade',
     'comprovante_endereco',
@@ -519,7 +526,7 @@
   }
 
   function getDocumentsForFinalize(contract: ContractItem): ContractDocument[] {
-    return (contract.documents ?? []).filter((doc) =>
+    return getAllContractDocuments(contract).filter((doc) =>
       signedReviewDocTypes.has((doc.documentType ?? '').trim().toLowerCase())
     );
   }
@@ -565,8 +572,27 @@
     });
   }
 
+  function documentMatchesCurrentContract(
+    contract: ContractItem,
+    doc: ContractDocument
+  ): boolean {
+    const documentType = String(doc.documentType ?? '').trim().toLowerCase();
+    if (!contractScopedDocumentTypes.has(documentType)) {
+      return true;
+    }
+
+    const metadataContractId = String(doc.metadata?.contractId ?? '').trim();
+    if (!metadataContractId) {
+      return false;
+    }
+
+    return metadataContractId === contract.id;
+  }
+
   function getAllContractDocuments(contract: ContractItem): ContractDocument[] {
-    return [...getNonProposalDocuments(contract)].sort((left, right) => {
+    return getNonProposalDocuments(contract)
+      .filter((doc) => documentMatchesCurrentContract(contract, doc))
+      .sort((left, right) => {
       const leftDate = left.createdAt ? new Date(left.createdAt).getTime() : 0;
       const rightDate = right.createdAt ? new Date(right.createdAt).getTime() : 0;
       if (leftDate !== rightDate) {

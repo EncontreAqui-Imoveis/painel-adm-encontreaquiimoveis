@@ -468,6 +468,7 @@ describe('ContractsModule', () => {
                   status: 'APPROVED',
                   originalFileName: 'identidade_captador.pdf',
                   downloadUrl: '/negotiations/neg-test-sign-1/documents/6021/download',
+                  metadata: { contractId: 'contract-test-sign-1' },
                   createdAt: '2026-03-01T09:00:00.000Z',
                 },
                 {
@@ -477,6 +478,7 @@ describe('ContractsModule', () => {
                   status: 'APPROVED',
                   originalFileName: 'identidade_vendedor.pdf',
                   downloadUrl: '/negotiations/neg-test-sign-1/documents/6022/download',
+                  metadata: { contractId: 'contract-test-sign-1' },
                   createdAt: '2026-03-01T09:10:00.000Z',
                 },
                 {
@@ -484,6 +486,7 @@ describe('ContractsModule', () => {
                   documentType: 'contrato_minuta',
                   originalFileName: 'contrato_minuta.pdf',
                   downloadUrl: '/negotiations/neg-test-sign-1/documents/6023/download',
+                  metadata: { contractId: 'contract-test-sign-1' },
                   createdAt: '2026-03-02T08:00:00.000Z',
                 },
                 {
@@ -491,6 +494,7 @@ describe('ContractsModule', () => {
                   documentType: 'contrato_assinado',
                   originalFileName: 'contrato_assinado.pdf',
                   downloadUrl: '/negotiations/neg-test-sign-1/documents/6024/download',
+                  metadata: { contractId: 'contract-test-sign-1' },
                   createdAt: '2026-03-02T10:00:00.000Z',
                 },
               ],
@@ -862,6 +866,71 @@ describe('ContractsModule', () => {
         'Na venda, a soma de comissões e taxa precisa fechar exatamente 100% do valor. (Req: req-finalize-123)'
       );
     });
+  });
+
+  it('não lista documentos de assinatura vinculados a outro contrato no modal de finalização', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_SIGNATURES')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-sign-6',
+              status: 'AWAITING_SIGNATURES',
+              negotiationId: 'neg-test-sign-6',
+              propertyId: 607,
+              propertyCode: 'RV-607',
+              propertyTitle: 'Casa Contrato Atual',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6071,
+                  documentType: 'contrato_assinado',
+                  originalFileName: 'contrato_atual.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-6/documents/6071/download',
+                  metadata: { contractId: 'contract-test-sign-6' },
+                  createdAt: '2026-03-02T10:00:00.000Z',
+                },
+                {
+                  id: 6072,
+                  documentType: 'comprovante_pagamento',
+                  originalFileName: 'pagamento_outro_contrato.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-6/documents/6072/download',
+                  metadata: { contractId: 'contract-old-1' },
+                  createdAt: '2026-03-02T11:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-02T11:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+
+    render(ContractsModule);
+
+    const signaturesTab = await screen.findByRole('button', {
+      name: 'Aguardando Assinaturas',
+    });
+    await fireEvent.click(signaturesTab);
+
+    const openFinalizeButton = await screen.findByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    });
+    await fireEvent.click(openFinalizeButton);
+
+    expect(await screen.findByText('contrato_atual.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('pagamento_outro_contrato.pdf')).not.toBeInTheDocument();
   });
 
   it('lista documentos bloqueados quando um documento está pendente de revisão', async () => {
