@@ -27,7 +27,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.19",
     "axe-core": "^4.11.1",
-    "jsdom": "^26.1.0",
+    "jsdom": "^28.1.0",
     "postcss": "^8.4.38",
     "svelte": "^5.53.8",
     "svelte-check": "^4.2.2",
