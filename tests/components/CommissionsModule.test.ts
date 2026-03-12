@@ -67,9 +67,9 @@ describe('CommissionsModule', () => {
   it('mostra Editar e Excluir na tabela de VGV', async () => {
     render(CommissionsModule);
 
-    expect(await screen.findByText(/Casa Centro/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Editar' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Excluir' })).toBeInTheDocument();
+    expect((await screen.findAllByText(/Casa Centro/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Editar' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Excluir' }).length).toBeGreaterThan(0);
   });
 
   it('edita VGV em valor real e envia commission_data numérico', async () => {
@@ -77,8 +77,8 @@ describe('CommissionsModule', () => {
 
     render(CommissionsModule);
 
-    await screen.findByText(/Casa Centro/);
-    await fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    await screen.findAllByText(/Casa Centro/);
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Editar' })[0]);
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador (R$)') as HTMLInputElement;
@@ -109,8 +109,8 @@ describe('CommissionsModule', () => {
 
     render(CommissionsModule);
 
-    await screen.findByText(/Casa Centro/);
-    await fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    await screen.findAllByText(/Casa Centro/);
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Editar' })[0]);
     await fireEvent.click(screen.getByRole('button', { name: 'Percentual (%)' }));
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
@@ -143,8 +143,8 @@ describe('CommissionsModule', () => {
 
     render(CommissionsModule);
 
-    await screen.findByText(/Casa Centro/);
-    await fireEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+    await screen.findAllByText(/Casa Centro/);
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Excluir' })[0]);
 
     await waitFor(() => {
       expect(apiDeleteMock).toHaveBeenCalledWith('/admin/contracts/contract-final-1/commission-data');

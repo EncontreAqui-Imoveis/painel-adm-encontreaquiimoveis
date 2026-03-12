@@ -443,6 +443,97 @@ describe('ContractsModule', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('deixa claro que a minuta é obrigatória quando ainda não existe PDF anexado', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=IN_DRAFT')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-draft-required-1',
+              status: 'IN_DRAFT',
+              negotiationId: 'neg-test-draft-required-1',
+              propertyId: 612,
+              propertyCode: 'RV-612',
+              propertyTitle: 'Casa Sem Minuta',
+              propertyPurpose: 'Venda',
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-01T12:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return { data: [], total: 0 };
+    });
+
+    render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Em Confecção' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
+
+    expect(
+      await screen.findByText('Ainda não existe minuta anexada para este contrato.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Para avançar para a etapa de assinaturas, anexe o PDF da minuta.')
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('PDF da minuta')).toBeInTheDocument();
+  });
+
+  it('mostra a minuta atual e muda o CTA para atualizar quando já existe PDF', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=IN_DRAFT')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-draft-existing-1',
+              status: 'IN_DRAFT',
+              negotiationId: 'neg-test-draft-existing-1',
+              propertyId: 613,
+              propertyCode: 'RV-613',
+              propertyTitle: 'Casa Com Minuta',
+              propertyPurpose: 'Venda',
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6131,
+                  documentType: 'contrato_minuta',
+                  originalFileName: 'minuta_atual.pdf',
+                  downloadUrl: '/negotiations/neg-test-draft-existing-1/documents/6131/download',
+                  metadata: { contractId: 'contract-test-draft-existing-1' },
+                  createdAt: '2026-03-01T09:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-01T12:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return { data: [], total: 0 };
+    });
+
+    render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Em Confecção' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
+
+    expect(
+      await screen.findByText('Já existe uma minuta anexada para este contrato.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Minuta atual')).toBeInTheDocument();
+    expect(screen.getAllByText('minuta_atual.pdf').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Novo PDF da minuta (opcional)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Atualizar minuta' })).toBeInTheDocument();
+  });
+
   it('permite voltar de IN_DRAFT para a etapa anterior pelo modal', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=IN_DRAFT')) {

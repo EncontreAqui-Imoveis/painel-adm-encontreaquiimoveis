@@ -57,6 +57,7 @@
   let itemsPerPage = 10;
   let totalItems = 0;
   let totalPages = 1;
+  let isMobileLayout = false;
   let fetchKey = 0;
   let hasMounted = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -115,6 +116,7 @@
   }
 
   onMount(() => {
+    syncIsMobileLayout();
     hasMounted = true;
     requestFetch();
   });
@@ -152,6 +154,11 @@
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
+  function syncIsMobileLayout() {
+    if (typeof window === 'undefined') return;
+    isMobileLayout = window.innerWidth < 768;
   }
 
   function handleExport() {
@@ -291,6 +298,8 @@
   }
 </script>
 
+<svelte:window on:resize={syncIsMobileLayout} />
+
 <section class="space-y-4">
   <header class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
     <div>
@@ -369,6 +378,41 @@
       <p class="text-sm text-gray-600 dark:text-gray-300">Nenhum cliente encontrado.</p>
     </div>
   {:else}
+    {#if isMobileLayout}
+    <div class="space-y-3">
+      {#each clients as client (client.id)}
+        <article class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-base font-semibold text-gray-900 dark:text-gray-100">{client.name}</p>
+              <p class="mt-1 break-all text-sm text-gray-600 dark:text-gray-300">{client.email}</p>
+            </div>
+            <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              #{client.id}
+            </span>
+          </div>
+          <dl class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
+            <div class="flex items-center justify-between gap-3">
+              <dt>Telefone</dt>
+              <dd class="text-right">{client.phone ?? 'N/A'}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt>Cadastrado em</dt>
+              <dd class="text-right">{formatDate(client.created_at)}</dd>
+            </div>
+          </dl>
+          <div class="mt-4 flex flex-col gap-2">
+            <Button variant="outline" on:click={() => openClientProperties(client)}>
+              Ver Imóveis
+            </Button>
+            <Button variant="outline" on:click={() => openClientModal(client)}>
+              Revisar
+            </Button>
+          </div>
+        </article>
+      {/each}
+    </div>
+    {:else}
     <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
       <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
         <thead class="bg-gray-50 dark:bg-gray-900/70">
@@ -421,6 +465,7 @@
         </tbody>
       </table>
     </div>
+    {/if}
     <div class="mt-4">
       <Pagination bind:currentPage {totalPages} {totalItems} {itemsPerPage} />
     </div>
@@ -428,7 +473,7 @@
 </section>
 
 <Dialog.Root bind:open={isModalOpen}>
-  <Dialog.Content className="max-w-lg">
+  <Dialog.Content className="max-w-lg max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">
     {#if selectedClient}
       <Dialog.Header>
         <Dialog.Title>Revisar Cliente</Dialog.Title>
@@ -538,7 +583,7 @@
 </Dialog.Root>
 
 <Dialog.Root bind:open={isPropertiesModalOpen}>
-  <Dialog.Content className="max-w-lg">
+  <Dialog.Content className="max-w-lg max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">
     {#if selectedClientForProperties}
       <Dialog.Header>
         <Dialog.Title>Imóveis do cliente</Dialog.Title>

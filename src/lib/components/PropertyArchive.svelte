@@ -17,6 +17,29 @@
     transactionDate?: string | null;
   };
 
+  type ArchivePropertyDetail = {
+    id: number;
+    code?: string | null;
+    title: string;
+    type?: string | null;
+    purpose?: string | null;
+    status?: string | null;
+    city?: string | null;
+    state?: string | null;
+    bairro?: string | null;
+    address?: string | null;
+    numero?: string | null;
+    broker_name?: string | null;
+    broker_phone?: string | null;
+    owner_name?: string | null;
+    owner_phone?: string | null;
+    price?: number | null;
+    price_sale?: number | null;
+    price_rent?: number | null;
+    updated_at?: string | null;
+    created_at?: string | null;
+  };
+
   let rows: ArchiveItem[] = [];
   let isLoading = true;
   let hasMounted = false;
@@ -28,8 +51,14 @@
   let search = '';
   let searchDraft = '';
   let isRelisting = false;
+  let isMobileLayout = false;
   let selected: ArchiveItem | null = null;
   let showModal = false;
+  let isReviewModalOpen = false;
+  let selectedReviewItem: ArchiveItem | null = null;
+  let reviewDetails: ArchivePropertyDetail | null = null;
+  let isReviewLoading = false;
+  let reviewError: string | null = null;
 
   function formatDate(value?: string | null): string {
     if (!value) return '-';
@@ -49,15 +78,68 @@
     return 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100';
   }
 
+  function propertyStatusLabel(status?: string | null): string {
+    const normalized = String(status ?? '').trim().toLowerCase();
+    if (normalized === 'sold') return 'Vendido';
+    if (normalized === 'rented') return 'Alugado';
+    if (normalized === 'approved') return 'Aprovado';
+    if (normalized === 'pending_approval') return 'Pendente';
+    return normalized ? normalized : '-';
+  }
+
+  function purposeLabel(purpose?: string | null): string {
+    const normalized = String(purpose ?? '').trim();
+    return normalized.length > 0 ? normalized : '-';
+  }
+
+  function formatCurrency(value?: number | null): string {
+    if (value == null || Number.isNaN(value)) return '-';
+    return value.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+  }
+
+  function syncIsMobileLayout() {
+    if (typeof window === 'undefined') return;
+    isMobileLayout = window.innerWidth < 768;
+  }
+
   function openRelistModal(item: ArchiveItem) {
     selected = item;
     showModal = true;
+  }
+
+  async function openReviewModal(item: ArchiveItem) {
+    selectedReviewItem = item;
+    isReviewModalOpen = true;
+    reviewDetails = null;
+    reviewError = null;
+    isReviewLoading = true;
+
+    try {
+      const response = await api.get<ArchivePropertyDetail>(`/admin/properties/${item.id}`);
+      reviewDetails = response;
+    } catch (error) {
+      console.error('Erro ao carregar detalhes do imóvel finalizado:', error);
+      reviewError = 'Não foi possível carregar os detalhes do imóvel.';
+    } finally {
+      isReviewLoading = false;
+    }
   }
 
   function closeModal(force = false) {
     if (isRelisting && !force) return;
     showModal = false;
     selected = null;
+  }
+
+  function closeReviewModal() {
+    if (isReviewLoading) return;
+    isReviewModalOpen = false;
+    selectedReviewItem = null;
+    reviewDetails = null;
+    reviewError = null;
   }
 
   function requestFetch(resetPage = false) {
@@ -117,6 +199,7 @@
   }
 
   onMount(() => {
+    syncIsMobileLayout();
     hasMounted = true;
     requestFetch();
   });
@@ -128,6 +211,8 @@
     fetchArchive();
   }
 </script>
+
+<svelte:window on:resize={syncIsMobileLayout} />
 
 <div class="space-y-4">
   <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -162,6 +247,56 @@
     </div>
   </div>
 
+  {#if isMobileLayout}
+  <div class="space-y-3">
+    {#if isLoading}
+      <div class="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+        Carregando imóveis...
+      </div>
+    {:else if rows.length === 0}
+      <div class="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+        Nenhum imóvel vendido ou alugado encontrado.
+      </div>
+    {:else}
+      {#each rows as item (item.id)}
+        <article class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {item.code ? item.code : `#${item.id}`}
+              </p>
+              <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">{item.title}</p>
+            </div>
+            <span class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusClass(item.status)}`}>
+              {statusLabel(item.status)}
+            </span>
+          </div>
+          <dl class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
+            <div class="flex items-center justify-between gap-3">
+              <dt>Corretor</dt>
+              <dd class="text-right">{item.brokerName ?? '-'}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt>Data da transação</dt>
+              <dd class="text-right">{formatDate(item.transactionDate)}</dd>
+            </div>
+          </dl>
+          <div class="mt-4 flex flex-col gap-2">
+            <Button variant="outline" on:click={() => openReviewModal(item)}>
+              Revisar
+            </Button>
+            {#if item.status === 'rented'}
+              <Button on:click={() => openRelistModal(item)}>
+                Disponibilizar Novamente
+              </Button>
+            {/if}
+          </div>
+        </article>
+      {/each}
+    {/if}
+  </div>
+
+  {:else}
   <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
       <thead class="bg-gray-50 dark:bg-gray-900/70">
@@ -216,13 +351,16 @@
                 {formatDate(item.transactionDate)}
               </td>
               <td class="px-6 py-4 text-right">
-                {#if item.status === 'rented'}
-                  <Button size="sm" variant="outline" on:click={() => openRelistModal(item)}>
-                    Disponibilizar Novamente
+                <div class="flex justify-end gap-2">
+                  <Button size="sm" variant="outline" on:click={() => openReviewModal(item)}>
+                    Revisar
                   </Button>
-                {:else}
-                  <span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-                {/if}
+                  {#if item.status === 'rented'}
+                    <Button size="sm" on:click={() => openRelistModal(item)}>
+                      Disponibilizar Novamente
+                    </Button>
+                  {/if}
+                </div>
               </td>
             </tr>
           {/each}
@@ -230,11 +368,117 @@
       </tbody>
     </table>
   </div>
+  {/if}
 
   <div class="mt-4">
     <Pagination bind:currentPage {totalPages} {totalItems} {itemsPerPage} />
   </div>
 </div>
+
+{#if isReviewModalOpen && selectedReviewItem}
+  <div
+    class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+    role="presentation"
+    on:click={(event) => {
+      if (event.target === event.currentTarget) {
+        closeReviewModal();
+      }
+    }}
+    on:keydown={() => {}}
+  >
+    <div
+      class="w-full max-w-2xl rounded-t-2xl bg-white p-6 shadow-xl dark:bg-gray-900 sm:rounded-2xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="archive-review-title"
+    >
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h3 id="archive-review-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Revisar imóvel finalizado
+          </h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            {selectedReviewItem.code ? selectedReviewItem.code : `#${selectedReviewItem.id}`} - {selectedReviewItem.title}
+          </p>
+        </div>
+        <span class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusClass(selectedReviewItem.status)}`}>
+          {statusLabel(selectedReviewItem.status)}
+        </span>
+      </div>
+
+      <div class="mt-4 space-y-4">
+        {#if isReviewLoading}
+          <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <Loader2 class="h-4 w-4 animate-spin" />
+            Carregando detalhes...
+          </div>
+        {:else if reviewError}
+          <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+            {reviewError}
+          </div>
+        {:else if reviewDetails}
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Tipo</p>
+              <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{reviewDetails.type ?? '-'}</p>
+            </div>
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Finalidade</p>
+              <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{purposeLabel(reviewDetails.purpose)}</p>
+            </div>
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Status atual</p>
+              <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{propertyStatusLabel(reviewDetails.status)}</p>
+            </div>
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Última atualização</p>
+              <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                {formatDate(reviewDetails.updated_at ?? reviewDetails.created_at)}
+              </p>
+            </div>
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Valor de venda</p>
+              <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{formatCurrency(reviewDetails.price_sale)}</p>
+            </div>
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Valor de aluguel</p>
+              <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{formatCurrency(reviewDetails.price_rent)}</p>
+            </div>
+          </div>
+
+          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Localização</p>
+            <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+              {reviewDetails.address ?? '-'}{#if reviewDetails.numero} , {reviewDetails.numero}{/if}
+            </p>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+              {reviewDetails.bairro ?? '-'} • {reviewDetails.city ?? '-'} / {reviewDetails.state ?? '-'}
+            </p>
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Anunciante</p>
+              <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{reviewDetails.broker_name ?? '-'}</p>
+              <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{reviewDetails.broker_phone ?? '-'}</p>
+            </div>
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Proprietário</p>
+              <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{reviewDetails.owner_name ?? '-'}</p>
+              <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{reviewDetails.owner_phone ?? '-'}</p>
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      <div class="mt-6 flex justify-end">
+        <Button variant="outline" on:click={closeReviewModal}>
+          Fechar
+        </Button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if showModal && selected}
   <div

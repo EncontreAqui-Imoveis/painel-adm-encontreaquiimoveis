@@ -580,6 +580,10 @@
         }
     }
 
+    async function handlePropertyCreated() {
+        await changeView("properties");
+    }
+
     function handleSortToggle() {
         if (
             activeView === "dashboard" ||
@@ -1664,7 +1668,10 @@
                 {/if}
             {:else if activeView === "create_property"}
                 {#if CreatePropertyComponent}
-                    <svelte:component this={CreatePropertyComponent} />
+                    <svelte:component
+                        this={CreatePropertyComponent}
+                        on:created={handlePropertyCreated}
+                    />
                 {:else}
                     <div class="flex justify-center items-center h-64">
                         <div

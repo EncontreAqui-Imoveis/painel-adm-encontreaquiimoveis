@@ -1843,7 +1843,7 @@
 </div>
 
 <Dialog.Root bind:open={isModalOpen}>
-  <Dialog.Content className="max-h-[85vh] overflow-y-auto">
+  <Dialog.Content className="max-h-[85vh] overflow-y-auto max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">
     {#if selectedProperty}
       <Dialog.Header>
         <Dialog.Title>{selectedProperty.title}</Dialog.Title>

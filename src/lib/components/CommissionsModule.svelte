@@ -68,6 +68,7 @@
   let savingCommissionData = false;
   let deletingCommissionData = false;
   let commissionSplitMode: FinalizeSplitMode = 'amount';
+  let isMobileLayout = false;
   let commissionForm = {
     valorVenda: '',
     comissaoCaptador: '',
@@ -101,6 +102,11 @@
 
   function formatCurrency(value: number): string {
     return brlFormatter.format(Number.isFinite(value) ? value : 0);
+  }
+
+  function syncIsMobileLayout() {
+    if (typeof window === 'undefined') return;
+    isMobileLayout = window.innerWidth < 768;
   }
 
   function readCommissionValue(value: unknown): string {
@@ -474,9 +480,12 @@
   }
 
   onMount(async () => {
+    syncIsMobileLayout();
     await fetchCommissions();
   });
 </script>
+
+<svelte:window on:resize={syncIsMobileLayout} />
 
 <div class="space-y-4">
   <div>
@@ -564,6 +573,65 @@
     </div>
   </div>
 
+  {#if isMobileLayout}
+  <div class="space-y-3">
+    {#if loading}
+      <div class="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+        Carregando dados de comissões...
+      </div>
+    {:else if error}
+      <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700 shadow-sm dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+        {error}
+      </div>
+    {:else if transactions.length === 0}
+      <div class="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+        Nenhuma transação finalizada para o período selecionado.
+      </div>
+    {:else}
+      {#each transactions as item (item.contractId)}
+        <article class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-base font-semibold text-gray-900 dark:text-gray-100">{propertyLabel(item)}</p>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Finalizado em {formatDate(item.finalizedAt)}
+              </p>
+            </div>
+            <span class="rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300">
+              VGV
+            </span>
+          </div>
+          <dl class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
+            <div class="flex items-center justify-between gap-3">
+              <dt>VGV</dt>
+              <dd class="text-right">{formatCurrency(toNumber(item.commissionData?.valorVenda))}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt>Captador</dt>
+              <dd class="text-right">{formatCurrency(toNumber(item.commissionData?.comissaoCaptador))}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt>Vendedor</dt>
+              <dd class="text-right">{formatCurrency(toNumber(item.commissionData?.comissaoVendedor))}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt>Plataforma</dt>
+              <dd class="text-right">{formatCurrency(toNumber(item.commissionData?.taxaPlataforma))}</dd>
+            </div>
+          </dl>
+          <div class="mt-4 flex flex-col gap-2">
+            <Button variant="outline" on:click={() => openEditModal(item)}>
+              Editar
+            </Button>
+            <Button variant="destructive" on:click={() => deleteCommissionData(item)}>
+              Excluir
+            </Button>
+          </div>
+        </article>
+      {/each}
+    {/if}
+  </div>
+  {:else}
   <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
       <thead class="bg-gray-50 dark:bg-gray-900/70">
@@ -647,11 +715,12 @@
       </tbody>
     </table>
   </div>
+  {/if}
 </div>
 
 {#if editModalOpen && selectedTransaction}
   <div
-    class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4"
+    class="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-0 sm:items-start sm:p-4"
     role="presentation"
     on:click={(event) => {
       if (event.target === event.currentTarget) {
@@ -661,7 +730,7 @@
     on:keydown={() => {}}
   >
     <div
-      class="my-8 w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900"
+      class="w-full max-w-2xl rounded-t-2xl bg-white p-6 shadow-xl dark:bg-gray-900 sm:my-8 sm:rounded-lg"
       role="dialog"
       aria-modal="true"
       aria-labelledby="commission-edit-title"

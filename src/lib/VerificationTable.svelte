@@ -8,6 +8,8 @@
     const dispatch = createEventDispatcher();
     let isModalOpen = false;
     let selectedBroker: Broker | null = null;
+    let isMobileLayout =
+        typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
     // Função para obter texto do status
     function getStatusText(status: string) {
@@ -78,8 +80,68 @@
     function handleModalUpdate() {
         dispatch('refresh');
     }
+
+    function syncIsMobileLayout() {
+        if (typeof window === 'undefined') return;
+        isMobileLayout = window.innerWidth < 768;
+    }
 </script>
 
+<svelte:window on:resize={syncIsMobileLayout} />
+
+{#if isMobileLayout}
+<div class="space-y-3">
+    {#if pendingBrokers.length === 0}
+        <div class="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+            Nenhuma solicitação pendente.
+        </div>
+    {:else}
+        {#each pendingBrokers as broker}
+            {@const creciFrontUrl = resolveDocumentField(broker, 'creci_front_url')}
+            {@const creciBackUrl = resolveDocumentField(broker, 'creci_back_url')}
+            {@const selfieUrl = resolveDocumentField(broker, 'selfie_url')}
+            <article class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-base font-semibold text-gray-900 dark:text-white">{broker.name}</p>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{broker.email}</p>
+                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">CRECI: {broker.creci}</p>
+                    </div>
+                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {getStatusClasses(broker.status)}">
+                        {getStatusText(broker.status)}
+                    </span>
+                </div>
+                <div class="mt-3 space-y-2 text-sm">
+                    {#if creciFrontUrl && isUrlAccessible(creciFrontUrl)}
+                        <a href={getDocumentUrl(creciFrontUrl)} target="_blank"
+                           class="inline-flex items-center text-green-600 hover:text-green-900 dark:text-green-400 transition-colors">
+                            Frente do CRECI
+                        </a>
+                    {/if}
+                    {#if creciBackUrl && isUrlAccessible(creciBackUrl)}
+                        <a href={getDocumentUrl(creciBackUrl)} target="_blank"
+                           class="inline-flex items-center text-green-600 hover:text-green-900 dark:text-green-400 transition-colors">
+                            Verso do CRECI
+                        </a>
+                    {/if}
+                    {#if selfieUrl && isUrlAccessible(selfieUrl)}
+                        <a href={getDocumentUrl(selfieUrl)} target="_blank"
+                           class="inline-flex items-center text-green-600 hover:text-green-900 dark:text-green-400 transition-colors">
+                            Selfie
+                        </a>
+                    {/if}
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <Button variant="outline" size="sm" on:click={() => reviewBroker(broker)}>
+                        Revisar
+                    </Button>
+                </div>
+            </article>
+        {/each}
+    {/if}
+</div>
+
+{:else}
 <div class="overflow-x-auto">
     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead class="bg-gray-50 dark:bg-gray-700">
@@ -182,6 +244,7 @@
         </tbody>
     </table>
 </div>
+{/if}
 
 <BrokerReviewModal
     bind:open={isModalOpen}

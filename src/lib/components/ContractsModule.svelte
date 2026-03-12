@@ -140,6 +140,7 @@
   let selected: ContractItem | null = null;
   let showModal = false;
   let modalMode: ModalMode = 'review_docs';
+  let isMobileLayout = false;
   let isLoading = true;
   let hasMounted = false;
   let refreshKey = 0;
@@ -278,6 +279,11 @@
 
   function statusLabel(status: ContractStatus): string {
     return tabs.find((tab) => tab.key === status)?.label ?? status;
+  }
+
+  function syncIsMobileLayout() {
+    if (typeof window === 'undefined') return;
+    isMobileLayout = window.innerWidth < 768;
   }
 
   function previousStageLabel(currentStatus: ContractStatus): string {
@@ -680,6 +686,29 @@
       }
       return Number(right.id ?? 0) - Number(left.id ?? 0);
     });
+  }
+
+  function getCurrentDraftDocument(contract: ContractItem | null): ContractDocument | null {
+    if (!contract) return null;
+    return (
+      getAllContractDocuments(contract).find(
+        (doc) => String(doc.documentType ?? '').trim().toLowerCase() === 'contrato_minuta'
+      ) ?? null
+    );
+  }
+
+  function hasCurrentDraftDocument(contract: ContractItem | null): boolean {
+    return getCurrentDraftDocument(contract) != null;
+  }
+
+  function draftUploadInputLabel(contract: ContractItem | null): string {
+    return hasCurrentDraftDocument(contract)
+      ? 'Novo PDF da minuta (opcional)'
+      : 'PDF da minuta';
+  }
+
+  function draftSubmitLabel(contract: ContractItem | null): string {
+    return hasCurrentDraftDocument(contract) ? 'Atualizar minuta' : 'Anexar Minuta';
   }
 
   function listMissingRecordFields(
@@ -1303,6 +1332,7 @@
   }
 
   onMount(() => {
+    syncIsMobileLayout();
     hasMounted = true;
     refresh(true);
   });
@@ -1319,6 +1349,8 @@
   $: isReadyToApprove = approvalLockReasons.length === 0;
   $: sellerApprovalDisabled = evaluatingSide === 'seller' || !isReadyToApprove;
 </script>
+
+<svelte:window on:resize={syncIsMobileLayout} />
 
 <div class="space-y-4">
   <div>
@@ -1370,6 +1402,69 @@
     </Button>
   </div>
 
+  {#if isMobileLayout}
+  <div class="space-y-3">
+    {#if isLoading}
+      <div class="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+        Carregando contratos...
+      </div>
+    {:else if items.length === 0}
+      <div class="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
+        Nenhum contrato encontrado nesta etapa.
+      </div>
+    {:else}
+      {#each items as item (item.id)}
+        <article class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                {item.propertyCode ? item.propertyCode : `#${item.propertyId}`}
+              </p>
+              <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">{item.propertyTitle ?? '-'}</p>
+            </div>
+            <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              {statusLabel(item.status)}
+            </span>
+          </div>
+          <dl class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
+            <div class="flex items-center justify-between gap-3">
+              <dt>Captador</dt>
+              <dd class="text-right">{item.capturingBrokerName ?? '-'}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt>Vendedor</dt>
+              <dd class="text-right">{item.sellingBrokerName ?? '-'}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt>Data</dt>
+              <dd class="text-right">{formatDate(item.updatedAt ?? item.createdAt)}</dd>
+            </div>
+          </dl>
+          {#if getApprovalRemarkSummaries(item).length > 0}
+            <div class="mt-3 flex flex-wrap gap-2">
+              {#each getApprovalRemarkSummaries(item) as summary (summary.key)}
+                <span class="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                  {summary.label} com ressalvas
+                </span>
+              {/each}
+            </div>
+          {/if}
+          <div class="mt-4 flex flex-col gap-2">
+            <Button variant="outline" on:click={() => openModal(item)}>
+              {tableActionLabel(item.status)}
+            </Button>
+            {#if item.status === 'FINALIZED'}
+              <Button variant="destructive" on:click={() => deleteFinalizedContract(item)}>
+                Excluir
+              </Button>
+            {/if}
+          </div>
+        </article>
+      {/each}
+    {/if}
+  </div>
+
+  {:else}
   <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
       <thead class="bg-gray-50 dark:bg-gray-900/70">
@@ -1455,6 +1550,7 @@
       </tbody>
     </table>
   </div>
+  {/if}
 
   <div class="mt-4">
     <Pagination bind:currentPage {totalPages} {totalItems} {itemsPerPage} />
@@ -1463,7 +1559,7 @@
 
 {#if showModal && selected}
   <div
-    class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4"
+    class="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-0 sm:items-start sm:p-4"
     role="presentation"
     on:click={(event) => {
       if (event.target === event.currentTarget) {
@@ -1473,7 +1569,7 @@
     on:keydown={() => {}}
   >
     <div
-      class="my-8 w-full max-w-3xl max-h-[80vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900"
+      class="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl dark:bg-gray-900 sm:my-8 sm:max-h-[80vh] sm:rounded-lg"
       role="dialog"
       aria-modal="true"
       aria-labelledby="contract-modal-title"
@@ -1847,10 +1943,68 @@
         </div>
       {:else if modalMode === 'upload_draft'}
         <div class="space-y-4">
-          <p class="text-sm text-gray-600 dark:text-gray-300">
-            Faça o upload do PDF da minuta (<code>contrato_minuta</code>). Ao enviar, o contrato será movido automaticamente para
-            <span class="font-semibold"> Aguardando Assinaturas</span>.
-          </p>
+          <div
+            class={`rounded-md border p-4 ${
+              hasCurrentDraftDocument(selected)
+                ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/20'
+                : 'border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/20'
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            <p class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">
+              Situação da minuta
+            </p>
+            {#if hasCurrentDraftDocument(selected)}
+              <p class="mt-2 text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                Já existe uma minuta anexada para este contrato.
+              </p>
+              <p class="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
+                Envie um novo PDF apenas se quiser substituir a versão atual antes de seguir para assinaturas.
+              </p>
+            {:else}
+              <p class="mt-2 text-sm font-medium text-amber-800 dark:text-amber-200">
+                Ainda não existe minuta anexada para este contrato.
+              </p>
+              <p class="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                Para avançar para a etapa de assinaturas, anexe o PDF da minuta.
+              </p>
+            {/if}
+          </div>
+
+          {#if getCurrentDraftDocument(selected)}
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                Minuta atual
+              </p>
+              <div class="mt-2 flex flex-col gap-3 rounded bg-gray-50 px-3 py-3 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0">
+                  <p class="font-medium text-gray-900 dark:text-gray-100">
+                    {documentFileName(getCurrentDraftDocument(selected))}
+                  </p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    Enviado em {formatDate(getCurrentDraftDocument(selected)?.createdAt)}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  on:click={() => {
+                    const draftDoc = getCurrentDraftDocument(selected);
+                    if (selected && draftDoc) {
+                      viewDocument(draftDoc, selected);
+                    }
+                  }}
+                  disabled={downloadingDocumentId === getCurrentDraftDocument(selected)?.id}
+                >
+                  {#if downloadingDocumentId === getCurrentDraftDocument(selected)?.id}
+                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                  {/if}
+                  Baixar/Visualizar
+                </Button>
+              </div>
+            </div>
+          {/if}
 
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
@@ -1910,8 +2064,15 @@
 
           <div class="rounded-md border border-dashed border-gray-300 p-4 dark:border-gray-700">
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200" for="draft-pdf">
-              PDF da minuta
+              {draftUploadInputLabel(selected)}
             </label>
+            <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">
+              {#if hasCurrentDraftDocument(selected)}
+                Selecione um novo PDF apenas se quiser substituir a minuta atual.
+              {:else}
+                Selecione o PDF que será usado como minuta oficial deste contrato.
+              {/if}
+            </p>
             <input
               id="draft-pdf"
               type="file"
@@ -1952,7 +2113,7 @@
               {#if uploadingDraft}
                 <Loader2 class="mr-2 h-4 w-4 animate-spin" />
               {/if}
-              Anexar Minuta
+              {draftSubmitLabel(selected)}
             </Button>
           </div>
         </div>

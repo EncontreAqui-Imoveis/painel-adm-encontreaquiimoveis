@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { createEventDispatcher, onDestroy, onMount } from 'svelte';
   import { toast } from 'svelte-sonner';
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
@@ -82,6 +82,9 @@
     'SE',
     'TO'
   ];
+  const dispatch = createEventDispatcher<{
+    created: { propertyId: number };
+  }>();
 
   let brokers: Broker[] = [];
   let brokersLoading = false;
@@ -138,6 +141,7 @@
   let isSubmitting = false;
   let uploadProgress = 0;
   let uploadStatus = '';
+  let submitFeedback: { type: 'success' | 'error'; message: string } | null = null;
   let hasWifi = false;
   let temPiscina = false;
   let temEnergiaSolar = false;
@@ -628,6 +632,7 @@
 
   async function handleSubmit() {
     if (isSubmitting) return;
+    submitFeedback = null;
     const numeroDigits = onlyDigits(numero);
     const requiredMessage =
       !title.trim()
@@ -894,6 +899,10 @@
       }
 
       void syncBrokerPhoneIfNeeded();
+      submitFeedback = {
+        type: 'success',
+        message: `Imóvel criado com sucesso. Código interno: #${propertyId}.`,
+      };
       toast.success('Imóvel criado com sucesso.');
       title = '';
       description = '';
@@ -938,6 +947,7 @@
       ehMobiliada = false;
       if (imagesInput) imagesInput.value = '';
       clearVideoSelection();
+      dispatch('created', { propertyId });
     } catch (error) {
       console.error('Erro ao criar imóvel:', error);
       const apiError = error as { response?: { data?: { error?: string; message?: string } } };
@@ -952,6 +962,10 @@
         backendMessage ||
         (error instanceof Error ? error.message : null) ||
         'Não foi possível criar o imóvel.';
+      submitFeedback = {
+        type: 'error',
+        message: errorMessage,
+      };
       toast.error(errorMessage);
     } finally {
       isSubmitting = false;
@@ -1596,10 +1610,36 @@
         {/if}
       </div>
 
-      <div class="flex justify-end">
+      {#if submitFeedback}
+        <div
+          class={`rounded-md border px-4 py-3 text-sm ${
+            submitFeedback.type === 'success'
+              ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-200'
+              : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200'
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          {submitFeedback.message}
+        </div>
+      {/if}
+
+      <div class="sticky bottom-0 -mx-6 border-t border-gray-200 bg-white/95 px-6 py-4 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="space-y-1">
+            <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+              Revise os dados antes de enviar
+            </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              O imóvel será criado assim que as imagens terminarem de subir e o backend confirmar o cadastro.
+            </p>
+          </div>
+          <div class="flex justify-end">
         <Button on:click={handleSubmit} disabled={isSubmitting}>
           {isSubmitting ? 'Enviando...' : 'Cadastrar imóvel'}
         </Button>
+          </div>
+        </div>
       </div>
       {#if uploadStatus}
         <p class="text-xs text-gray-500 dark:text-gray-400">{uploadStatus}</p>
