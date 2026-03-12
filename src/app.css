@@ -1,6 +1,6 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 @font-face {
   font-family: 'DMSans';
@@ -24,6 +24,28 @@
   font-weight: 700;
   font-style: normal;
   font-display: swap;
+}
+
+@theme {
+  --font-sans: 'DMSans', sans-serif;
+  --font-display: 'HKGrotesk', sans-serif;
+
+  --color-green-50: #fff7e1;
+  --color-green-100: #ffe9b3;
+  --color-green-200: #ffdb85;
+  --color-green-300: #ffd066;
+  --color-green-400: #ffca45;
+  --color-green-500: #e3b53d;
+  --color-green-600: #b7892d;
+  --color-green-700: #8f6621;
+  --color-green-800: #664716;
+  --color-green-900: #4a3410;
+
+  --color-brand-primary: #ffffff;
+  --color-brand-secondary: #ffca45;
+  --color-brand-tertiary: #0d5051;
+  --color-brand-green: #ffca45;
+  --color-brand-green-dark: #b7892d;
 }
 
 :root {
@@ -60,10 +82,8 @@ h6 {
   color: #0d5051;
 }
 
-@layer components {
-  .panel {
-    @apply rounded-2xl bg-slate-900/60 border border-white/5 shadow-lg shadow-black/30 backdrop-blur;
-  }
+@utility panel {
+  @apply rounded-2xl border border-white/5 bg-slate-900/60 shadow-lg shadow-black/30 backdrop-blur;
 }
 
 /* Global elegant scrollbar for main window */

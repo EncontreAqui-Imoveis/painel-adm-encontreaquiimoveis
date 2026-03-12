@@ -346,7 +346,7 @@
                         {/if}
                         
                         {#if showSaleDeletionWarning}
-                            <tr class="warning-row">
+                            <tr class="bg-orange-50 dark:bg-[rgba(124,45,18,0.2)]">
                                 <td colspan={headers.length + 1} class="px-6 py-2 text-center">
                                      <p class="text-xs font-semibold text-orange-600 dark:text-orange-400">
                                         Ateno: Ao salvar com um novo status, os detalhes da venda anterior sero permanentemente removidos.
@@ -359,13 +359,4 @@
             {/if}
         </tbody>
     </table>
-</div>
-
-<style>
-    .warning-row {
-        background-color: rgb(255 247 237); /* orange-50 */
-    }
-    :global(.dark) .warning-row {
-        background-color: rgba(124, 45, 18, 0.2); /* Equivalente a orange-900 com 20% de opacidade */
-    }
-</style>
+</div>`r`n
