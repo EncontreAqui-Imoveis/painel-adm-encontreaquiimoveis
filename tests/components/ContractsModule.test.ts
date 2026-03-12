@@ -185,8 +185,8 @@ describe('ContractsModule', () => {
     ).toBeInTheDocument();
 
     const approveButtons = [
-      screen.getByRole('button', { name: 'Aprovar captador' }),
-      screen.getByRole('button', { name: 'Aprovar vendedor' }),
+      screen.getByRole('button', { name: /Aprovar\s*captador/i }),
+      screen.getByRole('button', { name: /Aprovar\s*vendedor/i }),
     ];
     for (const button of approveButtons) {
       expect(button).toBeDisabled();
@@ -194,8 +194,8 @@ describe('ContractsModule', () => {
     }
 
     const approveWithRemarksButtons = [
-      screen.getByRole('button', { name: 'Aprovar c/ ressalvas captador' }),
-      screen.getByRole('button', { name: 'Aprovar c/ ressalvas vendedor' }),
+      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*captador/i }),
+      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*vendedor/i }),
     ];
     for (const button of approveWithRemarksButtons) {
       expect(button).toBeEnabled();
@@ -271,16 +271,16 @@ describe('ContractsModule', () => {
     expect(screen.queryByText('Aprovação bloqueada.')).not.toBeInTheDocument();
 
     const approveButtons = [
-      screen.getByRole('button', { name: 'Aprovar captador' }),
-      screen.getByRole('button', { name: 'Aprovar vendedor' }),
+      screen.getByRole('button', { name: /Aprovar\s*captador/i }),
+      screen.getByRole('button', { name: /Aprovar\s*vendedor/i }),
     ];
     for (const button of approveButtons) {
       expect(button).toBeEnabled();
     }
 
     const approveWithRemarksButtons = [
-      screen.getByRole('button', { name: 'Aprovar c/ ressalvas captador' }),
-      screen.getByRole('button', { name: 'Aprovar c/ ressalvas vendedor' }),
+      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*captador/i }),
+      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*vendedor/i }),
     ];
     for (const button of approveWithRemarksButtons) {
       expect(button).toBeEnabled();
@@ -1313,8 +1313,8 @@ describe('ContractsModule', () => {
     ).toBeInTheDocument();
 
     const approveButtons = [
-      screen.getByRole('button', { name: 'Aprovar captador' }),
-      screen.getByRole('button', { name: 'Aprovar vendedor' }),
+      screen.getByRole('button', { name: /Aprovar\s*captador/i }),
+      screen.getByRole('button', { name: /Aprovar\s*vendedor/i }),
     ];
     for (const button of approveButtons) {
       expect(button).toBeDisabled();
@@ -1378,7 +1378,7 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(openReviewButton);
 
-    const approveButton = screen.getByRole('button', { name: 'Aprovar captador' });
+    const approveButton = screen.getByRole('button', { name: /Aprovar\s*captador/i });
     await fireEvent.click(approveButton);
 
     await waitFor(() => {
@@ -1433,7 +1433,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(openReviewButton);
 
     const approveWithRemarksButton = screen.getByRole('button', {
-      name: 'Aprovar c/ ressalvas captador',
+      name: /Aprovar c\/ ressalvas\s*captador/i,
     });
     await fireEvent.click(approveWithRemarksButton);
 

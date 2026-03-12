@@ -88,10 +88,10 @@ describe('ContractsModule accessibility', () => {
     });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(screen.getByRole('status')).toHaveTextContent('Aprovação bloqueada.');
-    expect(screen.getByRole('button', { name: 'Aprovar captador' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Aprovar vendedor' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Aprovar c/ ressalvas captador' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Aprovar c/ ressalvas vendedor' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Aprovar\s*captador/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Aprovar\s*vendedor/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*captador/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*vendedor/i })).toBeEnabled();
 
     const result = await axe.run(container, {
       rules: {

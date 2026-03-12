@@ -22,25 +22,25 @@
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.2.8",
-    "@tsconfig/svelte": "^5.0.4",
-    "@types/node": "^25.2.1",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^25.4.0",
     "@vitest/coverage-v8": "^4.0.18",
-    "autoprefixer": "^10.4.19",
+    "autoprefixer": "^10.4.27",
     "axe-core": "^4.11.1",
-    "jsdom": "^26.1.0",
-    "postcss": "^8.4.38",
-    "svelte": "^5.53.8",
-    "svelte-check": "^4.2.2",
+    "jsdom": "^28.1.0",
+    "postcss": "^8.5.8",
+    "svelte": "^5.53.10",
+    "svelte-check": "^4.4.5",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4",
+    "vite": "^7.3.1",
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "axios": "^1.13.5",
+    "axios": "^1.13.6",
     "chart.js": "^4.5.1",
     "lucide-svelte": "^0.553.0",
     "svelte-routing": "^2.13.0",
-    "svelte-sonner": "^1.0.5"
+    "svelte-sonner": "^1.1.0"
   }
 }
