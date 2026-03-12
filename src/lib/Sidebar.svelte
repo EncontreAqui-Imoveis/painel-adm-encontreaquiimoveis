@@ -140,14 +140,14 @@
   };
 
   const navItemBase =
-    'w-full text-left flex items-center px-4 py-2 rounded-lg transition';
+    'w-full text-left flex items-start gap-3 rounded-xl px-4 py-3 text-[15px] leading-snug transition';
   const navItemActive =
     'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-400/20';
   const navItemInactive =
     'text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white';
 
   const groupButtonBase =
-    'w-full text-left flex items-center justify-between px-4 py-2 rounded-lg transition text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white';
+    'w-full text-left flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-[15px] transition text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white';
 
   function isValidView(view: string): view is View {
     return validViews.includes(view as View);
@@ -271,7 +271,7 @@
 ></div>
 
 <aside
-  class="fixed inset-y-0 left-0 z-30 w-64 flex flex-col transform transition-transform duration-300 ease-in-out lg:translate-x-0 {isOpen ? 'translate-x-0' : '-translate-x-full'} bg-white text-slate-900 border-r border-slate-200 shadow-lg shadow-black/5 dark:bg-slate-950 dark:text-white dark:border-white/5 dark:shadow-xl dark:shadow-black/40"
+  class="fixed inset-y-0 left-0 z-30 flex w-[19rem] flex-col transform bg-white text-slate-900 border-r border-slate-200 shadow-lg shadow-black/5 transition-transform duration-300 ease-in-out dark:bg-slate-950 dark:text-white dark:border-white/5 dark:shadow-xl dark:shadow-black/40 sm:w-80 lg:w-64 lg:translate-x-0 {isOpen ? 'translate-x-0' : '-translate-x-full'}"
 >
   <div class="h-16 flex items-center px-4 border-b border-slate-200 dark:border-white/5">
     <div class="w-full">
@@ -295,8 +295,8 @@
       class={navItemClass('dashboard')}
       on:click={() => handleNavigation('dashboard')}
     >
-      <LayoutDashboard class="mr-3 h-6 w-6" />
-      Dashboard
+      <LayoutDashboard class="mt-0.5 h-5 w-5 shrink-0" />
+      <span class="min-w-0 flex-1">Dashboard</span>
     </button>
 
     <div class="space-y-1">
@@ -305,9 +305,9 @@
         on:click={() => toggleGroup('imoveis')}
         aria-expanded={openGroups.imoveis}
       >
-        <span class="flex items-center gap-2">
-          <FolderKanban class="h-5 w-5" />
-          Imóveis
+        <span class="flex min-w-0 items-center gap-2">
+          <FolderKanban class="h-5 w-5 shrink-0" />
+          <span class="truncate">Imóveis</span>
         </span>
         <span class="flex items-center gap-2">
           {#if !openGroups.imoveis && pendingCounts.propertyRequests > 0}
@@ -326,11 +326,11 @@
                 class={navItemClass(item.view, 'pl-10')}
                 on:click={() => handleNavigation(item.view as View)}
               >
-                <svelte:component this={item.icon} class="mr-3 h-5 w-5" />
-                {item.label}
+                <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
+                <span class="min-w-0 flex-1 break-words">{item.label}</span>
                 {#if item.view === 'property_requests' && pendingCounts.propertyRequests > 0}
                   <span
-                    class="ml-auto inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
+                    class="ml-auto mt-0.5 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
                   >
                     {pendingCounts.propertyRequests}
                   </span>
@@ -338,11 +338,11 @@
               </button>
             {:else}
               <button
-                class="w-full cursor-not-allowed text-left flex items-center px-4 py-2 rounded-lg text-slate-400 dark:text-slate-500 pl-10"
+                class="w-full cursor-not-allowed text-left flex items-start gap-3 rounded-xl px-4 py-3 pl-10 text-[15px] leading-snug text-slate-400 dark:text-slate-500"
                 disabled
               >
-                <svelte:component this={item.icon} class="mr-3 h-5 w-5" />
-                {item.label}
+                <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
+                <span class="min-w-0 flex-1 break-words">{item.label}</span>
               </button>
             {/if}
           {/each}
@@ -356,9 +356,9 @@
         on:click={() => toggleGroup('usuarios')}
         aria-expanded={openGroups.usuarios}
       >
-        <span class="flex items-center gap-2">
-          <Users class="h-5 w-5" />
-          Usuários
+        <span class="flex min-w-0 items-center gap-2">
+          <Users class="h-5 w-5 shrink-0" />
+          <span class="truncate">Usuários</span>
         </span>
         <ChevronDown class={`h-4 w-4 transition-transform ${openGroups.usuarios ? 'rotate-180' : ''}`} />
       </button>
@@ -369,8 +369,8 @@
               class={navItemClass(item.view as View, 'pl-10')}
               on:click={() => handleNavigation(item.view as View)}
             >
-              <svelte:component this={item.icon} class="mr-3 h-5 w-5" />
-              {item.label}
+              <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
+              <span class="min-w-0 flex-1 break-words">{item.label}</span>
             </button>
           {/each}
         </div>
@@ -383,9 +383,9 @@
         on:click={() => toggleGroup('negociacoes')}
         aria-expanded={openGroups.negociacoes}
       >
-        <span class="flex items-center gap-2">
-          <FileText class="h-5 w-5" />
-          Negociações
+        <span class="flex min-w-0 items-center gap-2">
+          <FileText class="h-5 w-5 shrink-0" />
+          <span class="truncate">Negociações</span>
         </span>
         <ChevronDown class={`h-4 w-4 transition-transform ${openGroups.negociacoes ? 'rotate-180' : ''}`} />
       </button>
@@ -396,8 +396,8 @@
               class={navItemClass(item.view as View, 'pl-10')}
               on:click={() => handleNavigation(item.view as View)}
             >
-              <svelte:component this={item.icon} class="mr-3 h-5 w-5" />
-              {item.label}
+              <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
+              <span class="min-w-0 flex-1 break-words">{item.label}</span>
             </button>
           {/each}
         </div>
@@ -410,9 +410,9 @@
         on:click={() => toggleGroup('verificacao')}
         aria-expanded={openGroups.verificacao}
       >
-        <span class="flex items-center gap-2">
-          <ShieldCheck class="h-5 w-5" />
-          Verificação
+        <span class="flex min-w-0 items-center gap-2">
+          <ShieldCheck class="h-5 w-5 shrink-0" />
+          <span class="truncate">Verificação</span>
         </span>
         <span class="flex items-center gap-2">
           {#if !openGroups.verificacao && pendingCounts.brokerRequests > 0}
@@ -430,11 +430,11 @@
               class={navItemClass(item.view as View, 'pl-10')}
               on:click={() => handleNavigation(item.view as View)}
             >
-              <svelte:component this={item.icon} class="mr-3 h-5 w-5" />
-              {item.label}
+              <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
+              <span class="min-w-0 flex-1 break-words">{item.label}</span>
               {#if pendingCounts.brokerRequests > 0}
                 <span
-                  class="ml-auto inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
+                  class="ml-auto mt-0.5 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
                 >
                   {pendingCounts.brokerRequests}
                 </span>
@@ -449,8 +449,8 @@
       class={navItemClass('notifications')}
       on:click={() => handleNavigation('notifications')}
     >
-      <Bell class="mr-3 h-6 w-6" />
-      Notificações
+      <Bell class="mt-0.5 h-5 w-5 shrink-0" />
+      <span class="min-w-0 flex-1">Notificações</span>
     </button>
     </nav>
 
