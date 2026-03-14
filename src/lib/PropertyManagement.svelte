@@ -2302,6 +2302,7 @@
           {#if isEditMode && editableProperty}
             <textarea
               name="description"
+              maxlength="500"
               class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm leading-relaxed dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               rows="3"
               bind:value={editableProperty.description}
@@ -2320,7 +2321,7 @@
             <div class="mt-2 grid gap-2 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-2">
               <label class="flex flex-col gap-1">
                 <strong>Estado:</strong>
-                <input name="state" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.state} />
+                <input name="state" maxlength="2" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.state} />
               </label>
               <label class="flex flex-col gap-1">
                 <strong>CEP:</strong>
@@ -2342,6 +2343,7 @@
                 <input
                   name="city"
                   list="property-cities-list"
+                  maxlength="120"
                   class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
                   bind:value={editableProperty.city}
                 />
@@ -2353,16 +2355,17 @@
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Bairro:</strong>
-                <input name="bairro" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.bairro} />
+                <input name="bairro" maxlength="120" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.bairro} />
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Endereço:</strong>
-                <input name="address" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.address} />
+                <input name="address" maxlength="120" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.address} />
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Número:</strong>
                 <input
                   name="numero"
+                  maxlength="25"
                   class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
                   bind:value={editableProperty.numero}
                   inputmode="numeric"
@@ -2390,19 +2393,19 @@
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Complemento:</strong>
-                <input name="complemento" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.complemento} />
+                <input name="complemento" maxlength="120" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.complemento} />
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Quadra:</strong>
-                <input name="quadra" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.quadra} />
+                <input name="quadra" maxlength="25" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.quadra} />
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Lote:</strong>
-                <input name="lote" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.lote} />
+                <input name="lote" maxlength="25" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.lote} />
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Tipo do lote:</strong>
-                <input name="tipo_lote" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.tipo_lote} />
+                <input name="tipo_lote" maxlength="25" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.tipo_lote} />
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Quartos:</strong>

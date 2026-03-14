@@ -83,7 +83,7 @@
     if (!name.trim()) return 'Informe o nome.';
     if (!email.trim()) return 'Informe o email.';
     if (!isValidEmail(email)) return 'Informe um email válido (exemplo: nome@dominio.com).';
-    if (!hasValidPhoneBr(phone)) return 'Informe telefone no formato (00)00000-0000.';
+    if (!hasValidPhoneBr(phone)) return 'Informe telefone no formato +55 (00) 00000-0000.';
     if (!password.trim()) return 'Informe a senha.';
     if (!street.trim()) return 'Informe o endereço.';
     if (!number.trim()) return 'Informe o número.';
@@ -256,6 +256,7 @@
       <input
         id="create-user-name"
         name="name"
+        maxlength="120"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={name}
         placeholder="Nome completo"
@@ -267,6 +268,7 @@
       <input
         id="create-user-email"
         name="email"
+        maxlength="120"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         type="email"
         bind:value={email}
@@ -279,10 +281,11 @@
       <input
         id="create-user-phone"
         name="phone"
+        maxlength="19"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={phone}
         inputmode="numeric"
-        placeholder="(00)00000-0000"
+        placeholder="+55 (00) 00000-0000"
         on:input={(event) => {
           const target = event.target as HTMLInputElement;
           phone = formatPhoneBr(target.value);
@@ -318,6 +321,7 @@
         <input
           id="create-user-creci"
           name="creci"
+          maxlength="25"
           class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           bind:value={creci}
           inputmode="numeric"
@@ -350,6 +354,7 @@
       <input
         id="create-user-street"
         name="street"
+        maxlength="120"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={street}
       />
@@ -359,6 +364,7 @@
       <input
         id="create-user-number"
         name="number"
+        maxlength="25"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={number}
         inputmode="numeric"
@@ -373,6 +379,7 @@
       <input
         id="create-user-complement"
         name="complement"
+        maxlength="120"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={complement}
       />
@@ -382,6 +389,7 @@
       <input
         id="create-user-bairro"
         name="bairro"
+        maxlength="120"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={bairro}
       />
@@ -410,6 +418,7 @@
         id="create-user-city"
         name="city"
         list="cities-list-user"
+        maxlength="120"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={city}
         placeholder={citiesLoading ? 'Carregando cidades...' : 'Digite ou selecione'}

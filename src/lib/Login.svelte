@@ -90,6 +90,7 @@
                         type="email" 
                         id="email" 
                         required 
+                        maxlength="120"
                         placeholder="Email"
                         bind:value={email}
                         on:keypress={handleKeypress}
@@ -102,6 +103,7 @@
                         type="password" 
                         id="password" 
                         required 
+                        maxlength="256"
                         placeholder="Senha"
                         bind:value={password}
                         on:keypress={handleKeypress}

@@ -220,8 +220,8 @@
                                 {@const prop = editableItemData as Partial<Property>}
                                 <td class="px-6 py-4 whitespace-nowrap"><span class="font-mono text-gray-500 dark:text-gray-400">{prop.id}</span></td>
                                 <td class="px-2 py-2 whitespace-nowrap"><input name="code" type="text" value={prop.code || ''} class="w-24 p-2 border rounded-md bg-gray-100 dark:bg-gray-700 text-sm font-mono" disabled></td>
-                                <td class="px-2 py-2"><input name="title" type="text" bind:value={prop.title} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white" disabled={isApprovedReadOnly}></td>
-                                <td class="px-2 py-2"><input name="type" type="text" bind:value={prop.type} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white" disabled={isApprovedReadOnly}></td>
+                                <td class="px-2 py-2"><input name="title" type="text" bind:value={prop.title} maxlength="120" class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white" disabled={isApprovedReadOnly}></td>
+                                <td class="px-2 py-2"><input name="type" type="text" bind:value={prop.type} maxlength="120" class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white" disabled={isApprovedReadOnly}></td>
                                 <td class="px-2 py-2">
                                     <select name="status" bind:value={prop.status} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white">
                                         {#each PROPERTY_STATUS_OPTIONS as option}
@@ -230,24 +230,24 @@
                                     </select>
                                 </td>
                                 <td class="px-2 py-2"><input name="price" type="number" step="1" bind:value={prop.price} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white" disabled={isApprovedReadOnly}></td>
-                                <td class="px-2 py-2"><input name="city" type="text" bind:value={prop.city} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white" disabled={isApprovedReadOnly}></td>
+                                <td class="px-2 py-2"><input name="city" type="text" bind:value={prop.city} maxlength="120" class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white" disabled={isApprovedReadOnly}></td>
                                 <td class="px-2 py-2"><input name="broker_name" type="text" value={prop.broker_name || ''} class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 text-sm" disabled></td>
                             
                             {:else if view === 'brokers'}
                                 {@const broker = editableItemData as Partial<Broker>}
                                 <td class="px-6 py-4 whitespace-nowrap"><span class="font-mono text-gray-500 dark:text-gray-400">{broker.id}</span></td>
-                                <td class="px-2 py-2"><input name="broker_name" type="text" bind:value={broker.name} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
-                                <td class="px-2 py-2"><input name="broker_email" type="email" bind:value={broker.email} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
-                                <td class="px-2 py-2"><input name="broker_creci" type="text" bind:value={broker.creci} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
+                                <td class="px-2 py-2"><input name="broker_name" type="text" bind:value={broker.name} maxlength="120" class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
+                                <td class="px-2 py-2"><input name="broker_email" type="email" bind:value={broker.email} maxlength="120" class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
+                                <td class="px-2 py-2"><input name="broker_creci" type="text" bind:value={broker.creci} maxlength="25" class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
                                 <td class="px-2 py-2"><input name="broker_created_at" type="text" value={broker.created_at ? new Date(broker.created_at).toLocaleDateString('pt-BR') : ''} class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 text-sm" disabled></td>
                                 <td class="px-2 py-2"><input name="broker_property_count" type="text" value={broker.property_count || ''} class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 text-sm" disabled></td>
 
                             {:else if view === 'clients'}
                                 {@const client = editableItemData as Partial<User>}
                                 <td class="px-6 py-4 whitespace-nowrap"><span class="font-mono text-gray-500 dark:text-gray-400">{client.id}</span></td>
-                                <td class="px-2 py-2"><input name="client_name" type="text" bind:value={client.name} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
-                                <td class="px-2 py-2"><input name="client_email" type="email" bind:value={client.email} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
-                                <td class="px-2 py-2"><input name="client_phone" type="text" bind:value={client.phone} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
+                                <td class="px-2 py-2"><input name="client_name" type="text" bind:value={client.name} maxlength="120" class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
+                                <td class="px-2 py-2"><input name="client_email" type="email" bind:value={client.email} maxlength="120" class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
+                                <td class="px-2 py-2"><input name="client_phone" type="text" bind:value={client.phone} maxlength="19" class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-sm focus:ring-green-500 focus:border-green-500 text-gray-900 dark:text-white"></td>
                                 <td class="px-2 py-2"><input name="client_created_at" type="text" value={client.created_at ? new Date(client.created_at).toLocaleDateString('pt-BR') : ''} class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 text-sm" disabled></td>
                             {/if}
                         {:else}

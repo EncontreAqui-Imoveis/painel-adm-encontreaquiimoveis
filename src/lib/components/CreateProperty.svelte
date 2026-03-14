@@ -1002,6 +1002,7 @@
           <input
             id="create-property-title"
             name="title"
+            maxlength="120"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={title}
             placeholder="Ex: Casa no Canaã 2"
@@ -1053,6 +1054,7 @@
           <input
             id="create-property-owner-name"
             name="owner_name"
+            maxlength="120"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={ownerName}
             placeholder="Nome do proprietário"
@@ -1063,10 +1065,11 @@
           <input
             id="create-property-owner-phone"
             name="owner_phone"
+            maxlength="19"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={ownerPhone}
             inputmode="numeric"
-            placeholder="(00)00000-0000"
+            placeholder="+55 (00) 00000-0000"
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
               ownerPhone = formatPhoneBr(target.value);
@@ -1079,6 +1082,7 @@
             <input
               id="create-property-broker-query"
               name="broker_query"
+              maxlength="120"
               class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               bind:value={brokerQuery}
               placeholder="Digite ao menos 2 letras para buscar corretor"
@@ -1134,10 +1138,11 @@
           <input
             id="create-property-broker-phone"
             name="broker_phone"
+            maxlength="19"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={brokerPhone}
             inputmode="numeric"
-            placeholder="(00)00000-0000"
+            placeholder="+55 (00) 00000-0000"
             disabled={!brokerId}
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
@@ -1152,6 +1157,7 @@
         <textarea
           id="create-property-description"
           name="description"
+          maxlength="500"
           class="min-h-[110px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           bind:value={description}
           placeholder="Descreva o imóvel"
@@ -1359,6 +1365,7 @@
             id="create-property-city"
             name="city"
             list="cities-list"
+            maxlength="120"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={city}
             placeholder={citiesLoading ? 'Carregando cidades...' : 'Digite ou selecione'}
@@ -1377,6 +1384,7 @@
           <input
             id="create-property-address"
             name="address"
+            maxlength="120"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={address}
             placeholder="Rua, avenida, etc."
@@ -1387,6 +1395,7 @@
           <input
             id="create-property-bairro"
             name="bairro"
+            maxlength="120"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={bairro}
           />
@@ -1396,6 +1405,7 @@
           <input
             id="numero-input"
             name="numero"
+            maxlength="25"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900"
             bind:value={numero}
             inputmode="numeric"
@@ -1427,6 +1437,7 @@
           <input
             id="create-property-quadra"
             name="quadra"
+            maxlength="25"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={quadra}
           />
@@ -1436,6 +1447,7 @@
           <input
             id="create-property-lote"
             name="lote"
+            maxlength="25"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={lote}
           />
@@ -1459,6 +1471,7 @@
           <input
             id="create-property-complemento"
             name="complemento"
+            maxlength="120"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={complemento}
             placeholder="Apartamento, bloco, referência..."

@@ -4,23 +4,27 @@ export function onlyDigits(value: string): string {
 
 function normalizePhoneBrDigits(value: string): string {
   const digits = onlyDigits(value);
-  if (digits.length > 11 && digits.startsWith('55')) {
-    return digits.slice(2);
-  }
   return digits;
 }
 
 export function formatPhoneBr(value: string): string {
-  const digits = normalizePhoneBrDigits(value).slice(0, 11);
+  const digits = normalizePhoneBrDigits(value).slice(0, 13);
   if (!digits) return '';
-  if (digits.length <= 2) return `(${digits}`;
-  if (digits.length <= 7) return `(${digits.slice(0, 2)})${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 2)})${digits.slice(2, 6)}-${digits.slice(6)}`;
-  return `(${digits.slice(0, 2)})${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length <= 2) return `+${digits}`;
+  const country = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  if (!rest) return `+${country}`;
+  if (rest.length <= 2) return `+${country} (${rest}`;
+  const area = rest.slice(0, 2);
+  const local = rest.slice(2);
+  if (!local) return `+${country} (${area})`;
+  if (local.length <= 5) return `+${country} (${area}) ${local}`;
+  return `+${country} (${area}) ${local.slice(0, 5)}-${local.slice(5)}`;
 }
 
 export function hasValidPhoneBr(value: string): boolean {
-  return normalizePhoneBrDigits(value).length === 11;
+  const length = normalizePhoneBrDigits(value).length;
+  return length >= 10 && length <= 13;
 }
 
 export function sanitizeCreciInput(value: string): string {

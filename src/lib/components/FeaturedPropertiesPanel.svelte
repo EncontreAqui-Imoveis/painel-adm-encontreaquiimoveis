@@ -233,6 +233,7 @@
         <input
           id="featured-search"
           name="featured_search"
+          maxlength="120"
           class="w-44 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
           placeholder="Buscar..."
           value={search}

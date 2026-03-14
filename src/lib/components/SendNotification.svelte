@@ -229,6 +229,7 @@
               id={RECIPIENT_FIELD_ID}
               name="recipient_search"
               type="search"
+              maxlength="120"
               class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               placeholder="Buscar por nome ou email..."
               bind:value={searchTerm}

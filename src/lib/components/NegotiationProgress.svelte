@@ -289,6 +289,7 @@
         <textarea
           id="cancel-reason"
           bind:value={cancelReason}
+          maxlength="500"
           rows={4}
           class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
           placeholder="Digite o motivo do cancelamento (Ex: Cliente não obteve financiamento)..."

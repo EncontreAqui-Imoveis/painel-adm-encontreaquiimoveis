@@ -423,6 +423,7 @@
           <textarea
             id="reject-reason"
             bind:value={rejectReason}
+            maxlength="500"
             rows={4}
             class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
             placeholder="Descreva o motivo da rejeição..."

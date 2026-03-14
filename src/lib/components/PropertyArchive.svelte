@@ -226,6 +226,7 @@
       <input
         type="text"
         bind:value={searchDraft}
+        maxlength="120"
         placeholder="Buscar por código, título ou corretor"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
       />
