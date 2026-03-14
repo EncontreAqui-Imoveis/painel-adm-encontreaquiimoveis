@@ -56,11 +56,14 @@ export function clampCountInput(value: string): string {
   return String(Math.min(99, Number.parseInt(digits, 10)));
 }
 
+const MAX_PROPERTY_AREA = 9999999.99;
+const MAX_CURRENCY_VALUE = 9999999999.99;
+
 export function sanitizeDecimalInput(value: string): string {
   const cleaned = value.replace(/[^\d.,]/g, '');
   const parts = cleaned.split(/[.,]/);
   const integer = parts.shift() ?? '';
-  const decimal = parts.join('');
+  const decimal = parts.join('').slice(0, 2);
   if (!decimal) return integer;
   return `${integer},${decimal}`;
 }
@@ -72,8 +75,10 @@ export function clampAreaInput(value: string): string {
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return sanitized;
   }
-  const clamped = Math.min(parsed, 99999999.99);
-  return clamped.toString().replace('.', ',');
+  const clamped = Math.min(parsed, MAX_PROPERTY_AREA);
+  return sanitized === '' || clamped === parsed
+    ? sanitized
+    : clamped.toFixed(2).replace('.', ',');
 }
 
 export function normalizeDecimal(value: string): number | null {
@@ -88,7 +93,7 @@ export function formatCurrencyInput(raw: string): string {
   if (!digits) {
     return '';
   }
-  const numberValue = Number(digits) / 100;
+  const numberValue = Math.min(Number(digits) / 100, MAX_CURRENCY_VALUE);
   return numberValue.toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -99,7 +104,7 @@ export function formatCurrencyInput(raw: string): string {
 export function parseCurrency(value: string): number | null {
   const digits = onlyDigits(value);
   if (!digits) return null;
-  const parsed = Number(digits) / 100;
+  const parsed = Math.min(Number(digits) / 100, MAX_CURRENCY_VALUE);
   return Number.isNaN(parsed) ? null : parsed;
 }
 
