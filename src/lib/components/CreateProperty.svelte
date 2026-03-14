@@ -7,6 +7,8 @@
   import type { Broker } from '$lib/types';
   import {
     formatCep,
+    clampAreaInput,
+    clampCountInput,
     formatCurrencyInput,
     formatPhoneBr,
     hasValidPhoneBr,
@@ -1250,13 +1252,14 @@
           <input
             id="create-property-bedrooms"
             name="bedrooms"
+            maxlength="2"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={bedrooms}
             inputmode="numeric"
             pattern="\d*"
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
-              bedrooms = sanitizeDigitsInput(target.value);
+              bedrooms = clampCountInput(target.value);
             }}
           />
         </label>
@@ -1265,13 +1268,14 @@
           <input
             id="create-property-bathrooms"
             name="bathrooms"
+            maxlength="2"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={bathrooms}
             inputmode="numeric"
             pattern="\d*"
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
-              bathrooms = sanitizeDigitsInput(target.value);
+              bathrooms = clampCountInput(target.value);
             }}
           />
         </label>
@@ -1280,13 +1284,14 @@
           <input
             id="create-property-garage-spots"
             name="garage_spots"
+            maxlength="2"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={garageSpots}
             inputmode="numeric"
             pattern="\d*"
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
-              garageSpots = sanitizeDigitsInput(target.value);
+              garageSpots = clampCountInput(target.value);
             }}
           />
         </label>
@@ -1298,12 +1303,13 @@
           <input
             id="create-property-area-construida"
             name="area_construida"
+            maxlength="12"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={areaConstruida}
             inputmode="decimal"
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
-              areaConstruida = sanitizeDecimalInput(target.value);
+              areaConstruida = clampAreaInput(target.value);
             }}
           />
         </label>
@@ -1312,12 +1318,13 @@
           <input
             id="create-property-area-terreno"
             name="area_terreno"
+            maxlength="12"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={areaTerreno}
             inputmode="decimal"
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
-              areaTerreno = sanitizeDecimalInput(target.value);
+              areaTerreno = clampAreaInput(target.value);
             }}
           />
         </label>

@@ -2413,12 +2413,13 @@
                   name="bedrooms"
                   type="text"
                   inputmode="numeric"
+                  maxlength="2"
                   class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
                   bind:value={editableProperty.bedrooms}
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
-                      const digits = sanitizeDigitsInput(target.value);
+                      const digits = clampCountInput(target.value);
                       editableProperty.bedrooms = digits ? Number(digits) : null;
                     }
                   }}
@@ -2430,12 +2431,13 @@
                   name="bathrooms"
                   type="text"
                   inputmode="numeric"
+                  maxlength="2"
                   class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
                   bind:value={editableProperty.bathrooms}
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
-                      const digits = sanitizeDigitsInput(target.value);
+                      const digits = clampCountInput(target.value);
                       editableProperty.bathrooms = digits ? Number(digits) : null;
                     }
                   }}
@@ -2447,29 +2449,31 @@
                   name="garage_spots"
                   type="text"
                   inputmode="numeric"
+                  maxlength="2"
                   class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
                   bind:value={editableProperty.garage_spots}
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
-                      const digits = sanitizeDigitsInput(target.value);
+                      const digits = clampCountInput(target.value);
                       editableProperty.garage_spots = digits ? Number(digits) : null;
                     }
                   }}
                 />
               </label>
               <label class="flex flex-col gap-1">
-                <strong>Área construida:</strong>
+                <strong>Área construida (m²):</strong>
                 <input
                   name="area_construida"
                   type="text"
                   inputmode="decimal"
+                  maxlength="12"
                   class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
                   bind:value={editableProperty.area_construida}
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
-                      const sanitized = sanitizeDecimalInput(target.value);
+                      const sanitized = clampAreaInput(target.value);
                       editableProperty.area_construida = sanitized
                         ? Number(sanitized.replace(',', '.'))
                         : null;
@@ -2478,17 +2482,18 @@
                 />
               </label>
               <label class="flex flex-col gap-1">
-                <strong>Área do terreno:</strong>
+                <strong>Área do terreno (m²):</strong>
                 <input
                   name="area_terreno"
                   type="text"
                   inputmode="decimal"
+                  maxlength="12"
                   class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
                   bind:value={editableProperty.area_terreno}
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
-                      const sanitized = sanitizeDecimalInput(target.value);
+                      const sanitized = clampAreaInput(target.value);
                       editableProperty.area_terreno = sanitized
                         ? Number(sanitized.replace(',', '.'))
                         : null;

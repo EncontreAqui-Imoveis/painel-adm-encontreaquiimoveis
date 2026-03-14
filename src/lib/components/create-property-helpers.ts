@@ -50,6 +50,12 @@ export function sanitizeDigitsInput(value: string): string {
   return onlyDigits(value);
 }
 
+export function clampCountInput(value: string): string {
+  const digits = onlyDigits(value).slice(0, 2);
+  if (!digits) return '';
+  return String(Math.min(99, Number.parseInt(digits, 10)));
+}
+
 export function sanitizeDecimalInput(value: string): string {
   const cleaned = value.replace(/[^\d.,]/g, '');
   const parts = cleaned.split(/[.,]/);
@@ -57,6 +63,17 @@ export function sanitizeDecimalInput(value: string): string {
   const decimal = parts.join('');
   if (!decimal) return integer;
   return `${integer},${decimal}`;
+}
+
+export function clampAreaInput(value: string): string {
+  const sanitized = sanitizeDecimalInput(value);
+  const normalized = sanitized.replace(/\./g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return sanitized;
+  }
+  const clamped = Math.min(parsed, 99999999.99);
+  return clamped.toString().replace('.', ',');
 }
 
 export function normalizeDecimal(value: string): number | null {
