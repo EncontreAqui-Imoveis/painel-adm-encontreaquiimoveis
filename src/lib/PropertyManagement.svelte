@@ -37,6 +37,9 @@
     broker_phone?: string | null;
     broker_status?: string | null;
     broker_creci?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+    request_type?: 'creation' | 'edit' | null;
   }
 
   type NormalizedImage = PropertyImageType;
@@ -83,10 +86,12 @@
     city: string;
     search: string;
   };
+  type PropertyRequestTypeFilter = 'all' | 'creation' | 'edit';
 
   export let initialStatus: PropertyStatus | 'all' = 'approved';
   export let allowApproval = false;
   let isReviewOnly = false;
+  let reviewRequestType: PropertyRequestTypeFilter = 'all';
   $: isReviewOnly = allowApproval;
 
     let properties: PropertySummary[] = [];
@@ -294,6 +299,9 @@
       if (filters.city !== 'all') {
         params.append('city', filters.city);
       }
+      if (isReviewOnly && reviewRequestType !== 'all') {
+        params.append('requestType', reviewRequestType);
+      }
       params.append('sortBy', sortConfig.key);
       params.append('sortOrder', sortConfig.order);
       params.append('page', String(currentPage));
@@ -333,6 +341,9 @@
           const brokerPhoneValue = record['broker_phone'];
           const brokerStatusValue = record['broker_status'];
           const brokerCreciValue = record['broker_creci'];
+          const createdAtValue = record['created_at'];
+          const updatedAtValue = record['updated_at'];
+          const requestTypeValue = String(record['request_type'] ?? '').trim().toLowerCase();
           const cepValue = record['cep'];
 
           return {
@@ -366,6 +377,14 @@
             broker_phone: (brokerPhoneValue as string | null | undefined) ?? null,
             broker_status: (brokerStatusValue as string | null | undefined) ?? null,
             broker_creci: (brokerCreciValue as string | null | undefined) ?? null,
+            created_at: createdAtValue != null ? String(createdAtValue) : null,
+            updated_at: updatedAtValue != null ? String(updatedAtValue) : null,
+            request_type:
+              requestTypeValue === 'edit'
+                ? 'edit'
+                : requestTypeValue === 'creation'
+                ? 'creation'
+                : null,
           } as PropertySummary;
         })
         .filter((item): item is PropertySummary => item !== null);
@@ -639,6 +658,49 @@
     };
 
     return classes[status] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
+  }
+
+  function inferRequestType(property: PropertySummary): 'creation' | 'edit' {
+    if (property.request_type === 'creation' || property.request_type === 'edit') {
+      return property.request_type;
+    }
+
+    const createdAtRaw = String(property.created_at ?? '').trim();
+    const updatedAtRaw = String(property.updated_at ?? '').trim();
+    if (!createdAtRaw || !updatedAtRaw) {
+      return 'creation';
+    }
+
+    const createdAt = Date.parse(createdAtRaw);
+    const updatedAt = Date.parse(updatedAtRaw);
+    if (!Number.isFinite(createdAt) || !Number.isFinite(updatedAt)) {
+      return 'creation';
+    }
+
+    return updatedAt - createdAt >= 60 * 1000 ? 'edit' : 'creation';
+  }
+
+  function humanizeRequestType(type: 'creation' | 'edit'): string {
+    return type === 'edit' ? 'Edição' : 'Criação';
+  }
+
+  function requestTypeBadgeClasses(type: 'creation' | 'edit'): string {
+    if (type === 'edit') {
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+    }
+    return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200';
+  }
+
+  function reviewRequestTypeLabel(type: PropertyRequestTypeFilter): string {
+    if (type === 'edit') return 'somente edição';
+    if (type === 'creation') return 'somente criação';
+    return 'criação e edição';
+  }
+
+  function setReviewRequestType(type: PropertyRequestTypeFilter) {
+    if (reviewRequestType === type) return;
+    reviewRequestType = type;
+    requestFetch(true);
   }
 
   const booleanKeys = [
@@ -1487,10 +1549,10 @@
         </div>
         <div class="grid gap-2 sm:grid-cols-2">
           <div class="rounded-lg border border-green-100 bg-white/80 px-4 py-2 text-sm text-gray-700 shadow-sm dark:border-green-900/60 dark:bg-gray-900/70 dark:text-gray-200">
-            Pendentes: {isLoading ? '...' : properties.length}
+            Pendentes: {isLoading ? '...' : totalItems}
           </div>
           <div class="rounded-lg border border-green-100 bg-white/80 px-4 py-2 text-sm text-gray-700 shadow-sm dark:border-green-900/60 dark:bg-gray-900/70 dark:text-gray-200">
-            Filtro: pendente de aprovação
+            Filtro: pendente de aprovação • {reviewRequestTypeLabel(reviewRequestType)}
           </div>
         </div>
       </div>
@@ -1521,6 +1583,36 @@
           disabled={isLoading}
         >
           Ordenar A-Z
+        </Button>
+        <Button
+          variant="outline"
+          className={reviewRequestType === 'all'
+            ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+            : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
+          on:click={() => setReviewRequestType('all')}
+          disabled={isLoading}
+        >
+          Todas
+        </Button>
+        <Button
+          variant="outline"
+          className={reviewRequestType === 'creation'
+            ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+            : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
+          on:click={() => setReviewRequestType('creation')}
+          disabled={isLoading}
+        >
+          Criação
+        </Button>
+        <Button
+          variant="outline"
+          className={reviewRequestType === 'edit'
+            ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+            : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
+          on:click={() => setReviewRequestType('edit')}
+          disabled={isLoading}
+        >
+          Edição
         </Button>
       </div>
     </section>
@@ -1683,8 +1775,20 @@
     </div>
   {:else if properties.length === 0}
     <div class="rounded-md border border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-900">
-      <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">Nenhum imóvel encontrado</h2>
-      <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Ajuste os filtros para visualizar outros resultados.</p>
+      <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">
+        {#if isReviewOnly}
+          Nenhuma solicitação encontrada
+        {:else}
+          Nenhum imóvel encontrado
+        {/if}
+      </h2>
+      <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+        {#if isReviewOnly}
+          Não há itens pendentes no recorte "{reviewRequestTypeLabel(reviewRequestType)}".
+        {:else}
+          Ajuste os filtros para visualizar outros resultados.
+        {/if}
+      </p>
     </div>
   {:else}
     <div class="space-y-3 md:hidden">
@@ -1709,6 +1813,14 @@
               {humanizeStatus(property.status, property.purpose)}
             </span>
           </div>
+          {#if isReviewOnly}
+            {@const requestType = inferRequestType(property)}
+            <div class="mt-2">
+              <span class={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${requestTypeBadgeClasses(requestType)}`}>
+                Solicitação: {humanizeRequestType(requestType)}
+              </span>
+            </div>
+          {/if}
           <div class="mt-2 text-sm text-gray-700 dark:text-gray-300">
             {property.city ?? '-'}{#if property.state} / {property.state}{/if}
           </div>
@@ -1779,6 +1891,11 @@
                 <span>{getSortIndicator('p.status')}</span>
               </button>
             </th>
+            {#if isReviewOnly}
+              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Solicitação
+              </th>
+            {/if}
             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Anunciante</th>
             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Telefone</th>
             <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Ações</th>
@@ -1809,6 +1926,14 @@
                   {humanizeStatus(property.status, property.purpose)}
                 </span>
               </td>
+              {#if isReviewOnly}
+                {@const requestType = inferRequestType(property)}
+                <td class="px-6 py-4">
+                  <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${requestTypeBadgeClasses(requestType)}`}>
+                    {humanizeRequestType(requestType)}
+                  </span>
+                </td>
+              {/if}
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                 {property.broker_name ?? '-'}
               </td>
