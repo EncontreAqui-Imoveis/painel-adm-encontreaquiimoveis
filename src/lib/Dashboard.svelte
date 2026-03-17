@@ -90,6 +90,7 @@
     type LazySvelteComponent = any;
 
     let PropertyManagementComponent: LazySvelteComponent | null = null;
+    let PropertyRequestsModuleComponent: LazySvelteComponent | null = null;
     let ClientManagementComponent: LazySvelteComponent | null = null;
     let BrokerManagementComponent: LazySvelteComponent | null = null;
     let CreatePropertyComponent: LazySvelteComponent | null = null;
@@ -120,10 +121,19 @@
     }
 
     async function ensureViewComponents(view: View) {
-        if (view === "properties" || view === "property_requests") {
+        if (view === "properties") {
             if (!PropertyManagementComponent) {
                 const module = await import("./PropertyManagement.svelte");
                 PropertyManagementComponent = module.default;
+            }
+            return;
+        }
+        if (view === "property_requests") {
+            if (!PropertyRequestsModuleComponent) {
+                const module = await import(
+                    "./components/PropertyRequestsModule.svelte"
+                );
+                PropertyRequestsModuleComponent = module.default;
             }
             return;
         }
@@ -487,15 +497,21 @@
         }
 
         try {
-            const [propertyRequests, brokerRequests] = await Promise.all([
+            const [creationRequests, editRequests, brokerRequests] = await Promise.all([
                 fetchCount(
                     "/admin/properties-with-brokers?status=pending_approval&limit=1&page=1",
+                ),
+                fetchCount(
+                    "/admin/property-edit-requests?status=PENDING&limit=1&page=1",
                 ),
                 fetchCount(
                     "/admin/brokers?status=pending_verification&limit=1&page=1",
                 ),
             ]);
-            pendingCounts = { propertyRequests, brokerRequests };
+            pendingCounts = {
+                propertyRequests: creationRequests + editRequests,
+                brokerRequests,
+            };
         } catch (error) {
             console.error("Erro ao buscar contagem de solicitacoes:", error);
         }
@@ -1603,12 +1619,8 @@
                     </div>
                 {/if}
             {:else if activeView === "property_requests"}
-                {#if PropertyManagementComponent}
-                    <svelte:component
-                        this={PropertyManagementComponent}
-                        initialStatus="pending_approval"
-                        allowApproval={true}
-                    />
+                {#if PropertyRequestsModuleComponent}
+                    <svelte:component this={PropertyRequestsModuleComponent} />
                 {:else}
                     <div class="flex justify-center items-center h-64">
                         <div
