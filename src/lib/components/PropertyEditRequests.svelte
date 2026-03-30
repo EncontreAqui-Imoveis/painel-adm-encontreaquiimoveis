@@ -19,6 +19,7 @@
     before: Record<string, unknown>;
     after: Record<string, unknown>;
     diff: Record<string, { before: unknown; after: unknown }>;
+    fieldReviews?: Record<string, { decision?: string; reason?: string | null }>;
     reviewReason?: string | null;
     reviewedBy?: number | null;
     reviewedAt?: string | null;
@@ -104,7 +105,11 @@
   let selected: PropertyEditRequest | null = null;
   let isDetailLoading = false;
   let isSubmitting = false;
-  let rejectionReason = '';
+  let draftFieldReviews: Record<
+    string,
+    { decision: 'UNDECIDED' | 'APPROVED' | 'REJECTED'; reason: string }
+  > = {};
+  let diffEntries: Array<{ key: string; before: unknown; after: unknown }> = [];
 
   onMount(() => {
     hasMounted = true;
@@ -193,11 +198,12 @@
   async function openRequest(item: PropertyEditRequest) {
     showModal = true;
     selected = null;
-    rejectionReason = '';
+    draftFieldReviews = {};
     isDetailLoading = true;
 
     try {
       selected = await api.get<PropertyEditRequest>(`/admin/property-edit-requests/${item.id}`);
+      draftFieldReviews = buildDraftFieldReviews(selected);
     } catch (loadError) {
       console.error('Erro ao carregar detalhe da solicitação:', loadError);
       toast.error('Não foi possível carregar os detalhes da solicitação.');
@@ -211,51 +217,122 @@
     if (isSubmitting) return;
     showModal = false;
     selected = null;
-    rejectionReason = '';
+    draftFieldReviews = {};
   }
 
-  async function approveSelected() {
-    if (!selected || isSubmitting) return;
+  function buildDraftFieldReviews(request: PropertyEditRequest) {
+    const next: Record<
+      string,
+      { decision: 'UNDECIDED' | 'APPROVED' | 'REJECTED'; reason: string }
+    > = {};
 
-    isSubmitting = true;
-    try {
-      await api.post(`/admin/property-edit-requests/${selected.id}/approve`, {});
-      toast.success('Solicitação aprovada com sucesso.');
-      closeModal();
-      refreshKey += 1;
-    } catch (submitError) {
-      console.error('Erro ao aprovar solicitação de edição:', submitError);
-      toast.error(
-        submitError instanceof Error
-          ? submitError.message
-          : 'Não foi possível aprovar a solicitação.'
-      );
-    } finally {
-      isSubmitting = false;
+    for (const key of Object.keys(request.diff ?? {})) {
+      const current = request.fieldReviews?.[key];
+      const decision = String(current?.decision ?? '').trim().toUpperCase();
+      next[key] = {
+        decision:
+          decision === 'APPROVED' || decision === 'REJECTED'
+            ? (decision as 'APPROVED' | 'REJECTED')
+            : 'UNDECIDED',
+        reason: String(current?.reason ?? '').trim(),
+      };
     }
+
+    return next;
   }
 
-  async function rejectSelected() {
+  function updateFieldDecision(
+    key: string,
+    decision: 'UNDECIDED' | 'APPROVED' | 'REJECTED'
+  ) {
+    draftFieldReviews = {
+      ...draftFieldReviews,
+      [key]: {
+        decision,
+        reason:
+          decision === 'APPROVED'
+            ? ''
+            : draftFieldReviews[key]?.reason ?? '',
+      },
+    };
+  }
+
+  function updateFieldReason(key: string, reason: string) {
+    draftFieldReviews = {
+      ...draftFieldReviews,
+      [key]: {
+        decision: draftFieldReviews[key]?.decision ?? 'REJECTED',
+        reason,
+      },
+    };
+  }
+
+  function markAllFields(decision: 'APPROVED' | 'REJECTED') {
+    const next = { ...draftFieldReviews };
+    for (const key of Object.keys(next)) {
+      next[key] = {
+        decision,
+        reason: decision === 'APPROVED' ? '' : next[key]?.reason ?? '',
+      };
+    }
+    draftFieldReviews = next;
+  }
+
+  function reviewCount(decision: 'APPROVED' | 'REJECTED') {
+    return Object.values(draftFieldReviews).filter((item) => item.decision === decision).length;
+  }
+
+  function canSubmitReview() {
+    const entries = Object.values(draftFieldReviews);
+    if (entries.length === 0) return false;
+    return entries.every((item) => {
+      if (item.decision === 'UNDECIDED') return false;
+      if (item.decision === 'REJECTED') return item.reason.trim().length > 0;
+      return true;
+    });
+  }
+
+  async function submitReview() {
     if (!selected || isSubmitting) return;
-    if (rejectionReason.trim().length === 0) {
-      toast.error('Informe o motivo da rejeição.');
+    if (!canSubmitReview()) {
+      toast.error('Revise todos os campos e preencha o motivo dos rejeitados.');
       return;
     }
 
+    const fieldReviews = Object.fromEntries(
+      Object.entries(draftFieldReviews).map(([key, value]) => [
+        key,
+        {
+          decision: value.decision,
+          ...(value.decision === 'REJECTED'
+            ? { reason: value.reason.trim() }
+            : {}),
+        },
+      ])
+    );
+
     isSubmitting = true;
     try {
-      await api.post(`/admin/property-edit-requests/${selected.id}/reject`, {
-        reason: rejectionReason.trim(),
-      });
-      toast.success('Solicitação rejeitada com sucesso.');
+      const response = await api.post<{ status?: string }>(
+        `/admin/property-edit-requests/${selected.id}/review`,
+        { fieldReviews }
+      );
+      const resolvedStatus = String(response?.status ?? '').trim().toUpperCase();
+      toast.success(
+        resolvedStatus === 'PARTIALLY_APPROVED'
+          ? 'Solicitação revisada com aprovação parcial.'
+          : resolvedStatus === 'REJECTED'
+          ? 'Solicitação rejeitada com sucesso.'
+          : 'Solicitação aprovada com sucesso.'
+      );
       closeModal();
       refreshKey += 1;
     } catch (submitError) {
-      console.error('Erro ao rejeitar solicitação de edição:', submitError);
+      console.error('Erro ao revisar solicitação de edição:', submitError);
       toast.error(
         submitError instanceof Error
           ? submitError.message
-          : 'Não foi possível rejeitar a solicitação.'
+          : 'Não foi possível concluir a revisão.'
       );
     } finally {
       isSubmitting = false;
@@ -390,6 +467,26 @@
           Compare o que mudou antes de aprovar. Somente os campos alterados aparecem abaixo.
         </div>
 
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <span class="rounded-full bg-green-100 px-3 py-1 font-semibold text-green-800 dark:bg-green-900/40 dark:text-green-200">
+            Aprovados: {reviewCount('APPROVED')}
+          </span>
+          <span class="rounded-full bg-red-100 px-3 py-1 font-semibold text-red-800 dark:bg-red-900/40 dark:text-red-200">
+            Rejeitados: {reviewCount('REJECTED')}
+          </span>
+          <span class="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            Pendentes: {Object.keys(draftFieldReviews).length - reviewCount('APPROVED') - reviewCount('REJECTED')}
+          </span>
+          <div class="ml-auto flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" on:click={() => markAllFields('APPROVED')} disabled={isSubmitting}>
+              Aprovar tudo
+            </Button>
+            <Button variant="outline" size="sm" on:click={() => markAllFields('REJECTED')} disabled={isSubmitting}>
+              Rejeitar tudo
+            </Button>
+          </div>
+        </div>
+
         <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-800">
             <thead class="bg-gray-50 dark:bg-gray-900/70">
@@ -397,6 +494,7 @@
                 <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Campo</th>
                 <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Antes</th>
                 <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Depois</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Revisão</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
@@ -411,38 +509,61 @@
                   <td class="px-4 py-3 text-gray-900 dark:text-gray-100">
                     {formatValue(entry.key, entry.after)}
                   </td>
+                  <td class="px-4 py-3">
+                    <div class="space-y-2">
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                            draftFieldReviews[entry.key]?.decision === 'APPROVED'
+                              ? 'bg-green-600 text-white'
+                              : 'border border-green-200 bg-white text-green-700 dark:border-green-800 dark:bg-gray-900 dark:text-green-300'
+                          }`}
+                          on:click={() => updateFieldDecision(entry.key, 'APPROVED')}
+                          disabled={isSubmitting}
+                        >
+                          Aprovar
+                        </button>
+                        <button
+                          type="button"
+                          class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                            draftFieldReviews[entry.key]?.decision === 'REJECTED'
+                              ? 'bg-red-600 text-white'
+                              : 'border border-red-200 bg-white text-red-700 dark:border-red-800 dark:bg-gray-900 dark:text-red-300'
+                          }`}
+                          on:click={() => updateFieldDecision(entry.key, 'REJECTED')}
+                          disabled={isSubmitting}
+                        >
+                          Rejeitar
+                        </button>
+                      </div>
+                      {#if draftFieldReviews[entry.key]?.decision === 'REJECTED'}
+                        <textarea
+                          rows={3}
+                          placeholder="Motivo da rejeição para este campo"
+                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                          value={draftFieldReviews[entry.key]?.reason ?? ''}
+                          on:input={(event) =>
+                            updateFieldReason(
+                              entry.key,
+                              (event.currentTarget as HTMLTextAreaElement).value
+                            )}
+                        ></textarea>
+                      {/if}
+                    </div>
+                  </td>
                 </tr>
               {/each}
             </tbody>
           </table>
         </div>
 
-        <div class="space-y-2">
-          <label for="edit-request-reason" class="text-sm font-medium text-gray-700 dark:text-gray-200">
-            Motivo da rejeição
-          </label>
-          <textarea
-            id="edit-request-reason"
-            bind:value={rejectionReason}
-            rows={4}
-            placeholder="Preencha apenas se for rejeitar."
-            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          ></textarea>
-        </div>
-
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="outline" on:click={closeModal} disabled={isSubmitting}>
             Fechar
           </Button>
-          <Button
-            variant="destructive"
-            on:click={rejectSelected}
-            disabled={isSubmitting}
-          >
-            Rejeitar
-          </Button>
-          <Button on:click={approveSelected} disabled={isSubmitting}>
-            Aprovar
+          <Button on:click={submitReview} disabled={isSubmitting || !canSubmitReview()}>
+            Concluir revisão
           </Button>
         </div>
       </div>
