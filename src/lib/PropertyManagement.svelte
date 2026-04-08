@@ -8,6 +8,7 @@
   import { Button } from '$lib/components/ui/button';
   import * as Select from '$lib/components/ui/select';
   import { Input } from '$lib/components/ui/input';
+  import { clampAreaInput, clampCountInput } from '$lib/components/create-property-helpers';
   import FeaturedPropertiesPanel from '$lib/components/FeaturedPropertiesPanel.svelte';
   import Pagination from '$lib/Pagination.svelte';
   import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';

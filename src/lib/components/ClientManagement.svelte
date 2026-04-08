@@ -312,7 +312,7 @@
       <Input
         className="w-full sm:w-64"
         type="search"
-        maxlength={120}
+        maxLength={120}
         placeholder="Buscar por nome ou email..."
         bind:value={filters.search}
         on:input={onSearchInput}

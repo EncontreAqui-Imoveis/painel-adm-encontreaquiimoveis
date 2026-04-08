@@ -5,6 +5,7 @@
   export let placeholder = '';
   export let disabled = false;
   export let name = '';
+  export let maxLength: number | undefined = undefined;
 </script>
 
 <input
@@ -14,6 +15,7 @@
   {placeholder}
   {disabled}
   {name}
+  maxlength={maxLength}
   on:input
   on:keydown
   on:keyup

@@ -132,6 +132,30 @@
           after: value.after,
         }));
 
+  $: if (
+    selected != null &&
+    !isDetailLoading &&
+    Object.keys(draftFieldReviews).length === 0 &&
+    diffEntries.length > 0
+  ) {
+    draftFieldReviews = Object.fromEntries(
+      diffEntries.map((entry) => {
+        const current = selected?.fieldReviews?.[entry.key];
+        const decision = String(current?.decision ?? '').trim().toUpperCase();
+        return [
+          entry.key,
+          {
+            decision:
+              decision === 'APPROVED' || decision === 'REJECTED'
+                ? (decision as 'APPROVED' | 'REJECTED')
+                : 'UNDECIDED',
+            reason: String(current?.reason ?? '').trim(),
+          },
+        ];
+      })
+    );
+  }
+
   async function fetchRequests() {
     isLoading = true;
     error = null;
