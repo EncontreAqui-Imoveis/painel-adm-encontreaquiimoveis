@@ -485,6 +485,21 @@
         }
     }
 
+    /** Total em respostas paginadas do admin (MySQL costuma enviar COUNT como string). */
+    function readListTotal(payload: unknown): number {
+        if (payload == null) return 0;
+        if (Array.isArray(payload)) return payload.length;
+        if (typeof payload !== "object") return 0;
+        const raw = (payload as { total?: unknown }).total;
+        if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+        if (typeof raw === "string" && raw.trim() !== "") {
+            const n = Number(raw);
+            if (Number.isFinite(n)) return n;
+        }
+        if (typeof raw === "bigint") return Number(raw);
+        return 0;
+    }
+
     async function fetchPendingCounts() {
         if (!hasSessionToken()) {
             pendingCounts = { propertyRequests: 0, brokerRequests: 0 };
@@ -502,12 +517,7 @@
                 return 0;
             }
             const payload = await response.json();
-            if (payload && typeof payload.total === "number")
-                return payload.total;
-            if (Array.isArray(payload)) return payload.length;
-            if (payload && Array.isArray(payload.data))
-                return payload.data.length;
-            return 0;
+            return readListTotal(payload);
         }
 
         try {
