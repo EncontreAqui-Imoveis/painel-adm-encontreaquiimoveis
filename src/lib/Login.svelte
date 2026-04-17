@@ -46,6 +46,15 @@
             }
 
             const data = await response.json();
+            if (typeof data?.token !== 'string' || data.token.trim().length === 0) {
+                error = 'Login concluído sem token de sessão válido.';
+                return;
+            }
+            if (typeof window !== 'undefined') {
+                if (window.location.hash) {
+                    window.history.replaceState({}, '', window.location.pathname);
+                }
+            }
             setSessionToken(data.token);
             
         } catch (err) {

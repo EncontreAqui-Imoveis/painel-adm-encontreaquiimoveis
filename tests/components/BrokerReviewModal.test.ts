@@ -103,4 +103,27 @@ describe('BrokerReviewModal', () => {
       });
     });
   });
+
+  it('requires admin password before deleting a broker', async () => {
+    render(BrokerReviewModal, { open: true, broker, showApprove: true });
+
+    await screen.findByText('Revisar Corretor');
+    await fireEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+    await fireEvent.input(screen.getByPlaceholderText('Digite sua senha atual'), {
+      target: { value: 'secret-123' },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Excluir corretor' }));
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith('/admin/reauth', {
+        password: 'secret-123',
+      });
+    });
+
+    expect(apiDeleteMock).toHaveBeenCalledWith('/admin/brokers/10', {
+      headers: {
+        'X-Admin-Reauth': 'reauth-broker',
+      },
+    });
+  });
 });

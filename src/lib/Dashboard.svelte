@@ -465,7 +465,9 @@
             headers = config.headers || [];
         } catch (error) {
             console.error(`Erro ao buscar dados de ${activeView}:`, error);
-            clearSessionToken();
+            allData = [];
+            totalItems = 0;
+            headers = config.headers || [];
         } finally {
             isLoading = false;
         }
