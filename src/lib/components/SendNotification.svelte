@@ -290,11 +290,9 @@
           maxlength={MAX_MESSAGE_LENGTH}
           disabled={isSubmitting}
         ></textarea>
-        <div class="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500">
-          <span>A mensagem será entregue imediatamente aos destinatários selecionados.
-        </span>
-          <span>{message.length}/{MAX_MESSAGE_LENGTH}</span>
-        </div>
+        <p class="text-xs text-gray-400 dark:text-gray-500">
+          A mensagem será entregue imediatamente aos destinatários selecionados.
+        </p>
       </div>
 
       <div class="flex items-center gap-3">

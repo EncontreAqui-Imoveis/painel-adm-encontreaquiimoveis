@@ -68,7 +68,7 @@
     },
     {
       view: 'sold_properties',
-      label: 'Vendidos/Alugados',
+      label: 'Vendidos / Alugados',
       icon: House
     },
     {
@@ -179,6 +179,24 @@
     return null;
   }
 
+  /** Rotas com URL dedicada têm prioridade sobre o hash (#view) ao destacar a aba ativa. */
+  function viewFromPathname(pathname: string): View | null {
+    const normalized = pathname.replace(/\/$/, '') || '/';
+    const entries: { prefix: string; view: View }[] = [
+      { prefix: '/admin/properties', view: 'properties' },
+      { prefix: '/admin/negociacoes/solicitacoes', view: 'negotiation_requests' },
+      { prefix: '/admin/negociacoes/andamento', view: 'negotiation_progress' },
+      { prefix: '/admin/contratos', view: 'negotiation_contracts' },
+      { prefix: '/admin/comissoes', view: 'commissions' }
+    ];
+    for (const { prefix, view } of entries) {
+      if (normalized === prefix || normalized.startsWith(`${prefix}/`)) {
+        return view;
+      }
+    }
+    return null;
+  }
+
   function updateLocation(view: View) {
     if (typeof window === 'undefined') return;
 
@@ -230,6 +248,11 @@
 
   function handleHashChange() {
     if (typeof window === 'undefined') return;
+    const pathView = viewFromPathname(window.location.pathname);
+    if (pathView && pathView !== activeView) {
+      onNavigate(pathView);
+      return;
+    }
     const hashView = window.location.hash.replace('#', '');
     if (hashView && isValidView(hashView) && hashView !== activeView) {
       onNavigate(hashView);
@@ -256,9 +279,14 @@
       }
     }
 
-    const hashView = window.location.hash.replace('#', '');
-    if (hashView && isValidView(hashView)) {
-      onNavigate(hashView);
+    const pathView = viewFromPathname(window.location.pathname);
+    if (pathView) {
+      onNavigate(pathView);
+    } else {
+      const hashView = window.location.hash.replace('#', '');
+      if (hashView && isValidView(hashView)) {
+        onNavigate(hashView);
+      }
     }
 
     window.addEventListener('hashchange', handleHashChange);
@@ -329,7 +357,7 @@
                 on:click={() => handleNavigation(item.view as View)}
               >
                 <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
-                <span class="min-w-0 flex-1 break-words">{item.label}</span>
+                <span class="min-w-0 flex-1 text-left [overflow-wrap:anywhere] [word-break:normal] hyphens-none">{item.label}</span>
                 {#if item.view === 'property_requests' && pendingCounts.propertyRequests > 0}
                   <span
                     class="ml-auto mt-0.5 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
@@ -344,7 +372,7 @@
                 disabled
               >
                 <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
-                <span class="min-w-0 flex-1 break-words">{item.label}</span>
+                <span class="min-w-0 flex-1 text-left [overflow-wrap:anywhere] [word-break:normal] hyphens-none">{item.label}</span>
               </button>
             {/if}
           {/each}
@@ -372,7 +400,7 @@
               on:click={() => handleNavigation(item.view as View)}
             >
               <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
-              <span class="min-w-0 flex-1 break-words">{item.label}</span>
+              <span class="min-w-0 flex-1 text-left [overflow-wrap:anywhere] [word-break:normal] hyphens-none">{item.label}</span>
             </button>
           {/each}
         </div>
@@ -399,7 +427,7 @@
               on:click={() => handleNavigation(item.view as View)}
             >
               <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
-              <span class="min-w-0 flex-1 break-words">{item.label}</span>
+              <span class="min-w-0 flex-1 text-left [overflow-wrap:anywhere] [word-break:normal] hyphens-none">{item.label}</span>
             </button>
           {/each}
         </div>
@@ -433,7 +461,7 @@
               on:click={() => handleNavigation(item.view as View)}
             >
               <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
-              <span class="min-w-0 flex-1 break-words">{item.label}</span>
+              <span class="min-w-0 flex-1 text-left [overflow-wrap:anywhere] [word-break:normal] hyphens-none">{item.label}</span>
               {#if item.view === 'verification' && pendingCounts.brokerRequests > 0}
                 <span
                   class="ml-auto mt-0.5 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"

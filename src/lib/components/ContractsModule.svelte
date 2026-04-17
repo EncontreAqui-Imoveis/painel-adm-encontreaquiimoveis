@@ -91,6 +91,9 @@
     comprovante_pagamento: 'Comprovante de Pagamento',
     boleto_vistoria: 'Boleto de Vistoria',
     outro: 'Outro',
+    cliente_cnh: 'CNH do Cliente',
+    cliente_identidade: 'Identidade (RG) do Cliente',
+    cliente_cpf: 'CPF do Cliente',
   };
 
   const signedReviewDocTypes = new Set([

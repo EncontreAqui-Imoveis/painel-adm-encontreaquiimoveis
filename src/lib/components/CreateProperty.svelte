@@ -119,6 +119,10 @@
   let semNumero = false;
   let quadra = '';
   let lote = '';
+  let semQuadra = false;
+  let semLote = false;
+  /** Unidade da área construída informada (o backend grava em m² + esta unidade). */
+  let areaConstruidaUnidade: 'm2' | 'hectare' | 'alqueire' = 'm2';
   let complemento = '';
   let tipoLote = '';
   let bedrooms = '';
@@ -668,10 +672,10 @@
                                 ? 'Informe a cidade.'
                               : !state.trim()
                                 ? 'Informe o estado.'
-                                : !quadra.trim()
-                                  ? 'Informe a quadra.'
-                                  : !lote.trim()
-                                    ? 'Informe o lote.'
+                                : !semQuadra && !quadra.trim()
+                                  ? 'Informe a quadra ou marque "Sem quadra".'
+                                  : !semLote && !lote.trim()
+                                    ? 'Informe o lote ou marque "Sem lote".'
                                     : !tipoLote.trim()
                                   ? 'Informe o tipo do lote.'
                                       : !resolvedBedrooms.trim()
@@ -873,6 +877,8 @@
         address: address.trim(),
         quadra: quadra.trim(),
         lote: lote.trim(),
+        sem_quadra: semQuadra ? 1 : 0,
+        sem_lote: semLote ? 1 : 0,
         numero: semNumero ? null : numeroDigits,
         sem_numero: semNumero ? 1 : 0,
         bairro: bairro.trim(),
@@ -884,6 +890,7 @@
         bedrooms: parsedBedrooms,
         bathrooms: parsedBathrooms,
         area_construida: parsedAreaConstruida,
+        area_construida_unidade: areaConstruidaUnidade,
         area_terreno: parsedAreaTerreno,
         garage_spots: parsedGarage,
         has_wifi: hasWifi ? 1 : 0,
@@ -937,6 +944,9 @@
       semNumero = false;
       quadra = '';
       lote = '';
+      semQuadra = false;
+      semLote = false;
+      areaConstruidaUnidade = 'm2';
       complemento = '';
       tipoLote = '';
       bedrooms = '';
@@ -1348,21 +1358,36 @@
       </div>
 
       <div class="grid gap-4 md:grid-cols-2">
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Área construída (m²) *
-          <input
-            id="create-property-area-construida"
-            name="area_construida"
-            maxlength="12"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={areaConstruida}
-            inputmode="decimal"
-            on:input={(event) => {
-              const target = event.target as HTMLInputElement;
-              areaConstruida = clampAreaInput(target.value);
-            }}
-          />
-        </label>
+        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <span>Área construída *</span>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+            <input
+              id="create-property-area-construida"
+              name="area_construida"
+              maxlength="12"
+              class="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              bind:value={areaConstruida}
+              inputmode="decimal"
+              on:input={(event) => {
+                const target = event.target as HTMLInputElement;
+                areaConstruida = clampAreaInput(target.value);
+              }}
+            />
+            <select
+              id="create-property-area-construida-unidade"
+              name="area_construida_unidade"
+              class="w-full shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:w-44 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              bind:value={areaConstruidaUnidade}
+            >
+              <option value="m2">m²</option>
+              <option value="hectare">Hectare (ha)</option>
+              <option value="alqueire">Alqueire</option>
+            </select>
+          </div>
+          <span class="text-xs font-normal text-gray-500 dark:text-gray-400"
+            >Valor armazenado em m² após conversão.</span
+          >
+        </div>
         <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
           Área do terreno (m²) *
           <input
@@ -1489,26 +1514,50 @@
       </div>
 
       <div class="grid gap-4 md:grid-cols-4">
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Quadra *
+        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <span>{semQuadra ? 'Quadra (opcional)' : 'Quadra *'}</span>
           <input
             id="create-property-quadra"
             name="quadra"
             maxlength="25"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900"
             bind:value={quadra}
+            disabled={semQuadra}
           />
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Lote *
+          <label class="inline-flex items-center gap-2 text-xs font-normal text-gray-600 dark:text-gray-400">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+              bind:checked={semQuadra}
+              on:change={() => {
+                if (semQuadra) quadra = '';
+              }}
+            />
+            Sem quadra
+          </label>
+        </div>
+        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <span>{semLote ? 'Lote (opcional)' : 'Lote *'}</span>
           <input
             id="create-property-lote"
             name="lote"
             maxlength="25"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900"
             bind:value={lote}
+            disabled={semLote}
           />
-        </label>
+          <label class="inline-flex items-center gap-2 text-xs font-normal text-gray-600 dark:text-gray-400">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+              bind:checked={semLote}
+              on:change={() => {
+                if (semLote) lote = '';
+              }}
+            />
+            Sem lote
+          </label>
+        </div>
         <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
           Tipo do lote *
           <select
