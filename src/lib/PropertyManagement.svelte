@@ -10,7 +10,6 @@
   import { Input } from '$lib/components/ui/input';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import { clampAreaInput, clampCountInput, extractApiErrorMessage } from '$lib/components/create-property-helpers';
-  import FeaturedPropertiesPanel from '$lib/components/FeaturedPropertiesPanel.svelte';
   import Pagination from '$lib/Pagination.svelte';
   import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';
   import { clearSessionToken, hasSessionToken } from './sessionState';
@@ -1840,11 +1839,6 @@
       </div>
     </div>
   {/if}
-  {#if !isReviewOnly}
-    <div class="mt-4">
-      <FeaturedPropertiesPanel />
-    </div>
-  {/if}
   {#if isLoading}
     <div class="flex h-48 items-center justify-center rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
       <div class="flex items-center gap-3 text-gray-600 dark:text-gray-300">
@@ -2051,7 +2045,7 @@
 </div>
 
 <Dialog.Root bind:open={isModalOpen}>
-  <Dialog.Content className="max-h-[85vh] overflow-y-auto max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">
+  <Dialog.Content className="max-h-[85vh] overflow-y-auto overflow-x-hidden max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">
     {#if selectedProperty}
       <Dialog.Header>
         <Dialog.Title>{selectedProperty.title}</Dialog.Title>
@@ -2066,7 +2060,7 @@
         </p>
       </Dialog.Header>
 
-      <div class="space-y-6 overflow-y-auto px-6 py-4">
+      <div class="min-w-0 space-y-6 overflow-y-auto overflow-x-hidden px-6 py-4">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div class="space-y-1">
             <p class="text-sm font-semibold text-gray-600 dark:text-gray-300">Finalidade</p>
@@ -2299,9 +2293,11 @@
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Galeria</h3>
           {#if selectedPropertyImages().length > 0}
-            <div class="mt-2 flex gap-3 overflow-x-auto rounded-md bg-gray-50 p-3 dark:bg-gray-800/60">
+            <div
+              class="mt-2 flex max-w-full min-w-0 gap-3 overflow-x-auto overscroll-x-contain rounded-md bg-gray-50 p-3 touch-pan-x [-webkit-overflow-scrolling:touch] dark:bg-gray-800/60"
+            >
                 {#each visibleSelectedPropertyImages() as image (image.id)}
-                <div class="relative flex flex-col gap-2 items-center">
+                <div class="relative flex shrink-0 flex-col items-center gap-2">
                   <button
                     type="button"
                     class="rounded-md p-0 shadow focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -2311,7 +2307,7 @@
                     <img
                       src={image.url}
                       alt="Foto do imóvel"
-                      class="h-32 w-auto rounded-md object-cover"
+                      class="h-32 w-48 max-w-none rounded-md object-cover sm:w-56"
                       loading="lazy"
                       on:error={() => markImageAsBroken(image.url)}
                     />
@@ -2964,7 +2960,7 @@
       on:keydown={handlePreviewKeydown}
     >
       <div
-        class="relative"
+        class="relative flex max-h-[90vh] max-w-[100vw] flex-col items-center"
         role="dialog"
         aria-modal="true"
         tabindex="0"
@@ -2977,7 +2973,7 @@
       {#if previewTotal > 1}
         <button
           type="button"
-          class="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white shadow transition hover:bg-black/50"
+          class="absolute left-2 top-[40%] z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white shadow transition hover:bg-black/50"
           on:click={goPrevImage}
           disabled={!hasPrevImage()}
           aria-label="Imagem anterior"
@@ -2988,7 +2984,7 @@
         </button>
         <button
           type="button"
-          class="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white shadow transition hover:bg-black/50"
+          class="absolute right-2 top-[40%] z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white shadow transition hover:bg-black/50"
           on:click={goNextImage}
           disabled={!hasNextImage()}
           aria-label="Próxima imagem"
@@ -3002,10 +2998,44 @@
         <img
           src={previewImageUrl}
           alt=""
-          class="max-h-[85vh] max-w-[95vw] select-none"
+          class="max-h-[min(72vh,85vw)] max-w-[95vw] shrink-0 select-none object-contain"
           draggable="false"
           on:error={handlePreviewImageError}
         />
+      {/if}
+      {#if previewTotal > 1}
+        <div
+          class="mt-3 max-w-[95vw] overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] touch-pan-x"
+          role="navigation"
+          aria-label="Miniaturas da galeria"
+        >
+          <div class="flex w-max min-w-full justify-center gap-2 px-1">
+            {#each previewImages as image, thumbIdx}
+              {#if image?.url && !brokenPreviewImages.has(image.url)}
+                <button
+                  type="button"
+                  class="shrink-0 overflow-hidden rounded-md ring-2 transition focus:outline-none focus-visible:ring-green-400 {thumbIdx ===
+                  previewImageIndex
+                    ? 'ring-white'
+                    : 'ring-transparent opacity-80 hover:opacity-100'}"
+                  aria-label={`Foto ${thumbIdx + 1} de ${previewTotal}`}
+                  aria-current={thumbIdx === previewImageIndex ? 'true' : undefined}
+                  on:click|stopPropagation={() => {
+                    previewImageIndex = thumbIdx;
+                    previewImageUrl = image.url;
+                  }}
+                >
+                  <img
+                    src={image.url}
+                    alt=""
+                    class="h-16 w-24 object-cover sm:h-[4.5rem] sm:w-28"
+                    draggable="false"
+                  />
+                </button>
+              {/if}
+            {/each}
+          </div>
+        </div>
       {/if}
       <button
         type="button"

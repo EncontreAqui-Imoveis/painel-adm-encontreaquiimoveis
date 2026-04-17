@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
     import Sidebar from "./Sidebar.svelte";
     import Header from "./Header.svelte";
     import Table from "./Table.svelte";
@@ -90,6 +90,7 @@
     type LazySvelteComponent = any;
 
     let PropertyManagementComponent: LazySvelteComponent | null = null;
+    let PropertyHighlightsComponent: LazySvelteComponent | null = null;
     let PropertyRequestsModuleComponent: LazySvelteComponent | null = null;
     let ClientManagementComponent: LazySvelteComponent | null = null;
     let BrokerManagementComponent: LazySvelteComponent | null = null;
@@ -125,6 +126,13 @@
             if (!PropertyManagementComponent) {
                 const module = await import("./PropertyManagement.svelte");
                 PropertyManagementComponent = module.default;
+            }
+            return;
+        }
+        if (view === "property_highlights") {
+            if (!PropertyHighlightsComponent) {
+                const module = await import("./PropertyHighlightsView.svelte");
+                PropertyHighlightsComponent = module.default;
             }
             return;
         }
@@ -243,7 +251,7 @@
         },
         properties: {
             endpoint: "/admin/properties-with-brokers",
-            title: "Gerenciamento de Imóveis",
+            title: "Imóveis disponíveis",
             headers: [
                 "ID",
                 "Código",
@@ -264,8 +272,11 @@
         property_requests: {
             title: "Solicitações de Imóveis",
         },
+        property_highlights: {
+            title: "Destaques",
+        },
         sold_properties: {
-            title: "Imóveis Vendidos/Alugados",
+            title: "Imóveis vendidos ou alugados",
         },
         negotiation_requests: {
             title: "Solicitação de Propostas",
@@ -343,6 +354,7 @@
 
         if (
             activeView === "properties" ||
+            activeView === "property_highlights" ||
             activeView === "property_requests" ||
             activeView === "sold_properties" ||
             activeView === "negotiation_requests" ||
@@ -607,6 +619,7 @@
             activeView === "dashboard" ||
             activeView === "verification" ||
             activeView === "properties" ||
+            activeView === "property_highlights" ||
             activeView === "brokers" ||
             activeView === "negotiation_requests" ||
             activeView === "negotiation_progress" ||
@@ -1613,6 +1626,16 @@
             {:else if activeView === "properties"}
                 {#if PropertyManagementComponent}
                     <svelte:component this={PropertyManagementComponent} />
+                {:else}
+                    <div class="flex justify-center items-center h-64">
+                        <div
+                            class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"
+                        ></div>
+                    </div>
+                {/if}
+            {:else if activeView === "property_highlights"}
+                {#if PropertyHighlightsComponent}
+                    <svelte:component this={PropertyHighlightsComponent} />
                 {:else}
                     <div class="flex justify-center items-center h-64">
                         <div

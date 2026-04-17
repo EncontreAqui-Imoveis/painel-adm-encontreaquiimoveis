@@ -13,6 +13,7 @@
     LayoutDashboard,
     ScrollText,
     ShieldCheck,
+    Sparkles,
     UserPlus,
     UserRound,
     Users
@@ -35,6 +36,7 @@
   const validViews: View[] = [
     'dashboard',
     'properties',
+    'property_highlights',
     'property_requests',
     'sold_properties',
     'negotiation_requests',
@@ -61,13 +63,18 @@
   const imoveisItems: SidebarItem[] = [
     {
       view: 'properties',
-      label: 'Imóveis',
+      label: 'Disponíveis',
       icon: Building2
     },
     {
       view: 'sold_properties',
-      label: 'Imóveis Vendidos/Alugados',
+      label: 'Vendidos/Alugados',
       icon: House
+    },
+    {
+      view: 'property_highlights',
+      label: 'Destaques',
+      icon: Sparkles
     },
     {
       view: 'create_property',

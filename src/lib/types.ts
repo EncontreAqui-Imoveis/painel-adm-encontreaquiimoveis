@@ -121,6 +121,7 @@ export interface Notification {
 export type View =
   | 'dashboard'
   | 'properties'
+  | 'property_highlights'
   | 'property_requests'
   | 'sold_properties'
   | 'negotiation_requests'
