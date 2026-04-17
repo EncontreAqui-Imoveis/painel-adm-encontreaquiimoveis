@@ -603,8 +603,11 @@
             newView = "dashboard";
         }
 
-        await ensureViewComponents(newView);
+        // Atualizar já para o menu e o sync URL (hashchange/popstate) não lerem a view antiga
+        // enquanto ensureViewComponents ainda está a carregar módulos.
         activeView = newView;
+
+        await ensureViewComponents(newView);
 
         isSidebarOpen = false;
         searchTerm = "";

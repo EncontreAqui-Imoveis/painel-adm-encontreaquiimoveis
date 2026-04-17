@@ -262,13 +262,21 @@
   function handleHashChange() {
     if (typeof window === 'undefined') return;
     const pathView = viewFromPathname(window.location.pathname);
+    const rawHash = window.location.hash.replace('#', '');
+    const hashView = rawHash && isValidView(rawHash) ? rawHash : '';
+
+    // Ex.: /admin/properties#brokers — o hash reflete a navegação intencional.
+    if (pathView && hashView && pathView !== hashView) {
+      if (hashView !== activeView) onNavigate(hashView as View);
+      return;
+    }
+
     if (pathView && pathView !== activeView) {
       onNavigate(pathView);
       return;
     }
-    const hashView = window.location.hash.replace('#', '');
-    if (hashView && isValidView(hashView) && hashView !== activeView) {
-      onNavigate(hashView);
+    if (hashView && hashView !== activeView) {
+      onNavigate(hashView as View);
     }
   }
 
