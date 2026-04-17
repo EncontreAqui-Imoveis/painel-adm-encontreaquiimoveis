@@ -153,9 +153,6 @@
   const navItemInactive =
     'text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white';
 
-  const groupButtonBase =
-    'w-full text-left flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-[15px] transition text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white';
-
   function isValidView(view: string): view is View {
     return validViews.includes(view as View);
   }
@@ -217,6 +214,14 @@
       return;
     }
 
+    // Sem rota dedicada: se ainda estamos num path /admin/... que mapeia para outra view,
+    // só mudar o hash deixaria pathname "preso" e o sync reativaria a view antiga.
+    const stalePathView = viewFromPathname(window.location.pathname);
+    if (stalePathView != null && stalePathView !== view) {
+      window.history.replaceState({}, '', `/admin#${view}`);
+      return;
+    }
+
     if (window.location.hash.replace('#', '') === view) return;
     window.location.hash = view;
   }
@@ -244,6 +249,14 @@
 
   function navItemClass(view: View, extra = '') {
     return `${navItemBase} ${activeView === view ? navItemActive : navItemInactive} ${extra}`.trim();
+  }
+
+  const groupHeaderLayout =
+    'w-full text-left flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-[15px] leading-snug transition';
+
+  function groupHeaderClass(group: GroupKey) {
+    const active = getGroupForView(activeView) === group;
+    return `${groupHeaderLayout} ${active ? navItemActive : navItemInactive}`.trim();
   }
 
   function handleHashChange() {
@@ -289,8 +302,13 @@
       }
     }
 
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    const onUrlChange = () => handleHashChange();
+    window.addEventListener('hashchange', onUrlChange);
+    window.addEventListener('popstate', onUrlChange);
+    return () => {
+      window.removeEventListener('hashchange', onUrlChange);
+      window.removeEventListener('popstate', onUrlChange);
+    };
   });
 </script>
 
@@ -336,7 +354,7 @@
 
     <div class="space-y-1">
       <button
-        class={groupButtonBase}
+        class={groupHeaderClass('imoveis')}
         on:click={() => toggleGroup('imoveis')}
         aria-expanded={openGroups.imoveis}
       >
@@ -382,7 +400,7 @@
 
     <div class="space-y-1">
       <button
-        class={groupButtonBase}
+        class={groupHeaderClass('usuarios')}
         on:click={() => toggleGroup('usuarios')}
         aria-expanded={openGroups.usuarios}
       >
@@ -409,7 +427,7 @@
 
     <div class="space-y-1">
       <button
-        class={groupButtonBase}
+        class={groupHeaderClass('negociacoes')}
         on:click={() => toggleGroup('negociacoes')}
         aria-expanded={openGroups.negociacoes}
       >
@@ -436,7 +454,7 @@
 
     <div class="space-y-1">
       <button
-        class={groupButtonBase}
+        class={groupHeaderClass('verificacao')}
         on:click={() => toggleGroup('verificacao')}
         aria-expanded={openGroups.verificacao}
       >
