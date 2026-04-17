@@ -132,30 +132,6 @@
           after: value.after,
         }));
 
-  $: if (
-    selected != null &&
-    !isDetailLoading &&
-    Object.keys(draftFieldReviews).length === 0 &&
-    diffEntries.length > 0
-  ) {
-    draftFieldReviews = Object.fromEntries(
-      diffEntries.map((entry) => {
-        const current = selected?.fieldReviews?.[entry.key];
-        const decision = String(current?.decision ?? '').trim().toUpperCase();
-        return [
-          entry.key,
-          {
-            decision:
-              decision === 'APPROVED' || decision === 'REJECTED'
-                ? (decision as 'APPROVED' | 'REJECTED')
-                : 'UNDECIDED',
-            reason: String(current?.reason ?? '').trim(),
-          },
-        ];
-      })
-    );
-  }
-
   async function fetchRequests() {
     isLoading = true;
     error = null;
@@ -307,13 +283,13 @@
   }
 
   function canSubmitReview() {
-    const entries = Object.values(draftFieldReviews);
-    if (entries.length === 0) return false;
-    return entries.every((item) => {
-      if (item.decision === 'UNDECIDED') return false;
-      if (item.decision === 'REJECTED') return item.reason.trim().length > 0;
-      return true;
-    });
+    if (!selected || diffEntries.length === 0) return false;
+    for (const { key } of diffEntries) {
+      const item = draftFieldReviews[key];
+      if (!item || item.decision === 'UNDECIDED') return false;
+      if (item.decision === 'REJECTED' && item.reason.trim().length === 0) return false;
+    }
+    return true;
   }
 
   async function submitReview() {
@@ -324,15 +300,18 @@
     }
 
     const fieldReviews = Object.fromEntries(
-      Object.entries(draftFieldReviews).map(([key, value]) => [
-        key,
-        {
-          decision: value.decision,
-          ...(value.decision === 'REJECTED'
-            ? { reason: value.reason.trim() }
-            : {}),
-        },
-      ])
+      diffEntries.map(({ key }) => {
+        const value = draftFieldReviews[key];
+        return [
+          key,
+          {
+            decision: value.decision,
+            ...(value.decision === 'REJECTED'
+              ? { reason: value.reason.trim() }
+              : {}),
+          },
+        ];
+      })
     );
 
     isSubmitting = true;
