@@ -5,6 +5,7 @@
   import { api } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
   import Pagination from '$lib/Pagination.svelte';
+  import { extractApiErrorMessage } from '$lib/components/create-property-helpers';
 
   type PropertyRequest = {
     id: number;
@@ -27,6 +28,10 @@
   let totalPages = 1;
   let fetchKey = 0;
   let hasMounted = false;
+  let rejectDialogOpen = false;
+  let rejectObservation = '';
+  let rejectObservationError: string | null = null;
+  let selectedRejectId: number | null = null;
 
   function requestFetch(resetPage = false) {
     if (resetPage) {
@@ -75,22 +80,50 @@
 
   async function handleStatusUpdate(propertyId: number, newStatus: 'approved' | 'rejected') {
     if (newStatus === 'rejected') {
-      const confirmed = window.confirm('Tem certeza que deseja rejeitar este imóvel?');
-      if (!confirmed) return;
+      selectedRejectId = propertyId;
+      rejectObservation = '';
+      rejectObservationError = null;
+      rejectDialogOpen = true;
+      return;
     }
     processing = { ...processing, [propertyId]: true };
     try {
-      if (newStatus === 'approved') {
-        await api.patch(`/admin/properties/${propertyId}/approve`, {});
-        toast.success('Imóvel aprovado.');
-      } else {
-        await api.patch(`/admin/properties/${propertyId}/reject`, {});
-        toast.success('Imóvel rejeitado e removido.');
-      }
+      await api.patch(`/admin/properties/${propertyId}/approve`, {});
+      toast.success('Imóvel aprovado.');
       requests = requests.filter((property) => property.id !== propertyId);
     } catch (error) {
       console.error('Erro ao atualizar status do imóvel:', error);
-      toast.error('Falha ao atualizar o status.');
+      toast.error(extractApiErrorMessage(error, 'Falha ao atualizar o status.'));
+    } finally {
+      processing = { ...processing, [propertyId]: false };
+    }
+  }
+
+  async function confirmReject() {
+    const propertyId = selectedRejectId;
+    if (propertyId == null) {
+      rejectDialogOpen = false;
+      return;
+    }
+
+    const reason = rejectObservation.trim();
+    if (!reason) {
+      rejectObservationError = 'Informe a observação da rejeição.';
+      return;
+    }
+
+    processing = { ...processing, [propertyId]: true };
+    rejectObservationError = null;
+    try {
+      await api.patch(`/admin/properties/${propertyId}/reject`, { reason });
+      toast.success('Imóvel rejeitado e removido.');
+      requests = requests.filter((property) => property.id !== propertyId);
+      rejectDialogOpen = false;
+      selectedRejectId = null;
+      rejectObservation = '';
+    } catch (error) {
+      console.error('Erro ao rejeitar o imóvel:', error);
+      toast.error(extractApiErrorMessage(error, 'Falha ao rejeitar o imóvel.'));
     } finally {
       processing = { ...processing, [propertyId]: false };
     }
@@ -219,3 +252,45 @@
     <Pagination bind:currentPage {totalPages} {totalItems} {itemsPerPage} />
   </div>
 </div>
+
+{#if rejectDialogOpen}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+    <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
+      <div class="space-y-2">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Rejeitar imóvel</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+          Informe uma observação para justificar a rejeição.
+        </p>
+      </div>
+      <label class="mt-4 block">
+        <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Observação</span>
+        <textarea
+          rows="4"
+          maxlength="500"
+          bind:value={rejectObservation}
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          placeholder="Explique o motivo da rejeição"
+        ></textarea>
+      </label>
+      {#if rejectObservationError}
+        <p class="mt-2 text-sm text-red-600 dark:text-red-300">{rejectObservationError}</p>
+      {/if}
+      <div class="mt-6 flex justify-end gap-2">
+        <Button
+          variant="outline"
+          on:click={() => {
+            rejectDialogOpen = false;
+            selectedRejectId = null;
+            rejectObservation = '';
+            rejectObservationError = null;
+          }}
+        >
+          Cancelar
+        </Button>
+        <Button variant="destructive" on:click={confirmReject}>
+          Rejeitar
+        </Button>
+      </div>
+    </div>
+  </div>
+{/if}

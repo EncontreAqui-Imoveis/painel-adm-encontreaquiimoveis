@@ -9,6 +9,7 @@
     formatCep,
     clampAreaInput,
     clampCountInput,
+    extractApiErrorMessage,
     formatCurrencyInput,
     formatPhoneBr,
     hasValidPhoneBr,
@@ -121,8 +122,11 @@
   let complemento = '';
   let tipoLote = '';
   let bedrooms = '';
+  let bedroomsAsZero = false;
   let bathrooms = '';
+  let bathroomsAsZero = false;
   let garageSpots = '';
+  let garageSpotsAsZero = false;
   let areaConstruida = '';
   let areaTerreno = '';
   let brokerId = '';
@@ -636,6 +640,9 @@
     if (isSubmitting) return;
     submitFeedback = null;
     const numeroDigits = onlyDigits(numero);
+    const resolvedBedrooms = bedroomsAsZero ? '0' : bedrooms;
+    const resolvedBathrooms = bathroomsAsZero ? '0' : bathrooms;
+    const resolvedGarageSpots = garageSpotsAsZero ? '0' : garageSpots;
     const requiredMessage =
       !title.trim()
         ? 'Informe o título do imóvel.'
@@ -654,11 +661,11 @@
                       : !semNumero && numeroDigits.length === 0
                         ? 'Número do endereço deve conter apenas dígitos.'
                         : !bairro.trim()
-                          ? 'Informe o bairro.'
+                      ? 'Informe o bairro.'
                           : cep.trim() && onlyDigits(cep).length !== 8
                             ? 'Informe um CEP válido.'
-                            : !city.trim()
-                              ? 'Informe a cidade.'
+                              : !city.trim()
+                                ? 'Informe a cidade.'
                               : !state.trim()
                                 ? 'Informe o estado.'
                                 : !quadra.trim()
@@ -666,14 +673,14 @@
                                   : !lote.trim()
                                     ? 'Informe o lote.'
                                     : !tipoLote.trim()
-                                      ? 'Informe o tipo do lote.'
-                                      : !bedrooms.trim()
+                                  ? 'Informe o tipo do lote.'
+                                      : !resolvedBedrooms.trim()
                                         ? 'Informe a quantidade de quartos.'
-                                        : !bathrooms.trim()
+                                        : !resolvedBathrooms.trim()
                                           ? 'Informe a quantidade de banheiros.'
-                                          : !garageSpots.trim()
+                                          : !resolvedGarageSpots.trim()
                                             ? 'Informe a quantidade de garagens.'
-                                            : !areaConstruida.trim()
+                                              : !areaConstruida.trim()
                                               ? 'Informe a área construída.'
                                     : !areaTerreno.trim()
                                         ? 'Informe a área do terreno.'
@@ -759,9 +766,9 @@
       (parsedPromotionPercentageSale ?? 0) > 0 ||
       (parsedPromotionPercentageRent ?? 0) > 0;
 
-    const parsedBedrooms = bedrooms ? Number(bedrooms) : null;
-    const parsedBathrooms = bathrooms ? Number(bathrooms) : null;
-    const parsedGarage = garageSpots ? Number(garageSpots) : null;
+    const parsedBedrooms = resolvedBedrooms ? Number(resolvedBedrooms) : null;
+    const parsedBathrooms = resolvedBathrooms ? Number(resolvedBathrooms) : null;
+    const parsedGarage = resolvedGarageSpots ? Number(resolvedGarageSpots) : null;
     const parsedAreaConstruida = normalizeDecimal(areaConstruida);
     const parsedAreaTerreno = normalizeDecimal(areaTerreno);
 
@@ -891,11 +898,13 @@
 
       uploadProgress = 100;
       uploadStatus = 'Criando imóvel...';
-      const createResponse = await apiClient.post<{ propertyId?: number }>('/admin/properties', payload, {
+      const createResponse = await apiClient.post('/admin/properties', payload, {
         timeout: CREATE_REQUEST_TIMEOUT_MS,
-      });
+        skipErrorToast: true,
+      } as Parameters<typeof apiClient.post>[2]);
 
-      const propertyId = Number(createResponse?.data?.propertyId ?? 0);
+      const createdPayload = createResponse.data as { propertyId?: unknown };
+      const propertyId = Number(createdPayload?.propertyId ?? 0);
       if (!Number.isFinite(propertyId) || propertyId <= 0) {
         throw new Error('Imóvel criado sem ID retornado pelo backend.');
       }
@@ -931,8 +940,11 @@
       complemento = '';
       tipoLote = '';
       bedrooms = '';
+      bedroomsAsZero = false;
       bathrooms = '';
+      bathroomsAsZero = false;
       garageSpots = '';
+      garageSpotsAsZero = false;
       areaConstruida = '';
       areaTerreno = '';
       brokerId = '';
@@ -952,8 +964,7 @@
       dispatch('created', { propertyId });
     } catch (error) {
       console.error('Erro ao criar imóvel:', error);
-      const apiError = error as { response?: { data?: { error?: string; message?: string } } };
-      const backendMessage = apiError?.response?.data?.error ?? apiError?.response?.data?.message;
+      const backendMessage = extractApiErrorMessage(error, '');
       if (selectedImages.length > 0 && imagePreviewUrls.length === 0) {
         refreshImagePreviews();
       }
@@ -1247,54 +1258,93 @@
       </div>
 
       <div class="grid gap-4 md:grid-cols-3">
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Quartos *
+        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label for="create-property-bedrooms" class="flex items-center justify-between gap-3">
+            <span>Quartos *</span>
+            <label class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+              <input
+                type="checkbox"
+                bind:checked={bedroomsAsZero}
+                on:change={() => {
+                  if (bedroomsAsZero) bedrooms = '0';
+                }}
+              />
+              Sem quarto
+            </label>
+          </label>
           <input
             id="create-property-bedrooms"
             name="bedrooms"
             maxlength="2"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
             bind:value={bedrooms}
             inputmode="numeric"
             pattern="\d*"
+            disabled={bedroomsAsZero}
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
               bedrooms = clampCountInput(target.value);
             }}
           />
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Banheiros *
+        </div>
+        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label for="create-property-bathrooms" class="flex items-center justify-between gap-3">
+            <span>Banheiros *</span>
+            <label class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+              <input
+                type="checkbox"
+                bind:checked={bathroomsAsZero}
+                on:change={() => {
+                  if (bathroomsAsZero) bathrooms = '0';
+                }}
+              />
+              Sem banheiro
+            </label>
+          </label>
           <input
             id="create-property-bathrooms"
             name="bathrooms"
             maxlength="2"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
             bind:value={bathrooms}
             inputmode="numeric"
             pattern="\d*"
+            disabled={bathroomsAsZero}
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
               bathrooms = clampCountInput(target.value);
             }}
           />
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Garagens *
+        </div>
+        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label for="create-property-garage-spots" class="flex items-center justify-between gap-3">
+            <span>Garagens *</span>
+            <label class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+              <input
+                type="checkbox"
+                bind:checked={garageSpotsAsZero}
+                on:change={() => {
+                  if (garageSpotsAsZero) garageSpots = '0';
+                }}
+              />
+              Sem garagem
+            </label>
+          </label>
           <input
             id="create-property-garage-spots"
             name="garage_spots"
             maxlength="2"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
             bind:value={garageSpots}
             inputmode="numeric"
             pattern="\d*"
+            disabled={garageSpotsAsZero}
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
               garageSpots = clampCountInput(target.value);
             }}
           />
-        </label>
+        </div>
       </div>
 
       <div class="grid gap-4 md:grid-cols-2">

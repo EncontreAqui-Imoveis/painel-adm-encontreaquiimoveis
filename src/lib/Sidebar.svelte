@@ -73,11 +73,6 @@
       view: 'create_property',
       label: 'Cadastrar Imóvel',
       icon: HousePlus
-    },
-    {
-      view: 'property_requests',
-      label: 'Solicitações (Imóveis)',
-      icon: ClipboardList
     }
   ];
 
@@ -101,11 +96,6 @@
 
   const negociacoesItems: SidebarItem[] = [
     {
-      view: 'negotiation_requests',
-      label: 'Solicitação de Propostas',
-      icon: ScrollText
-    },
-    {
       view: 'negotiation_progress',
       label: 'Imóveis em Negociação',
       icon: Handshake
@@ -127,6 +117,16 @@
       view: 'verification',
       label: 'Solicitações de Corretores',
       icon: ShieldCheck
+    },
+    {
+      view: 'property_requests',
+      label: 'Solicitações (Imóveis)',
+      icon: ClipboardList
+    },
+    {
+      view: 'negotiation_requests',
+      label: 'Solicitação de Propostas',
+      icon: ScrollText
     }
   ];
 
@@ -310,11 +310,6 @@
           <span class="truncate">Imóveis</span>
         </span>
         <span class="flex items-center gap-2">
-          {#if !openGroups.imoveis && pendingCounts.propertyRequests > 0}
-            <span class="inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white">
-              {pendingCounts.propertyRequests}
-            </span>
-          {/if}
           <ChevronDown class={`h-4 w-4 transition-transform ${openGroups.imoveis ? 'rotate-180' : ''}`} />
         </span>
       </button>
@@ -415,9 +410,9 @@
           <span class="truncate">Verificação</span>
         </span>
         <span class="flex items-center gap-2">
-          {#if !openGroups.verificacao && pendingCounts.brokerRequests > 0}
+          {#if !openGroups.verificacao && (pendingCounts.propertyRequests + pendingCounts.brokerRequests) > 0}
             <span class="inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white">
-              {pendingCounts.brokerRequests}
+              {pendingCounts.propertyRequests + pendingCounts.brokerRequests}
             </span>
           {/if}
           <ChevronDown class={`h-4 w-4 transition-transform ${openGroups.verificacao ? 'rotate-180' : ''}`} />
@@ -432,11 +427,17 @@
             >
               <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
               <span class="min-w-0 flex-1 break-words">{item.label}</span>
-              {#if pendingCounts.brokerRequests > 0}
+              {#if item.view === 'verification' && pendingCounts.brokerRequests > 0}
                 <span
                   class="ml-auto mt-0.5 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
                 >
                   {pendingCounts.brokerRequests}
+                </span>
+              {:else if item.view === 'property_requests' && pendingCounts.propertyRequests > 0}
+                <span
+                  class="ml-auto mt-0.5 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
+                >
+                  {pendingCounts.propertyRequests}
                 </span>
               {/if}
             </button>

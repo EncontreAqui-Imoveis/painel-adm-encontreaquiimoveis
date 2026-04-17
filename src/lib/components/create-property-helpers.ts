@@ -108,6 +108,48 @@ export function parseCurrency(value: string): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+function extractMessageFromValue(value: unknown, depth = 0): string | null {
+  if (depth > 5) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of ['message', 'error', 'detail', 'details']) {
+    const nested = extractMessageFromValue(record[key], depth + 1);
+    if (nested) return nested;
+  }
+
+  for (const entry of Object.values(record)) {
+    const nested = extractMessageFromValue(entry, depth + 1);
+    if (nested) return nested;
+  }
+
+  return null;
+}
+
+export function extractApiErrorMessage(error: unknown, fallback: string): string {
+  if (!error || typeof error !== 'object') {
+    return fallback;
+  }
+
+  const response = error as {
+    response?: { data?: unknown };
+    message?: unknown;
+  };
+
+  return (
+    extractMessageFromValue(response.response?.data) ||
+    extractMessageFromValue(response.message) ||
+    extractMessageFromValue(error) ||
+    fallback
+  );
+}
+
 type ResolvedPrices = {
   error?: string;
   price?: number;

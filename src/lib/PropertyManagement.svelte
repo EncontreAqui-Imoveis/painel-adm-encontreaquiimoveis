@@ -9,7 +9,7 @@
   import * as Select from '$lib/components/ui/select';
   import { Input } from '$lib/components/ui/input';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
-  import { clampAreaInput, clampCountInput } from '$lib/components/create-property-helpers';
+  import { clampAreaInput, clampCountInput, extractApiErrorMessage } from '$lib/components/create-property-helpers';
   import FeaturedPropertiesPanel from '$lib/components/FeaturedPropertiesPanel.svelte';
   import Pagination from '$lib/Pagination.svelte';
   import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';
@@ -122,6 +122,9 @@
   let isEditMode = false;
   let editableProperty: PropertyDetails | null = null;
   let editSemNumero = false;
+  let editBedroomsAsZero = false;
+  let editBathroomsAsZero = false;
+  let editGarageSpotsAsZero = false;
   let isSavingEdit = false;
   let editError: string | null = null;
   let editPriceSaleDisplay = '';
@@ -144,6 +147,9 @@
   let videoDeleting = false;
   let videoDeleteError: string | null = null;
   let videoInputEl: HTMLInputElement | null = null;
+  let rejectDialogOpen = false;
+  let rejectObservation = '';
+  let rejectObservationError: string | null = null;
   let isImagePreviewOpen = false;
   let previewImageUrl: string | null = null;
   let previewImageIndex = 0;
@@ -821,6 +827,12 @@
     editableProperty.promotional_rent_price = rentPromo;
   }
 
+  function syncEditZeroFlags(property: PropertyDetails) {
+    editBedroomsAsZero = Number(property.bedrooms ?? -1) === 0;
+    editBathroomsAsZero = Number(property.bathrooms ?? -1) === 0;
+    editGarageSpotsAsZero = Number(property.garage_spots ?? -1) === 0;
+  }
+
   function toggleEditMode() {
     if (!selectedProperty) return;
     isEditMode = !isEditMode;
@@ -828,12 +840,16 @@
     if (isEditMode && editableProperty) {
       syncEditPriceDisplays(editableProperty);
       editSemNumero = isSemNumeroValue(editableProperty.numero);
+      syncEditZeroFlags(editableProperty);
       if (editSemNumero) {
         editableProperty.numero = '';
       }
     } else {
       editableProperty = sanitizeEditable(selectedProperty as PropertyDetails);
       editSemNumero = false;
+      editBedroomsAsZero = false;
+      editBathroomsAsZero = false;
+      editGarageSpotsAsZero = false;
     }
   }
 
@@ -878,6 +894,7 @@
             : null,
       });
       editSemNumero = isSemNumeroValue(merged.numero);
+      syncEditZeroFlags(merged);
       if (editSemNumero && editableProperty) {
         editableProperty.numero = '';
       }
@@ -909,9 +926,15 @@
     selectedProperty = null;
     editableProperty = null;
     editSemNumero = false;
+    editBedroomsAsZero = false;
+    editBathroomsAsZero = false;
+    editGarageSpotsAsZero = false;
     brokenPreviewImages = new Set();
     isEditMode = false;
     editError = null;
+    rejectDialogOpen = false;
+    rejectObservation = '';
+    rejectObservationError = null;
   }
 
   async function handleStatusUpdate(newStatus: 'approved' | 'rejected') {
@@ -920,8 +943,10 @@
       return;
     }
     if (newStatus === 'rejected') {
-      const confirmed = window.confirm('Tem certeza que deseja rejeitar este imóvel?');
-      if (!confirmed) return;
+      rejectObservation = '';
+      rejectObservationError = null;
+      rejectDialogOpen = true;
+      return;
     }
     isProcessing = true;
     try {
@@ -944,7 +969,7 @@
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
         clearSessionToken();
       } else {
-        toast.error('Falha ao atualizar o status.');
+        toast.error(extractApiErrorMessage(err, 'Falha ao atualizar o status.'));
       }
     } finally {
       isProcessing = false;
@@ -990,9 +1015,44 @@
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
         clearSessionToken();
       } else {
-        deleteError =
-          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-          'Falha ao excluir o imóvel.';
+        deleteError = extractApiErrorMessage(err, 'Falha ao excluir o imóvel.');
+      }
+    } finally {
+      isProcessing = false;
+    }
+  }
+
+  async function confirmRejectProperty() {
+    if (!selectedProperty) {
+      rejectDialogOpen = false;
+      return;
+    }
+
+    const reason = rejectObservation.trim();
+    if (!reason) {
+      rejectObservationError = 'Informe a observação da rejeição.';
+      return;
+    }
+
+    isProcessing = true;
+    rejectObservationError = null;
+    try {
+      await api.patch(`/admin/properties/${selectedProperty.id}/reject`, { reason });
+      toast.success('Imóvel rejeitado e removido.');
+      rejectDialogOpen = false;
+      isModalOpen = false;
+      clearStagedImages();
+      clearStagedVideo();
+      selectedProperty = null;
+      await fetchProperties();
+    } catch (err) {
+      console.error('Falha ao rejeitar o imóvel:', err);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        toast.error('Sua sessão expirou. Por favor, faca login novamente.');
+        clearSessionToken();
+      } else {
+        toast.error(extractApiErrorMessage(err, 'Falha ao rejeitar o imóvel.'));
       }
     } finally {
       isProcessing = false;
@@ -1260,13 +1320,9 @@
       const requestedStatus = (payload as any).status;
 
       if (requestedStatus === 'rejected') {
-        await api.patch(`/admin/properties/${selectedProperty.id}/reject`, {});
-        toast.success('Imóvel rejeitado e removido.');
-        isEditMode = false;
-        isModalOpen = false;
-        selectedProperty = null;
-        editableProperty = null;
-        await fetchProperties();
+        rejectObservation = '';
+        rejectObservationError = null;
+        rejectDialogOpen = true;
         return;
       }
 
@@ -1291,20 +1347,23 @@
       console.error('Erro ao salvar imóvel:', err);
       const status = err?.response?.status;
       if (status === 403) {
-        editError =
-          err?.response?.data?.error ||
-          'Permissão negada pelo servidor para atualizar este imóvel. Verifique campos obrigatórios e permissão do usuário.';
+        editError = extractApiErrorMessage(
+          err,
+          'Permissão negada pelo servidor para atualizar este imóvel. Verifique campos obrigatórios e permissão do usuário.'
+        );
       } else if (status === 404) {
-        editError =
-          err?.response?.data?.error ||
-          'Imóvel não encontrado ou rota de atualização ausente no servidor.';
+        editError = extractApiErrorMessage(
+          err,
+          'Imóvel não encontrado ou rota de atualização ausente no servidor.'
+        );
       } else if (status === 500) {
-        editError =
-          err?.response?.data?.error ||
-          'Erro interno no servidor ao salvar o imóvel. Tente novamente e revise os campos.';
+        editError = extractApiErrorMessage(
+          err,
+          'Erro interno no servidor ao salvar o imóvel. Tente novamente e revise os campos.'
+        );
       } else {
         editError =
-          err?.response?.data?.error ||
+          extractApiErrorMessage(err, '') ||
           (err instanceof Error ? err.message : 'Não foi possível salvar o imóvel.');
       }
     } finally {
@@ -1469,7 +1528,7 @@
         clearSessionToken();
       }
       videoDeleteError =
-        err?.response?.data?.error ||
+        extractApiErrorMessage(err, '') ||
         (err instanceof Error ? err.message : 'Falha ao remover vídeo.');
     } finally {
       videoDeleting = false;
@@ -1536,7 +1595,7 @@
     } catch (err: any) {
       console.error('Erro ao enviar video:', err);
       videoDeleteError =
-        err?.response?.data?.error ||
+        extractApiErrorMessage(err, '') ||
         (err instanceof Error ? err.message : 'Falha ao enviar video.');
     } finally {
       videoUploading = false;
@@ -2557,14 +2616,29 @@
                 <input name="tipo_lote" maxlength="25" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.tipo_lote} />
               </label>
               <label class="flex flex-col gap-1">
-                <strong>Quartos:</strong>
+                <strong class="flex items-center justify-between gap-3">
+                  <span>Quartos:</span>
+                  <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <input
+                      type="checkbox"
+                      bind:checked={editBedroomsAsZero}
+                      on:change={() => {
+                        if (editBedroomsAsZero && editableProperty) {
+                          editableProperty.bedrooms = 0;
+                        }
+                      }}
+                    />
+                    Sem quarto
+                  </span>
+                </strong>
                 <input
                   name="bedrooms"
                   type="text"
                   inputmode="numeric"
                   maxlength="2"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
                   bind:value={editableProperty.bedrooms}
+                  disabled={editBedroomsAsZero}
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
@@ -2575,14 +2649,29 @@
                 />
               </label>
               <label class="flex flex-col gap-1">
-                <strong>Banheiros:</strong>
+                <strong class="flex items-center justify-between gap-3">
+                  <span>Banheiros:</span>
+                  <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <input
+                      type="checkbox"
+                      bind:checked={editBathroomsAsZero}
+                      on:change={() => {
+                        if (editBathroomsAsZero && editableProperty) {
+                          editableProperty.bathrooms = 0;
+                        }
+                      }}
+                    />
+                    Sem banheiro
+                  </span>
+                </strong>
                 <input
                   name="bathrooms"
                   type="text"
                   inputmode="numeric"
                   maxlength="2"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
                   bind:value={editableProperty.bathrooms}
+                  disabled={editBathroomsAsZero}
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
@@ -2593,14 +2682,29 @@
                 />
               </label>
               <label class="flex flex-col gap-1">
-                <strong>Garagens:</strong>
+                <strong class="flex items-center justify-between gap-3">
+                  <span>Garagens:</span>
+                  <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <input
+                      type="checkbox"
+                      bind:checked={editGarageSpotsAsZero}
+                      on:change={() => {
+                        if (editGarageSpotsAsZero && editableProperty) {
+                          editableProperty.garage_spots = 0;
+                        }
+                      }}
+                    />
+                    Sem garagem
+                  </span>
+                </strong>
                 <input
                   name="garage_spots"
                   type="text"
                   inputmode="numeric"
                   maxlength="2"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
                   bind:value={editableProperty.garage_spots}
+                  disabled={editGarageSpotsAsZero}
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
@@ -2796,6 +2900,47 @@
     {/if}
   </Dialog.Content>
 </Dialog.Root>
+
+{#if rejectDialogOpen}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+    <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
+      <div class="space-y-2">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Rejeitar imóvel</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+          Informe a observação que justifica a rejeição antes de concluir a ação.
+        </p>
+      </div>
+      <label class="mt-4 block">
+        <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Observação</span>
+        <textarea
+          rows="4"
+          maxlength="500"
+          bind:value={rejectObservation}
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          placeholder="Explique o motivo da rejeição"
+        ></textarea>
+      </label>
+      {#if rejectObservationError}
+        <p class="mt-2 text-sm text-red-600 dark:text-red-300">{rejectObservationError}</p>
+      {/if}
+      <div class="mt-6 flex justify-end gap-2">
+        <Button variant="outline" on:click={() => {
+          rejectDialogOpen = false;
+          rejectObservation = '';
+          rejectObservationError = null;
+        }} disabled={isProcessing}>
+          Cancelar
+        </Button>
+        <Button variant="destructive" on:click={confirmRejectProperty} disabled={isProcessing}>
+          {#if isProcessing}
+            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+          {/if}
+          Confirmar rejeição
+        </Button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <AdminPasswordConfirmDialog
   bind:open={isDeleteDialogOpen}

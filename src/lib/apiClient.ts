@@ -2,6 +2,7 @@ import axios, { AxiosHeaders, type AxiosRequestConfig } from 'axios';
 import { toast } from 'svelte-sonner';
 import { get } from 'svelte/store';
 import { baseURL, handleUnauthorizedResponse } from './api';
+import { extractApiErrorMessage } from '$lib/components/create-property-helpers';
 import { reportObservedError } from './observability';
 import { authToken } from './store';
 
@@ -110,6 +111,7 @@ type TokenOrOptions = string | null | RequestOptions | undefined;
 type ExtendedAxiosConfig = AxiosRequestConfig & {
   token?: string | null;
   skipAuth?: boolean;
+  skipErrorToast?: boolean;
 };
 
 function normalizeOptions(tokenOrOptions?: TokenOrOptions): RequestOptions {
@@ -201,11 +203,17 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const fallbackMessage =
-      (typeof safeResponseData?.message === 'string' ? safeResponseData.message : undefined) ||
-      error.message ||
-      'Erro ao se comunicar com o servidor.';
-    toast.error(fallbackMessage);
+    const fallbackMessage = extractApiErrorMessage(
+      error,
+      typeof error.message === 'string' && error.message.trim().length > 0
+        ? error.message
+        : 'Erro ao se comunicar com o servidor.'
+    );
+
+    const cfg = error.config as ExtendedAxiosConfig | undefined;
+    if (!cfg?.skipErrorToast) {
+      toast.error(fallbackMessage);
+    }
     return Promise.reject(error);
   }
 );
