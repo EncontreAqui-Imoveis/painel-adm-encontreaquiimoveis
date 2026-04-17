@@ -5,6 +5,7 @@
   import * as Dialog from '$lib/components/ui/dialog';
   import { Button } from '$lib/components/ui/button';
   import { Loader2 } from 'lucide-svelte';
+  import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
 
   type BrokerDetail = {
     id: number;
@@ -35,6 +36,22 @@
   let lastBrokerId: number | null = null;
   const dispatch = createEventDispatcher();
   let wasOpen = open;
+  let isEditMode = false;
+  let deleteError: string | null = null;
+  let isDeleteDialogOpen = false;
+  let brokerForm = {
+    name: '',
+    email: '',
+    phone: '',
+    street: '',
+    number: '',
+    complement: '',
+    bairro: '',
+    city: '',
+    state: '',
+    cep: '',
+    creci: '',
+  };
 
   $: if (wasOpen && !open) {
     dispatch('close');
@@ -51,6 +68,9 @@
     detailError = null;
     isDetailLoading = false;
     lastBrokerId = null;
+    isEditMode = false;
+    deleteError = null;
+    isDeleteDialogOpen = false;
   }
 
   function formatDate(value?: string | null) {
@@ -69,6 +89,19 @@
       const detail = (response as { data?: BrokerDetail })?.data ?? response;
       if (detail && typeof detail === 'object' && 'id' in detail) {
         brokerDetail = detail as BrokerDetail;
+        brokerForm = {
+          name: brokerDetail.name ?? broker?.name ?? '',
+          email: brokerDetail.email ?? broker?.email ?? '',
+          phone: brokerDetail.phone ?? broker?.phone ?? '',
+          street: brokerDetail.street ?? '',
+          number: brokerDetail.number ?? '',
+          complement: brokerDetail.complement ?? '',
+          bairro: brokerDetail.bairro ?? '',
+          city: brokerDetail.city ?? '',
+          state: brokerDetail.state ?? '',
+          cep: brokerDetail.cep ?? '',
+          creci: brokerDetail.creci ?? broker?.creci ?? '',
+        };
         detailError = null;
       } else {
         brokerDetail = null;
@@ -86,20 +119,19 @@
 
   async function handleStatusUpdate(newStatus: 'approved' | 'rejected') {
     if (!broker) return;
-    if (newStatus === 'rejected') {
-      const confirmed = window.confirm('Tem certeza que deseja rejeitar este corretor?');
-      if (!confirmed) return;
-    }
 
     isProcessing = true;
     try {
-      if (newStatus === 'rejected') {
-        await api.post(`/admin/brokers/${broker.id}/cleanup`, {});
-        toast.success('Corretor rejeitado e removido.');
-      } else {
-        await api.patch(`/admin/brokers/${broker.id}/status`, { status: newStatus });
-        toast.success('Corretor aprovado.');
-      }
+      const response = await api.patch<{ role?: string }>(`/admin/brokers/${broker.id}/status`, {
+        status: newStatus,
+      });
+      toast.success(
+        newStatus === 'approved'
+          ? 'Corretor aprovado.'
+          : response.role === 'client'
+            ? 'Corretor rebaixado para cliente.'
+            : 'Status atualizado.',
+      );
 
       dispatch('update');
       close();
@@ -116,20 +148,63 @@
     open = false;
   }
 
-  async function handleDelete() {
+  async function handleSave() {
     if (!broker) return;
-    const confirmed = window.confirm('Deseja remover este corretor permanentemente?');
-    if (!confirmed) return;
 
     isProcessing = true;
     try {
-      await api.delete(`/admin/brokers/${broker.id}`);
+      await api.put(`/admin/brokers/${broker.id}`, {
+        name: brokerForm.name.trim(),
+        email: brokerForm.email.trim(),
+        phone: brokerForm.phone.trim(),
+        street: brokerForm.street.trim(),
+        number: brokerForm.number.trim(),
+        complement: brokerForm.complement.trim(),
+        bairro: brokerForm.bairro.trim(),
+        city: brokerForm.city.trim(),
+        state: brokerForm.state.trim(),
+        cep: brokerForm.cep.trim(),
+        creci: brokerForm.creci.trim(),
+      });
+      brokerDetail = {
+        ...(brokerDetail ?? { id: broker.id }),
+        ...brokerForm,
+        status: brokerDetail?.status ?? broker.status ?? null,
+        created_at: brokerDetail?.created_at ?? broker.created_at ?? null,
+      };
+      toast.success('Corretor atualizado.');
+      isEditMode = false;
+      dispatch('update');
+    } catch (error) {
+      console.error('Erro ao atualizar corretor:', error);
+      toast.error('Falha ao atualizar corretor.');
+    } finally {
+      isProcessing = false;
+    }
+  }
+
+  async function handleDelete(password: string) {
+    if (!broker) return;
+
+    isProcessing = true;
+    deleteError = null;
+    try {
+      const response = await api.post<{ reauthToken: string }>('/admin/reauth', {
+        password,
+      });
+      await api.delete(`/admin/brokers/${broker.id}`, {
+        headers: {
+          'X-Admin-Reauth': response.reauthToken,
+        },
+      });
       toast.success('Corretor excluido.');
       dispatch('update');
       close();
     } catch (error) {
       console.error('Erro ao excluir corretor:', error);
-      toast.error('Falha ao excluir corretor.');
+      deleteError =
+        (error as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Falha ao excluir corretor.';
     } finally {
       isProcessing = false;
     }
@@ -142,7 +217,7 @@
       <Dialog.Header>
         <Dialog.Title className="text-2xl">Revisar Corretor</Dialog.Title>
         <Dialog.Description>
-          Rejeite ou exclua o corretor <span class="font-semibold">{broker.name}</span>
+          Revise, edite ou altere o status do corretor <span class="font-semibold">{broker.name}</span>
         </Dialog.Description>
       </Dialog.Header>
 
@@ -157,91 +232,140 @@
             {detailError}
           </div>
         {:else}
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div>
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome</div>
-              <div class="font-medium text-gray-900 dark:text-gray-100">
-                {brokerDetail?.name ?? broker.name}
+          {#if isEditMode}
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome</span>
+                <input bind:value={brokerForm.name} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Email</span>
+                <input bind:value={brokerForm.email} type="email" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Telefone</span>
+                <input bind:value={brokerForm.phone} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CRECI</span>
+                <input bind:value={brokerForm.creci} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1 sm:col-span-2">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Endereco</span>
+                <input bind:value={brokerForm.street} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Numero</span>
+                <input bind:value={brokerForm.number} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Complemento</span>
+                <input bind:value={brokerForm.complement} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Bairro</span>
+                <input bind:value={brokerForm.bairro} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CEP</span>
+                <input bind:value={brokerForm.cep} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cidade</span>
+                <input bind:value={brokerForm.city} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Estado</span>
+                <input bind:value={brokerForm.state} maxlength="2" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm uppercase text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+            </div>
+          {:else}
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {brokerDetail?.name ?? broker.name}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Email</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {brokerDetail?.email ?? broker.email}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Telefone</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {brokerDetail?.phone ?? broker.phone ?? 'N/A'}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CRECI</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {brokerDetail?.creci ?? broker.creci ?? 'N/A'}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Status</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {brokerDetail?.status ?? broker.status ?? '-'}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cadastrado em</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {formatDate(brokerDetail?.created_at ?? broker.created_at)}
+                </div>
               </div>
             </div>
-            <div>
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Email</div>
-              <div class="font-medium text-gray-900 dark:text-gray-100">
-                {brokerDetail?.email ?? broker.email}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Telefone</div>
-              <div class="font-medium text-gray-900 dark:text-gray-100">
-                {brokerDetail?.phone ?? broker.phone ?? 'N/A'}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CRECI</div>
-              <div class="font-medium text-gray-900 dark:text-gray-100">
-                {brokerDetail?.creci ?? broker.creci ?? 'N/A'}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Status</div>
-              <div class="font-medium text-gray-900 dark:text-gray-100">
-                {brokerDetail?.status ?? broker.status ?? '-'}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cadastrado em</div>
-              <div class="font-medium text-gray-900 dark:text-gray-100">
-                {formatDate(brokerDetail?.created_at ?? broker.created_at)}
-              </div>
-            </div>
-          </div>
 
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Endereco</div>
-            <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">
-              {brokerDetail?.street ?? '-'}
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Endereco</div>
+              <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                {brokerDetail?.street ?? '-'}
+              </div>
+              <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Numero</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {brokerDetail?.number ?? '-'}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Complemento</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {brokerDetail?.complement ?? '-'}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Bairro</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {brokerDetail?.bairro ?? '-'}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CEP</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {brokerDetail?.cep ?? '-'}
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cidade</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {brokerDetail?.city ?? '-'}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Estado</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {brokerDetail?.state ?? '-'}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Numero</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {brokerDetail?.number ?? '-'}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Complemento</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {brokerDetail?.complement ?? '-'}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Bairro</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {brokerDetail?.bairro ?? '-'}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CEP</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {brokerDetail?.cep ?? '-'}
-                </div>
-              </div>
-            </div>
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cidade</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {brokerDetail?.city ?? '-'}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Estado</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {brokerDetail?.state ?? '-'}
-                </div>
-              </div>
-            </div>
-          </div>
+          {/if}
         {/if}
       </div>
 
@@ -249,6 +373,20 @@
         <Button variant="outline" on:click={close} disabled={isProcessing}>
           Cancelar
         </Button>
+        {#if isEditMode}
+          <Button variant="outline" on:click={() => (isEditMode = false)} disabled={isProcessing}>
+            Voltar
+          </Button>
+          <Button on:click={handleSave} disabled={isProcessing}>
+            {#if isProcessing}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Salvar alterações
+          </Button>
+        {:else}
+          <Button variant="outline" on:click={() => (isEditMode = true)} disabled={isProcessing || !brokerDetail}>
+            Editar
+          </Button>
         {#if showApprove}
           <Button
             variant="outline"
@@ -270,13 +408,21 @@
             Rejeitar
           </Button>
         {/if}
-        <Button className="bg-red-700 text-white hover:bg-red-800" on:click={handleDelete} disabled={isProcessing}>
-          {#if isProcessing}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-          {/if}
+        <Button className="bg-red-700 text-white hover:bg-red-800" on:click={() => (isDeleteDialogOpen = true)} disabled={isProcessing}>
           Excluir
         </Button>
+        {/if}
       </Dialog.Footer>
     {/if}
   </Dialog.Content>
 </Dialog.Root>
+
+<AdminPasswordConfirmDialog
+  bind:open={isDeleteDialogOpen}
+  title="Excluir corretor"
+  description={broker ? `Confirme sua senha para excluir ${broker.name}.` : ''}
+  confirmLabel="Excluir corretor"
+  isSubmitting={isProcessing}
+  error={deleteError}
+  on:confirm={(event) => handleDelete(event.detail.password)}
+/>

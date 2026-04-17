@@ -8,6 +8,7 @@
   import { Loader2 } from 'lucide-svelte';
   import { toast } from 'svelte-sonner';
   import Pagination from '$lib/Pagination.svelte';
+  import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import type { PropertyStatus } from '$lib/types';
 
   type Client = {
@@ -49,6 +50,19 @@
     search: string;
   };
 
+  type ClientFormState = {
+    name: string;
+    email: string;
+    phone: string;
+    street: string;
+    number: string;
+    complement: string;
+    bairro: string;
+    city: string;
+    state: string;
+    cep: string;
+  };
+
   let clients: Client[] = [];
   let isLoading = true;
   let error = '';
@@ -73,6 +87,36 @@
   let isPropertiesLoading = false;
   let propertiesError: string | null = null;
   let isProcessing = false;
+  let isEditMode = false;
+  let clientForm: ClientFormState = {
+    name: '',
+    email: '',
+    phone: '',
+    street: '',
+    number: '',
+    complement: '',
+    bairro: '',
+    city: '',
+    state: '',
+    cep: '',
+  };
+  let isDeleteDialogOpen = false;
+  let deleteError: string | null = null;
+
+  function buildClientForm(detail: ClientDetail | null, fallback: Client | null): ClientFormState {
+    return {
+      name: detail?.name ?? fallback?.name ?? '',
+      email: detail?.email ?? fallback?.email ?? '',
+      phone: detail?.phone ?? fallback?.phone ?? '',
+      street: detail?.street ?? '',
+      number: detail?.number ?? '',
+      complement: detail?.complement ?? '',
+      bairro: detail?.bairro ?? '',
+      city: detail?.city ?? '',
+      state: detail?.state ?? '',
+      cep: detail?.cep ?? '',
+    };
+  }
 
   function requestFetch(resetPage = false) {
     if (resetPage) {
@@ -214,6 +258,9 @@
     clientDetail = null;
     clientDetailError = null;
     isClientDetailLoading = true;
+    isEditMode = false;
+    deleteError = null;
+    clientForm = buildClientForm(null, client);
     fetchClientDetail(client.id);
   }
 
@@ -224,6 +271,7 @@
       if (detail && typeof detail === 'object' && 'id' in detail) {
         clientDetail = detail as ClientDetail;
         clientDetailError = null;
+        clientForm = buildClientForm(clientDetail, selectedClient);
       } else {
         clientDetail = null;
         clientDetailError = 'Não foi possível carregar os dados do cliente.';
@@ -268,6 +316,9 @@
     clientDetail = null;
     clientDetailError = null;
     isClientDetailLoading = false;
+    isEditMode = false;
+    deleteError = null;
+    isDeleteDialogOpen = false;
   }
 
   function closePropertiesModal() {
@@ -278,20 +329,70 @@
     propertiesError = null;
   }
 
-  async function deleteClient() {
+  async function saveClient() {
     if (!selectedClient) return;
-    const confirmed = window.confirm(`Excluir o cliente ${selectedClient.name}?`);
-    if (!confirmed) return;
-
+    const clientId = selectedClient.id;
     isProcessing = true;
     try {
-      await api.delete(`/admin/clients/${selectedClient.id}`);
+      await api.put(`/admin/clients/${clientId}`, {
+        name: clientForm.name.trim(),
+        email: clientForm.email.trim(),
+        phone: clientForm.phone.trim(),
+        street: clientForm.street.trim(),
+        number: clientForm.number.trim(),
+        complement: clientForm.complement.trim(),
+        bairro: clientForm.bairro.trim(),
+        city: clientForm.city.trim(),
+        state: clientForm.state.trim(),
+        cep: clientForm.cep.trim(),
+      });
+      toast.success('Cliente atualizado.');
+      clientDetail = {
+        ...(clientDetail ?? { id: clientId }),
+        ...clientForm,
+        created_at: clientDetail?.created_at ?? selectedClient.created_at,
+      };
+      clients = clients.map((item) =>
+        item.id === clientId
+          ? {
+              ...item,
+              name: clientForm.name.trim(),
+              email: clientForm.email.trim(),
+              phone: clientForm.phone.trim(),
+            }
+          : item,
+      );
+      isEditMode = false;
+    } catch (err) {
+      console.error('Erro ao atualizar cliente:', err);
+      toast.error('Falha ao atualizar cliente.');
+    } finally {
+      isProcessing = false;
+    }
+  }
+
+  async function deleteClient(password: string) {
+    if (!selectedClient) return;
+
+    isProcessing = true;
+    deleteError = null;
+    try {
+      const response = await api.post<{ reauthToken: string }>('/admin/reauth', {
+        password,
+      });
+      await api.delete(`/admin/clients/${selectedClient.id}`, {
+        headers: {
+          'X-Admin-Reauth': response.reauthToken,
+        },
+      });
       toast.success('Cliente excluido.');
       clients = clients.filter((c) => c.id !== selectedClient?.id);
       closeModal();
     } catch (err) {
       console.error('Erro ao excluir cliente:', err);
-      toast.error('Falha ao excluir cliente.');
+      deleteError =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Falha ao excluir cliente.';
     } finally {
       isProcessing = false;
     }
@@ -494,94 +595,167 @@
             {clientDetailError}
           </div>
         {:else}
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div>
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome</div>
-              <div class="font-medium text-gray-900 dark:text-gray-100">
-                {clientDetail?.name ?? selectedClient.name}
+          {#if isEditMode}
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome</span>
+                <input bind:value={clientForm.name} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Email</span>
+                <input bind:value={clientForm.email} type="email" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Telefone</span>
+                <input bind:value={clientForm.phone} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cadastrado em</div>
+                <div class="pt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {formatDate(clientDetail?.created_at ?? selectedClient.created_at)}
+                </div>
+              </div>
+              <label class="space-y-1 sm:col-span-2">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Endereco</span>
+                <input bind:value={clientForm.street} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Numero</span>
+                <input bind:value={clientForm.number} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Complemento</span>
+                <input bind:value={clientForm.complement} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Bairro</span>
+                <input bind:value={clientForm.bairro} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CEP</span>
+                <input bind:value={clientForm.cep} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cidade</span>
+                <input bind:value={clientForm.city} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+              <label class="space-y-1">
+                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Estado</span>
+                <input bind:value={clientForm.state} maxlength="2" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm uppercase text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
+              </label>
+            </div>
+          {:else}
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {clientDetail?.name ?? selectedClient.name}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Email</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {clientDetail?.email ?? selectedClient.email}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Telefone</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {clientDetail?.phone ?? selectedClient.phone ?? 'N/A'}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cadastrado em</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {formatDate(clientDetail?.created_at ?? selectedClient.created_at)}
+                </div>
               </div>
             </div>
-            <div>
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Email</div>
-              <div class="font-medium text-gray-900 dark:text-gray-100">
-                {clientDetail?.email ?? selectedClient.email}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Telefone</div>
-              <div class="font-medium text-gray-900 dark:text-gray-100">
-                {clientDetail?.phone ?? selectedClient.phone ?? 'N/A'}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cadastrado em</div>
-              <div class="font-medium text-gray-900 dark:text-gray-100">
-                {formatDate(clientDetail?.created_at ?? selectedClient.created_at)}
-              </div>
-            </div>
-          </div>
 
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Endereco</div>
-            <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">
-              {clientDetail?.street ?? '-'}
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Endereco</div>
+              <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                {clientDetail?.street ?? '-'}
+              </div>
+              <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Numero</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {clientDetail?.number ?? '-'}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Complemento</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {clientDetail?.complement ?? '-'}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Bairro</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {clientDetail?.bairro ?? '-'}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CEP</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {clientDetail?.cep ?? '-'}
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cidade</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {clientDetail?.city ?? '-'}
+                  </div>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Estado</div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {clientDetail?.state ?? '-'}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Numero</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {clientDetail?.number ?? '-'}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Complemento</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {clientDetail?.complement ?? '-'}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Bairro</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {clientDetail?.bairro ?? '-'}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CEP</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {clientDetail?.cep ?? '-'}
-                </div>
-              </div>
-            </div>
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cidade</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {clientDetail?.city ?? '-'}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Estado</div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {clientDetail?.state ?? '-'}
-                </div>
-              </div>
-            </div>
-          </div>
+          {/if}
         {/if}
       </div>
 
       <Dialog.Footer className="flex gap-2">
         <Button variant="outline" on:click={closeModal} disabled={isProcessing}>Cancelar</Button>
-        <Button variant="destructive" on:click={deleteClient} disabled={isProcessing}>
-          {#if isProcessing}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-          {/if}
-          Excluir cliente
-        </Button>
+        {#if isEditMode}
+          <Button variant="outline" on:click={() => (isEditMode = false)} disabled={isProcessing}>
+            Voltar
+          </Button>
+          <Button on:click={saveClient} disabled={isProcessing}>
+            {#if isProcessing}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Salvar alterações
+          </Button>
+        {:else}
+          <Button variant="outline" on:click={() => (isEditMode = true)} disabled={isProcessing || !clientDetail}>
+            Editar
+          </Button>
+          <Button variant="destructive" on:click={() => (isDeleteDialogOpen = true)} disabled={isProcessing}>
+            Excluir cliente
+          </Button>
+        {/if}
       </Dialog.Footer>
     {/if}
   </Dialog.Content>
 </Dialog.Root>
+
+<AdminPasswordConfirmDialog
+  bind:open={isDeleteDialogOpen}
+  title="Excluir cliente"
+  description={selectedClient ? `Confirme sua senha para excluir ${selectedClient.name}.` : ''}
+  confirmLabel="Excluir cliente"
+  isSubmitting={isProcessing}
+  error={deleteError}
+  on:confirm={(event) => deleteClient(event.detail.password)}
+/>
 
 <Dialog.Root bind:open={isPropertiesModalOpen}>
   <Dialog.Content className="max-w-lg max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">

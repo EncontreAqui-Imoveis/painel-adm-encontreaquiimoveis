@@ -8,6 +8,7 @@
   import { Button } from '$lib/components/ui/button';
   import * as Select from '$lib/components/ui/select';
   import { Input } from '$lib/components/ui/input';
+  import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import { clampAreaInput, clampCountInput } from '$lib/components/create-property-helpers';
   import FeaturedPropertiesPanel from '$lib/components/FeaturedPropertiesPanel.svelte';
   import Pagination from '$lib/Pagination.svelte';
@@ -116,6 +117,8 @@
   let selectedProperty: PropertyDetails | null = null;
   let isDetailLoading = false;
   let isProcessing = false;
+  let isDeleteDialogOpen = false;
+  let deleteError: string | null = null;
   let isEditMode = false;
   let editableProperty: PropertyDetails | null = null;
   let editSemNumero = false;
@@ -901,6 +904,8 @@
     clearStagedImages();
     clearStagedVideo();
     isModalOpen = false;
+    isDeleteDialogOpen = false;
+    deleteError = null;
     selectedProperty = null;
     editableProperty = null;
     editSemNumero = false;
@@ -951,12 +956,28 @@
       toast.error('Erro de estado: o imóvel selecionado esta nulo. Tente fechar e reabrir o modal.');
       return;
     }
-    const confirmed = window.confirm('Tem certeza que deseja excluir este imóvel? Esta ação não pode ser desfeita.');
-    if (!confirmed) return;
+
+    isDeleteDialogOpen = true;
+  }
+
+  async function confirmDeleteProperty(password: string) {
+    if (!selectedProperty) {
+      return;
+    }
+
     isProcessing = true;
+    deleteError = null;
     try {
-      await api.delete(`/admin/properties/${selectedProperty.id}`);
+      const response = await api.post<{ reauthToken: string }>('/admin/reauth', {
+        password,
+      });
+      await api.delete(`/admin/properties/${selectedProperty.id}`, {
+        headers: {
+          'X-Admin-Reauth': response.reauthToken,
+        },
+      });
       toast.success('Imóvel excluido com sucesso.');
+      isDeleteDialogOpen = false;
       isModalOpen = false;
       clearStagedImages();
       clearStagedVideo();
@@ -969,7 +990,9 @@
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
         clearSessionToken();
       } else {
-        toast.error('Falha ao excluir o imóvel.');
+        deleteError =
+          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          'Falha ao excluir o imóvel.';
       }
     } finally {
       isProcessing = false;
@@ -2773,6 +2796,16 @@
     {/if}
   </Dialog.Content>
 </Dialog.Root>
+
+<AdminPasswordConfirmDialog
+  bind:open={isDeleteDialogOpen}
+  title="Excluir imóvel"
+  description={selectedProperty ? `Confirme sua senha para excluir o imóvel ${selectedProperty.title}.` : ''}
+  confirmLabel="Excluir imóvel"
+  isSubmitting={isProcessing}
+  error={deleteError}
+  on:confirm={(event) => confirmDeleteProperty(event.detail.password)}
+/>
 
 <svelte:window on:keydown={handlePreviewKeydown} />
 
