@@ -148,9 +148,7 @@
 
   const navItemBase =
     'w-full text-left flex items-start gap-3 rounded-xl px-4 py-3 text-[15px] leading-snug transition';
-  const navItemActive =
-    'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-200 dark:ring-emerald-400/20';
-  const navItemInactive =
+  const navItemStyle =
     'text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white';
 
   function isValidView(view: string): view is View {
@@ -176,7 +174,7 @@
     return null;
   }
 
-  /** Rotas com URL dedicada têm prioridade sobre o hash (#view) ao destacar a aba ativa. */
+  /** Rotas com URL dedicada têm prioridade sobre o hash (#view) ao sincronizar a vista. */
   function viewFromPathname(pathname: string): View | null {
     const normalized = pathname.replace(/\/$/, '') || '/';
     const entries: { prefix: string; view: View }[] = [
@@ -247,17 +245,14 @@
     }
   }
 
-  function navItemClass(view: View, extra = '') {
-    return `${navItemBase} ${activeView === view ? navItemActive : navItemInactive} ${extra}`.trim();
+  function navItemClass(_view: View, extra = '') {
+    return `${navItemBase} ${navItemStyle} ${extra}`.trim();
   }
 
   const groupHeaderLayout =
     'w-full text-left flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-[15px] leading-snug transition';
 
-  function groupHeaderClass(group: GroupKey) {
-    const active = getGroupForView(activeView) === group;
-    return `${groupHeaderLayout} ${active ? navItemActive : navItemInactive}`.trim();
-  }
+  const groupHeaderClassValue = `${groupHeaderLayout} ${navItemStyle}`.trim();
 
   function handleHashChange() {
     if (typeof window === 'undefined') return;
@@ -362,7 +357,7 @@
 
     <div class="space-y-1">
       <button
-        class={groupHeaderClass('imoveis')}
+        class={groupHeaderClassValue}
         on:click={() => toggleGroup('imoveis')}
         aria-expanded={openGroups.imoveis}
       >
@@ -408,7 +403,7 @@
 
     <div class="space-y-1">
       <button
-        class={groupHeaderClass('usuarios')}
+        class={groupHeaderClassValue}
         on:click={() => toggleGroup('usuarios')}
         aria-expanded={openGroups.usuarios}
       >
@@ -435,7 +430,7 @@
 
     <div class="space-y-1">
       <button
-        class={groupHeaderClass('negociacoes')}
+        class={groupHeaderClassValue}
         on:click={() => toggleGroup('negociacoes')}
         aria-expanded={openGroups.negociacoes}
       >
@@ -462,7 +457,7 @@
 
     <div class="space-y-1">
       <button
-        class={groupHeaderClass('verificacao')}
+        class={groupHeaderClassValue}
         on:click={() => toggleGroup('verificacao')}
         aria-expanded={openGroups.verificacao}
       >
