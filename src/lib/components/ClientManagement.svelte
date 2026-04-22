@@ -17,6 +17,7 @@
     email: string;
     phone?: string | null;
     created_at?: string;
+    role?: string;
   };
 
   type ClientDetail = {
@@ -102,6 +103,9 @@
   };
   let isDeleteDialogOpen = false;
   let deleteError: string | null = null;
+  let isPromoteDialogOpen = false;
+  let promoteCreci = '';
+  let promoteError: string | null = null;
 
   function buildClientForm(detail: ClientDetail | null, fallback: Client | null): ClientFormState {
     return {
@@ -319,6 +323,9 @@
     isEditMode = false;
     deleteError = null;
     isDeleteDialogOpen = false;
+    isPromoteDialogOpen = false;
+    promoteCreci = '';
+    promoteError = null;
   }
 
   function closePropertiesModal() {
@@ -366,6 +373,42 @@
     } catch (err) {
       console.error('Erro ao atualizar cliente:', err);
       toast.error('Falha ao atualizar cliente.');
+    } finally {
+      isProcessing = false;
+    }
+  }
+
+  function openPromoteDialog() {
+    promoteCreci = '';
+    promoteError = null;
+    isPromoteDialogOpen = true;
+  }
+
+  function closePromoteDialog() {
+    if (isProcessing) return;
+    isPromoteDialogOpen = false;
+    promoteCreci = '';
+    promoteError = null;
+  }
+
+  async function submitPromoteBroker() {
+    if (!selectedClient) return;
+    const trimmed = promoteCreci.trim();
+    if (trimmed.length < 3) {
+      promoteError = 'Informe um CRECI válido.';
+      return;
+    }
+    isProcessing = true;
+    promoteError = null;
+    try {
+      await api.post(`/admin/clients/${selectedClient.id}/promote-broker`, { creci: trimmed });
+      toast.success('Usuário promovido a corretor (CRECI aprovado).');
+      closePromoteDialog();
+      requestFetch();
+      closeModal();
+    } catch (err) {
+      const data = err as { response?: { data?: { error?: string } } };
+      promoteError = data?.response?.data?.error ?? 'Falha ao promover. Tente novamente.';
     } finally {
       isProcessing = false;
     }
@@ -738,12 +781,49 @@
           <Button variant="outline" on:click={() => (isEditMode = true)} disabled={isProcessing || !clientDetail}>
             Editar
           </Button>
+          <Button variant="default" on:click={openPromoteDialog} disabled={isProcessing || !clientDetail}>
+            Tornar corretor
+          </Button>
           <Button variant="destructive" on:click={() => (isDeleteDialogOpen = true)} disabled={isProcessing}>
             Excluir cliente
           </Button>
         {/if}
       </Dialog.Footer>
     {/if}
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={isPromoteDialogOpen}>
+  <Dialog.Content className="max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Tornar corretor</Dialog.Title>
+      <Dialog.Description>
+        Informe o CRECI do usuário <strong>{selectedClient?.name ?? ''}</strong>. A conta será
+        aprovada como corretor imediatamente.
+      </Dialog.Description>
+    </Dialog.Header>
+    <div class="space-y-3 py-2">
+      <label class="block space-y-1">
+        <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CRECI *</span>
+        <input
+          bind:value={promoteCreci}
+          class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+          placeholder="Ex: 12345678 ou 12345-A"
+        />
+      </label>
+      {#if promoteError}
+        <p class="text-sm text-red-600 dark:text-red-300">{promoteError}</p>
+      {/if}
+    </div>
+    <Dialog.Footer className="flex gap-2">
+      <Button variant="outline" on:click={closePromoteDialog} disabled={isProcessing}>Cancelar</Button>
+      <Button on:click={submitPromoteBroker} disabled={isProcessing}>
+        {#if isProcessing}
+          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+        {/if}
+        Confirmar
+      </Button>
+    </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>
 
