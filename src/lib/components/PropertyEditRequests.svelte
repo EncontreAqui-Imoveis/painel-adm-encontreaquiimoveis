@@ -105,6 +105,8 @@
   let selected: PropertyEditRequest | null = null;
   let isDetailLoading = false;
   let isSubmitting = false;
+  let canSubmitPartialReview = false;
+  let bulkRejectReason = '';
   let draftFieldReviews: Record<
     string,
     { decision: 'UNDECIDED' | 'APPROVED' | 'REJECTED'; reason: string }
@@ -131,6 +133,15 @@
           before: value.before,
           after: value.after,
         }));
+
+  $: if (selected && diffEntries.length > 0) {
+    const missingKeys = diffEntries.some(({ key }) => draftFieldReviews[key] == null);
+    if (missingKeys) {
+      draftFieldReviews = syncDraftFieldReviews(selected, draftFieldReviews);
+    }
+  }
+
+  $: canSubmitPartialReview = evaluateCanSubmitReview();
 
   async function fetchRequests() {
     isLoading = true;
@@ -198,6 +209,7 @@
   async function openRequest(item: PropertyEditRequest) {
     showModal = true;
     selected = null;
+    bulkRejectReason = '';
     draftFieldReviews = {};
     isDetailLoading = true;
 
@@ -217,6 +229,7 @@
     if (isSubmitting) return;
     showModal = false;
     selected = null;
+    bulkRejectReason = '';
     draftFieldReviews = {};
   }
 
@@ -239,6 +252,19 @@
     }
 
     return next;
+  }
+
+  function syncDraftFieldReviews(
+    request: PropertyEditRequest,
+    current: Record<string, { decision: 'UNDECIDED' | 'APPROVED' | 'REJECTED'; reason: string }>
+  ) {
+    const seeded = buildDraftFieldReviews(request);
+    for (const [key, value] of Object.entries(current)) {
+      if (seeded[key]) {
+        seeded[key] = value;
+      }
+    }
+    return seeded;
   }
 
   function updateFieldDecision(
@@ -282,7 +308,7 @@
     return Object.values(draftFieldReviews).filter((item) => item.decision === decision).length;
   }
 
-  function canSubmitReview() {
+  function evaluateCanSubmitReview() {
     if (!selected || diffEntries.length === 0) return false;
     for (const { key } of diffEntries) {
       const item = draftFieldReviews[key];
@@ -294,7 +320,7 @@
 
   async function submitReview() {
     if (!selected || isSubmitting) return;
-    if (!canSubmitReview()) {
+    if (!canSubmitPartialReview) {
       toast.error('Revise todos os campos e preencha o motivo dos rejeitados.');
       return;
     }
@@ -332,6 +358,39 @@
       refreshKey += 1;
     } catch (submitError) {
       console.error('Erro ao revisar solicitação de edição:', submitError);
+      toast.error(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Não foi possível concluir a revisão.'
+      );
+    } finally {
+      isSubmitting = false;
+    }
+  }
+
+  async function submitBulkReview(mode: 'approve_all' | 'reject_all') {
+    if (!selected || isSubmitting) return;
+    if (mode === 'reject_all' && bulkRejectReason.trim().length === 0) {
+      toast.error('Informe um motivo para rejeitar toda a solicitação.');
+      return;
+    }
+
+    isSubmitting = true;
+    try {
+      const response = await api.post<{ status?: string }>(
+        `/admin/property-edit-requests/${selected.id}/${mode === 'approve_all' ? 'approve' : 'reject'}`,
+        mode === 'reject_all' ? { reason: bulkRejectReason.trim() } : {}
+      );
+      const resolvedStatus = String(response?.status ?? '').trim().toUpperCase();
+      toast.success(
+        resolvedStatus === 'REJECTED'
+          ? 'Solicitação rejeitada com sucesso.'
+          : 'Solicitação aprovada com sucesso.'
+      );
+      closeModal();
+      refreshKey += 1;
+    } catch (submitError) {
+      console.error('Erro ao concluir revisão em massa:', submitError);
       toast.error(
         submitError instanceof Error
           ? submitError.message
@@ -470,6 +529,34 @@
           Compare o que mudou antes de aprovar. Somente os campos alterados aparecem abaixo.
         </div>
 
+        <div class="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/80 px-4 py-4 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div class="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+                Ação rápida da solicitação inteira
+              </div>
+              <div class="text-xs text-emerald-800/90 dark:text-emerald-200/90">
+                Use isso quando decisão vale para todos os campos. Revisão campo a campo continua disponível abaixo.
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" on:click={() => submitBulkReview('approve_all')} disabled={isSubmitting}>
+                Aprovar solicitação inteira
+              </Button>
+              <Button variant="destructive" size="sm" on:click={() => submitBulkReview('reject_all')} disabled={isSubmitting || bulkRejectReason.trim().length === 0}>
+                Rejeitar solicitação inteira
+              </Button>
+            </div>
+          </div>
+          <textarea
+            rows={3}
+            placeholder="Motivo obrigatório para rejeitar toda a solicitação"
+            class="w-full rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-emerald-900 dark:bg-gray-900 dark:text-gray-100"
+            bind:value={bulkRejectReason}
+            disabled={isSubmitting}
+          ></textarea>
+        </div>
+
         <div class="flex flex-wrap items-center gap-2 text-sm">
           <span class="rounded-full bg-green-100 px-3 py-1 font-semibold text-green-800 dark:bg-green-900/40 dark:text-green-200">
             Aprovados: {reviewCount('APPROVED')}
@@ -565,9 +652,19 @@
           <Button variant="outline" on:click={closeModal} disabled={isSubmitting}>
             Fechar
           </Button>
-          <Button on:click={submitReview} disabled={isSubmitting || !canSubmitReview()}>
+          {#if !canSubmitPartialReview}
+            <div class="self-center text-xs text-amber-700 dark:text-amber-300">
+              Para revisão parcial, decida todos os campos e preencha motivo nos rejeitados.
+            </div>
+          {/if}
+          <button
+            type="button"
+            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:cursor-not-allowed disabled:has-[.animate-spin]:cursor-wait bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 focus:ring-green-500 disabled:bg-green-400 disabled:text-white/60"
+            on:click={submitReview}
+            disabled={isSubmitting || !canSubmitPartialReview}
+          >
             Concluir revisão
-          </Button>
+          </button>
         </div>
       </div>
     {/if}

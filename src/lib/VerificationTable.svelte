@@ -77,8 +77,8 @@
         isModalOpen = true;
     }
 
-    function handleModalUpdate() {
-        dispatch('refresh');
+    function handleModalUpdate(event: CustomEvent<{ brokerId: number; status: string; role?: string }>) {
+        dispatch('refresh', event.detail);
     }
 
     function syncIsMobileLayout() {

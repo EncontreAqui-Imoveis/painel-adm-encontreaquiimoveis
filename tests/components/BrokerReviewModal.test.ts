@@ -102,6 +102,7 @@ describe('BrokerReviewModal', () => {
         status: 'rejected',
       });
     });
+    expect(toastSuccessMock).toHaveBeenCalledWith('Corretor rebaixado para cliente.');
   });
 
   it('requires admin password before deleting a broker', async () => {

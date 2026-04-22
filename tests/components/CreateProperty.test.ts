@@ -45,6 +45,14 @@ vi.mock('svelte-sonner', () => ({
 import CreateProperty from '../../src/lib/components/CreateProperty.svelte';
 
 describe('CreateProperty', () => {
+  function getInputById(id: string): HTMLInputElement | HTMLSelectElement {
+    const element = document.getElementById(id);
+    if (!element || !(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
+      throw new Error(`Elemento não encontrado: ${id}`);
+    }
+    return element;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     apiGetMock.mockResolvedValue([]);
@@ -101,25 +109,25 @@ describe('CreateProperty', () => {
     await fireEvent.input(screen.getByLabelText('Cidade *'), {
       target: { value: 'Rio Verde' },
     });
-    await fireEvent.input(screen.getByLabelText('Quadra *'), {
+    await fireEvent.input(getInputById('create-property-quadra'), {
       target: { value: 'Q1' },
     });
-    await fireEvent.input(screen.getByLabelText('Lote *'), {
+    await fireEvent.input(getInputById('create-property-lote'), {
       target: { value: '12' },
     });
     await fireEvent.change(screen.getByLabelText('Tipo do lote *'), {
       target: { value: 'meio' },
     });
-    await fireEvent.input(screen.getByLabelText('Quartos *'), {
+    await fireEvent.input(getInputById('create-property-bedrooms'), {
       target: { value: '3' },
     });
-    await fireEvent.input(screen.getByLabelText('Banheiros *'), {
+    await fireEvent.input(getInputById('create-property-bathrooms'), {
       target: { value: '2' },
     });
-    await fireEvent.input(screen.getByLabelText('Garagens *'), {
+    await fireEvent.input(getInputById('create-property-garage-spots'), {
       target: { value: '2' },
     });
-    await fireEvent.input(screen.getByLabelText('Área construída (m²) *'), {
+    await fireEvent.input(getInputById('create-property-area-construida'), {
       target: { value: '145,5' },
     });
     await fireEvent.input(screen.getByLabelText('Área do terreno (m²) *'), {
@@ -157,6 +165,10 @@ describe('CreateProperty', () => {
         })
       );
     });
+    expect(uploadMultipartWithProgressMock).toHaveBeenCalled();
+    const [, formData] = uploadMultipartWithProgressMock.mock.calls[0] as [string, FormData];
+    expect(formData.get('max_file_size')).toBeNull();
+    expect(formData.get('allowed_formats')).toBe('jpg,jpeg,png,webp');
 
     expect(toastSuccessMock).toHaveBeenCalledWith('Imóvel criado com sucesso.');
     expect(

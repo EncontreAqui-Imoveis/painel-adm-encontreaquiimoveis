@@ -122,22 +122,35 @@
 
     isProcessing = true;
     try {
-      const response = await api.patch<{ role?: string }>(`/admin/brokers/${broker.id}/status`, {
+      const response = await api.patch<{ role?: string; status?: string }>(`/admin/brokers/${broker.id}/status`, {
         status: newStatus,
       });
+      const resolvedStatus = String(response?.status ?? newStatus).trim() || newStatus;
+      const resolvedRole =
+        response?.role ?? (resolvedStatus === 'approved' ? 'broker' : 'client');
+      brokerDetail = brokerDetail
+        ? {
+            ...brokerDetail,
+            status: resolvedStatus,
+          }
+        : brokerDetail;
       toast.success(
-        newStatus === 'approved'
+        resolvedStatus === 'approved'
           ? 'Corretor aprovado.'
-          : response.role === 'client'
+          : resolvedRole === 'client'
             ? 'Corretor rebaixado para cliente.'
             : 'Status atualizado.',
       );
 
-      dispatch('update');
+      dispatch('update', {
+        brokerId: broker.id,
+        status: resolvedStatus,
+        role: resolvedRole,
+      });
       close();
     } catch (error) {
       console.error('Erro ao atualizar status do corretor:', error);
-      toast.error('Falha ao atualizar status.');
+      toast.error(error instanceof Error ? error.message : 'Falha ao atualizar status.');
     } finally {
       isProcessing = false;
     }

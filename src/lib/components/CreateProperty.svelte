@@ -591,7 +591,6 @@
     formData.append('timestamp', String(signature.timestamp));
     formData.append('signature', signature.signature);
     formData.append('folder', signature.folder);
-    formData.append('max_file_size', String(signature.maxFileSize));
     formData.append('allowed_formats', signature.allowedFormats.join(','));
 
     const response = await uploadMultipartWithProgress<{ secure_url?: string }>(

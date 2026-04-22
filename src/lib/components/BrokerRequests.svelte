@@ -68,6 +68,19 @@
     selectedBroker = broker;
     isModalOpen = true;
   }
+
+  function handleBrokerReviewUpdate(event: CustomEvent<{ brokerId: number; status: string }>) {
+    const brokerId = Number(event.detail?.brokerId);
+    const nextStatus = String(event.detail?.status ?? '').trim();
+    if (Number.isFinite(brokerId) && brokerId > 0) {
+      requests = requests.filter((broker) =>
+        broker.id !== brokerId || nextStatus === 'pending_verification'
+      );
+      totalItems = Math.max(0, totalItems - (nextStatus === 'pending_verification' ? 0 : 1));
+      totalPages = Math.max(1, Math.ceil(Math.max(totalItems, requests.length) / itemsPerPage));
+    }
+    requestFetch();
+  }
 </script>
 
 <div class="space-y-4">
@@ -164,6 +177,6 @@
   bind:open={isModalOpen}
   broker={selectedBroker}
   showApprove={true}
-  on:update={fetchRequests}
+  on:update={handleBrokerReviewUpdate}
   on:close={() => (selectedBroker = null)}
 />

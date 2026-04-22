@@ -344,6 +344,17 @@
     isReviewModalOpen = true;
   }
 
+  function handleBrokerReviewUpdate(event: CustomEvent<{ brokerId: number; status: string }>) {
+    const brokerId = Number(event.detail?.brokerId);
+    const nextStatus = String(event.detail?.status ?? '').trim();
+    if (Number.isFinite(brokerId) && brokerId > 0) {
+      brokers = brokers.map((broker) =>
+        broker.id === brokerId ? { ...broker, status: nextStatus as Broker['status'] } : broker
+      );
+    }
+    requestFetch();
+  }
+
   function handleExport() {
     exportToCsv(brokers, 'corretores.csv');
   }
@@ -545,7 +556,7 @@
   bind:open={isReviewModalOpen}
   broker={brokerUnderReview}
   showReject={false}
-  on:update={fetchBrokers}
+  on:update={handleBrokerReviewUpdate}
   on:close={() => (brokerUnderReview = null)}
 />
 
