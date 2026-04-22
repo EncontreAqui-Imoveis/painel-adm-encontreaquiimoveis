@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { toast } from 'svelte-sonner';
-  import { Loader2 } from 'lucide-svelte';
+  import { Loader2, X } from 'lucide-svelte';
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
   import Pagination from '$lib/Pagination.svelte';
@@ -80,51 +80,52 @@
   let processingAction = false;
   let selectedProposal: NegotiationItem | null = null;
   let showDetailModal = false;
-  let rejectMode = false;
   let rejectReason = '';
   let viewingPdf = false;
 
-  function readClientName(item: NegotiationItem | null): string {
-    if (!item) return '-';
+  function normalizeClient(item: NegotiationItem | null): { name: string; cpf: string } {
+    if (!item) return { name: '-', cpf: '-' };
     const raw =
       item.clientName ??
       (item as unknown as Record<string, unknown>).client_name ??
       (item as unknown as Record<string, unknown>).client;
 
-    if (typeof raw === 'string' && raw.trim().length > 0) {
-      return raw.trim();
-    }
+    let name = '-';
+    let cpf = '-';
 
-    if (raw && typeof raw === 'object') {
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+      name = raw.trim();
+    } else if (raw && typeof raw === 'object') {
       const nestedName = (raw as Record<string, unknown>).name;
       if (typeof nestedName === 'string' && nestedName.trim().length > 0) {
-        return nestedName.trim();
+        name = nestedName.trim();
       }
     }
 
-    return '-';
-  }
-
-  function readClientCpf(item: NegotiationItem | null): string {
-    if (!item) return '-';
-    const raw =
+    const rawCpf =
       item.clientCpf ??
       (item as unknown as Record<string, unknown>).client_cpf ??
       (item as unknown as Record<string, unknown>).cpf ??
       (item as unknown as Record<string, unknown>).client;
 
-    if (typeof raw === 'string' && raw.trim().length > 0) {
-      return raw.trim();
-    }
-
-    if (raw && typeof raw === 'object') {
-      const nestedCpf = (raw as Record<string, unknown>).cpf;
+    if (typeof rawCpf === 'string' && rawCpf.trim().length > 0) {
+      cpf = rawCpf.trim();
+    } else if (rawCpf && typeof rawCpf === 'object') {
+      const nestedCpf = (rawCpf as Record<string, unknown>).cpf;
       if (typeof nestedCpf === 'string' && nestedCpf.trim().length > 0) {
-        return nestedCpf.trim();
+        cpf = nestedCpf.trim();
       }
     }
 
-    return '-';
+    return { name, cpf };
+  }
+
+  function readClientName(item: NegotiationItem | null): string {
+    return normalizeClient(item).name;
+  }
+
+  function readClientCpf(item: NegotiationItem | null): string {
+    return normalizeClient(item).cpf;
   }
 
   function getBrokerName(item: NegotiationItem): string {
@@ -272,7 +273,6 @@
 
   function openProposalDetail(item: NegotiationItem) {
     selectedProposal = item;
-    rejectMode = false;
     rejectReason = '';
     showDetailModal = true;
   }
@@ -281,7 +281,6 @@
     if (processingAction && !force) return;
     showDetailModal = false;
     selectedProposal = null;
-    rejectMode = false;
     rejectReason = '';
   }
 
@@ -339,12 +338,6 @@
 
   async function rejectSelected() {
     if (!selectedProposal) return;
-
-    if (!rejectMode) {
-      rejectMode = true;
-      return;
-    }
-
     if (!rejectReason.trim()) {
       toast.error('Informe o motivo da rejeição.');
       return;
@@ -522,12 +515,17 @@
             {/if}
           </p>
         </div>
-        <Button variant="outline" size="sm" on:click={() => requestPropertyFetch()} disabled={propertyLoading}>
-          {#if propertyLoading}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-          {/if}
-          Atualizar
-        </Button>
+        <div class="flex items-center gap-2">
+          <Button variant="outline" size="sm" on:click={() => requestPropertyFetch()} disabled={propertyLoading}>
+            {#if propertyLoading}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Atualizar
+          </Button>
+          <Button variant="outline" size="sm" title="Fechar modal" className="px-2" on:click={closePropertyModal}>
+            <X class="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <div class="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
@@ -565,10 +563,6 @@
                   <div>
                     <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Validade</p>
                     <p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(item.validityDate)}</p>
-                  </div>
-                  <div>
-                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Status</p>
-                    <p class="text-sm text-gray-700 dark:text-gray-300">{getStatusLabel(item.status, item.internalStatus)}</p>
                   </div>
                   <div>
                     <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Data</p>
@@ -616,7 +610,7 @@
     on:keydown={() => {}}
   >
     <div class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900">
-      <div class="mb-4">
+      <div class="mb-4 flex items-start justify-between gap-3">
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Análise da proposta</h3>
           <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -628,6 +622,9 @@
             {/if}
           </p>
         </div>
+        <Button variant="outline" size="sm" title="Fechar modal" className="px-2" on:click={() => closeDetailModal()} disabled={processingAction}>
+          <X class="h-4 w-4" />
+        </Button>
       </div>
 
       <div class="grid gap-4 md:grid-cols-2">
@@ -658,24 +655,22 @@
         </p>
       </div>
 
-      {#if rejectMode}
-        <div class="mt-4">
-          <label
-            for="reject-reason"
-            class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            Motivo da rejeição
-          </label>
-          <textarea
-            id="reject-reason"
-            bind:value={rejectReason}
-            maxlength="500"
-            rows={4}
-            class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-            placeholder="Descreva o motivo da rejeição..."
-          ></textarea>
-        </div>
-      {/if}
+      <div class="mt-4">
+        <label
+          for="reject-reason"
+          class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          Motivo da rejeição (obrigatório para rejeitar)
+        </label>
+        <textarea
+          id="reject-reason"
+          bind:value={rejectReason}
+          maxlength="500"
+          rows={4}
+          class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+          placeholder="Descreva o motivo da rejeição..."
+        ></textarea>
+      </div>
 
       <div class="mt-5 flex flex-wrap items-center justify-end gap-2">
         <Button variant="outline" on:click={viewSignedPdf} disabled={viewingPdf || processingAction}>
@@ -690,10 +685,10 @@
           on:click={rejectSelected}
           disabled={processingAction}
         >
-          {#if processingAction && rejectMode}
+          {#if processingAction}
             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
           {/if}
-          {rejectMode ? 'Confirmar Rejeição' : 'Rejeitar'}
+          Rejeitar
         </Button>
         <Button
           variant="outline"
@@ -701,7 +696,7 @@
           on:click={approveSelected}
           disabled={processingAction}
         >
-          {#if processingAction && !rejectMode}
+          {#if processingAction}
             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
           {/if}
           Aprovar

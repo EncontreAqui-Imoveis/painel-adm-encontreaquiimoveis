@@ -15,6 +15,7 @@
     broker_id?: number | null;
     broker_status?: string | null;
     city?: string | null;
+    bairro?: string | null;
     state?: string | null;
     created_at?: string;
   };
@@ -175,7 +176,7 @@
             Telefone
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Cidade
+            Bairro / Cidade
           </th>
           <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Ações
@@ -213,7 +214,13 @@
                 {property.broker_phone ?? '-'}
               </td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                {property.city ?? '-'}{#if property.state} / {property.state}{/if}
+                {property.bairro ?? '-'}
+                {#if property.city}
+                  {' - '}{property.city}
+                {/if}
+                {#if property.state}
+                  / {property.state}
+                {/if}
               </td>
               <td class="px-6 py-4">
                 <div class="flex justify-end gap-2">

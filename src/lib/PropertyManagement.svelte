@@ -18,6 +18,7 @@
   interface PropertySummary {
     id: number;
     title: string;
+    bairro?: string | null;
     city?: string | null;
     state?: string | null;
     cep?: string | null;
@@ -358,6 +359,7 @@
           return {
             id,
             title: String(record['title'] ?? 'Imóvel sem título'),
+            bairro: (record['bairro'] as string | null | undefined) ?? null,
             city: (record['city'] as string | null | undefined) ?? null,
             state: (record['state'] as string | null | undefined) ?? null,
             cep: cepValue != null ? String(cepValue) : null,
@@ -1899,7 +1901,13 @@
             </div>
           {/if}
           <div class="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            {property.city ?? '-'}{#if property.state} / {property.state}{/if}
+            {property.bairro ?? '-'}
+            {#if property.city}
+              {' - '}{property.city}
+            {/if}
+            {#if property.state}
+              / {property.state}
+            {/if}
           </div>
           <div class="mt-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
             {#each resolvePriceLines(property) as line}
@@ -1989,7 +1997,13 @@
                 <div class="text-xs text-gray-500 dark:text-gray-400">ID: {property.id}</div>
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                {property.city ?? '-'}{#if property.state} / {property.state}{/if}
+                {property.bairro ?? '-'}
+                {#if property.city}
+                  {' - '}{property.city}
+                {/if}
+                {#if property.state}
+                  / {property.state}
+                {/if}
               </td>
               <td class="px-6 py-4 text-sm font-semibold text-gray-800 dark:text-gray-200">
                 <div class="flex flex-col gap-1">
