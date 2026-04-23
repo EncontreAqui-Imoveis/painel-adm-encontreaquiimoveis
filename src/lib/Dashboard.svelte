@@ -20,6 +20,7 @@
         Broker,
         User,
         Notification,
+        NotificationsSubTab,
         View,
         DataItem,
         ViewConfig,
@@ -77,10 +78,6 @@
         (_, i) => `${i * 2}h atrás`,
     ).reverse();
 
-    $: totalClients = stats
-        ? Math.max(0, stats.totalUsers - stats.totalBrokers)
-        : 0;
-
     interface DashboardChartData {
         propertiesByStatus: { status: string; count: number }[];
         newPropertiesOverTime: { date: string; count: number }[];
@@ -106,7 +103,6 @@
     let AdminNotificationsPanelComponent: LazySvelteComponent | null = null;
     let StatusPieChartComponent: LazySvelteComponent | null = null;
     let NewPropertiesLineChartComponent: LazySvelteComponent | null = null;
-    type NotificationsSubTab = "send" | "center" | "announcements";
     let notificationsSubTab: NotificationsSubTab = "send";
     let announcements: Notification[] = [];
     let announcementsTotal = 0;
@@ -715,7 +711,10 @@
         }
     }
 
-    async function changeView(newView: View) {
+    async function changeView(
+        newView: View,
+        nextNotificationsSubTab: NotificationsSubTab = "send",
+    ) {
         if (!isValidView(newView)) {
             console.error("Invalid view: " + newView);
             newView = "dashboard";
@@ -737,8 +736,11 @@
         fetchData();
         fetchPendingCounts();
         if (newView === "notifications") {
-            notificationsSubTab = "send";
+            notificationsSubTab = nextNotificationsSubTab;
             await fetchAnnouncementsCount();
+            if (nextNotificationsSubTab === "announcements") {
+                await fetchAnnouncements();
+            }
         }
         if (newView === "dashboard") {
             fetchChartData();
@@ -881,9 +883,7 @@
         if (activeView === "dashboard") {
             fetchChartData();
         }
-        if (activeView === "notifications") {
-            fetchAnnouncementsCount();
-        }
+        fetchAnnouncementsCount();
         fetchPendingCounts();
         pendingCountsInterval = setInterval(fetchPendingCounts, 15000);
     });
@@ -968,6 +968,7 @@
         bind:isOpen={isSidebarOpen}
         {activeView}
         {pendingCounts}
+        announcementsBadge={announcementsTotal}
         onNavigate={changeView}
     />
 
@@ -1712,15 +1713,15 @@
                         </div>
                     {/if}
 
-                    <section class="hidden opacity-90">
-                        <div class="mb-4 mt-6">
+                    <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                        <div class="mb-4">
                             <h2
                                 class="text-lg font-semibold text-gray-900 dark:text-gray-100"
                             >
                                 KPIs de Negócio (Visão Geral)
                             </h2>
                         </div>
-                        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             <KpiCard
                                 title="Total de Imóveis"
                                 value={stats?.totalProperties ?? 0}
@@ -1735,11 +1736,6 @@
                                 title="Total de Usuários"
                                 value={stats?.totalUsers ?? 0}
                                 color="yellow"
-                            />
-                            <KpiCard
-                                title="Total de Clientes"
-                                value={totalClients}
-                                color="blue"
                             />
                         </div>
                     </section>

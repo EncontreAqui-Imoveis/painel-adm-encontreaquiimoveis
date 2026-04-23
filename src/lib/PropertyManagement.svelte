@@ -43,9 +43,13 @@
     created_at?: string | null;
     updated_at?: string | null;
     request_type?: 'creation' | 'edit' | null;
+    area_construida_unidade?: AreaUnit | null;
+    area_terreno_unidade?: AreaUnit | null;
+    images?: Array<NormalizedImage | PropertyImageType | string> | string | null;
   }
 
   type NormalizedImage = PropertyImageType;
+  type AreaUnit = 'm2' | 'hectare' | 'alqueire';
 
   type PropertyDetails = PropertySummary & {
     description?: string | null;
@@ -61,7 +65,9 @@
     bathrooms?: number | null;
     garage_spots?: number | null;
     area_construida?: number | null;
+    area_construida_unidade?: AreaUnit | null;
     area_terreno?: number | null;
+    area_terreno_unidade?: AreaUnit | null;
     price_sale?: number | null;
     price_rent?: number | null;
     promotion_percentage?: number | null;
@@ -76,7 +82,7 @@
     tem_automacao?: boolean | null;
     tem_ar_condicionado?: boolean | null;
     eh_mobiliada?: boolean | null;
-    images?: Array<NormalizedImage | PropertyImageType | string> | null;
+    images?: Array<NormalizedImage | PropertyImageType | string> | string | null;
   };
 
   type SortConfig = {
@@ -156,7 +162,13 @@
   let previewImageIndex = 0;
   let previewImagesSnapshot: NormalizedImage[] = [];
   let brokenPreviewImages = new Set<string>();
+  let brokenListThumbnails = new Set<number>();
   const MAX_TOTAL_IMAGES = 20;
+  const areaUnitOptions: Array<{ value: AreaUnit; label: string }> = [
+    { value: 'm2', label: 'm²' },
+    { value: 'hectare', label: 'Hectare (ha)' },
+    { value: 'alqueire', label: 'Alqueire' },
+  ];
 
   $: previewImages = previewImagesSnapshot.length
     ? previewImagesSnapshot
@@ -356,6 +368,11 @@
           const updatedAtValue = record['updated_at'];
           const requestTypeValue = String(record['request_type'] ?? '').trim().toLowerCase();
           const cepValue = record['cep'];
+          const areaConstruidaUnidade = normalizeAreaUnit(record['area_construida_unidade']);
+          const areaTerrenoUnidadeRaw =
+            record['area_terreno_unidade'] ?? record['area_terreno_medida'];
+          const areaTerrenoUnidade =
+            normalizeAreaUnit(areaTerrenoUnidadeRaw) ?? areaConstruidaUnidade ?? 'm2';
 
           return {
             id,
@@ -367,6 +384,8 @@
             price: priceValue != null ? Number(priceValue) : null,
             price_sale: priceSaleValue != null ? Number(priceSaleValue) : null,
             price_rent: priceRentValue != null ? Number(priceRentValue) : null,
+            area_construida_unidade: areaConstruidaUnidade,
+            area_terreno_unidade: areaTerrenoUnidade,
             promotion_percentage:
               promotionPercentageValue != null ? Number(promotionPercentageValue) : null,
             promotion_price:
@@ -397,9 +416,23 @@
                 : requestTypeValue === 'creation'
                 ? 'creation'
                 : null,
+            images:
+              (record['images'] as
+                | Array<NormalizedImage | PropertyImageType | string>
+                | string
+                | null
+                | undefined) ??
+              (record['image_urls'] as
+                | Array<NormalizedImage | PropertyImageType | string>
+                | string
+                | null
+                | undefined) ??
+              (record['image_url'] as string | null | undefined) ??
+              null,
           } as PropertySummary;
         })
         .filter((item): item is PropertySummary => item !== null);
+      brokenListThumbnails = new Set();
 
       if (currentPage > totalPages && totalPages > 0) {
         currentPage = totalPages;
@@ -727,10 +760,48 @@
 
   function sanitizeEditable(data: Partial<PropertyDetails>): PropertyDetails {
     const coerced: Record<string, unknown> = { ...data };
+    const areaConstruidaUnidade = normalizeAreaUnit(data.area_construida_unidade) ?? 'm2';
+    const areaTerrenoUnidade =
+      normalizeAreaUnit(data.area_terreno_unidade) ?? areaConstruidaUnidade;
+    coerced.area_construida_unidade = areaConstruidaUnidade;
+    coerced.area_terreno_unidade = areaTerrenoUnidade;
     for (const key of booleanKeys) {
       coerced[key] = Boolean((data as any)?.[key]);
     }
     return coerced as unknown as PropertyDetails;
+  }
+
+  function normalizeAreaUnit(value: unknown): AreaUnit | null {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    if (normalized === 'm2' || normalized === 'hectare' || normalized === 'alqueire') {
+      return normalized;
+    }
+    return null;
+  }
+
+  function areaUnitLabel(value: unknown): string {
+    const normalized = normalizeAreaUnit(value);
+    if (normalized === 'hectare') return 'ha';
+    if (normalized === 'alqueire') return 'alqueire';
+    return 'm²';
+  }
+
+  function formatAreaWithUnit(value: unknown, unit: unknown): string {
+    if (value === null || value === undefined || value === '') return '-';
+    return `${value} ${areaUnitLabel(unit)}`;
+  }
+
+  function markThumbnailAsBroken(propertyId: number) {
+    if (brokenListThumbnails.has(propertyId)) return;
+    brokenListThumbnails = new Set(brokenListThumbnails);
+    brokenListThumbnails.add(propertyId);
+  }
+
+  function getPropertyCoverUrl(property: PropertySummary): string | null {
+    if (brokenListThumbnails.has(property.id)) return null;
+    const list = normalizeImages(property.images ?? null);
+    if (list.length > 0) return list[0]?.url ?? null;
+    return null;
   }
 
   function isSemNumeroValue(value: unknown): boolean {
@@ -1295,7 +1366,12 @@
         bedrooms: editableProperty.bedrooms,
         bathrooms: editableProperty.bathrooms,
         area_construida: editableProperty.area_construida,
+        area_construida_unidade: editableProperty.area_construida_unidade ?? 'm2',
         area_terreno: editableProperty.area_terreno,
+        area_terreno_unidade:
+          editableProperty.area_terreno_unidade ??
+          editableProperty.area_construida_unidade ??
+          'm2',
         has_wifi: editableProperty.has_wifi,
         tem_piscina: editableProperty.tem_piscina,
         tem_energia_solar: editableProperty.tem_energia_solar,
@@ -1884,11 +1960,26 @@
           on:click={(event) => reviewProperty(property, event)}
         >
           <div class="flex items-start justify-between gap-3">
-            <div>
-              <div class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {property.title}
+            <div class="flex min-w-0 items-start gap-3">
+              <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-100 text-[10px] font-semibold text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                {#if getPropertyCoverUrl(property)}
+                  <img
+                    src={getPropertyCoverUrl(property)}
+                    alt={`Capa do imóvel ${property.title}`}
+                    class="h-full w-full object-cover"
+                    loading="lazy"
+                    on:error={() => markThumbnailAsBroken(property.id)}
+                  />
+                {:else}
+                  Sem imagem
+                {/if}
               </div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">ID: {property.id}</div>
+              <div class="min-w-0">
+                <div class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                  {property.title}
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">ID: {property.id}</div>
+              </div>
             </div>
             <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClasses(property.status)}`}>
               {humanizeStatus(property.status, property.purpose)}
@@ -1995,8 +2086,25 @@
               on:click={(event) => reviewProperty(property, event)}
             >
               <td class="px-6 py-4">
-                <div class="font-semibold text-gray-900 dark:text-gray-100">{property.title}</div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">ID: {property.id}</div>
+                <div class="flex min-w-0 items-start gap-3">
+                  <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-100 text-[10px] font-semibold text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                    {#if getPropertyCoverUrl(property)}
+                      <img
+                        src={getPropertyCoverUrl(property)}
+                        alt={`Capa do imóvel ${property.title}`}
+                        class="h-full w-full object-cover"
+                        loading="lazy"
+                        on:error={() => markThumbnailAsBroken(property.id)}
+                      />
+                    {:else}
+                      Sem imagem
+                    {/if}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="font-semibold text-gray-900 dark:text-gray-100">{property.title}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">ID: {property.id}</div>
+                  </div>
+                </div>
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                 {property.bairro ?? '-'}
@@ -2727,44 +2835,66 @@
                 />
               </label>
               <label class="flex flex-col gap-1">
-                <strong>Área construida (m²):</strong>
-                <input
-                  name="area_construida"
-                  type="text"
-                  inputmode="decimal"
-                  maxlength="12"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
-                  bind:value={editableProperty.area_construida}
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    if (editableProperty) {
-                      const sanitized = clampAreaInput(target.value);
-                      editableProperty.area_construida = sanitized
-                        ? Number(sanitized.replace(',', '.'))
-                        : null;
-                    }
-                  }}
-                />
+                <strong>Área construída:</strong>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                  <input
+                    name="area_construida"
+                    type="text"
+                    inputmode="decimal"
+                    maxlength="12"
+                    class="w-full min-w-0 rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
+                    bind:value={editableProperty.area_construida}
+                    on:input={(event) => {
+                      const target = event.target as HTMLInputElement;
+                      if (editableProperty) {
+                        const sanitized = clampAreaInput(target.value);
+                        editableProperty.area_construida = sanitized
+                          ? Number(sanitized.replace(',', '.'))
+                          : null;
+                      }
+                    }}
+                  />
+                  <select
+                    name="area_construida_unidade"
+                    class="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 sm:w-44"
+                    bind:value={editableProperty.area_construida_unidade}
+                  >
+                    {#each areaUnitOptions as unit}
+                      <option value={unit.value}>{unit.label}</option>
+                    {/each}
+                  </select>
+                </div>
               </label>
               <label class="flex flex-col gap-1">
-                <strong>Área do terreno (m²):</strong>
-                <input
-                  name="area_terreno"
-                  type="text"
-                  inputmode="decimal"
-                  maxlength="12"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
-                  bind:value={editableProperty.area_terreno}
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    if (editableProperty) {
-                      const sanitized = clampAreaInput(target.value);
-                      editableProperty.area_terreno = sanitized
-                        ? Number(sanitized.replace(',', '.'))
-                        : null;
-                    }
-                  }}
-                />
+                <strong>Área do terreno:</strong>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                  <input
+                    name="area_terreno"
+                    type="text"
+                    inputmode="decimal"
+                    maxlength="12"
+                    class="w-full min-w-0 rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
+                    bind:value={editableProperty.area_terreno}
+                    on:input={(event) => {
+                      const target = event.target as HTMLInputElement;
+                      if (editableProperty) {
+                        const sanitized = clampAreaInput(target.value);
+                        editableProperty.area_terreno = sanitized
+                          ? Number(sanitized.replace(',', '.'))
+                          : null;
+                      }
+                    }}
+                  />
+                  <select
+                    name="area_terreno_unidade"
+                    class="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 sm:w-44"
+                    bind:value={editableProperty.area_terreno_unidade}
+                  >
+                    {#each areaUnitOptions as unit}
+                      <option value={unit.value}>{unit.label}</option>
+                    {/each}
+                  </select>
+                </div>
               </label>
               <p><strong>Proprietário:</strong> {selectedProperty.owner_name ?? '-'}</p>
               <p><strong>Telefone do proprietário:</strong> {formatPhoneDisplayBr(selectedProperty.owner_phone)}</p>
@@ -2790,8 +2920,8 @@
               <li><strong>Quartos:</strong> {selectedProperty.bedrooms ?? '-'}</li>
               <li><strong>Banheiros:</strong> {selectedProperty.bathrooms ?? '-'}</li>
               <li><strong>Garagens:</strong> {selectedProperty.garage_spots ?? '-'}</li>
-              <li><strong>Área construída:</strong> {selectedProperty.area_construida ?? '-'} m2</li>
-              <li><strong>Área do terreno:</strong> {selectedProperty.area_terreno ?? '-'} m2</li>
+              <li><strong>Área construída:</strong> {formatAreaWithUnit(selectedProperty.area_construida, selectedProperty.area_construida_unidade)}</li>
+              <li><strong>Área do terreno:</strong> {formatAreaWithUnit(selectedProperty.area_terreno, selectedProperty.area_terreno_unidade ?? selectedProperty.area_construida_unidade)}</li>
               <li><strong>Proprietário:</strong> {selectedProperty.owner_name ?? '-'}</li>
               <li><strong>Telefone do proprietário:</strong> {formatPhoneDisplayBr(selectedProperty.owner_phone)}</li>
               <li><strong>Anunciante:</strong> {selectedProperty.broker_name ?? '-'}</li>

@@ -22,16 +22,17 @@
   import { clearSessionToken } from './sessionState';
   import { api } from './apiClient';
   import ThemeToggle from './ThemeToggle.svelte';
-  import type { View } from './types';
+  import type { NotificationsSubTab, View } from './types';
   import encontreaquiimoveis from '../static/logo_principal.svg';
 
   export let isOpen = false;
   export let activeView: View;
-  export let onNavigate: (view: View) => void = () => {};
+  export let onNavigate: (view: View, notificationsSubTab?: NotificationsSubTab) => void = () => {};
   export let pendingCounts: {
     propertyRequests: number;
     brokerRequests: number;
   } = { propertyRequests: 0, brokerRequests: 0 };
+  export let announcementsBadge = 0;
 
   const validViews: View[] = [
     'dashboard',
@@ -51,13 +52,14 @@
     'notifications'
   ];
 
-  type GroupKey = 'imoveis' | 'negociacoes' | 'usuarios' | 'verificacao';
+  type GroupKey = 'imoveis' | 'negociacoes' | 'usuarios' | 'verificacao' | 'notificacoes';
 
   type SidebarItem = {
     view: View | null;
     label: string;
     icon: any;
     disabled?: boolean;
+    notificationsSubTab?: NotificationsSubTab;
   };
 
   const imoveisItems: SidebarItem[] = [
@@ -137,13 +139,35 @@
     }
   ];
 
+  const notificacoesItems: SidebarItem[] = [
+    {
+      view: 'notifications',
+      label: 'Enviar notificação',
+      icon: Bell,
+      notificationsSubTab: 'send'
+    },
+    {
+      view: 'notifications',
+      label: 'Central de notificações',
+      icon: Bell,
+      notificationsSubTab: 'center'
+    },
+    {
+      view: 'notifications',
+      label: 'Avisos',
+      icon: Bell,
+      notificationsSubTab: 'announcements'
+    }
+  ];
+
   const storageKey = 'sidebar_open_groups';
 
   let openGroups: Record<GroupKey, boolean> = {
     imoveis: false,
     negociacoes: false,
     usuarios: false,
-    verificacao: false
+    verificacao: false,
+    notificacoes: false
   };
 
   const navItemBase =
@@ -167,6 +191,7 @@
 
   function getGroupForView(view: View | string | null): GroupKey | null {
     if (!view || !isValidView(view)) return null;
+    if (view === 'notifications') return 'notificacoes';
     if (imoveisItems.some((item) => item.view === view)) return 'imoveis';
     if (negociacoesItems.some((item) => item.view === view)) return 'negociacoes';
     if (usuariosItems.some((item) => item.view === view)) return 'usuarios';
@@ -224,9 +249,9 @@
     window.location.hash = view;
   }
 
-  function handleNavigation(view: string) {
+  function handleNavigation(view: string, notificationsSubTab?: NotificationsSubTab) {
     if (isValidView(view)) {
-      onNavigate(view);
+      onNavigate(view, notificationsSubTab);
       updateLocation(view);
     } else {
       console.error(`Tentativa de navegar para view invalida: ${view}`);
@@ -502,13 +527,46 @@
       {/if}
     </div>
 
-    <button
-      class={navItemClass('notifications')}
-      on:click={() => handleNavigation('notifications')}
-    >
-      <Bell class="mt-0.5 h-5 w-5 shrink-0" />
-      <span class="min-w-0 flex-1">Notificações</span>
-    </button>
+    <div class="space-y-1">
+      <button
+        class={groupHeaderClassValue}
+        on:click={() => toggleGroup('notificacoes')}
+        aria-expanded={openGroups.notificacoes}
+      >
+        <span class="flex min-w-0 items-center gap-2">
+          <Bell class="h-5 w-5 shrink-0" />
+          <span class="truncate">Notificações</span>
+        </span>
+        <span class="flex items-center gap-2">
+          {#if !openGroups.notificacoes && announcementsBadge > 0}
+            <span class="inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+              {announcementsBadge}
+            </span>
+          {/if}
+          <ChevronDown class={`h-4 w-4 transition-transform ${openGroups.notificacoes ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+      {#if openGroups.notificacoes}
+        <div class="space-y-1">
+          {#each notificacoesItems as item}
+            <button
+              class={navItemClass(item.view as View, 'pl-10')}
+              on:click={() => handleNavigation(item.view as View, item.notificationsSubTab)}
+            >
+              <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
+              <span class="min-w-0 flex-1 text-left [overflow-wrap:anywhere] [word-break:normal] hyphens-none">{item.label}</span>
+              {#if item.notificationsSubTab === 'announcements' && announcementsBadge > 0}
+                <span
+                  class="ml-auto mt-0.5 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
+                >
+                  {announcementsBadge}
+                </span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
     </nav>
 
     <div class="pt-4 border-t border-white/10 space-y-4">

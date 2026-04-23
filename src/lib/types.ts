@@ -36,7 +36,9 @@ export interface Property {
   bedrooms?: number | null;
   bathrooms?: number | null;
   area_construida?: number | null;
+  area_construida_unidade?: 'm2' | 'hectare' | 'alqueire' | null;
   area_terreno?: number | null;
+  area_terreno_unidade?: 'm2' | 'hectare' | 'alqueire' | null;
   garage_spots?: number | null;
   has_wifi?: boolean;
   tem_piscina?: boolean;
@@ -142,6 +144,8 @@ export type View =
   | 'clients'
   | 'verification'
   | 'notifications';
+
+export type NotificationsSubTab = 'send' | 'center' | 'announcements';
 
 export type DataItem = Property | Broker | User;
 
