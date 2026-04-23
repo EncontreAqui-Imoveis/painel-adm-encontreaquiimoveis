@@ -428,6 +428,7 @@
                 | string
                 | null
                 | undefined) ??
+              (record['property_image_url'] as string | null | undefined) ??
               (record['image_url'] as string | null | undefined) ??
               null,
           } as PropertySummary;

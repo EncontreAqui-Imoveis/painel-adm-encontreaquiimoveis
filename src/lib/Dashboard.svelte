@@ -106,6 +106,14 @@
     let notificationsSubTab: NotificationsSubTab = "send";
     let announcements: Notification[] = [];
     let announcementsTotal = 0;
+    const ANNOUNCEMENTS_LAST_READ_STORAGE_KEY =
+        "painelweb.notifications.announcements.lastRead";
+    type AnnouncementReadMarker = {
+        createdAtMs: number;
+        id: number;
+    };
+    let latestAnnouncementMarker: AnnouncementReadMarker | null = null;
+    let lastReadAnnouncementMarker: AnnouncementReadMarker | null = null;
     let isAnnouncementsLoading = false;
     let announcementsError: string | null = null;
 
@@ -562,6 +570,97 @@
         return getMetadataString(getNotificationMetadata(item), "whatsappUrl");
     }
 
+    function parseAnnouncementCreatedAtMs(createdAt: string): number {
+        const parsed = Date.parse(createdAt);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function extractAnnouncementMarker(
+        item: Notification | null | undefined,
+    ): AnnouncementReadMarker | null {
+        if (!item || typeof item.id !== "number") return null;
+        return {
+            createdAtMs: parseAnnouncementCreatedAtMs(item.created_at),
+            id: item.id,
+        };
+    }
+
+    function isAnnouncementMarkerNewer(
+        candidate: AnnouncementReadMarker | null,
+        reference: AnnouncementReadMarker | null,
+    ): boolean {
+        if (!candidate) return false;
+        if (!reference) return true;
+        if (candidate.createdAtMs > reference.createdAtMs) return true;
+        if (candidate.createdAtMs < reference.createdAtMs) return false;
+        return candidate.id > reference.id;
+    }
+
+    function getMostRecentAnnouncementMarker(
+        list: Notification[],
+    ): AnnouncementReadMarker | null {
+        let mostRecent: AnnouncementReadMarker | null = null;
+        for (const item of list) {
+            const marker = extractAnnouncementMarker(item);
+            if (isAnnouncementMarkerNewer(marker, mostRecent)) {
+                mostRecent = marker;
+            }
+        }
+        return mostRecent;
+    }
+
+    function readLastReadAnnouncementMarkerFromStorage():
+        | AnnouncementReadMarker
+        | null {
+        if (typeof window === "undefined") return null;
+        const raw = window.localStorage.getItem(
+            ANNOUNCEMENTS_LAST_READ_STORAGE_KEY,
+        );
+        if (!raw) return null;
+        try {
+            const parsed = JSON.parse(raw) as {
+                createdAtMs?: unknown;
+                id?: unknown;
+            };
+            const createdAtMs = Number(parsed.createdAtMs);
+            const id = Number(parsed.id);
+            if (!Number.isFinite(createdAtMs) || !Number.isFinite(id)) {
+                return null;
+            }
+            return { createdAtMs, id };
+        } catch {
+            return null;
+        }
+    }
+
+    function persistLastReadAnnouncementMarker(
+        marker: AnnouncementReadMarker,
+    ): void {
+        if (typeof window === "undefined") return;
+        window.localStorage.setItem(
+            ANNOUNCEMENTS_LAST_READ_STORAGE_KEY,
+            JSON.stringify(marker),
+        );
+    }
+
+    function markAnnouncementsAsRead() {
+        const markerToPersist =
+            getMostRecentAnnouncementMarker(announcements) ??
+            latestAnnouncementMarker;
+        if (!markerToPersist) return;
+        lastReadAnnouncementMarker = markerToPersist;
+        persistLastReadAnnouncementMarker(markerToPersist);
+    }
+
+    $: announcementsUnreadVisualCount =
+        announcementsTotal > 0 &&
+        isAnnouncementMarkerNewer(
+            latestAnnouncementMarker,
+            lastReadAnnouncementMarker,
+        )
+            ? announcementsTotal
+            : 0;
+
     async function fetchAnnouncementsCount() {
         try {
             const response = await fetchPlatformResponse(
@@ -573,13 +672,19 @@
             }
             const payload = await response.json();
             announcementsTotal = readListTotal(payload);
+            const mostRecentFromCount =
+                getMostRecentAnnouncementMarker(readListData<Notification>(payload));
+            latestAnnouncementMarker = mostRecentFromCount;
         } catch (error) {
             console.error("Erro ao buscar total de avisos:", error);
             announcementsTotal = 0;
+            latestAnnouncementMarker = null;
         }
     }
 
-    async function fetchAnnouncements() {
+    async function fetchAnnouncements(
+        options: { markAsRead?: boolean } = {},
+    ): Promise<boolean> {
         isAnnouncementsLoading = true;
         announcementsError = null;
         try {
@@ -594,6 +699,12 @@
             const totalFromPayload = readListTotal(payload);
             announcementsTotal =
                 totalFromPayload > 0 ? totalFromPayload : announcements.length;
+            latestAnnouncementMarker =
+                getMostRecentAnnouncementMarker(announcements);
+            if (options.markAsRead) {
+                markAnnouncementsAsRead();
+            }
+            return true;
         } catch (error) {
             console.error("Erro ao buscar avisos:", error);
             announcementsError =
@@ -602,6 +713,8 @@
                     : "Não foi possível carregar os avisos.";
             announcements = [];
             announcementsTotal = 0;
+            latestAnnouncementMarker = null;
+            return false;
         } finally {
             isAnnouncementsLoading = false;
         }
@@ -610,7 +723,7 @@
     async function handleNotificationsSubTabChange(tab: NotificationsSubTab) {
         notificationsSubTab = tab;
         if (tab === "announcements") {
-            await fetchAnnouncements();
+            await fetchAnnouncements({ markAsRead: true });
         }
     }
 
@@ -739,7 +852,7 @@
             notificationsSubTab = nextNotificationsSubTab;
             await fetchAnnouncementsCount();
             if (nextNotificationsSubTab === "announcements") {
-                await fetchAnnouncements();
+                await fetchAnnouncements({ markAsRead: true });
             }
         }
         if (newView === "dashboard") {
@@ -878,6 +991,7 @@
     }
 
     onMount(async () => {
+        lastReadAnnouncementMarker = readLastReadAnnouncementMarkerFromStorage();
         await ensureViewComponents(activeView);
         fetchData();
         if (activeView === "dashboard") {
@@ -968,7 +1082,7 @@
         bind:isOpen={isSidebarOpen}
         {activeView}
         {pendingCounts}
-        announcementsBadge={announcementsTotal}
+        announcementsBadge={announcementsUnreadVisualCount}
         onNavigate={changeView}
     />
 
@@ -1989,7 +2103,10 @@
                                         </h2>
                                         <button
                                             type="button"
-                                            on:click={fetchAnnouncements}
+                                            on:click={() =>
+                                                fetchAnnouncements({
+                                                    markAsRead: true,
+                                                })}
                                             class="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                                         >
                                             Atualizar
