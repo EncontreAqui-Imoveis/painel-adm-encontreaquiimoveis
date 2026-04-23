@@ -212,8 +212,8 @@ test('fluxo de solicitações de imóvel abre a aba de edição e conclui uma re
 
   await page.goto('/');
 
-  await page.getByRole('button', { name: /^imóveis$/i }).click();
-  await page.getByText('Solicitações (Imóveis)').click();
+  await page.getByRole('button', { name: /^verificação/i }).click();
+  await page.getByRole('button', { name: /^solicitações \(imóveis\)/i }).click();
 
   await expect(page.getByRole('button', { name: 'Edição' }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Edição' }).first().click();

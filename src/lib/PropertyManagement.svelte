@@ -10,6 +10,7 @@
   import { Input } from '$lib/components/ui/input';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import { clampAreaInput, clampCountInput, extractApiErrorMessage } from '$lib/components/create-property-helpers';
+  import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
   import Pagination from '$lib/Pagination.svelte';
   import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';
   import { clearSessionToken, hasSessionToken } from './sessionState';
@@ -1919,7 +1920,7 @@
             Anunciante: {property.broker_name ?? '-'}
           </div>
           <div class="mt-1 text-xs text-gray-600 dark:text-gray-300">
-            Telefone: {property.broker_phone ?? '-'}
+            Telefone: {formatPhoneDisplayBr(property.broker_phone)}
           </div>
           <div class="mt-3 flex justify-end">
             <Button
@@ -1944,7 +1945,7 @@
       {/each}
     </div>
     <div
-      class={`hidden md:block overflow-x-auto rounded-lg border shadow-sm ${
+      class={`hidden md:block show-scrollbar overflow-x-auto rounded-lg border shadow-sm ${
         isReviewOnly
           ? 'border-green-200 bg-green-50/40 dark:border-green-800/60 dark:bg-gray-900/70'
           : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900'
@@ -2030,7 +2031,7 @@
                 {property.broker_name ?? '-'}
               </td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                {property.broker_phone ?? '-'}
+                {formatPhoneDisplayBr(property.broker_phone)}
               </td>
               <td class="px-6 py-4 text-right">
                 <Button
@@ -2309,7 +2310,7 @@
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Galeria</h3>
           {#if selectedPropertyImages().length > 0}
             <div
-              class="mt-2 flex max-w-full min-w-0 gap-3 overflow-x-auto overscroll-x-contain rounded-md bg-gray-50 p-3 touch-pan-x [-webkit-overflow-scrolling:touch] dark:bg-gray-800/60"
+              class="show-scrollbar mt-2 flex max-w-full min-w-0 gap-3 overflow-x-auto overscroll-x-contain rounded-md bg-gray-50 p-3 touch-pan-x [-webkit-overflow-scrolling:touch] dark:bg-gray-800/60"
             >
                 {#each visibleSelectedPropertyImages() as image (image.id)}
                 <div class="relative flex shrink-0 flex-col items-center gap-2">
@@ -2381,7 +2382,7 @@
             </p>
           </div>
           {#if stagedImages.length > 0}
-            <div class="mt-3 flex gap-3 overflow-x-auto rounded-md bg-gray-50 p-3 dark:bg-gray-800/60">
+            <div class="show-scrollbar mt-3 flex gap-3 overflow-x-auto rounded-md bg-gray-50 p-3 dark:bg-gray-800/60">
               {#each stagedImagePreviews as preview, index}
                 <div class="relative flex-shrink-0">
                   <img
@@ -2766,9 +2767,9 @@
                 />
               </label>
               <p><strong>Proprietário:</strong> {selectedProperty.owner_name ?? '-'}</p>
-              <p><strong>Telefone do proprietário:</strong> {selectedProperty.owner_phone ?? '-'}</p>
+              <p><strong>Telefone do proprietário:</strong> {formatPhoneDisplayBr(selectedProperty.owner_phone)}</p>
               <p><strong>Anunciante:</strong> {selectedProperty.broker_name ?? '-'}</p>
-              <p><strong>Telefone:</strong> {selectedProperty.broker_phone ?? '-'}</p>
+              <p><strong>Telefone:</strong> {formatPhoneDisplayBr(selectedProperty.broker_phone)}</p>
               <p><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Não'}</p>
               {#if isBrokerCredenciado(selectedProperty)}
                 <p><strong>CRECI:</strong> {selectedProperty.broker_creci ?? '-'}</p>
@@ -2792,9 +2793,9 @@
               <li><strong>Área construída:</strong> {selectedProperty.area_construida ?? '-'} m2</li>
               <li><strong>Área do terreno:</strong> {selectedProperty.area_terreno ?? '-'} m2</li>
               <li><strong>Proprietário:</strong> {selectedProperty.owner_name ?? '-'}</li>
-              <li><strong>Telefone do proprietário:</strong> {selectedProperty.owner_phone ?? '-'}</li>
+              <li><strong>Telefone do proprietário:</strong> {formatPhoneDisplayBr(selectedProperty.owner_phone)}</li>
               <li><strong>Anunciante:</strong> {selectedProperty.broker_name ?? '-'}</li>
-              <li><strong>Telefone:</strong> {selectedProperty.broker_phone ?? '-'}</li>
+              <li><strong>Telefone:</strong> {formatPhoneDisplayBr(selectedProperty.broker_phone)}</li>
               <li><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Não'}</li>
               {#if isBrokerCredenciado(selectedProperty)}
                 <li><strong>CRECI:</strong> {selectedProperty.broker_creci ?? '-'}</li>
@@ -3020,7 +3021,7 @@
       {/if}
       {#if previewTotal > 1}
         <div
-          class="mt-3 max-w-[95vw] overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] touch-pan-x"
+          class="show-scrollbar mt-3 max-w-[95vw] overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] touch-pan-x"
           role="navigation"
           aria-label="Miniaturas da galeria"
         >

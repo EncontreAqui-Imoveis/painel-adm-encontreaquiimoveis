@@ -6,6 +6,7 @@
   import { Button } from '$lib/components/ui/button';
   import { Loader2 } from 'lucide-svelte';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
+  import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
 
   type BrokerDetail = {
     id: number;
@@ -309,7 +310,7 @@
               <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Telefone</div>
                 <div class="font-medium text-gray-900 dark:text-gray-100">
-                  {brokerDetail?.phone ?? broker.phone ?? 'N/A'}
+                  {formatPhoneDisplayBr(brokerDetail?.phone ?? broker.phone, 'N/A')}
                 </div>
               </div>
               <div>

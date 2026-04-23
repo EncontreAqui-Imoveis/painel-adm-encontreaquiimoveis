@@ -10,6 +10,7 @@
   import Pagination from '$lib/Pagination.svelte';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import type { PropertyStatus } from '$lib/types';
+  import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
 
   type Client = {
     id: number;
@@ -216,7 +217,7 @@
       id: client.id,
       nome: client.name,
       email: client.email,
-      telefone: client.phone ?? 'N/A',
+      telefone: formatPhoneDisplayBr(client.phone, 'N/A'),
       data_cadastro: client.created_at ?? '',
     }));
 
@@ -539,7 +540,7 @@
           <dl class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
             <div class="flex items-center justify-between gap-3">
               <dt>Telefone</dt>
-              <dd class="text-right">{client.phone ?? 'N/A'}</dd>
+              <dd class="text-right">{formatPhoneDisplayBr(client.phone, 'N/A')}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
               <dt>Cadastrado em</dt>
@@ -593,7 +594,7 @@
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
               <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">{client.name}</td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{client.email}</td>
-              <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{client.phone ?? 'N/A'}</td>
+              <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{formatPhoneDisplayBr(client.phone, 'N/A')}</td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{formatDate(client.created_at)}</td>
               <td class="px-6 py-4 text-right">
                 <div class="flex justify-end gap-2">
@@ -704,7 +705,7 @@
               <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Telefone</div>
                 <div class="font-medium text-gray-900 dark:text-gray-100">
-                  {clientDetail?.phone ?? selectedClient.phone ?? 'N/A'}
+                  {formatPhoneDisplayBr(clientDetail?.phone ?? selectedClient.phone, 'N/A')}
                 </div>
               </div>
               <div>

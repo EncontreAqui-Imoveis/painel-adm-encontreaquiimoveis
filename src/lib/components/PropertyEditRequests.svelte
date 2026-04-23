@@ -672,10 +672,16 @@
                         </button>
                       </div>
                       {#if draftFieldReviews[entry.key]?.decision === 'REJECTED'}
+                        {@const missingReason =
+                          (draftFieldReviews[entry.key]?.reason ?? '').trim().length === 0}
                         <textarea
                           rows={3}
-                          placeholder="Motivo da rejeição para este campo"
-                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                          placeholder="Motivo da Alteração"
+                          class={`w-full rounded-md border px-3 py-2 text-sm dark:bg-gray-800 dark:text-gray-100 ${
+                            missingReason
+                              ? 'border-red-400 bg-red-50 text-red-900 focus:border-red-500 focus:ring-red-200 dark:border-red-700 dark:bg-red-950/20 dark:text-red-200'
+                              : 'border-gray-300 dark:border-gray-700'
+                          }`}
                           value={draftFieldReviews[entry.key]?.reason ?? ''}
                           on:input={(event) =>
                             updateFieldReason(
@@ -683,6 +689,11 @@
                               (event.currentTarget as HTMLTextAreaElement).value
                             )}
                         ></textarea>
+                        {#if missingReason}
+                          <p class="text-xs font-medium text-red-600 dark:text-red-300">
+                            O motivo é obrigatório para manter o histórico de auditoria
+                          </p>
+                        {/if}
                       {/if}
                     </div>
                   </td>

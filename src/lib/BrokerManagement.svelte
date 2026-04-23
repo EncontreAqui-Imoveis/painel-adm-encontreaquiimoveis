@@ -10,6 +10,7 @@
   import { clearSessionToken, hasSessionToken } from './sessionState';
   import { toast } from 'svelte-sonner';
   import type { Broker, BrokerDocuments, Property } from './types';
+  import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
 
   type SortConfig = {
     key: string;
@@ -504,7 +505,7 @@
                 <div class="font-semibold text-gray-900 dark:text-white">{broker.name}</div>
                 <div class="text-sm text-gray-500 dark:text-gray-400">{broker.email}</div>
               </td>
-              <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{broker.phone ?? '-'}</td>
+              <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{formatPhoneDisplayBr(broker.phone)}</td>
               <td class="px-6 py-4 text-sm font-semibold text-gray-800 dark:text-gray-200">{broker.creci}</td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{broker.property_count ?? 0}</td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">

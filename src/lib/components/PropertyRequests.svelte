@@ -6,6 +6,7 @@
   import { Button } from '$lib/components/ui/button';
   import Pagination from '$lib/Pagination.svelte';
   import { extractApiErrorMessage } from '$lib/components/create-property-helpers';
+  import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
 
   type PropertyRequest = {
     id: number;
@@ -162,7 +163,7 @@
     </Button>
   </div>
 
-  <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+  <div class="show-scrollbar overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
       <thead class="bg-gray-50 dark:bg-gray-900/70">
         <tr>
@@ -211,7 +212,7 @@
                 </div>
               </td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                {property.broker_phone ?? '-'}
+                {formatPhoneDisplayBr(property.broker_phone)}
               </td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                 {property.bairro ?? '-'}

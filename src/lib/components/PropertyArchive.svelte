@@ -5,6 +5,7 @@
   import { api } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
   import Pagination from '$lib/Pagination.svelte';
+  import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
 
   type ArchiveStatus = 'sold' | 'rented';
 
@@ -495,12 +496,12 @@
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Anunciante</p>
               <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{reviewDetails.broker_name ?? '-'}</p>
-              <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{reviewDetails.broker_phone ?? '-'}</p>
+              <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{formatPhoneDisplayBr(reviewDetails.broker_phone)}</p>
             </div>
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Proprietário</p>
               <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{reviewDetails.owner_name ?? '-'}</p>
-              <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{reviewDetails.owner_phone ?? '-'}</p>
+              <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{formatPhoneDisplayBr(reviewDetails.owner_phone)}</p>
             </div>
           </div>
         {/if}

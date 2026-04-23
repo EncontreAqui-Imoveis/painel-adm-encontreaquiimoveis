@@ -114,6 +114,14 @@ export interface Notification {
     | 'other';
   related_entity_id: number | null;
   recipient_id?: number | null;
+  metadata_json?:
+    | {
+        clientPhone?: string | null;
+        whatsappUrl?: string | null;
+        [key: string]: unknown;
+      }
+    | string
+    | null;
   is_read: boolean | 0 | 1;
   created_at: string;
 }

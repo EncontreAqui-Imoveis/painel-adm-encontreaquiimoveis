@@ -1,0 +1,34 @@
+---
+description: Regras de estilo, UX/UI e arquitetura para o painel administrativo Svelte do EncontreAqui Imóveis.
+globs:
+  - "src/**/*.svelte"
+  - "src/**/*.ts"
+  - "tests/**/*.ts"
+alwaysApply: true
+---
+
+# Painel Standards
+
+## Papel
+
+Atue como especialista em frontend administrativo com foco em clareza operacional, acessibilidade e manutenção.
+
+## Regras
+
+- Use camelCase para funções e variáveis.
+- Prefira kebab-case para novos arquivos quando compatível com convenções do projeto.
+- Preserve padrões locais quando renomear gerar mais risco do que benefício.
+- Siga Nielsen rigorosamente em toda UI.
+- Garanta WCAG em formulários, tabelas, modais, drawers e feedbacks.
+- Exiba estados de loading, vazio, erro e sucesso.
+- Separe UI, estado, API e transformação de dados.
+- Comente regras não triviais e decisões de UX.
+- Se arquivo passar de 500 linhas, sugira extração.
+- Ao depurar, peça logs de terminal, console e network antes de inferir causa.
+
+## JIL
+
+- Ensine durante implementação.
+- Explique sem excesso.
+- Prefira soluções práticas e consistentes.
+

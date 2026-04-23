@@ -19,6 +19,7 @@
         Property,
         Broker,
         User,
+        Notification,
         View,
         DataItem,
         ViewConfig,
@@ -105,6 +106,12 @@
     let AdminNotificationsPanelComponent: LazySvelteComponent | null = null;
     let StatusPieChartComponent: LazySvelteComponent | null = null;
     let NewPropertiesLineChartComponent: LazySvelteComponent | null = null;
+    type NotificationsSubTab = "send" | "center" | "announcements";
+    let notificationsSubTab: NotificationsSubTab = "send";
+    let announcements: Notification[] = [];
+    let announcementsTotal = 0;
+    let isAnnouncementsLoading = false;
+    let announcementsError: string | null = null;
 
     async function ensureDashboardCharts() {
         if (!StatusPieChartComponent) {
@@ -500,6 +507,117 @@
         return 0;
     }
 
+    function readListData<T>(payload: unknown): T[] {
+        if (Array.isArray(payload)) return payload as T[];
+        if (payload && typeof payload === "object") {
+            const data = (payload as { data?: unknown }).data;
+            if (Array.isArray(data)) return data as T[];
+        }
+        return [];
+    }
+
+    function formatNotificationDate(value: string): string {
+        if (!value) return "-";
+        const normalized = value.includes("T") ? value : value.replace(" ", "T");
+        const parsed = new Date(normalized);
+        if (Number.isNaN(parsed.getTime())) return value;
+        return parsed.toLocaleString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    }
+
+    function getNotificationMetadata(
+        item: Notification,
+    ): Record<string, unknown> | null {
+        const raw = item.metadata_json;
+        if (!raw) return null;
+        if (typeof raw === "string") {
+            try {
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === "object"
+                    ? (parsed as Record<string, unknown>)
+                    : null;
+            } catch {
+                return null;
+            }
+        }
+        return typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+    }
+
+    function getMetadataString(
+        metadata: Record<string, unknown> | null,
+        key: string,
+    ): string | null {
+        const value = metadata?.[key];
+        if (typeof value !== "string") return null;
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : null;
+    }
+
+    function getAnnouncementClientPhone(item: Notification): string | null {
+        return getMetadataString(getNotificationMetadata(item), "clientPhone");
+    }
+
+    function getAnnouncementWhatsappUrl(item: Notification): string | null {
+        return getMetadataString(getNotificationMetadata(item), "whatsappUrl");
+    }
+
+    async function fetchAnnouncementsCount() {
+        try {
+            const response = await fetchPlatformResponse(
+                "/admin/notifications?type=announcement&limit=1&page=1",
+            );
+            if (!response || !response.ok) {
+                announcementsTotal = 0;
+                return;
+            }
+            const payload = await response.json();
+            announcementsTotal = readListTotal(payload);
+        } catch (error) {
+            console.error("Erro ao buscar total de avisos:", error);
+            announcementsTotal = 0;
+        }
+    }
+
+    async function fetchAnnouncements() {
+        isAnnouncementsLoading = true;
+        announcementsError = null;
+        try {
+            const response = await fetchPlatformResponse(
+                "/admin/notifications?type=announcement&limit=20&page=1",
+            );
+            if (!response || !response.ok) {
+                throw new Error("Falha ao carregar avisos.");
+            }
+            const payload = await response.json();
+            announcements = readListData<Notification>(payload);
+            const totalFromPayload = readListTotal(payload);
+            announcementsTotal =
+                totalFromPayload > 0 ? totalFromPayload : announcements.length;
+        } catch (error) {
+            console.error("Erro ao buscar avisos:", error);
+            announcementsError =
+                error instanceof Error
+                    ? error.message
+                    : "Não foi possível carregar os avisos.";
+            announcements = [];
+            announcementsTotal = 0;
+        } finally {
+            isAnnouncementsLoading = false;
+        }
+    }
+
+    async function handleNotificationsSubTabChange(tab: NotificationsSubTab) {
+        notificationsSubTab = tab;
+        if (tab === "announcements") {
+            await fetchAnnouncements();
+        }
+    }
+
     async function fetchPendingCounts() {
         if (!hasSessionToken()) {
             pendingCounts = { propertyRequests: 0, brokerRequests: 0 };
@@ -618,6 +736,10 @@
         sortOrder = "desc";
         fetchData();
         fetchPendingCounts();
+        if (newView === "notifications") {
+            notificationsSubTab = "send";
+            await fetchAnnouncementsCount();
+        }
         if (newView === "dashboard") {
             fetchChartData();
         }
@@ -759,6 +881,9 @@
         if (activeView === "dashboard") {
             fetchChartData();
         }
+        if (activeView === "notifications") {
+            fetchAnnouncementsCount();
+        }
         fetchPendingCounts();
         pendingCountsInterval = setInterval(fetchPendingCounts, 15000);
     });
@@ -861,7 +986,57 @@
                 </div>
             {:else if activeView === "dashboard"}
                 <div class="space-y-6">
-                    {#if sreStats}
+                    <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900/50 dark:bg-amber-950/20">
+                            <p class="text-sm font-semibold text-amber-900 dark:text-amber-200">Pendências urgentes</p>
+                            <p class="mt-2 text-3xl font-black text-amber-700 dark:text-amber-300">
+                                {(pendingCounts.propertyRequests ?? 0) + (pendingCounts.brokerRequests ?? 0)}
+                            </p>
+                            <p class="mt-1 text-xs text-amber-800 dark:text-amber-200/90">
+                                Aprovações de imóveis e solicitações de corretores aguardando ação.
+                            </p>
+                            <button
+                                class="mt-4 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                                on:click={() => changeView("property_requests")}
+                            >
+                                Ir para pendências
+                            </button>
+                        </div>
+
+                        <div class="rounded-xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-900/50 dark:bg-blue-950/20">
+                            <p class="text-sm font-semibold text-blue-900 dark:text-blue-200">Novas propostas do dia</p>
+                            <p class="mt-2 text-3xl font-black text-blue-700 dark:text-blue-300">
+                                {Number(sreStats?.business?.newProposalsToday ?? sreStats?.newProposalsToday ?? 0)}
+                            </p>
+                            <p class="mt-1 text-xs text-blue-800 dark:text-blue-200/90">
+                                Volume diário para triagem rápida de negociação.
+                            </p>
+                            <button
+                                class="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                                on:click={() => changeView("negotiation_requests")}
+                            >
+                                Abrir propostas
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                        <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Visitas e leads</h2>
+                        <p class="mb-4 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Tendência recente para leitura rápida de operação.
+                        </p>
+                        {#if NewPropertiesLineChartComponent && chartData}
+                            <div class="h-72">
+                                <svelte:component this={NewPropertiesLineChartComponent} data={chartData.newPropertiesOverTime} />
+                            </div>
+                        {:else}
+                            <div class="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                                Sem dados de gráfico no momento.
+                            </div>
+                        {/if}
+                    </section>
+
+                    {#if false && sreStats}
                         <!-- SRE Command Center Enclosure -->
                         <section
                             class="bg-white dark:bg-[#05070a] rounded-[2.5rem] p-6 lg:p-8 shadow-sm dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)] border border-gray-200 dark:border-gray-800/60 relative overflow-hidden"
@@ -1537,7 +1712,7 @@
                         </div>
                     {/if}
 
-                    <section class="opacity-90">
+                    <section class="hidden opacity-90">
                         <div class="mb-4 mt-6">
                             <h2
                                 class="text-lg font-semibold text-gray-900 dark:text-gray-100"
@@ -1770,38 +1945,194 @@
                             <h1
                                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
                             >
-                                Enviar notificação manual
+                                Notificações
                             </h1>
                             <p
                                 class="mt-1 text-sm text-gray-500 dark:text-gray-400"
                             >
-                                Envie mensagens manuais para usuários
-                                especifícos ou para todos os clientes e
-                                corretores da plataforma.
+                                Gerencie disparos, consulte o histórico e acompanhe
+                                os avisos enviados para clientes e corretores.
                             </p>
                         </div>
-                        <div class="p-6">
-                            {#if SendNotificationComponent}
-                                <svelte:component
-                                    this={SendNotificationComponent}
-                                />
-                            {:else}
-                                <div
-                                    class="flex items-center gap-2 text-gray-500 dark:text-gray-300"
+                        <div
+                            class="px-6 py-3 border-b border-gray-200 dark:border-gray-800"
+                        >
+                            <div class="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-1 bg-gray-50 dark:bg-gray-800/70">
+                                <button
+                                    on:click={() =>
+                                        handleNotificationsSubTabChange("send")}
+                                    class="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors {notificationsSubTab ===
+                                    'send'
+                                        ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
+                                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'}"
+                                    type="button"
                                 >
+                                    Enviar notificação
+                                </button>
+                                <button
+                                    on:click={() =>
+                                        handleNotificationsSubTabChange(
+                                            'center',
+                                        )}
+                                    class="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors {notificationsSubTab ===
+                                    'center'
+                                        ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
+                                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'}"
+                                    type="button"
+                                >
+                                    Central de notificações
+                                </button>
+                                <button
+                                    on:click={() =>
+                                        handleNotificationsSubTabChange(
+                                            'announcements',
+                                        )}
+                                    class="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors {notificationsSubTab ===
+                                    'announcements'
+                                        ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
+                                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'}"
+                                    type="button"
+                                >
+                                    Avisos
                                     <span
-                                        class="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-transparent dark:border-gray-600"
-                                    ></span>
-                                    Carregando...
+                                        class="inline-flex min-w-5 items-center justify-center rounded-full bg-green-100 px-1.5 py-0.5 text-[11px] font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                                    >
+                                        {announcementsTotal}
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            {#if notificationsSubTab === "send"}
+                                {#if SendNotificationComponent}
+                                    <svelte:component
+                                        this={SendNotificationComponent}
+                                    />
+                                {:else}
+                                    <div
+                                        class="flex items-center gap-2 text-gray-500 dark:text-gray-300"
+                                    >
+                                        <span
+                                            class="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-transparent dark:border-gray-600"
+                                        ></span>
+                                        Carregando...
+                                    </div>
+                                {/if}
+                            {:else if notificationsSubTab === "center"}
+                                {#if AdminNotificationsPanelComponent}
+                                    <svelte:component
+                                        this={AdminNotificationsPanelComponent}
+                                    />
+                                {:else}
+                                    <div
+                                        class="flex items-center gap-2 text-gray-500 dark:text-gray-300"
+                                    >
+                                        <span
+                                            class="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-transparent dark:border-gray-600"
+                                        ></span>
+                                        Carregando...
+                                    </div>
+                                {/if}
+                            {:else}
+                                <div class="space-y-4">
+                                    <div
+                                        class="flex items-center justify-between gap-3"
+                                    >
+                                        <h2
+                                            class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+                                        >
+                                            Avisos recentes
+                                        </h2>
+                                        <button
+                                            type="button"
+                                            on:click={fetchAnnouncements}
+                                            class="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                                        >
+                                            Atualizar
+                                        </button>
+                                    </div>
+
+                                    {#if isAnnouncementsLoading}
+                                        <div
+                                            class="text-sm text-gray-500 dark:text-gray-400"
+                                        >
+                                            Carregando avisos...
+                                        </div>
+                                    {:else if announcementsError}
+                                        <div
+                                            class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+                                        >
+                                            {announcementsError}
+                                        </div>
+                                    {:else if announcements.length === 0}
+                                        <div
+                                            class="rounded-md border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400"
+                                        >
+                                            Nenhum aviso encontrado.
+                                        </div>
+                                    {:else}
+                                        <div class="space-y-3">
+                                            {#each announcements as item (item.id)}
+                                                <article
+                                                    class="rounded-lg border border-gray-200 bg-white px-4 py-4 shadow-sm dark:border-gray-800 dark:bg-gray-900"
+                                                >
+                                                    <div
+                                                        class="flex items-center justify-between gap-3"
+                                                    >
+                                                        <span
+                                                            class="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                                        >
+                                                            Aviso
+                                                        </span>
+                                                        <span
+                                                            class="text-xs text-gray-400 dark:text-gray-500"
+                                                        >
+                                                            {formatNotificationDate(
+                                                                item.created_at,
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                    <p
+                                                        class="mt-3 text-sm text-gray-700 dark:text-gray-100"
+                                                    >
+                                                        {item.message}
+                                                    </p>
+                                                    <div
+                                                        class="mt-4 flex flex-wrap items-center gap-2 text-xs"
+                                                    >
+                                                        {#if getAnnouncementClientPhone(item)}
+                                                            <span
+                                                                class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                                                            >
+                                                                Telefone:
+                                                                {getAnnouncementClientPhone(
+                                                                    item,
+                                                                )}
+                                                            </span>
+                                                        {/if}
+                                                        {#if getAnnouncementWhatsappUrl(
+                                                            item,
+                                                        )}
+                                                            <a
+                                                                href={getAnnouncementWhatsappUrl(
+                                                                    item,
+                                                                )}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                class="inline-flex items-center rounded-md bg-green-600 px-2.5 py-1 text-white font-medium hover:bg-green-700 transition-colors"
+                                                            >
+                                                                Abrir no WhatsApp
+                                                            </a>
+                                                        {/if}
+                                                    </div>
+                                                </article>
+                                            {/each}
+                                        </div>
+                                    {/if}
                                 </div>
                             {/if}
                         </div>
                     </div>
-                    {#if AdminNotificationsPanelComponent}
-                        <svelte:component
-                            this={AdminNotificationsPanelComponent}
-                        />
-                    {/if}
                 </div>
             {:else}
                 {@const config = getViewConfig(activeView)}
