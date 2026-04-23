@@ -45,6 +45,7 @@
     propertyCode?: string | null;
     propertyTitle?: string | null;
     propertyAddress?: string | null;
+    propertyImageUrl?: string | null;
     proposalCount: number;
     updatedAt?: string | null;
     topProposal?: TopProposal | null;
@@ -408,6 +409,9 @@
       <thead class="bg-gray-50 dark:bg-gray-900/70">
         <tr>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Foto
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Código / Imóvel
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -427,19 +431,31 @@
       <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
         {#if summaryLoading}
           <tr>
-            <td colspan="5" class="px-6 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            <td colspan="6" class="px-6 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
               Carregando imóveis...
             </td>
           </tr>
         {:else if summaryItems.length === 0}
           <tr>
-            <td colspan="5" class="px-6 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            <td colspan="6" class="px-6 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
               Nenhuma proposta aguardando análise.
             </td>
           </tr>
         {:else}
           {#each summaryItems as item (item.propertyId)}
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
+              <td class="px-6 py-4">
+                {#if item.propertyImageUrl}
+                  <img
+                    src={item.propertyImageUrl}
+                    alt={item.propertyTitle ?? `Imóvel #${item.propertyId}`}
+                    class="h-10 w-14 rounded-md border border-gray-200 object-cover dark:border-gray-700"
+                    loading="lazy"
+                  />
+                {:else}
+                  <div class="h-10 w-14 rounded-md border border-dashed border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"></div>
+                {/if}
+              </td>
               <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                 <div class="font-semibold">
                   {item.propertyCode ? `${item.propertyCode}` : `#${item.propertyId}`}
