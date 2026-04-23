@@ -164,6 +164,7 @@
   let brokenPreviewImages = new Set<string>();
   let brokenListThumbnails = new Set<number>();
   const MAX_TOTAL_IMAGES = 20;
+  const cloudinaryCloudName = String(import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME ?? '').trim();
   const areaUnitOptions: Array<{ value: AreaUnit; label: string }> = [
     { value: 'm2', label: 'm²' },
     { value: 'hectare', label: 'Hectare (ha)' },
@@ -598,8 +599,43 @@
     if (typeof rawUrl !== 'string' || rawUrl.trim().length === 0) return null;
     const cleaned = rawUrl.trim();
     if (/^https?:\/\//i.test(cleaned)) return cleaned;
+    if (/^\/\/res\.cloudinary\.com\//i.test(cleaned)) return `https:${cleaned}`;
+    if (/^res\.cloudinary\.com\//i.test(cleaned)) return `https://${cleaned}`;
+    if (/^\/\//.test(cleaned)) return `https:${cleaned}`;
     // fallback: assume relative path from API
     return resolveApiAssetUrl(cleaned);
+  }
+
+  function encodeCloudinaryPublicId(publicId: string): string {
+    return publicId
+      .split('/')
+      .filter(Boolean)
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+  }
+
+  function cloudinaryUrlFromPublicId(rawPublicId: unknown): string | null {
+    if (typeof rawPublicId !== 'string') return null;
+    const publicId = rawPublicId.trim().replace(/^\/+|\/+$/g, '');
+    if (!publicId) return null;
+    if (!cloudinaryCloudName) return null;
+    return `https://res.cloudinary.com/${encodeURIComponent(cloudinaryCloudName)}/image/upload/${encodeCloudinaryPublicId(publicId)}`;
+  }
+
+  function parseImagesJsonString(raw: string): unknown | null {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (!trimmed.startsWith('[') && !trimmed.startsWith('{') && !trimmed.startsWith('"')) return null;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === 'string') {
+        const nested = parseImagesJsonString(parsed);
+        return nested ?? parsed;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
   }
 
   function splitImageTokens(raw: string): string[] {
@@ -638,12 +674,20 @@
   }
 
   function normalizeImages(
-    images?: Array<NormalizedImage | PropertyImageType | Record<string, unknown> | string> | string | null
+    images?:
+      | Array<NormalizedImage | PropertyImageType | Record<string, unknown> | string>
+      | Record<string, unknown>
+      | string
+      | null
   ): NormalizedImage[] {
     if (!images) return [];
 
-    // Backend pode enviar string delimitada por ";" ou "," contendo id|url
+    // Backend pode enviar lista serializada em JSON como string.
     if (typeof images === 'string') {
+      const parsed = parseImagesJsonString(images);
+      if (parsed != null) {
+        return normalizeImages(parsed as Record<string, unknown> | Array<NormalizedImage | PropertyImageType | Record<string, unknown> | string> | string | null);
+      }
       return parseDelimitedImages(images);
     }
 
@@ -652,6 +696,10 @@
     return list
       .flatMap<NormalizedImage | null>((image, index) => {
         if (typeof image === 'string') {
+          const parsed = parseImagesJsonString(image);
+          if (parsed != null) {
+            return normalizeImages(parsed as Record<string, unknown> | Array<NormalizedImage | PropertyImageType | Record<string, unknown> | string> | string | null);
+          }
           // Se a string tiver vários itens, faça split
           if (image.includes('|') || image.includes(';') || image.includes(',')) {
             return parseDelimitedImages(image);
@@ -663,8 +711,10 @@
         if (image && typeof image === 'object') {
           const anyImg = image as Record<string, unknown>;
           const candidateUrl =
+            normalizeImageUrl((anyImg.secure_url as string | undefined) ?? null) ||
             normalizeImageUrl((anyImg.url as string | undefined) ?? null) ||
-            normalizeImageUrl((anyImg.image_url as string | undefined) ?? null);
+            normalizeImageUrl((anyImg.image_url as string | undefined) ?? null) ||
+            cloudinaryUrlFromPublicId((anyImg.public_id as string | undefined) ?? null);
           if (!candidateUrl) return null;
           const fallbackId = Number.isFinite(Number(index)) ? index : 0;
           const rawId = (anyImg.id as number | undefined) ?? fallbackId;

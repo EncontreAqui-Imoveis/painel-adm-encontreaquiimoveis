@@ -1950,60 +1950,10 @@
                                 os avisos enviados para clientes e corretores.
                             </p>
                         </div>
-                        <div
-                            class="px-6 py-3 border-b border-gray-200 dark:border-gray-800"
-                        >
-                            <div class="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-1 bg-gray-50 dark:bg-gray-800/70">
-                                <button
-                                    on:click={() =>
-                                        handleNotificationsSubTabChange("send")}
-                                    class="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors {notificationsSubTab ===
-                                    'send'
-                                        ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
-                                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'}"
-                                    type="button"
-                                >
-                                    Enviar notificação
-                                </button>
-                                <button
-                                    on:click={() =>
-                                        handleNotificationsSubTabChange(
-                                            'center',
-                                        )}
-                                    class="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors {notificationsSubTab ===
-                                    'center'
-                                        ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
-                                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'}"
-                                    type="button"
-                                >
-                                    Central de notificações
-                                </button>
-                                <button
-                                    on:click={() =>
-                                        handleNotificationsSubTabChange(
-                                            'announcements',
-                                        )}
-                                    class="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors {notificationsSubTab ===
-                                    'announcements'
-                                        ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
-                                        : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'}"
-                                    type="button"
-                                >
-                                    Avisos
-                                    <span
-                                        class="inline-flex min-w-5 items-center justify-center rounded-full bg-green-100 px-1.5 py-0.5 text-[11px] font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                                    >
-                                        {announcementsTotal}
-                                    </span>
-                                </button>
-                            </div>
-                        </div>
                         <div class="p-6">
                             {#if notificationsSubTab === "send"}
                                 {#if SendNotificationComponent}
-                                    <svelte:component
-                                        this={SendNotificationComponent}
-                                    />
+                                    <SendNotificationComponent />
                                 {:else}
                                     <div
                                         class="flex items-center gap-2 text-gray-500 dark:text-gray-300"
@@ -2016,9 +1966,7 @@
                                 {/if}
                             {:else if notificationsSubTab === "center"}
                                 {#if AdminNotificationsPanelComponent}
-                                    <svelte:component
-                                        this={AdminNotificationsPanelComponent}
-                                    />
+                                    <AdminNotificationsPanelComponent />
                                 {:else}
                                     <div
                                         class="flex items-center gap-2 text-gray-500 dark:text-gray-300"
