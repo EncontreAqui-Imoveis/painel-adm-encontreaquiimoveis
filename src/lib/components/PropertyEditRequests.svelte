@@ -112,6 +112,7 @@
     { decision: 'UNDECIDED' | 'APPROVED' | 'REJECTED'; reason: string }
   > = {};
   let diffEntries: Array<{ key: string; before: unknown; after: unknown }> = [];
+  let reviewPendingItems: Array<{ key: string; label: string; message: string }> = [];
 
   onMount(() => {
     hasMounted = true;
@@ -141,6 +142,7 @@
     }
   }
 
+  $: reviewPendingItems = buildReviewPendingItems();
   $: canSubmitPartialReview = evaluateCanSubmitReview();
 
   async function fetchRequests() {
@@ -261,33 +263,48 @@
     const seeded = buildDraftFieldReviews(request);
     for (const [key, value] of Object.entries(current)) {
       if (seeded[key]) {
-        seeded[key] = value;
+        seeded[key] = {
+          decision: value.decision,
+          reason: value.reason,
+        };
       }
     }
     return seeded;
+  }
+
+  function getRelevantReviewKeys() {
+    const keys = diffEntries.map((entry) => entry.key);
+    return Array.from(new Set(keys));
+  }
+
+  function getFieldReviewByKey(key: string) {
+    const current = draftFieldReviews[key];
+    return {
+      decision: current?.decision ?? 'UNDECIDED',
+      reason: current?.reason ?? '',
+    };
   }
 
   function updateFieldDecision(
     key: string,
     decision: 'UNDECIDED' | 'APPROVED' | 'REJECTED'
   ) {
+    const current = getFieldReviewByKey(key);
     draftFieldReviews = {
       ...draftFieldReviews,
       [key]: {
         decision,
-        reason:
-          decision === 'APPROVED'
-            ? ''
-            : draftFieldReviews[key]?.reason ?? '',
+        reason: current.reason,
       },
     };
   }
 
   function updateFieldReason(key: string, reason: string) {
+    const current = getFieldReviewByKey(key);
     draftFieldReviews = {
       ...draftFieldReviews,
       [key]: {
-        decision: draftFieldReviews[key]?.decision ?? 'REJECTED',
+        decision: current.decision,
         reason,
       },
     };
@@ -295,39 +312,66 @@
 
   function markAllFields(decision: 'APPROVED' | 'REJECTED') {
     const next = { ...draftFieldReviews };
-    for (const key of Object.keys(next)) {
+    for (const key of getRelevantReviewKeys()) {
+      const current = getFieldReviewByKey(key);
       next[key] = {
         decision,
-        reason: decision === 'APPROVED' ? '' : next[key]?.reason ?? '',
+        reason: current.reason,
       };
     }
     draftFieldReviews = next;
   }
 
   function reviewCount(decision: 'APPROVED' | 'REJECTED') {
-    return Object.values(draftFieldReviews).filter((item) => item.decision === decision).length;
+    return getRelevantReviewKeys().filter((key) => getFieldReviewByKey(key).decision === decision).length;
+  }
+
+  function buildReviewPendingItems() {
+    if (!selected || diffEntries.length === 0) return [];
+
+    const pending: Array<{ key: string; label: string; message: string }> = [];
+
+    for (const key of getRelevantReviewKeys()) {
+      const field = getFieldReviewByKey(key);
+      const label = fieldLabels[key] ?? key;
+      if (field.decision === 'UNDECIDED') {
+        pending.push({
+          key,
+          label,
+          message: `${label}: selecione Aprovar ou Rejeitar.`,
+        });
+        continue;
+      }
+      if (field.decision === 'REJECTED' && field.reason.trim().length === 0) {
+        pending.push({
+          key,
+          label,
+          message: `${label}: informe o motivo da rejeição.`,
+        });
+      }
+    }
+
+    return pending;
   }
 
   function evaluateCanSubmitReview() {
-    if (!selected || diffEntries.length === 0) return false;
-    for (const { key } of diffEntries) {
-      const item = draftFieldReviews[key];
-      if (!item || item.decision === 'UNDECIDED') return false;
-      if (item.decision === 'REJECTED' && item.reason.trim().length === 0) return false;
-    }
-    return true;
+    return selected != null && diffEntries.length > 0 && reviewPendingItems.length === 0;
   }
 
   async function submitReview() {
     if (!selected || isSubmitting) return;
-    if (!canSubmitPartialReview) {
-      toast.error('Revise todos os campos e preencha o motivo dos rejeitados.');
+    if (reviewPendingItems.length > 0) {
+      const details = reviewPendingItems
+        .slice(0, 2)
+        .map((item) => item.message)
+        .join(' ');
+      toast.error(`Revise os campos pendentes antes de concluir. ${details}`);
       return;
     }
 
     const fieldReviews = Object.fromEntries(
-      diffEntries.map(({ key }) => {
-        const value = draftFieldReviews[key];
+      getRelevantReviewKeys().map((key) => {
+        const value = getFieldReviewByKey(key);
         return [
           key,
           {
@@ -565,7 +609,7 @@
             Rejeitados: {reviewCount('REJECTED')}
           </span>
           <span class="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-            Pendentes: {Object.keys(draftFieldReviews).length - reviewCount('APPROVED') - reviewCount('REJECTED')}
+            Pendentes: {reviewPendingItems.length}
           </span>
           <div class="ml-auto flex flex-wrap gap-2">
             <Button variant="outline" size="sm" on:click={() => markAllFields('APPROVED')} disabled={isSubmitting}>
@@ -652,16 +696,21 @@
           <Button variant="outline" on:click={closeModal} disabled={isSubmitting}>
             Fechar
           </Button>
-          {#if !canSubmitPartialReview}
-            <div class="self-center text-xs text-amber-700 dark:text-amber-300">
-              Para revisão parcial, decida todos os campos e preencha motivo nos rejeitados.
+          {#if reviewPendingItems.length > 0}
+            <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+              <div class="font-semibold">Pendências para concluir revisão:</div>
+              <ul class="mt-1 list-disc pl-5">
+                {#each reviewPendingItems as pending}
+                  <li>{pending.message}</li>
+                {/each}
+              </ul>
             </div>
           {/if}
           <button
             type="button"
             class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:cursor-not-allowed disabled:has-[.animate-spin]:cursor-wait bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 focus:ring-green-500 disabled:bg-green-400 disabled:text-white/60"
             on:click={submitReview}
-            disabled={isSubmitting || !canSubmitPartialReview}
+            disabled={isSubmitting}
           >
             Concluir revisão
           </button>
