@@ -109,6 +109,8 @@
   let itemsPerPage = 10;
   let totalItems = 0;
   let totalPages = 1;
+  let reviewPendingCreationCount = 0;
+  let reviewPendingEditCount = 0;
   let fetchKey = 0;
   let hasMounted = false;
   let sortConfig: SortConfig = { key: 'p.created_at', order: 'desc' };
@@ -403,6 +405,8 @@
       if (currentPage > totalPages && totalPages > 0) {
         currentPage = totalPages;
       }
+
+      await refreshReviewRequestTypeCounts();
     } catch (err) {
       console.error('Erro ao carregar imóveis:', err);
       const status = (err as { response?: { status?: number } })?.response?.status;
@@ -414,8 +418,73 @@
         error = err instanceof Error ? err.message : 'Erro inesperado ao carregar imóveis.';
       }
       properties = [];
+      resetReviewRequestTypeCounts();
     } finally {
       isLoading = false;
+    }
+  }
+
+  function resetReviewRequestTypeCounts() {
+    reviewPendingCreationCount = 0;
+    reviewPendingEditCount = 0;
+  }
+
+  function buildReviewCountQuery(requestType: 'creation' | 'edit') {
+    const params = new URLSearchParams();
+    if (filters.status !== 'all') {
+      params.append('status', filters.status);
+    }
+    if (filters.city !== 'all') {
+      params.append('city', filters.city);
+    }
+    const trimmedSearch = filters.search.trim();
+    if (trimmedSearch) {
+      params.append('search', trimmedSearch);
+    }
+    params.append('requestType', requestType);
+    params.append('page', '1');
+    params.append('limit', '1');
+    return params.toString();
+  }
+
+  function resolveTotalFromResponse(response: unknown): number {
+    const candidate = Number((response as { total?: number })?.total);
+    if (Number.isFinite(candidate) && candidate >= 0) {
+      return candidate;
+    }
+
+    const data = (response as { data?: unknown })?.data;
+    if (Array.isArray(data)) {
+      return data.length;
+    }
+
+    return 0;
+  }
+
+  async function fetchReviewCountByType(requestType: 'creation' | 'edit') {
+    const query = buildReviewCountQuery(requestType);
+    const response = await api.get<{ data?: Array<Record<string, unknown>>; total?: number }>(
+      `/admin/properties-with-brokers${query ? `?${query}` : ''}`
+    );
+    return resolveTotalFromResponse(response);
+  }
+
+  async function refreshReviewRequestTypeCounts() {
+    if (!isReviewOnly) {
+      resetReviewRequestTypeCounts();
+      return;
+    }
+
+    try {
+      const [creationCount, editCount] = await Promise.all([
+        fetchReviewCountByType('creation'),
+        fetchReviewCountByType('edit'),
+      ]);
+      reviewPendingCreationCount = creationCount;
+      reviewPendingEditCount = editCount;
+    } catch (err) {
+      console.error('Erro ao atualizar contagem por tipo:', err);
+      resetReviewRequestTypeCounts();
     }
   }
 
@@ -712,6 +781,11 @@
     if (reviewRequestType === type) return;
     reviewRequestType = type;
     requestFetch(true);
+  }
+
+  function formatReviewBadgeCount(value: number): string {
+    const normalized = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    return normalized > 99 ? '99+' : String(normalized);
   }
 
   const booleanKeys = [
@@ -1681,22 +1755,28 @@
         <Button
           variant="outline"
           className={reviewRequestType === 'creation'
-            ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
-            : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
+            ? 'flex items-center gap-2 border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+            : 'flex items-center gap-2 border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
           on:click={() => setReviewRequestType('creation')}
           disabled={isLoading}
         >
           Criação
+          <span class="inline-flex min-w-[2rem] items-center justify-center rounded-full bg-green-700 px-2 py-0.5 text-xs font-semibold text-white dark:bg-green-500 dark:text-green-950">
+            {formatReviewBadgeCount(reviewPendingCreationCount)}
+          </span>
         </Button>
         <Button
           variant="outline"
           className={reviewRequestType === 'edit'
-            ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
-            : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
+            ? 'flex items-center gap-2 border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+            : 'flex items-center gap-2 border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
           on:click={() => setReviewRequestType('edit')}
           disabled={isLoading}
         >
           Edição
+          <span class="inline-flex min-w-[2rem] items-center justify-center rounded-full bg-green-700 px-2 py-0.5 text-xs font-semibold text-white dark:bg-green-500 dark:text-green-950">
+            {formatReviewBadgeCount(reviewPendingEditCount)}
+          </span>
         </Button>
       </div>
     </section>
