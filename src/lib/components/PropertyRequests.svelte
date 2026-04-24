@@ -118,7 +118,7 @@
     rejectObservationError = null;
     try {
       await api.patch(`/admin/properties/${propertyId}/reject`, { reason });
-      toast.success('Imóvel rejeitado e removido.');
+      toast.success('Imóvel rejeitado. O anunciante pode corrigir e reenviar.');
       requests = requests.filter((property) => property.id !== propertyId);
       rejectDialogOpen = false;
       selectedRejectId = null;

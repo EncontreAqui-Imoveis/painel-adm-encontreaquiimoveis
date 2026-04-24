@@ -334,7 +334,10 @@
     return PROPOSAL_FILTERS.find((item) => item.key === selectedProposalFilter)?.status ?? 'PROPOSAL_SIGNED';
   }
 
+  /** Elegível para aprovar/rejeitar: PDF assinado anexado OU status já assinado (backend às vezes mantém outro status). */
   function isSignedProposal(item: NegotiationItem | null): boolean {
+    if (!item) return false;
+    if (item.signedDocumentId != null) return true;
     const value = String(item?.status ?? item?.internalStatus ?? '').trim().toUpperCase();
     return value === 'PROPOSAL_SIGNED';
   }
@@ -1603,7 +1606,10 @@
                     size="sm"
                     variant="outline"
                     className="mt-2"
-                    on:click={() => fetchResponsibles(selectedProposal.id)}
+                    on:click={() => {
+                      const p = selectedProposal;
+                      if (p) void fetchResponsibles(p.id);
+                    }}
                     disabled={responsiblesLoading || savingResponsibles || processingAction}
                   >
                     {#if responsiblesLoading}
@@ -1676,13 +1682,21 @@
         </div>
       </div>
 
-      <div class="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
-        {#if isSignedProposal(selectedProposal)}
+      <div class="mt-5 flex flex-col gap-2 border-t border-gray-200 pt-4 dark:border-gray-700 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        <p class="order-last text-left text-sm text-gray-500 dark:text-gray-400 sm:order-first sm:mr-auto sm:max-w-md">
+          {#if !isSignedProposal(selectedProposal) || requiresSignedPdf()}
+            Anexe o PDF assinado para aprovar ou rejeitar esta proposta.
+          {:else if hasResponsiblesInconsistentState(selectedProposal?.id ?? null)}
+            Valide/corrija o carregamento dos responsáveis para aprovar. Rejeitar ainda pode ser usado.
+          {/if}
+        </p>
+        <div class="flex flex-wrap items-center justify-end gap-2">
           <Button
             variant="destructive"
             className="bg-red-600 text-white hover:bg-red-700"
             on:click={rejectSelected}
-            disabled={isApproveBusy()}
+            disabled={isApproveBusy() || !isSignedProposal(selectedProposal) || requiresSignedPdf()}
+            title={!isSignedProposal(selectedProposal) || requiresSignedPdf() ? 'Exija PDF assinado anexado' : 'Rejeitar proposta com motivo abaixo'}
           >
             {#if processingAction}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
@@ -1693,18 +1707,15 @@
             variant="outline"
             className="bg-green-600 text-white hover:bg-green-700"
             on:click={approveSelected}
-            disabled={isApproveBusy() || requiresSignedPdf() || hasResponsiblesInconsistentState(selectedProposal?.id ?? null)}
+            disabled={isApproveBusy() || requiresSignedPdf() || hasResponsiblesInconsistentState(selectedProposal?.id ?? null) || !isSignedProposal(selectedProposal)}
+            title={requiresSignedPdf() ? 'Anexe o PDF assinado' : hasResponsiblesInconsistentState(selectedProposal?.id ?? null) ? 'Corrija responsáveis' : 'Aprovar e seguir para contratos'}
           >
             {#if processingAction || savingResponsibles}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
             {/if}
             Aprovar
           </Button>
-        {:else}
-          <p class="text-sm text-gray-500 dark:text-gray-400">
-            Aprovação/Rejeição disponível apenas para propostas assinadas.
-          </p>
-        {/if}
+        </div>
       </div>
     </div>
   </div>

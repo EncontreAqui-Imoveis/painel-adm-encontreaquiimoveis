@@ -1134,7 +1134,7 @@
         toast.success('Imóvel aprovado.');
       } else {
         await api.patch(`/admin/properties/${selectedProperty.id}/reject`, {});
-        toast.success('Imóvel rejeitado e removido.');
+        toast.success('Imóvel rejeitado. O anunciante pode corrigir e reenviar.');
       }
       isModalOpen = false;
       clearStagedImages();
@@ -1180,7 +1180,7 @@
           'X-Admin-Reauth': response.reauthToken,
         },
       });
-      toast.success('Imóvel excluido com sucesso.');
+      toast.success('Imóvel marcado como vendido.');
       isDeleteDialogOpen = false;
       isModalOpen = false;
       clearStagedImages();
@@ -1217,7 +1217,7 @@
     rejectObservationError = null;
     try {
       await api.patch(`/admin/properties/${selectedProperty.id}/reject`, { reason });
-      toast.success('Imóvel rejeitado e removido.');
+      toast.success('Imóvel rejeitado. O anunciante pode corrigir e reenviar.');
       rejectDialogOpen = false;
       isModalOpen = false;
       clearStagedImages();
@@ -1746,6 +1746,8 @@
     }
   }
 
+  let previewImageDeleteBusy = false;
+
   async function handleImageDelete(imageId: number) {
     if (!selectedProperty) return;
     if (selectedPropertyImages().length <= 1) {
@@ -1768,6 +1770,21 @@
       imageDeleteError =
         err?.response?.data?.error ||
         (err instanceof Error ? err.message : 'Falha ao remover imagem.');
+    }
+  }
+
+  async function handleDeleteCurrentPreviewImage() {
+    const img = previewImages[previewImageIndex];
+    if (!img?.id || !selectedProperty) {
+      toast.error('Não foi possível identificar a imagem.');
+      return;
+    }
+    previewImageDeleteBusy = true;
+    try {
+      await handleImageDelete(img.id);
+      closeImagePreview();
+    } finally {
+      previewImageDeleteBusy = false;
     }
   }
 
@@ -2618,7 +2635,7 @@
                   on:click={handleDeleteProperty}
                   disabled={isProcessing || isSavingEdit}
                 >
-                  Excluir
+                  Marcar como vendido
                 </Button>
                 {#if selectedProperty}
                   <Button
@@ -3293,7 +3310,7 @@
             {#if isProcessing}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
             {/if}
-            Excluir
+            Marcar como vendido
           </Button>
         {/if}
           {#if isEditMode && editableProperty}
@@ -3370,9 +3387,11 @@
 
 <AdminPasswordConfirmDialog
   bind:open={isDeleteDialogOpen}
-  title="Excluir imóvel"
-  description={selectedProperty ? `Confirme sua senha para excluir o imóvel ${selectedProperty.title}.` : ''}
-  confirmLabel="Excluir imóvel"
+  title="Marcar imóvel como vendido"
+  description={selectedProperty
+    ? `LGPD: o cadastro nao e apagado. Confirme sua senha para marcar "${selectedProperty.title}" como vendido e retirar da vitrine.`
+    : ''}
+  confirmLabel="Confirmar (vendido)"
   isSubmitting={isProcessing}
   error={deleteError}
   on:confirm={(event) => confirmDeleteProperty(event.detail.password)}
@@ -3480,6 +3499,17 @@
             {/each}
           </div>
         </div>
+      {/if}
+      {#if selectedProperty && previewImages[previewImageIndex]?.id}
+        <button
+          type="button"
+          class="absolute left-2 top-2 z-10 rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-red-700 disabled:opacity-50"
+          on:click|stopPropagation={handleDeleteCurrentPreviewImage}
+          disabled={previewImageDeleteBusy || (previewTotal > 0 && selectedPropertyImages().length <= 1)}
+          aria-label="Excluir foto atual"
+        >
+          {previewImageDeleteBusy ? 'Excluindo...' : 'Excluir foto'}
+        </button>
       {/if}
       <button
         type="button"

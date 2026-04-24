@@ -78,6 +78,18 @@
     return numeric.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
+  function brokerSelfieThumb(b: Broker): string | null {
+    const docs = b.documents;
+    if (docs && typeof docs.selfie_url === 'string' && docs.selfie_url.trim()) {
+      return docs.selfie_url.trim();
+    }
+    const extra = b as Broker & { selfie_url?: string | null };
+    if (typeof extra.selfie_url === 'string' && extra.selfie_url.trim()) {
+      return extra.selfie_url.trim();
+    }
+    return null;
+  }
+
   function getPurposeFlags(purpose?: string | null) {
     const normalized = (purpose ?? '').toLowerCase();
     const supportsSale = normalized.includes('vend');
@@ -502,8 +514,26 @@
           {#each brokers as broker}
             <tr class="hover:bg-gray-50 transition-colors dark:hover:bg-gray-900/50">
               <td class="px-6 py-4">
-                <div class="font-semibold text-gray-900 dark:text-white">{broker.name}</div>
-                <div class="text-sm text-gray-500 dark:text-gray-400">{broker.email}</div>
+                <div class="flex min-w-0 items-center gap-3">
+                  <div
+                    class="relative h-12 w-16 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-100 dark:border-gray-600 dark:bg-gray-800"
+                  >
+                    {#if brokerSelfieThumb(broker)}
+                      <img
+                        src={brokerSelfieThumb(broker) ?? ''}
+                        alt=""
+                        class="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    {:else}
+                      <div class="flex h-full w-full items-center justify-center text-[10px] text-gray-400">—</div>
+                    {/if}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="truncate font-semibold text-gray-900 dark:text-white">{broker.name}</div>
+                    <div class="truncate text-sm text-gray-500 dark:text-gray-400">{broker.email}</div>
+                  </div>
+                </div>
               </td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{formatPhoneDisplayBr(broker.phone)}</td>
               <td class="px-6 py-4 text-sm font-semibold text-gray-800 dark:text-gray-200">{broker.creci}</td>

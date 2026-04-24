@@ -3,7 +3,6 @@
   import { Loader2, X } from 'lucide-svelte';
   import { toast } from 'svelte-sonner';
   import { api } from '$lib/apiClient';
-  import { Button } from '$lib/components/ui/button';
 
   type Audience = 'all' | 'client' | 'broker' | 'favorites';
   type UserItem = {
@@ -112,6 +111,10 @@
     dispatch('close');
   }
 
+  function handleBackdropClick(event: MouseEvent) {
+    if (event.target === event.currentTarget) closeModal();
+  }
+
   async function submitNotification() {
     if (doNotSendNotification) {
       toast.info('Envio ignorado. Nenhuma notificação será disparada.');
@@ -171,16 +174,18 @@
   }
 </script>
 
+<!-- z-[300]: acima de Toaster, Dialog (z-50) e modais comuns; cliques do card não borbulham p/ o backdrop. -->
 {#if open}
   <div
-    class="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4"
+    class="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4"
     role="presentation"
-    on:click={(event) => {
-      if (event.target === event.currentTarget) closeModal();
-    }}
-    on:keydown={() => {}}
+    onclick={handleBackdropClick}
   >
-    <div class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900">
+    <div
+      class="relative z-10 w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900"
+      role="dialog"
+      aria-modal="true"
+    >
       <div class="mb-4 flex items-start justify-between gap-3">
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -190,9 +195,15 @@
             {propertyTitle ? propertyTitle : `Imóvel #${propertyId}`}
           </p>
         </div>
-        <Button variant="outline" size="sm" className="px-2" on:click={closeModal} disabled={isSubmitting}>
+        <button
+          type="button"
+          class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-gray-300 px-2 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          onclick={closeModal}
+          disabled={isSubmitting}
+          aria-label="Fechar"
+        >
           <X class="h-4 w-4" />
-        </Button>
+        </button>
       </div>
 
       <div class="space-y-4">
@@ -246,7 +257,7 @@
               class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               placeholder="Buscar por nome ou e-mail..."
               bind:value={searchTerm}
-              on:input={handleSearchInput}
+              oninput={handleSearchInput}
               disabled={isSubmitting}
             />
             {#if loadingUsers}
@@ -263,7 +274,7 @@
                       type="checkbox"
                       class="rounded border-gray-300 text-green-600 focus:ring-green-500"
                       checked={selectedRecipients.has(String(user.id))}
-                      on:change={() => toggleRecipient(user.id)}
+                      onchange={() => toggleRecipient(user.id)}
                       disabled={isSubmitting}
                     />
                     <span>
@@ -290,13 +301,25 @@
         </div>
 
         <div class="flex justify-end gap-2">
-          <Button variant="outline" on:click={closeModal} disabled={isSubmitting}>Cancelar</Button>
-          <Button on:click={submitNotification} disabled={isSubmitting}>
+          <button
+            type="button"
+            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            onclick={closeModal}
+            disabled={isSubmitting}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-1 focus:outline-none disabled:cursor-not-allowed disabled:bg-green-400 disabled:text-white/60"
+            onclick={submitNotification}
+            disabled={isSubmitting}
+          >
             {#if isSubmitting}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
             {/if}
             {doNotSendNotification ? 'Continuar sem enviar' : 'Enviar notificação'}
-          </Button>
+          </button>
         </div>
       </div>
     </div>
