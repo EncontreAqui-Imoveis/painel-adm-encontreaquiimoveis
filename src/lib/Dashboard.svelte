@@ -1216,7 +1216,7 @@
                         {/if}
                     </section>
 
-                    {#if false && sreStats}
+                    {#if sreStats}
                         <!-- SRE Command Center Enclosure -->
                         <section
                             class="bg-white dark:bg-[#05070a] rounded-[2.5rem] p-6 lg:p-8 shadow-sm dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)] border border-gray-200 dark:border-gray-800/60 relative overflow-hidden"

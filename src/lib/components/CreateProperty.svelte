@@ -169,9 +169,14 @@
   let ehMobiliada = false;
 
   const cityCache: Record<string, string[]> = {};
+  const bairroCache: Record<string, string[]> = {};
   let cities: string[] = [];
+  let bairros: string[] = [];
   let citiesLoading = false;
+  let bairrosLoading = false;
+  let bairrosError: string | null = null;
   let citiesError: string | null = null;
+  let lastBairroLookupCity = '';
   let cepLookupError: string | null = null;
   let lastCepLookup = '';
 
@@ -324,6 +329,41 @@
       cities = [];
     } finally {
       citiesLoading = false;
+    }
+  }
+
+  async function fetchBairrosForCity(cityName: string) {
+    const normalizedCity = cityName.trim();
+    if (!normalizedCity) {
+      bairros = [];
+      bairrosError = null;
+      return;
+    }
+    const cacheKey = `${state}:${normalizedCity.toLowerCase()}`;
+    if (bairroCache[cacheKey]) {
+      bairros = bairroCache[cacheKey];
+      bairrosError = null;
+      return;
+    }
+    bairrosLoading = true;
+    bairrosError = null;
+    try {
+      const payload = await api.get<Array<{ bairro?: string; city?: string }>>(
+        `/properties/bairros?city=${encodeURIComponent(normalizedCity)}`
+      );
+      const names = Array.isArray(payload)
+        ? payload
+            .map((item) => String(item?.bairro ?? '').trim())
+            .filter((item) => item.length > 0)
+        : [];
+      bairros = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      bairroCache[cacheKey] = bairros;
+    } catch (error) {
+      console.error('Erro ao carregar bairros:', error);
+      bairros = [];
+      bairrosError = 'Não foi possível carregar bairros para esta cidade.';
+    } finally {
+      bairrosLoading = false;
     }
   }
 
@@ -999,6 +1039,22 @@
     fetchCitiesForState(state);
   });
 
+  $: {
+    const normalizedCity = city.trim().toLowerCase();
+    if (normalizedCity.length > 0 && normalizedCity !== lastBairroLookupCity) {
+      lastBairroLookupCity = normalizedCity;
+      fetchBairrosForCity(city);
+    } else if (normalizedCity.length === 0) {
+      lastBairroLookupCity = '';
+      bairros = [];
+      bairrosError = null;
+    }
+  }
+  $: if (!city.trim().length) {
+    bairros = [];
+    bairrosError = null;
+  }
+
   onDestroy(() => {
     if (brokerSearchTimer) {
       clearTimeout(brokerSearchTimer);
@@ -1487,10 +1543,20 @@
           <input
             id="create-property-bairro"
             name="bairro"
+            list="bairros-list"
             maxlength="120"
             class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             bind:value={bairro}
+            placeholder={bairrosLoading ? 'Carregando bairros...' : 'Digite ou selecione'}
           />
+          <datalist id="bairros-list">
+            {#each bairros as option}
+              <option value={option}></option>
+            {/each}
+          </datalist>
+          {#if bairrosError}
+            <span class="text-xs text-red-500 dark:text-red-400">{bairrosError}</span>
+          {/if}
         </label>
         <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
           <label for="numero-input">Número {semNumero ? '(opcional)' : '*'}</label>

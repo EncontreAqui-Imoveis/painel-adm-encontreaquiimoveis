@@ -175,6 +175,7 @@
   let promotionNotificationMessage = '';
   let promotionNotificationTitle = '';
   let promotionNotificationPropertyId: number | null = null;
+  let skipAutoPromotionModalOnce = false;
   const MAX_TOTAL_IMAGES = 20;
   const cloudinaryCloudName = String(import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME ?? '').trim();
   const areaUnitOptions: Array<{ value: AreaUnit; label: string }> = [
@@ -1557,14 +1558,18 @@
       editableProperty = sanitizeEditable(selectedProperty as any);
 
       if ((payload as any).is_promoted === 1) {
-        const salePercent = Number((payload as any).promotion_percentage ?? NaN);
-        const rentPercent = Number((payload as any).promotional_rent_percentage ?? NaN);
-        openPromotionNotificationModal({
-          propertyId: selectedProperty.id,
-          title: selectedProperty.title ?? 'Imóvel',
-          salePercent: Number.isFinite(salePercent) ? salePercent : null,
-          rentPercent: Number.isFinite(rentPercent) ? rentPercent : null,
-        });
+        if (skipAutoPromotionModalOnce) {
+          skipAutoPromotionModalOnce = false;
+        } else {
+          const salePercent = Number((payload as any).promotion_percentage ?? NaN);
+          const rentPercent = Number((payload as any).promotional_rent_percentage ?? NaN);
+          openPromotionNotificationModal({
+            propertyId: selectedProperty.id,
+            title: selectedProperty.title ?? 'Imóvel',
+            salePercent: Number.isFinite(salePercent) ? salePercent : null,
+            rentPercent: Number.isFinite(rentPercent) ? rentPercent : null,
+          });
+        }
       }
     } catch (err: any) {
       console.error('Erro ao salvar imóvel:', err);
@@ -2578,6 +2583,15 @@
                 >
                   Excluir
                 </Button>
+                {#if selectedProperty}
+                  <Button
+                    variant="outline"
+                    on:click={openPromotionNotificationFromSelected}
+                    disabled={isProcessing || isSavingEdit}
+                  >
+                    Notificar promoção
+                  </Button>
+                {/if}
                 {#if isEditMode && editableProperty}
                   <div class="flex items-center gap-2">
                     <label class="text-xs text-gray-500 dark:text-gray-400" for="status-select">Status</label>
@@ -3177,15 +3191,6 @@
         <Button variant="outline" on:click={closeModal} disabled={isProcessing}>
           Sair
         </Button>
-        {#if selectedProperty}
-          <Button
-            variant="outline"
-            on:click={openPromotionNotificationFromSelected}
-            disabled={isProcessing || isSavingEdit}
-          >
-            Notificar promoção
-          </Button>
-        {/if}
         {#if allowApproval}
           {#if selectedProperty.status !== 'rejected'}
             <Button variant="destructive" on:click={() => handleStatusUpdate('rejected')} disabled={isProcessing}>
@@ -3294,6 +3299,7 @@
     isPromotionNotificationModalOpen = false;
   }}
   on:sent={() => {
+    skipAutoPromotionModalOnce = true;
     isPromotionNotificationModalOpen = false;
   }}
 />

@@ -24,6 +24,7 @@
   let sendToAll = true;
   let message = '';
   let isSubmitting = false;
+  let doNotSendNotification = false;
   let loadingUsers = false;
   let usersError: string | null = null;
   let users: UserItem[] = [];
@@ -43,6 +44,7 @@
     selectedRecipients = new Set();
     searchTerm = '';
     usersError = null;
+    doNotSendNotification = false;
   }
 
   $: filteredUsers = users.filter((user) => {
@@ -111,6 +113,11 @@
   }
 
   async function submitNotification() {
+    if (doNotSendNotification) {
+      toast.info('Envio ignorado. Nenhuma notificação será disparada.');
+      dispatch('close');
+      return;
+    }
     if (!propertyId || !Number.isFinite(propertyId)) {
       toast.error('Imóvel inválido para notificação.');
       return;
@@ -151,7 +158,13 @@
       dispatch('close');
     } catch (error) {
       console.error('Erro ao enviar notificação de promoção:', error);
-      toast.error('Falha ao enviar notificação de promoção.');
+      const maybeStatus = (error as { response?: { status?: number; data?: { error?: string } } })?.response?.status;
+      const maybeMessage = (error as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      if (maybeStatus === 404 && maybeMessage) {
+        toast.error(maybeMessage);
+      } else {
+        toast.error('Falha ao enviar notificação de promoção.');
+      }
     } finally {
       isSubmitting = false;
     }
@@ -183,6 +196,10 @@
       </div>
 
       <div class="space-y-4">
+        <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+          Se você enviar por este modal agora, ele não abrirá novamente após salvar edição com promoção ativa.
+          Se não enviar agora e salvar imóvel com promoção ativa, o modal abrirá automaticamente após salvar.
+        </div>
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
             <input
@@ -208,6 +225,16 @@
             </select>
           </div>
         </div>
+
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+          <input
+            type="checkbox"
+            class="rounded border-gray-300 text-green-600 focus:ring-green-500"
+            bind:checked={doNotSendNotification}
+            disabled={isSubmitting}
+          />
+          Não enviar notificação agora
+        </label>
 
         {#if !sendToAll}
           <div class="space-y-2">
@@ -268,7 +295,7 @@
             {#if isSubmitting}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
             {/if}
-            Enviar notificação
+            {doNotSendNotification ? 'Continuar sem enviar' : 'Enviar notificação'}
           </Button>
         </div>
       </div>
