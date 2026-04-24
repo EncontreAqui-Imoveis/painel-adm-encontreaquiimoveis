@@ -115,9 +115,6 @@ describe('CreateProperty', () => {
     await fireEvent.input(getInputById('create-property-lote'), {
       target: { value: '12' },
     });
-    await fireEvent.change(screen.getByLabelText('Tipo do lote *'), {
-      target: { value: 'meio' },
-    });
     await fireEvent.input(getInputById('create-property-bedrooms'), {
       target: { value: '3' },
     });

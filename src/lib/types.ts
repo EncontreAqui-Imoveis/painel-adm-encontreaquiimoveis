@@ -29,10 +29,10 @@ export interface Property {
   numero?: string | null;
   bairro?: string | null;
   complemento?: string | null;
-  tipo_lote?: string | null;
   city?: string | null;
   state?: string | null;
   cep?: string | null;
+  sem_cep?: number | boolean | null;
   bedrooms?: number | null;
   bathrooms?: number | null;
   area_construida?: number | null;

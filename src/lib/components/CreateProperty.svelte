@@ -48,7 +48,6 @@
     'Prédio',
   ];
   const purposes = ['Venda', 'Aluguel', 'Venda e Aluguel'];
-  const lotTypes = ['meio', 'inteiro'];
   const MAX_IMAGE_SIZE_MB = 15;
   const MAX_VIDEO_SIZE_MB = 100;
   const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
@@ -121,6 +120,7 @@
   let city = '';
   let state = 'GO';
   let cep = '';
+  let semCep = false;
   let bairro = '';
   let numero = '';
   let semNumero = false;
@@ -133,7 +133,6 @@
   /** Unidade da área de terreno informada. */
   let areaTerrenoUnidade: 'm2' | 'hectare' | 'alqueire' = 'm2';
   let complemento = '';
-  let tipoLote = '';
   let bedrooms = '';
   let bedroomsAsZero = false;
   let bathrooms = '';
@@ -179,6 +178,8 @@
   let lastBairroLookupCity = '';
   let cepLookupError: string | null = null;
   let lastCepLookup = '';
+  const optionalBairroPropertyTypes = new Set(['Área rural', 'Chácara', 'Rancho']);
+  $: bairroOptional = optionalBairroPropertyTypes.has(type);
 
   function getFileExtension(fileName: string): string {
     const index = fileName.lastIndexOf('.');
@@ -700,9 +701,9 @@
                       ? 'Informe o número do endereço ou marque "Sem número".'
                       : !semNumero && numeroDigits.length === 0
                         ? 'Número do endereço deve conter apenas dígitos.'
-                        : !bairro.trim()
+                        : !bairroOptional && !bairro.trim()
                       ? 'Informe o bairro.'
-                          : cep.trim() && onlyDigits(cep).length !== 8
+                          : !semCep && cep.trim() && onlyDigits(cep).length !== 8
                             ? 'Informe um CEP válido.'
                               : !city.trim()
                                 ? 'Informe a cidade.'
@@ -712,8 +713,6 @@
                                   ? 'Informe a quadra ou marque "Sem quadra".'
                                   : !semLote && !lote.trim()
                                     ? 'Informe o lote ou marque "Sem lote".'
-                                    : !tipoLote.trim()
-                                  ? 'Informe o tipo do lote.'
                                       : !resolvedBedrooms.trim()
                                         ? 'Informe a quantidade de quartos.'
                                         : !resolvedBathrooms.trim()
@@ -919,10 +918,10 @@
         sem_numero: semNumero ? 1 : 0,
         bairro: bairro.trim(),
         complemento: complemento.trim() || null,
-        tipo_lote: tipoLote.trim(),
         city: city.trim(),
         state: state.trim(),
-        cep: cep.trim() ? onlyDigits(cep) : null,
+        cep: semCep ? null : cep.trim() ? onlyDigits(cep) : null,
+        sem_cep: semCep ? 1 : 0,
         bedrooms: parsedBedrooms,
         bathrooms: parsedBathrooms,
         area_construida: parsedAreaConstruida,
@@ -976,6 +975,7 @@
       city = '';
       state = 'GO';
       cep = '';
+      semCep = false;
       bairro = '';
       numero = '';
       semNumero = false;
@@ -986,7 +986,6 @@
       areaConstruidaUnidade = 'm2';
       areaTerrenoUnidade = 'm2';
       complemento = '';
-      tipoLote = '';
       bedrooms = '';
       bedroomsAsZero = false;
       bathrooms = '';
@@ -1473,22 +1472,34 @@
 
       <div class="grid gap-4 md:grid-cols-2">
         <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          CEP (opcional)
+          {semCep ? 'CEP (opcional)' : 'CEP'}
           <input
             id="create-property-cep"
             name="cep"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900"
             bind:value={cep}
+            disabled={semCep}
             placeholder="00000-000"
             inputmode="numeric"
             on:input={(event) => {
               const target = event.target as HTMLInputElement;
               cep = formatCep(target.value);
-              if (onlyDigits(cep).length === 8) {
+              if (!semCep && onlyDigits(cep).length === 8) {
                 lookupCep(cep);
               }
             }}
           />
+          <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+            <input
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+              bind:checked={semCep}
+              on:change={() => {
+                if (semCep) cep = '';
+              }}
+            />
+            Sem CEP
+          </label>
           {#if cepLookupError}
             <span class="text-xs text-red-500 dark:text-red-400">{cepLookupError}</span>
           {/if}
@@ -1539,7 +1550,7 @@
           />
         </label>
         <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Bairro *
+          {bairroOptional ? 'Bairro' : 'Bairro *'}
           <input
             id="create-property-bairro"
             name="bairro"
@@ -1589,7 +1600,7 @@
         </div>
       </div>
 
-      <div class="grid gap-4 md:grid-cols-4">
+      <div class="grid gap-4 md:grid-cols-3">
         <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
           <span>{semQuadra ? 'Quadra (opcional)' : 'Quadra *'}</span>
           <input
@@ -1634,20 +1645,6 @@
             Sem lote
           </label>
         </div>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Tipo do lote *
-          <select
-            id="create-property-tipo-lote"
-            name="tipo_lote"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={tipoLote}
-          >
-            <option value="">Selecione</option>
-            {#each lotTypes as lotType}
-              <option value={lotType}>{lotType}</option>
-            {/each}
-          </select>
-        </label>
         <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
           Complemento (opcional)
           <input

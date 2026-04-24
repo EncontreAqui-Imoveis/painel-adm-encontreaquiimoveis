@@ -41,7 +41,7 @@
     numero: 'Número',
     bairro: 'Bairro',
     complemento: 'Complemento',
-    tipoLote: 'Tipo de lote',
+    semCep: 'Sem CEP',
     city: 'Cidade',
     state: 'Estado',
     cep: 'CEP',

@@ -16,6 +16,7 @@
     import { onMount, onDestroy } from "svelte";
     import { fade, slide } from "svelte/transition";
     import { toast } from "svelte-sonner";
+    import { Trash2 } from "lucide-svelte";
     import type {
         Property,
         Broker,
@@ -117,6 +118,13 @@
     let lastReadAnnouncementMarker: AnnouncementReadMarker | null = null;
     let isAnnouncementsLoading = false;
     let announcementsError: string | null = null;
+    let announcementsCurrentPage = 1;
+    let announcementsItemsPerPage = 10;
+    const announcementsPageSizeOptions = [10, 20, 50, 100];
+    $: announcementsTotalPages = Math.max(
+        1,
+        Math.ceil(announcementsTotal / announcementsItemsPerPage),
+    );
     const externalDashboardShortcuts = [
         {
             name: "Google Search Console",
@@ -768,8 +776,13 @@
         isAnnouncementsLoading = true;
         announcementsError = null;
         try {
+            const params = new URLSearchParams({
+                type: "announcement",
+                limit: String(announcementsItemsPerPage),
+                page: String(announcementsCurrentPage),
+            });
             const response = await fetchPlatformResponse(
-                "/admin/notifications?type=announcement&limit=20&page=1",
+                `/admin/notifications?${params.toString()}`,
             );
             if (!response || !response.ok) {
                 throw new Error("Falha ao carregar avisos.");
@@ -779,6 +792,22 @@
             const totalFromPayload = readListTotal(payload);
             announcementsTotal =
                 totalFromPayload > 0 ? totalFromPayload : announcements.length;
+            if (
+                announcementsCurrentPage > 1 &&
+                announcements.length === 0 &&
+                announcementsTotal > 0
+            ) {
+                announcementsCurrentPage = Math.min(
+                    announcementsCurrentPage - 1,
+                    Math.max(
+                        1,
+                        Math.ceil(
+                            announcementsTotal / announcementsItemsPerPage,
+                        ),
+                    ),
+                );
+                return await fetchAnnouncements(options);
+            }
             latestAnnouncementMarker =
                 getMostRecentAnnouncementMarker(announcements);
             if (options.markAsRead) {
@@ -817,6 +846,7 @@
             }
             announcements = [];
             announcementsTotal = 0;
+            announcementsCurrentPage = 1;
             latestAnnouncementMarker = null;
             lastReadAnnouncementMarker = null;
             if (typeof window !== "undefined") {
@@ -837,11 +867,53 @@
         }
     }
 
+    async function deleteAnnouncementNotification(notificationId: number) {
+        if (isAnnouncementsLoading) return;
+        const confirmed = window.confirm("Deseja excluir este aviso?");
+        if (!confirmed) return;
+
+        isAnnouncementsLoading = true;
+        announcementsError = null;
+        try {
+            const response = await fetchPlatformResponse(
+                `/admin/notifications/${notificationId}`,
+                { method: "DELETE" },
+            );
+            if (!response || !response.ok) {
+                throw new Error("Não foi possível excluir o aviso.");
+            }
+            announcements = announcements.filter(
+                (item) => item.id !== notificationId,
+            );
+            announcementsTotal = Math.max(0, announcementsTotal - 1);
+            if (announcements.length === 0 && announcementsCurrentPage > 1) {
+                announcementsCurrentPage -= 1;
+            }
+            await fetchAnnouncements({ markAsRead: true });
+            await fetchAnnouncementsCount();
+            toast.success("Aviso excluído com sucesso.");
+        } catch (error) {
+            console.error("Erro ao excluir aviso:", error);
+            announcementsError =
+                error instanceof Error
+                    ? error.message
+                    : "Não foi possível excluir o aviso.";
+        } finally {
+            isAnnouncementsLoading = false;
+        }
+    }
+
     async function handleNotificationsSubTabChange(tab: NotificationsSubTab) {
         notificationsSubTab = tab;
-        if (tab === "announcements") {
-            await fetchAnnouncements({ markAsRead: true });
-        }
+    }
+
+    $: if (
+        activeView === "notifications" &&
+        notificationsSubTab === "announcements"
+    ) {
+        announcementsCurrentPage;
+        announcementsItemsPerPage;
+        void fetchAnnouncements({ markAsRead: true });
     }
 
     async function fetchPendingCounts() {
@@ -2281,11 +2353,31 @@
                             {:else}
                                 <div class="space-y-4">
                                     <div class="flex items-center justify-between gap-3">
-                                        <h2
-                                            class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-                                        >
-                                            Avisos recentes
-                                        </h2>
+                                        <div class="flex items-center gap-3">
+                                            <h2
+                                                class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+                                            >
+                                                Avisos recentes
+                                            </h2>
+                                            <label
+                                                class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
+                                            >
+                                                <span>Mostrar</span>
+                                                <select
+                                                    bind:value={announcementsItemsPerPage}
+                                                    class="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                                                    on:change={() => {
+                                                        announcementsCurrentPage = 1;
+                                                    }}
+                                                >
+                                                    {#each announcementsPageSizeOptions as size}
+                                                        <option value={size}>
+                                                            {size}
+                                                        </option>
+                                                    {/each}
+                                                </select>
+                                            </label>
+                                        </div>
                                         <div class="flex items-center gap-2">
                                             <button
                                                 type="button"
@@ -2335,18 +2427,31 @@
                                                     <div
                                                         class="flex items-center justify-between gap-3"
                                                     >
-                                                        <span
-                                                            class="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                                        <div class="flex items-center gap-2">
+                                                            <span
+                                                                class="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                                            >
+                                                                Aviso
+                                                            </span>
+                                                            <span
+                                                                class="text-xs text-gray-400 dark:text-gray-500"
+                                                            >
+                                                                {formatNotificationDate(
+                                                                    item.created_at,
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 text-red-600 transition-colors hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
+                                                            aria-label="Excluir aviso"
+                                                            on:click={() =>
+                                                                deleteAnnouncementNotification(
+                                                                    item.id,
+                                                                )}
                                                         >
-                                                            Aviso
-                                                        </span>
-                                                        <span
-                                                            class="text-xs text-gray-400 dark:text-gray-500"
-                                                        >
-                                                            {formatNotificationDate(
-                                                                item.created_at,
-                                                            )}
-                                                        </span>
+                                                            <Trash2 class="h-4 w-4" />
+                                                        </button>
                                                     </div>
                                                     <p
                                                         class="mt-3 text-sm text-gray-700 dark:text-gray-100"
@@ -2383,6 +2488,14 @@
                                                     </div>
                                                 </article>
                                             {/each}
+                                        </div>
+                                        <div class="mt-4">
+                                            <Pagination
+                                                bind:currentPage={announcementsCurrentPage}
+                                                totalPages={announcementsTotalPages}
+                                                totalItems={announcementsTotal}
+                                                itemsPerPage={announcementsItemsPerPage}
+                                            />
                                         </div>
                                     {/if}
                                 </div>

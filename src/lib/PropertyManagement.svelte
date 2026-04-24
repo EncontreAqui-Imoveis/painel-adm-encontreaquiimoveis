@@ -27,6 +27,7 @@
   interface PropertySummary {
     id: number;
     title: string;
+    type?: string | null;
     bairro?: string | null;
     city?: string | null;
     state?: string | null;
@@ -70,7 +71,7 @@
     numero?: string | null;
     bairro?: string | null;
     complemento?: string | null;
-    tipo_lote?: string | null;
+    sem_cep?: number | boolean | null;
     bedrooms?: number | null;
     bathrooms?: number | null;
     garage_spots?: number | null;
@@ -858,6 +859,11 @@
     return `${value} ${areaUnitLabel(unit)}`;
   }
 
+  function isOptionalBairroPropertyType(value: unknown): boolean {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    return normalized === 'área rural' || normalized === 'chácara' || normalized === 'rancho';
+  }
+
   function markThumbnailAsBroken(propertyId: number) {
     if (brokenListThumbnails.has(propertyId)) return;
     brokenListThumbnails = new Set(brokenListThumbnails);
@@ -1527,7 +1533,7 @@
         sem_lote: editSemLote ? 1 : 0,
         quadra: editSemQuadra ? null : editableProperty.quadra,
         lote: editSemLote ? null : editableProperty.lote,
-        tipo_lote: editableProperty.tipo_lote,
+        sem_cep: editableProperty.sem_cep ? 1 : 0,
         bedrooms: editableProperty.bedrooms,
         bathrooms: editableProperty.bathrooms,
         area_construida: editableProperty.area_construida,
@@ -2873,17 +2879,19 @@
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Localização e atributos</h3>
           {#if isEditMode && editableProperty}
+            {@const editBairroOptional = isOptionalBairroPropertyType(editableProperty.type)}
             <div class="mt-2 grid gap-2 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-2">
               <label class="flex flex-col gap-1">
                 <strong>Estado:</strong>
                 <input name="state" maxlength="2" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.state} />
               </label>
               <label class="flex flex-col gap-1">
-                <strong>CEP:</strong>
+                <strong>{editableProperty.sem_cep ? 'CEP (opcional)' : 'CEP'}:</strong>
                 <input
                   name="cep"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
                   bind:value={editableProperty.cep}
+                  disabled={Boolean(editableProperty.sem_cep)}
                   inputmode="numeric"
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
@@ -2892,6 +2900,22 @@
                     }
                   }}
                 />
+              </label>
+              <label class="flex items-center gap-2 md:col-span-2">
+                <input
+                  type="checkbox"
+                  name="sem_cep"
+                  checked={Boolean(editableProperty.sem_cep)}
+                  on:change={(event) => {
+                    const target = event.currentTarget as HTMLInputElement;
+                    if (!editableProperty) return;
+                    editableProperty.sem_cep = target.checked;
+                    if (target.checked) {
+                      editableProperty.cep = '';
+                    }
+                  }}
+                />
+                <span>Sem CEP</span>
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Cidade:</strong>
@@ -2909,7 +2933,7 @@
                 </datalist>
               </label>
               <label class="flex flex-col gap-1">
-                <strong>Bairro:</strong>
+                <strong>{editBairroOptional ? 'Bairro (opcional)' : 'Bairro'}:</strong>
                 <input name="bairro" maxlength="120" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.bairro} />
               </label>
               <label class="flex flex-col gap-1">
@@ -2995,10 +3019,6 @@
                   }}
                 />
                 <span>Sem lote</span>
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>Tipo do lote:</strong>
-                <input name="tipo_lote" maxlength="25" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.tipo_lote} />
               </label>
               <label class="flex flex-col gap-1">
                 <strong class="flex items-center justify-between gap-3">
@@ -3181,7 +3201,6 @@
               <li><strong>Complemento:</strong> {selectedProperty.complemento ?? '-'}</li>
               <li><strong>Quadra:</strong> {selectedProperty.quadra ?? '-'}</li>
               <li><strong>Lote:</strong> {selectedProperty.lote ?? '-'}</li>
-              <li><strong>Tipo do lote:</strong> {selectedProperty.tipo_lote ?? '-'}</li>
               <li><strong>Quartos:</strong> {selectedProperty.bedrooms ?? '-'}</li>
               <li><strong>Banheiros:</strong> {selectedProperty.bathrooms ?? '-'}</li>
               <li><strong>Garagens:</strong> {selectedProperty.garage_spots ?? '-'}</li>
