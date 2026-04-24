@@ -51,6 +51,24 @@
   let sortConfig: SortConfig = { key: 'created_at', order: 'desc' };
   let docErrorMessage = '';
 
+  let isSelfiePreviewOpen = false;
+  let selfiePreviewUrl: string | null = null;
+  function openSelfieFullscreen(url: string) {
+    selfiePreviewUrl = url;
+    isSelfiePreviewOpen = true;
+  }
+  function closeSelfieFullscreen() {
+    isSelfiePreviewOpen = false;
+    selfiePreviewUrl = null;
+  }
+  function handleSelfiePreviewKeydown(event: KeyboardEvent) {
+    if (!isSelfiePreviewOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeSelfieFullscreen();
+    }
+  }
+
   const DOCUMENT_TILES: ReadonlyArray<{ key: keyof BrokerDocuments; label: string }> = [
     { key: 'creci_front_url', label: 'Frente do CRECI' },
     { key: 'creci_back_url', label: 'Verso do CRECI' },
@@ -488,7 +506,11 @@
                 <span aria-hidden="true">{getSortIndicator('name')}</span>
               </button>
             </th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Telefone</th>
+            <th
+              class="whitespace-nowrap px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >
+              Telefone
+            </th>
             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               <button type="button" class="flex items-center gap-1" on:click={() => handleSort('creci')}>
                 CRECI
@@ -512,6 +534,7 @@
         </thead>
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
           {#each brokers as broker}
+            {@const phoneDisplay = formatPhoneDisplayBr(broker.phone)}
             <tr class="hover:bg-gray-50 transition-colors dark:hover:bg-gray-900/50">
               <td class="px-6 py-4">
                 <div class="flex min-w-0 items-center gap-3">
@@ -519,12 +542,20 @@
                     class="relative h-12 w-16 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-100 dark:border-gray-600 dark:bg-gray-800"
                   >
                     {#if brokerSelfieThumb(broker)}
-                      <img
-                        src={brokerSelfieThumb(broker) ?? ''}
-                        alt=""
-                        class="h-full w-full object-cover"
-                        loading="lazy"
-                      />
+                      {@const thumb = brokerSelfieThumb(broker)}
+                      <button
+                        type="button"
+                        class="block h-full w-full cursor-zoom-in p-0 text-left focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 dark:ring-offset-gray-900"
+                        aria-label="Abrir selfie em tela cheia"
+                        on:click|stopPropagation={() => thumb && openSelfieFullscreen(thumb)}
+                      >
+                        <img
+                          src={thumb}
+                          alt=""
+                          class="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </button>
                     {:else}
                       <div class="flex h-full w-full items-center justify-center text-[10px] text-gray-400">—</div>
                     {/if}
@@ -535,7 +566,11 @@
                   </div>
                 </div>
               </td>
-              <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{formatPhoneDisplayBr(broker.phone)}</td>
+              <td
+                class="whitespace-nowrap px-6 py-4 align-top font-mono text-sm tabular-nums text-gray-600 dark:text-gray-300"
+              >
+                {phoneDisplay}
+              </td>
               <td class="px-6 py-4 text-sm font-semibold text-gray-800 dark:text-gray-200">{broker.creci}</td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{broker.property_count ?? 0}</td>
               <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
@@ -590,6 +625,53 @@
   on:update={handleBrokerReviewUpdate}
   on:close={() => (brokerUnderReview = null)}
 />
+
+<svelte:window on:keydown={handleSelfiePreviewKeydown} />
+
+{#if isSelfiePreviewOpen && selfiePreviewUrl}
+  <div
+    class="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Selfie em tela cheia"
+    tabindex="0"
+    on:keydown={(e) => {
+      if (e.key === 'Escape') closeSelfieFullscreen();
+    }}
+  >
+    <button
+      type="button"
+      class="pointer-events-auto absolute inset-0 z-0 border-0 bg-black/85 p-0"
+      aria-label="Fechar visualização"
+      on:click={closeSelfieFullscreen}
+    >
+      <span class="sr-only">Fechar</span>
+    </button>
+    <div class="pointer-events-auto relative z-10 inline-block max-h-full max-w-full">
+      <img
+        src={selfiePreviewUrl}
+        alt="Selfie com documento do corretor"
+        class="max-h-[min(92vh,92vw)] max-w-[min(96vw,1200px)] select-none object-contain"
+        draggable="false"
+      />
+      <button
+        type="button"
+        class="absolute -right-2 -top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-gray-800 shadow-md ring-1 ring-gray-200 hover:bg-white dark:bg-gray-800 dark:text-white dark:ring-gray-600"
+        on:click|stopPropagation={closeSelfieFullscreen}
+        aria-label="Fechar visualização"
+      >
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+      </button>
+    </div>
+  </div>
+{/if}
 
 {#if isDocumentsModalOpen}
   <div
