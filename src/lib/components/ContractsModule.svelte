@@ -54,6 +54,8 @@
     commissionData?: Record<string, unknown> | null;
     workflowMetadata?: Record<string, unknown> | null;
     documents?: ContractDocument[];
+    documentRequirements?: unknown;
+    documentProgress?: unknown;
     agencyName?: string | null;
     agencyAddress?: string | null;
     createdAt?: string | null;
@@ -63,6 +65,16 @@
   type RequiredFieldDescriptor = {
     keys: string[];
     label: string;
+  };
+  type MatrixSide = 'seller' | 'buyer';
+  type MatrixRequirement = {
+    documentType: string;
+    side: MatrixSide;
+  };
+  type MatrixRow = {
+    documentType: string;
+    sellerRequired: boolean;
+    buyerRequired: boolean;
   };
 
   type ModalMode = 'review_docs' | 'upload_draft' | 'finalize' | 'edit_finalized';
@@ -660,6 +672,203 @@
     return [...saleRequiredDocTypes];
   }
 
+  function normalizeMatrixSide(value: unknown): MatrixSide | null {
+    const side = String(value ?? '').trim().toLowerCase();
+    if (side === 'seller') return 'seller';
+    if (side === 'buyer') return 'buyer';
+    if (side === 'captador' || side === 'capturing') return 'seller';
+    if (side === 'vendedor' || side === 'selling') return 'buyer';
+    return null;
+  }
+
+  function normalizeMatrixDocumentType(value: unknown): string {
+    return String(value ?? '').trim().toLowerCase();
+  }
+
+  function readRawMatrixRequirements(contract: ContractItem): MatrixRequirement[] {
+    const raw = contract.documentRequirements;
+    const entries: MatrixRequirement[] = [];
+
+    const categoryToDocumentTypes = (category: string): string[] => {
+      switch (category.trim().toLowerCase()) {
+        case 'identidade':
+          return ['doc_identidade'];
+        case 'comprovante_endereco':
+          return ['comprovante_endereco'];
+        case 'estado_civil':
+          return ['certidao_casamento_nascimento'];
+        case 'conjuge_documentos':
+          return ['outro'];
+        case 'comprovante_renda':
+          return ['comprovante_renda'];
+        case 'dados_bancarios':
+          return ['outro'];
+        case 'docs_imovel':
+          return ['certidao_inteiro_teor', 'certidao_onus_acoes'];
+        default:
+          return [];
+      }
+    };
+
+    const pushFromSideRows = (side: MatrixSide, rows: unknown) => {
+      if (!Array.isArray(rows)) return;
+      for (const row of rows) {
+        if (!row || typeof row !== 'object') continue;
+        const source = row as Record<string, unknown>;
+        const applicability = String(source.applicability ?? '').trim().toLowerCase();
+        if (applicability === 'not_applicable') continue;
+        const category = String(source.category ?? '').trim();
+        if (!category) continue;
+        const docTypes = categoryToDocumentTypes(category);
+        for (const documentType of docTypes) {
+          entries.push({ documentType, side });
+        }
+      }
+    };
+
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const source = raw as Record<string, unknown>;
+      pushFromSideRows('seller', source.seller);
+      pushFromSideRows('buyer', source.buyer);
+      return entries;
+    }
+
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        if (!entry || typeof entry !== 'object') continue;
+        const source = entry as Record<string, unknown>;
+        const documentType = normalizeMatrixDocumentType(
+          source.documentType ?? source.type ?? source.document ?? source.key
+        );
+        const side = normalizeMatrixSide(source.side ?? source.party ?? source.role);
+        if (!documentType || !side) continue;
+        entries.push({ documentType, side });
+      }
+    }
+
+    return entries;
+  }
+
+  function getMatrixRows(contract: ContractItem): MatrixRow[] {
+    const requirements = readRawMatrixRequirements(contract);
+    if (requirements.length === 0) {
+      const fallbackTypes = getRequiredDocTypes(contract);
+      if (isDoubleEndedDeal(contract)) {
+        return fallbackTypes.map((documentType) => ({
+          documentType,
+          sellerRequired: true,
+          buyerRequired: false,
+        }));
+      }
+      return fallbackTypes.map((documentType) => ({
+        documentType,
+        sellerRequired: true,
+        buyerRequired: true,
+      }));
+    }
+
+    const rows = new Map<string, MatrixRow>();
+    for (const requirement of requirements) {
+      const current = rows.get(requirement.documentType) ?? {
+        documentType: requirement.documentType,
+        sellerRequired: false,
+        buyerRequired: false,
+      };
+      if (requirement.side === 'seller') current.sellerRequired = true;
+      if (requirement.side === 'buyer') current.buyerRequired = true;
+      rows.set(requirement.documentType, current);
+    }
+
+    return Array.from(rows.values());
+  }
+
+  function readProgressStatus(
+    contract: ContractItem,
+    documentType: string,
+    side: MatrixSide
+  ): string {
+    const raw = contract.documentProgress;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const source = raw as Record<string, unknown>;
+      const sideNode = source[side];
+      if (sideNode && typeof sideNode === 'object') {
+        const categories = (sideNode as Record<string, unknown>).categories;
+        if (Array.isArray(categories)) {
+          const normalizedType = normalizeMatrixDocumentType(documentType);
+          const typeToCategory = (type: string, matrixSide: MatrixSide): string => {
+            if (type === 'comprovante_endereco') return 'comprovante_endereco';
+            if (type === 'certidao_casamento_nascimento') return 'estado_civil';
+            if (type === 'comprovante_renda') return 'comprovante_renda';
+            if (type === 'certidao_inteiro_teor' || type === 'certidao_onus_acoes') return 'docs_imovel';
+            if (type === 'outro') {
+              return matrixSide === 'buyer' ? 'conjuge_documentos' : 'dados_bancarios';
+            }
+            return 'identidade';
+          };
+          const targetCategory = typeToCategory(normalizedType, side);
+          const categoryRow = categories.find((item) => {
+            if (!item || typeof item !== 'object') return false;
+            const row = item as Record<string, unknown>;
+            return String(row.category ?? '').trim().toLowerCase() === targetCategory;
+          }) as Record<string, unknown> | undefined;
+          if (categoryRow) {
+            return String(categoryRow.status ?? '').trim().toUpperCase();
+          }
+        }
+      }
+      return '';
+    }
+    if (!Array.isArray(raw)) return '';
+    const normalizedType = normalizeMatrixDocumentType(documentType);
+    const match = raw.find((entry) => {
+      if (!entry || typeof entry !== 'object') return false;
+      const source = entry as Record<string, unknown>;
+      const entryType = normalizeMatrixDocumentType(
+        source.documentType ?? source.type ?? source.document ?? source.key
+      );
+      const entrySide = normalizeMatrixSide(source.side ?? source.party ?? source.role);
+      return entryType === normalizedType && entrySide === side;
+    });
+    if (!match || typeof match !== 'object') return '';
+    const source = match as Record<string, unknown>;
+    return String(source.status ?? source.state ?? source.progress ?? '').trim().toUpperCase();
+  }
+
+  function matrixCellStatus(
+    contract: ContractItem,
+    documentType: string,
+    side: MatrixSide
+  ): string {
+    const doc = getDocumentForMatrixCell(contract, documentType, side);
+    const docStatus = normalizeDocumentStatus(doc);
+    if (docStatus) return docStatus;
+    return readProgressStatus(contract, documentType, side);
+  }
+
+  function matrixCellStatusLabel(status: string): string {
+    const value = String(status).trim().toUpperCase();
+    if (value === 'APPROVED') return 'Aprovado';
+    if (value === 'REJECTED') return 'Rejeitado';
+    if (value === 'PENDING') return 'Pendente';
+    if (value === 'SENT' || value === 'UPLOADED' || value === 'SUBMITTED') return 'Enviado';
+    if (!value) return 'Pendente';
+    return value;
+  }
+
+  function matrixCellStatusClass(status: string): string {
+    const value = String(status).trim().toUpperCase();
+    if (value === 'APPROVED') {
+      return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+    }
+    if (value === 'REJECTED') {
+      return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
+    }
+    if (value === 'PENDING' || value === 'MISSING' || !value) {
+      return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+    }
+    return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+  }
+
   function getNonProposalDocuments(contract: ContractItem): ContractDocument[] {
     return (contract.documents ?? []).filter((doc) => {
       const documentType = String(doc.documentType ?? '').trim().toLowerCase();
@@ -745,26 +954,27 @@
   }
 
   function listMissingRequiredDocuments(contract: ContractItem): string[] {
-    const requiredDocTypes = getRequiredDocTypes(contract);
+    const rows = getMatrixRows(contract);
     const missing: string[] = [];
 
     if (isDoubleEndedDeal(contract)) {
-      for (const documentType of requiredDocTypes) {
-        if (getDocumentForMatrixCell(contract, documentType, 'seller') == null) {
-          missing.push(documentLabel(documentType));
+      for (const row of rows) {
+        if (!row.sellerRequired) continue;
+        if (getDocumentForMatrixCell(contract, row.documentType, 'seller') == null) {
+          missing.push(documentLabel(row.documentType));
         }
       }
       return missing;
     }
 
-    for (const documentType of requiredDocTypes) {
-      const sellerDoc = getDocumentForMatrixCell(contract, documentType, 'seller');
-      const buyerDoc = getDocumentForMatrixCell(contract, documentType, 'buyer');
-      if (sellerDoc == null) {
-        missing.push(`${documentLabel(documentType)} (Captador)`);
+    for (const row of rows) {
+      const sellerDoc = getDocumentForMatrixCell(contract, row.documentType, 'seller');
+      const buyerDoc = getDocumentForMatrixCell(contract, row.documentType, 'buyer');
+      if (row.sellerRequired && sellerDoc == null) {
+        missing.push(`${documentLabel(row.documentType)} (Captador)`);
       }
-      if (buyerDoc == null) {
-        missing.push(`${documentLabel(documentType)} (Vendedor)`);
+      if (row.buyerRequired && buyerDoc == null) {
+        missing.push(`${documentLabel(row.documentType)} (Vendedor)`);
       }
     }
 
@@ -1803,8 +2013,10 @@
                 </thead>
                 <tbody>
                   {#if isDoubleEndedDeal(selected)}
-                    {#each getRequiredDocTypes(selected) as documentType}
-                      {@const brokerDoc = getDocumentForMatrixCell(selected, documentType, 'seller')}
+                    {#each getMatrixRows(selected) as row}
+                      {#if row.sellerRequired}
+                        {@const documentType = row.documentType}
+                        {@const brokerDoc = getDocumentForMatrixCell(selected, documentType, 'seller')}
                       <tr class="border-b border-gray-100 dark:border-gray-800">
                         <td class="px-3 py-3 text-gray-700 dark:text-gray-200">
                           {documentLabel(documentType)}
@@ -1875,17 +2087,20 @@
                           {/if}
                         </td>
                       </tr>
+                      {/if}
                     {/each}
                   {:else}
-                    {#each getRequiredDocTypes(selected) as documentType}
+                    {#each getMatrixRows(selected) as row}
+                      {@const documentType = row.documentType}
                       {@const sellerDoc = getDocumentForMatrixCell(selected, documentType, 'seller')}
                       {@const buyerDoc = getDocumentForMatrixCell(selected, documentType, 'buyer')}
+                      {@const buyerStatus = matrixCellStatus(selected, documentType, 'buyer')}
                       <tr class="border-b border-gray-100 dark:border-gray-800">
                         <td class="px-3 py-3 text-gray-700 dark:text-gray-200">
                           {documentLabel(documentType)}
                         </td>
                         <td class="px-3 py-3">
-                          {#if sellerDoc}
+                          {#if row.sellerRequired && sellerDoc}
                             <div class="flex flex-wrap items-center gap-2">
                               <Button
                                 size="sm"
@@ -1930,7 +2145,7 @@
                                 </span>
                               {/if}
                             </div>
-                          {:else}
+                          {:else if row.sellerRequired}
                             <div class="flex flex-wrap items-center gap-2">
                               <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                                 Pendente
@@ -1947,71 +2162,21 @@
                                 Enviar
                               </Button>
                             </div>
+                          {:else}
+                            <span class="text-xs text-gray-500 dark:text-gray-400">N/A</span>
                           {/if}
                         </td>
                         <td class="px-3 py-3">
-                          {#if buyerDoc}
-                            <div class="flex flex-wrap items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                on:click={() => selected && viewDocument(buyerDoc, selected)}
-                                disabled={downloadingDocumentId === buyerDoc.id}
-                              >
-                                {#if downloadingDocumentId === buyerDoc.id}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Baixar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                on:click={() => triggerMatrixUpload(documentType, 'buyer')}
-                                disabled={matrixUploadingKey === `buyer:${documentType}`}
-                              >
-                                {#if matrixUploadingKey === `buyer:${documentType}`}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Substituir
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                on:click={() => deleteMatrixDocument(buyerDoc)}
-                                disabled={matrixDeletingDocumentId === buyerDoc.id}
-                              >
-                                {#if matrixDeletingDocumentId === buyerDoc.id}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Excluir
-                              </Button>
-                              {#if hasDocumentReviewStatus(buyerDoc)}
-                                <span
-                                  class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
-                                    buyerDoc
-                                  )}`}
-                                >
-                                  {documentStatusLabel(buyerDoc)}
-                                </span>
-                              {/if}
-                            </div>
+                          {#if row.buyerRequired}
+                            <span
+                              class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${matrixCellStatusClass(
+                                buyerStatus
+                              )}`}
+                            >
+                              {matrixCellStatusLabel(buyerStatus)}
+                            </span>
                           {:else}
-                            <div class="flex flex-wrap items-center gap-2">
-                              <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                Pendente
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                on:click={() => triggerMatrixUpload(documentType, 'buyer')}
-                                disabled={matrixUploadingKey === `buyer:${documentType}`}
-                              >
-                                {#if matrixUploadingKey === `buyer:${documentType}`}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Enviar
-                              </Button>
-                            </div>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">N/A</span>
                           {/if}
                         </td>
                       </tr>
