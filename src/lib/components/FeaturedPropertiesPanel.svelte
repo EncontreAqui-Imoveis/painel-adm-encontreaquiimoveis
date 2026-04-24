@@ -27,6 +27,9 @@
   let isLoadingFeatured = false;
   let isLoadingCandidates = false;
   let isSaving = false;
+  let isImagePreviewOpen = false;
+  let previewImageUrl: string | null = null;
+  let previewImageAlt = 'Pré-visualização do imóvel';
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   $: selectedIds = new Set(featured.map((item) => item.id));
@@ -47,6 +50,26 @@
       .map((value) => String(value ?? '').trim())
       .filter((value) => value.length > 0);
     return parts.length > 0 ? parts.join(' - ') : '-';
+  }
+
+  function openImagePreview(url: string | null | undefined, alt?: string) {
+    if (!url) return;
+    previewImageUrl = url;
+    previewImageAlt = alt ?? 'Pré-visualização do imóvel';
+    isImagePreviewOpen = true;
+  }
+
+  function closeImagePreview() {
+    isImagePreviewOpen = false;
+    previewImageUrl = null;
+  }
+
+  function handlePreviewKeydown(event: KeyboardEvent) {
+    if (!isImagePreviewOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeImagePreview();
+    }
   }
 
   async function loadFeatured() {
@@ -141,6 +164,8 @@
     }
   }
 </script>
+
+<svelte:window on:keydown={handlePreviewKeydown} />
 
 <section class="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
   <div class="flex flex-col gap-3 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
@@ -276,12 +301,18 @@
                 <tr class="border-t border-gray-200 dark:border-gray-800">
                   <td class="px-3 py-2">
                     {#if item.property_image_url}
-                      <img
-                        src={item.property_image_url}
-                        alt={item.title}
-                        class="h-12 w-16 rounded-md object-cover"
-                        loading="lazy"
-                      />
+                      <button
+                        type="button"
+                        aria-label={`Abrir imagem de ${item.title}`}
+                        on:click|stopPropagation={() => openImagePreview(item.property_image_url, item.title)}
+                      >
+                        <img
+                          src={item.property_image_url}
+                          alt={item.title}
+                          class="h-12 w-16 rounded-md object-cover"
+                          loading="lazy"
+                        />
+                      </button>
                     {:else}
                       <div class="flex h-12 w-16 items-center justify-center rounded-md bg-gray-100 text-[10px] text-gray-500 dark:bg-gray-800 dark:text-gray-400">
                         Sem foto
@@ -320,3 +351,26 @@
     </div>
   </div>
 </section>
+
+{#if isImagePreviewOpen && previewImageUrl}
+  <div
+    class="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4"
+    role="button"
+    tabindex="0"
+    aria-label="Fechar visualização da imagem"
+    on:click={closeImagePreview}
+    on:keydown={handlePreviewKeydown}
+  >
+    <div class="relative max-h-[90vh] max-w-[95vw]" role="presentation">
+      <img src={previewImageUrl} alt={previewImageAlt} class="max-h-[90vh] max-w-[95vw] rounded-md object-contain" />
+      <button
+        type="button"
+        class="absolute right-2 top-2 rounded-full bg-black/55 p-2 text-white hover:bg-black/75"
+        aria-label="Fechar"
+        on:click={closeImagePreview}
+      >
+        x
+      </button>
+    </div>
+  </div>
+{/if}
