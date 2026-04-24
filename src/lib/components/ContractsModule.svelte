@@ -4,8 +4,14 @@
   import { toast } from 'svelte-sonner';
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
+  import { Input } from '$lib/components/ui/input';
+  import type { InputProps } from '$lib/components/ui/input/input-props';
+  import type { Component } from 'svelte';
   import { formatCurrencyInput, parseCurrency } from '$lib/components/create-property-helpers';
   import Pagination from '$lib/Pagination.svelte';
+
+  /** TS do IDE: tipo inferido do `Input` costuma omitir `id`/handlers; aqui usamos o contrato explícito. */
+  const LabeledTextInput = Input as unknown as Component<InputProps, {}, 'value'>;
 
   type FinalizeSplitMode = 'amount' | 'percentage';
 
@@ -194,18 +200,42 @@
     taxaPlataforma: '',
   };
 
-  function getRecordValue(
+  let savingPartyData = false;
+  let sellerInfoForm = {
+    estadoCivil: '',
+    profissao: '',
+    email: '',
+    telefone: '',
+    dadosBancarios: '',
+  };
+  let buyerInfoForm = {
+    estadoCivil: '',
+    profissao: '',
+    email: '',
+    telefone: '',
+    garantiaLocacao: '',
+  };
+
+  function getRecordValueRaw(
     source: Record<string, unknown> | null | undefined,
     keys: string[]
   ): string {
-    if (!source) return '-';
+    if (!source) return '';
     for (const key of keys) {
       const value = source[key];
       if (value != null && String(value).trim().length > 0) {
         return String(value).trim();
       }
     }
-    return '-';
+    return '';
+  }
+
+  function getRecordValue(
+    source: Record<string, unknown> | null | undefined,
+    keys: string[]
+  ): string {
+    const raw = getRecordValueRaw(source, keys);
+    return raw.length ? raw : '-';
   }
 
   function hasRecordValue(
@@ -1143,6 +1173,82 @@
         ? payload.documents
         : selected.documents ?? [],
     };
+    if (showModal) {
+      hydratePartyInfoFormsFromSelected();
+    }
+  }
+
+  function hydratePartyInfoFormsFromSelected() {
+    if (!selected) return;
+    sellerInfoForm = {
+      estadoCivil: getRecordValueRaw(selected.sellerInfo, ['estado_civil', 'estadoCivil']),
+      profissao: getRecordValueRaw(selected.sellerInfo, ['profissao']),
+      email: getRecordValueRaw(selected.sellerInfo, ['email']),
+      telefone: getRecordValueRaw(selected.sellerInfo, ['telefone', 'phone']),
+      dadosBancarios: getRecordValueRaw(selected.sellerInfo, ['dados_bancarios', 'dadosBancarios']),
+    };
+    buyerInfoForm = {
+      estadoCivil: getRecordValueRaw(selected.buyerInfo, ['estado_civil', 'estadoCivil']),
+      profissao: getRecordValueRaw(selected.buyerInfo, ['profissao']),
+      email: getRecordValueRaw(selected.buyerInfo, ['email']),
+      telefone: getRecordValueRaw(selected.buyerInfo, ['telefone', 'phone']),
+      garantiaLocacao: getRecordValueRaw(selected.buyerInfo, ['garantia_locacao', 'garantiaLocacao']),
+    };
+  }
+
+  function trimInfoValue(raw: string): string | null {
+    const t = raw.trim();
+    return t.length ? t : null;
+  }
+
+  function buildSellerInfoPayload(): Record<string, unknown> {
+    if (!selected) return {};
+    const prev =
+      selected.sellerInfo && typeof selected.sellerInfo === 'object'
+        ? { ...(selected.sellerInfo as Record<string, unknown>) }
+        : {};
+    return {
+      ...prev,
+      estado_civil: trimInfoValue(sellerInfoForm.estadoCivil),
+      profissao: trimInfoValue(sellerInfoForm.profissao),
+      email: trimInfoValue(sellerInfoForm.email),
+      telefone: trimInfoValue(sellerInfoForm.telefone),
+      dados_bancarios: trimInfoValue(sellerInfoForm.dadosBancarios),
+    };
+  }
+
+  function buildBuyerInfoPayload(): Record<string, unknown> {
+    if (!selected) return {};
+    const prev =
+      selected.buyerInfo && typeof selected.buyerInfo === 'object'
+        ? { ...(selected.buyerInfo as Record<string, unknown>) }
+        : {};
+    return {
+      ...prev,
+      estado_civil: trimInfoValue(buyerInfoForm.estadoCivil),
+      profissao: trimInfoValue(buyerInfoForm.profissao),
+      email: trimInfoValue(buyerInfoForm.email),
+      telefone: trimInfoValue(buyerInfoForm.telefone),
+      garantia_locacao: trimInfoValue(buyerInfoForm.garantiaLocacao),
+    };
+  }
+
+  async function saveContractPartyData() {
+    if (!selected) return;
+    savingPartyData = true;
+    try {
+      await api.put(`/admin/contracts/${selected.id}/data`, {
+        sellerInfo: buildSellerInfoPayload(),
+        buyerInfo: buildBuyerInfoPayload(),
+      });
+      toast.success('Dados do captador e do comprador salvos.');
+      await reloadSelectedContract(selected.id);
+    } catch (error) {
+      console.error('Erro ao salvar dados do contrato:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível salvar os dados.'));
+    } finally {
+      savingPartyData = false;
+    }
   }
 
   function changeTab(status: ContractStatus) {
@@ -1175,7 +1281,9 @@
     downloadingAllDocuments = false;
     evaluatingSide = null;
     finalizingContract = false;
+    savingPartyData = false;
     hydrateFinalizeForm(item);
+    hydratePartyInfoFormsFromSelected();
   }
 
   function closeModal(force = false) {
@@ -1186,7 +1294,8 @@
         reopeningContract ||
         deletingContract ||
         finalizingContract ||
-        evaluatingSide !== null)
+        evaluatingSide !== null ||
+        savingPartyData)
     ) {
       return;
     }
@@ -1694,7 +1803,7 @@
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <p class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {item.propertyCode ? item.propertyCode : `#${item.propertyId}`}
+                ID {item.propertyId}{#if item.propertyCode}{' · '}{item.propertyCode}{/if}
               </p>
               <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">{item.propertyTitle ?? '-'}</p>
             </div>
@@ -1746,7 +1855,7 @@
       <thead class="bg-gray-50 dark:bg-gray-900/70">
         <tr>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Código Imóvel
+            Imóvel (ID / código)
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Captador
@@ -1780,7 +1889,7 @@
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
               <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                 <div class="font-semibold">
-                  {item.propertyCode ? item.propertyCode : `#${item.propertyId}`}
+                  ID {item.propertyId}{#if item.propertyCode}{' · '}{item.propertyCode}{/if}
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400">
                   {item.propertyTitle ?? '-'}
@@ -1862,9 +1971,9 @@
             : 'Editar Contrato Finalizado'}
         </h3>
         <p id="contract-modal-description" class="text-sm text-gray-500 dark:text-gray-400">
-          {selected.propertyCode ? selected.propertyCode : `#${selected.propertyId}`}
+          ID {selected.propertyId}{#if selected.propertyCode}{' · Código '}{selected.propertyCode}{/if}
           {#if selected.propertyTitle}
-            {' - '}{selected.propertyTitle}
+            {' — '}{selected.propertyTitle}
           {/if}
         </p>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1899,9 +2008,9 @@
 
       {#if modalMode === 'review_docs'}
         <div class="space-y-4">
-          {#if isDoubleEndedDeal(selected)}
+          <div class="grid gap-4 md:grid-cols-2">
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-              <div class="flex items-center justify-between">
+              <div class="flex items-center justify-between gap-2">
                 <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
                   Dados Captador
                 </p>
@@ -1913,75 +2022,117 @@
                   {approvalLabel(selected.sellerApprovalStatus)}
                 </span>
               </div>
-              <div class="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-200">
-                <p><span class="font-semibold">Estado Civil:</span> {getRecordValue(selected.sellerInfo ?? selected.buyerInfo, ['estado_civil', 'estadoCivil'])}</p>
-                <p><span class="font-semibold">Profissão:</span> {getRecordValue(selected.sellerInfo ?? selected.buyerInfo, ['profissao'])}</p>
-                <p><span class="font-semibold">E-mail:</span> {getRecordValue(selected.sellerInfo ?? selected.buyerInfo, ['email'])}</p>
-                <p><span class="font-semibold">Telefone:</span> {getRecordValue(selected.sellerInfo ?? selected.buyerInfo, ['telefone', 'phone'])}</p>
-                <p><span class="font-semibold">Banco:</span> {getRecordValue(selected.sellerInfo ?? selected.buyerInfo, ['dados_bancarios', 'dadosBancarios'])}</p>
-                {#if readReasonText(selected.sellerApprovalReason).length > 0}
-                  <p class="text-xs text-amber-700 dark:text-amber-300">
-                    Motivo: {readReasonText(selected.sellerApprovalReason)}
-                  </p>
-                {/if}
-              </div>
-            </div>
-          {:else}
-            <div class="grid gap-4 md:grid-cols-2">
-              <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-                <div class="flex items-center justify-between">
-                  <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                    Dados Captador
-                  </p>
-                  <span
-                    class={`rounded-full px-2 py-1 text-xs font-semibold ${approvalBadgeClass(
-                      selected.sellerApprovalStatus
-                    )}`}
+              {#if readReasonText(selected.sellerApprovalReason).length > 0}
+                <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                  Motivo: {readReasonText(selected.sellerApprovalReason)}
+                </p>
+              {/if}
+              <div class="mt-3 space-y-3 text-sm">
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-estado-civil"
+                    >Estado civil</label
                   >
-                    {approvalLabel(selected.sellerApprovalStatus)}
-                  </span>
+                  <LabeledTextInput id="seller-estado-civil" bind:value={sellerInfoForm.estadoCivil} disabled={savingPartyData} />
                 </div>
-                <div class="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-200">
-                  <p><span class="font-semibold">Estado Civil:</span> {getRecordValue(selected.sellerInfo, ['estado_civil', 'estadoCivil'])}</p>
-                  <p><span class="font-semibold">Profissão:</span> {getRecordValue(selected.sellerInfo, ['profissao'])}</p>
-                  <p><span class="font-semibold">E-mail:</span> {getRecordValue(selected.sellerInfo, ['email'])}</p>
-                  <p><span class="font-semibold">Telefone:</span> {getRecordValue(selected.sellerInfo, ['telefone', 'phone'])}</p>
-                  <p><span class="font-semibold">Banco:</span> {getRecordValue(selected.sellerInfo, ['dados_bancarios', 'dadosBancarios'])}</p>
-                  {#if readReasonText(selected.sellerApprovalReason).length > 0}
-                    <p class="text-xs text-amber-700 dark:text-amber-300">
-                      Motivo: {readReasonText(selected.sellerApprovalReason)}
-                    </p>
-                  {/if}
-                </div>
-              </div>
-              <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-                <div class="flex items-center justify-between">
-                  <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                    Dados Comprador
-                  </p>
-                  <span
-                    class={`rounded-full px-2 py-1 text-xs font-semibold ${approvalBadgeClass(
-                      selected.buyerApprovalStatus
-                    )}`}
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-profissao"
+                    >Profissão</label
                   >
-                    {approvalLabel(selected.buyerApprovalStatus)}
-                  </span>
+                  <LabeledTextInput id="seller-profissao" bind:value={sellerInfoForm.profissao} disabled={savingPartyData} />
                 </div>
-                <div class="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-200">
-                  <p><span class="font-semibold">Estado Civil:</span> {getRecordValue(selected.buyerInfo, ['estado_civil', 'estadoCivil'])}</p>
-                  <p><span class="font-semibold">Profissão:</span> {getRecordValue(selected.buyerInfo, ['profissao'])}</p>
-                  <p><span class="font-semibold">E-mail:</span> {getRecordValue(selected.buyerInfo, ['email'])}</p>
-                  <p><span class="font-semibold">Telefone:</span> {getRecordValue(selected.buyerInfo, ['telefone', 'phone'])}</p>
-                  <p><span class="font-semibold">Garantia:</span> {getRecordValue(selected.buyerInfo, ['garantia_locacao', 'garantiaLocacao'])}</p>
-                  {#if readReasonText(selected.buyerApprovalReason).length > 0}
-                    <p class="text-xs text-amber-700 dark:text-amber-300">
-                      Motivo: {readReasonText(selected.buyerApprovalReason)}
-                    </p>
-                  {/if}
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-email"
+                    >E-mail</label
+                  >
+                  <LabeledTextInput
+                    id="seller-email"
+                    type="text"
+                    bind:value={sellerInfoForm.email}
+                    disabled={savingPartyData}
+                  />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-telefone"
+                    >Telefone</label
+                  >
+                  <LabeledTextInput id="seller-telefone" bind:value={sellerInfoForm.telefone} disabled={savingPartyData} />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-banco"
+                    >Dados bancários</label
+                  >
+                  <LabeledTextInput id="seller-banco" bind:value={sellerInfoForm.dadosBancarios} disabled={savingPartyData} />
                 </div>
               </div>
             </div>
-          {/if}
+            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                  Dados Comprador
+                </p>
+                <span
+                  class={`rounded-full px-2 py-1 text-xs font-semibold ${approvalBadgeClass(
+                    selected.buyerApprovalStatus
+                  )}`}
+                >
+                  {approvalLabel(selected.buyerApprovalStatus)}
+                </span>
+              </div>
+              {#if readReasonText(selected.buyerApprovalReason).length > 0}
+                <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                  Motivo: {readReasonText(selected.buyerApprovalReason)}
+                </p>
+              {/if}
+              <div class="mt-3 space-y-3 text-sm">
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-estado-civil"
+                    >Estado civil</label
+                  >
+                  <LabeledTextInput id="buyer-estado-civil" bind:value={buyerInfoForm.estadoCivil} disabled={savingPartyData} />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-profissao"
+                    >Profissão</label
+                  >
+                  <LabeledTextInput id="buyer-profissao" bind:value={buyerInfoForm.profissao} disabled={savingPartyData} />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-email"
+                    >E-mail</label
+                  >
+                  <LabeledTextInput id="buyer-email" bind:value={buyerInfoForm.email} disabled={savingPartyData} />
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-telefone"
+                    >Telefone</label
+                  >
+                  <LabeledTextInput id="buyer-telefone" bind:value={buyerInfoForm.telefone} disabled={savingPartyData} />
+                </div>
+                <div>
+                  <label
+                    class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    for="buyer-garantia"
+                    >Garantia (locação, se aplicável)</label
+                  >
+                  <LabeledTextInput id="buyer-garantia" bind:value={buyerInfoForm.garantiaLocacao} disabled={savingPartyData} />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              disabled={savingPartyData}
+              on:click={() => {
+                void saveContractPartyData();
+              }}
+            >
+              {#if savingPartyData}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Salvar dados captador e comprador
+            </Button>
+          </div>
 
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <p

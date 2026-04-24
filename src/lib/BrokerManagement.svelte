@@ -406,9 +406,9 @@
         maxLength={120}
         placeholder="Buscar por nome, email ou CRECI..."
         bind:value={filters.search}
-        on:input={onSearchInput}
-        on:keydown={handleKeydown}
-        on:keyup={handleKeyup}
+        oninput={onSearchInput}
+        onkeydown={handleKeydown}
+        onkeyup={handleKeyup}
       />
       <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
         <label for="brokers-items-per-page" class="font-medium">Mostrar</label>

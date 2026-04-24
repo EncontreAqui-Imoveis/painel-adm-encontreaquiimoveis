@@ -2040,9 +2040,9 @@
           type="search"
           placeholder="Buscar por título, cidade, ID..."
           bind:value={filters.search}
-          on:input={onSearchInput}
-          on:keydown={handleKeydown}
-          on:keyup={handleKeyup}
+          oninput={onSearchInput}
+          onkeydown={handleKeydown}
+          onkeyup={handleKeyup}
         />
         <div class="text-xs text-green-700 dark:text-green-200">
           Dica: clique em Revisar para ver os detalhes completos.
@@ -2086,9 +2086,9 @@
         type="search"
         placeholder="Buscar por título, cidade, ID..."
         bind:value={filters.search}
-        on:input={onSearchInput}
-        on:keydown={handleKeydown}
-        on:keyup={handleKeyup}
+        oninput={onSearchInput}
+        onkeydown={handleKeydown}
+        onkeyup={handleKeyup}
       />
     </div>
     <div class="mt-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
