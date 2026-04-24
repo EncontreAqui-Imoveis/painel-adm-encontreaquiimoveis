@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { Download, Loader2 } from 'lucide-svelte';
   import { toast } from 'svelte-sonner';
-  import { api } from '$lib/apiClient';
+  import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
   import { formatCurrencyInput, parseCurrency } from '$lib/components/create-property-helpers';
 
@@ -25,6 +25,8 @@
     capturingBrokerName?: string | null;
     sellingBrokerName?: string | null;
     finalizedAt?: string | null;
+    signedProposalDocumentId?: number | string | null;
+    signedProposalDocumentSource?: 'negotiation_documents' | null;
     commissionData: {
       valorVenda: number;
       comissaoCaptador: number;
@@ -81,6 +83,7 @@
     totalVendedores: 0,
     totalPlataforma: 0,
   };
+  let signedProposalLoadingByNegotiation: Record<string, boolean> = {};
 
   const yearOptions = Array.from(
     { length: 8 },
@@ -154,6 +157,48 @@
             : '';
     if (!backendMessage) return fallback;
     return requestId ? `${backendMessage} (Req: ${requestId})` : backendMessage;
+  }
+
+  function canViewSignedProposal(item: CommissionsTransaction): boolean {
+    const negotiationId = String(item.negotiationId ?? '').trim();
+    return negotiationId.length > 0 && item.signedProposalDocumentId != null;
+  }
+
+  function isSignedProposalLoading(item: CommissionsTransaction): boolean {
+    const negotiationId = String(item.negotiationId ?? '').trim();
+    return Boolean(signedProposalLoadingByNegotiation[negotiationId]);
+  }
+
+  async function viewSignedProposal(item: CommissionsTransaction) {
+    const negotiationId = String(item.negotiationId ?? '').trim();
+    if (!negotiationId) {
+      toast.error('Negociação sem identificador para abrir proposta assinada.');
+      return;
+    }
+    signedProposalLoadingByNegotiation = {
+      ...signedProposalLoadingByNegotiation,
+      [negotiationId]: true,
+    };
+    try {
+      const response = await apiClient.get(
+        `/admin/negotiations/${negotiationId}/signed-proposal/download`,
+        { responseType: 'blob' }
+      );
+      const blob = response.data instanceof Blob
+        ? response.data
+        : new Blob([response.data], { type: 'application/pdf' });
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (error) {
+      console.error('Erro ao abrir proposta assinada:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível abrir a proposta assinada.'));
+    } finally {
+      signedProposalLoadingByNegotiation = {
+        ...signedProposalLoadingByNegotiation,
+        [negotiationId]: false,
+      };
+    }
   }
 
   function requiresExactSaleSplit(item: CommissionsTransaction | null): boolean {
@@ -463,7 +508,16 @@
         totalVendedores: toNumber(summaryPayload.totalVendedores),
         totalPlataforma: toNumber(summaryPayload.totalPlataforma),
       };
-      transactions = list;
+      transactions = list.map((item) => {
+        const record = item as CommissionsTransaction & {
+          signed_proposal_document_id?: number | string | null;
+        };
+        return {
+          ...record,
+          signedProposalDocumentId:
+            record.signedProposalDocumentId ?? record.signed_proposal_document_id ?? null,
+        };
+      });
     } catch (fetchError) {
       console.error('Erro ao carregar comissões:', fetchError);
       error = 'Não foi possível carregar os dados de comissões.';
@@ -620,6 +674,14 @@
             </div>
           </dl>
           <div class="mt-4 flex flex-col gap-2">
+            {#if canViewSignedProposal(item)}
+              <Button variant="outline" on:click={() => viewSignedProposal(item)} disabled={isSignedProposalLoading(item)}>
+                {#if isSignedProposalLoading(item)}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                Ver proposta assinada
+              </Button>
+            {/if}
             <Button variant="outline" on:click={() => openEditModal(item)}>
               Editar
             </Button>
@@ -701,6 +763,14 @@
               </td>
               <td class="px-6 py-4 text-right">
                 <div class="flex justify-end gap-2">
+                  {#if canViewSignedProposal(item)}
+                    <Button size="sm" variant="outline" on:click={() => viewSignedProposal(item)} disabled={isSignedProposalLoading(item)}>
+                      {#if isSignedProposalLoading(item)}
+                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                      {/if}
+                      Ver proposta assinada
+                    </Button>
+                  {/if}
                   <Button size="sm" variant="outline" on:click={() => openEditModal(item)}>
                     Editar
                   </Button>

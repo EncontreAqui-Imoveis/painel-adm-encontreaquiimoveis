@@ -32,6 +32,7 @@ import PropertyArchive from '../../src/lib/components/PropertyArchive.svelte';
 describe('PropertyArchive', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.startsWith('/admin/properties/archive')) {
         return {
@@ -89,7 +90,7 @@ describe('PropertyArchive', () => {
     expect((await screen.findAllByText('Casa Vendida')).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Revisar' }).length).toBeGreaterThan(0);
     expect(
-      screen.getAllByRole('button', { name: 'Disponibilizar Novamente' }).length
+      screen.getAllByRole('button', { name: 'Voltar para Disponível' }).length
     ).toBeGreaterThan(0);
 
     await fireEvent.click(screen.getAllByRole('button', { name: 'Revisar' })[0]);
@@ -100,13 +101,14 @@ describe('PropertyArchive', () => {
     expect(within(dialog).getByText('Corretor 1')).toBeInTheDocument();
   });
 
-  it('permite disponibilizar novamente apenas imóveis alugados', async () => {
+  it('permite voltar imóvel alugado para disponível', async () => {
     apiPutMock.mockResolvedValue({});
 
     render(PropertyArchive);
 
     await screen.findAllByText('Apartamento Alugado');
-    await fireEvent.click(screen.getAllByRole('button', { name: 'Disponibilizar Novamente' })[0]);
+    const relistButtons = screen.getAllByRole('button', { name: 'Voltar para Disponível' });
+    await fireEvent.click(relistButtons[relistButtons.length - 1]);
     await fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
 
     await waitFor(() => {

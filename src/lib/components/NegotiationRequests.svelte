@@ -96,6 +96,7 @@
   let savingSellerBroker = false;
   let selectedSignedPdfFile: File | null = null;
   let signedPdfInputRenderKey = 0;
+  let signedPdfFileInput: HTMLInputElement | null = null;
   let sameAsCapturing = true;
   let sellerBrokerSearchQuery = '';
   let sellerBrokerOptions: ApprovedBrokerOption[] = [];
@@ -106,6 +107,9 @@
   let sellerSearchDebounce: ReturnType<typeof setTimeout> | null = null;
   let sellerBrokerDropdownOpen = false;
   let sellerBrokerBlurTimeout: ReturnType<typeof setTimeout> | null = null;
+  let isImagePreviewOpen = false;
+  let previewImageUrl: string | null = null;
+  let previewImageAlt = 'Pré-visualização do imóvel';
 
   function normalizeClient(item: NegotiationItem | null): { name: string; cpf: string } {
     if (!item) return { name: '-', cpf: '-' };
@@ -326,7 +330,8 @@
         record.signedDocumentId ??
         record.signed_document_id ??
         record.signedProposalDocumentId ??
-        record.documentId;
+        record.documentId ??
+        record.document_id;
       if (typeof candidate === 'number' && Number.isFinite(candidate)) {
         return candidate;
       }
@@ -443,6 +448,26 @@
     clearPropertyModalState();
   }
 
+  function openImagePreview(url: string | null | undefined, alt?: string) {
+    if (!url) return;
+    previewImageUrl = url;
+    previewImageAlt = alt ?? 'Pré-visualização do imóvel';
+    isImagePreviewOpen = true;
+  }
+
+  function closeImagePreview() {
+    isImagePreviewOpen = false;
+    previewImageUrl = null;
+  }
+
+  function handlePreviewKeydown(event: KeyboardEvent) {
+    if (!isImagePreviewOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeImagePreview();
+    }
+  }
+
   async function viewSignedPdf() {
     if (!selectedProposal?.signedDocumentId) {
       toast.error('Nenhum PDF assinado anexado para visualização.');
@@ -470,7 +495,7 @@
     }
   }
 
-  function handleSignedPdfChange(event: Event) {
+  async function handleSignedPdfChange(event: Event) {
     const input = event.currentTarget as HTMLInputElement | null;
     const file = input?.files?.[0] ?? null;
     if (!file) {
@@ -484,6 +509,7 @@
       return;
     }
     selectedSignedPdfFile = file;
+    await uploadSignedPdf();
   }
 
   async function uploadSignedPdf() {
@@ -506,8 +532,11 @@
         }
       );
 
-      const nextSignedDocumentId =
-        extractSignedDocumentId(response?.data) ?? selectedProposal.signedDocumentId ?? Date.now();
+      const nextSignedDocumentId = extractSignedDocumentId(response?.data);
+      if (nextSignedDocumentId == null) {
+        toast.error('Resposta do servidor sem identificador do documento. Tente novamente.');
+        return;
+      }
       syncProposalInState(selectedProposal.id, { signedDocumentId: nextSignedDocumentId });
       clearSignedPdfSelection();
       toast.success(
@@ -819,6 +848,7 @@
 </script>
 
 <svelte:options runes={false} />
+<svelte:window on:keydown={handlePreviewKeydown} />
 
 <div class="space-y-4">
   <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -878,12 +908,22 @@
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
               <td class="px-6 py-4">
                 {#if item.propertyImageUrl}
-                  <img
-                    src={item.propertyImageUrl}
-                    alt={item.propertyTitle ?? `Imóvel #${item.propertyId}`}
-                    class="h-10 w-14 rounded-md border border-gray-200 object-cover dark:border-gray-700"
-                    loading="lazy"
-                  />
+                  <button
+                    type="button"
+                    aria-label={`Abrir imagem de ${item.propertyTitle ?? `Imóvel #${item.propertyId}`}`}
+                    on:click|stopPropagation={() =>
+                      openImagePreview(
+                        item.propertyImageUrl,
+                        item.propertyTitle ?? `Imóvel #${item.propertyId}`
+                      )}
+                  >
+                    <img
+                      src={item.propertyImageUrl}
+                      alt={item.propertyTitle ?? `Imóvel #${item.propertyId}`}
+                      class="h-10 w-14 rounded-md border border-gray-200 object-cover dark:border-gray-700"
+                      loading="lazy"
+                    />
+                  </button>
                 {:else}
                   <div class="h-10 w-14 rounded-md border border-dashed border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"></div>
                 {/if}
@@ -1046,9 +1086,9 @@
   </div>
 {/if}
 
-{#if showDetailModal && selectedProposal}
+  {#if showDetailModal && selectedProposal}
   <div
-    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+    class="fixed inset-0 z-[60] flex max-h-dvh items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
     role="presentation"
     on:click={(event) => {
       if (event.target === event.currentTarget) {
@@ -1057,7 +1097,7 @@
     }}
     on:keydown={() => {}}
   >
-    <div class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900">
+    <div class="my-auto flex w-full max-w-2xl flex-col rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900 sm:max-h-[90vh]">
       <div class="mb-4 flex items-start justify-between gap-3">
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Análise da proposta</h3>
@@ -1075,201 +1115,208 @@
         </Button>
       </div>
 
-      <div class="grid gap-4 md:grid-cols-2">
-        <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cliente</p>
-          <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{readClientName(selectedProposal)}</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(selectedProposal)}</p>
+      <div class="min-h-0 max-h-[min(70vh,32rem)] flex-1 overflow-y-auto pr-1 sm:max-h-[min(65vh,40rem)]">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cliente</p>
+            <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{readClientName(selectedProposal)}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(selectedProposal)}</p>
+          </div>
+          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Validade</p>
+            <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+              {formatDate(selectedProposal.validityDate)}
+            </p>
+          </div>
         </div>
-        <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Validade</p>
-          <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">
-            {formatDate(selectedProposal.validityDate)}
+
+        <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
+          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Condições de pagamento</p>
+          <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            {#each paymentLines(selectedProposal.payment) as item (item.label)}
+              <div class="rounded bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                <span class="font-semibold">{item.label}:</span> {formatCurrency(item.value)}
+              </div>
+            {/each}
+          </div>
+          <p class="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+            Valor total: {formatCurrency(selectedProposal.value)}
           </p>
         </div>
-      </div>
 
-      <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
-        <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Condições de pagamento</p>
-        <div class="mt-2 grid gap-2 sm:grid-cols-2">
-          {#each paymentLines(selectedProposal.payment) as item (item.label)}
-            <div class="rounded bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-              <span class="font-semibold">{item.label}:</span> {formatCurrency(item.value)}
-            </div>
-          {/each}
-        </div>
-        <p class="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
-          Valor total: {formatCurrency(selectedProposal.value)}
-        </p>
-      </div>
-
-      <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
-        <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">PDF assinado</p>
-        <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
-          {#if selectedProposal.signedDocumentId != null}
-            PDF assinado anexado.
-          {:else}
-            Nenhum PDF assinado anexado.
-          {/if}
-        </p>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {#if selectedProposal.signedDocumentId != null}
-            Você pode visualizar, excluir ou substituir.
-          {:else}
-            Envie um PDF assinado para habilitar a aprovação.
-          {/if}
-        </p>
-
-        {#if requiresSignedPdf()}
-          <p class="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-            Para aprovar, é obrigatório anexar um PDF assinado.
+        <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
+          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">PDF assinado</p>
+          <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+            {#if selectedProposal.signedDocumentId != null}
+              PDF assinado anexado.
+            {:else}
+              Nenhum PDF assinado anexado.
+            {/if}
           </p>
-        {/if}
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {#if selectedProposal.signedDocumentId != null}
+              Você pode visualizar, excluir ou substituir.
+            {:else}
+              Envie um PDF assinado para habilitar a aprovação.
+            {/if}
+          </p>
 
-        <div class="mt-3">
-          {#key signedPdfInputRenderKey}
-            <input
-              type="file"
-              accept="application/pdf"
-              on:change={handleSignedPdfChange}
-              class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:file:bg-gray-800 dark:file:text-gray-100 dark:hover:file:bg-gray-700"
-            />
-          {/key}
-          {#if selectedSignedPdfFile}
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              Arquivo selecionado: {selectedSignedPdfFile.name}
+          {#if requiresSignedPdf()}
+            <p class="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+              Para aprovar, é obrigatório anexar um PDF assinado.
             </p>
           {/if}
-        </div>
 
-        <div class="mt-3 flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            on:click={uploadSignedPdf}
-            disabled={uploadingSignedPdf || deletingSignedPdf || processingAction || !selectedSignedPdfFile}
-          >
-            {#if uploadingSignedPdf}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Enviar/Substituir PDF
-          </Button>
-          <Button
-            variant="outline"
-            on:click={deleteSignedPdf}
-            disabled={deletingSignedPdf || uploadingSignedPdf || processingAction || selectedProposal.signedDocumentId == null}
-          >
-            {#if deletingSignedPdf}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Excluir PDF
-          </Button>
-          <Button
-            variant="outline"
-            on:click={viewSignedPdf}
-            disabled={viewingPdf || uploadingSignedPdf || deletingSignedPdf || selectedProposal.signedDocumentId == null}
-          >
-            {#if viewingPdf}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Visualizar PDF Assinado
-          </Button>
-        </div>
-      </div>
-
-      <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
-        <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Corretor vendedor</p>
-        <label class="mt-2 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-          <input
-            type="checkbox"
-            checked={sameAsCapturing}
-            on:change={onSameAsCapturingChange}
-            class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-700"
-          />
-          O corretor vendedor também é o captador?
-        </label>
-
-        {#if sameAsCapturing}
-          <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            O corretor captador será utilizado como corretor vendedor.
-          </p>
-        {:else}
-          <div class="mt-3 space-y-2">
-            <div class="relative">
+          <div class="mt-3">
+            <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+              O envio inicia automaticamente ao selecionar o arquivo (Substituir PDF).
+            </p>
+            {#key signedPdfInputRenderKey}
               <input
-                type="text"
-                value={sellerBrokerSearchQuery}
-                on:focus={openSellerBrokerDropdown}
-                on:blur={scheduleCloseSellerBrokerDropdown}
-                on:input={onSellerBrokerSearchInput}
-                placeholder="Digite ao menos 2 letras para buscar corretor"
-                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-green-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                bind:this={signedPdfFileInput}
+                type="file"
+                accept="application/pdf"
+                on:change={handleSignedPdfChange}
+                class="sr-only"
               />
-
-              {#if sellerBrokerDropdownOpen}
-                <div class="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
-                  <button
-                    type="button"
-                    class="w-full border-b border-gray-200 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                    on:click={clearSellerBrokerSelection}
-                  >
-                    Limpar corretor vendedor
-                  </button>
-                  {#if sellerBrokerSearchQuery.trim().length < 2}
-                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-                      Digite ao menos 2 letras para buscar corretor aprovado.
-                    </p>
-                  {:else if searchingSellerBrokers}
-                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Buscando corretores aprovados...</p>
-                  {:else if sellerBrokerOptions.length === 0}
-                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nenhum corretor encontrado.</p>
-                  {:else}
-                    {#each sellerBrokerOptions as option (`${option.id}`)}
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between border-t border-gray-100 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-800"
-                        on:click={() => selectSellerBroker(option)}
-                      >
-                        <span>{option.name}</span>
-                        {#if option.creci}
-                          <span class="text-xs text-gray-500 dark:text-gray-400">{option.creci}</span>
-                        {/if}
-                      </button>
-                    {/each}
-                  {/if}
-                </div>
-              {/if}
+            {/key}
+            <div class="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={uploadingSignedPdf || deletingSignedPdf || processingAction}
+                on:click={() => signedPdfFileInput?.click()}
+              >
+                {#if uploadingSignedPdf}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                Substituir PDF
+              </Button>
             </div>
-
-            {#if selectedSellerBrokerId != null}
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                Corretor vendedor selecionado: {selectedSellerBrokerName || `#${selectedSellerBrokerId}`}
-              </p>
-            {/if}
-            {#if sellerBrokerError}
-              <p class="text-xs font-medium text-red-600 dark:text-red-400">{sellerBrokerError}</p>
+            {#if uploadingSignedPdf}
+              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Enviando PDF assinado...</p>
             {/if}
           </div>
-        {/if}
+
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              on:click={deleteSignedPdf}
+              disabled={deletingSignedPdf || uploadingSignedPdf || processingAction || selectedProposal.signedDocumentId == null}
+            >
+              {#if deletingSignedPdf}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Excluir PDF
+            </Button>
+            <Button
+              variant="outline"
+              on:click={viewSignedPdf}
+              disabled={viewingPdf || uploadingSignedPdf || deletingSignedPdf || selectedProposal.signedDocumentId == null}
+            >
+              {#if viewingPdf}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Visualizar PDF Assinado
+            </Button>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
+          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Corretor vendedor</p>
+          <label class="mt-2 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={sameAsCapturing}
+              on:change={onSameAsCapturingChange}
+              class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-700"
+            />
+            O corretor vendedor também é o captador?
+          </label>
+
+          {#if sameAsCapturing}
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              O corretor captador será utilizado como corretor vendedor.
+            </p>
+          {:else}
+            <div class="mt-3 space-y-2">
+              <div class="relative">
+                <input
+                  type="text"
+                  value={sellerBrokerSearchQuery}
+                  on:focus={openSellerBrokerDropdown}
+                  on:blur={scheduleCloseSellerBrokerDropdown}
+                  on:input={onSellerBrokerSearchInput}
+                  placeholder="Digite ao menos 2 letras para buscar corretor"
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-green-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                />
+
+                {#if sellerBrokerDropdownOpen}
+                  <div class="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                    <button
+                      type="button"
+                      class="w-full border-b border-gray-200 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                      on:click={clearSellerBrokerSelection}
+                    >
+                      Limpar corretor vendedor
+                    </button>
+                    {#if sellerBrokerSearchQuery.trim().length < 2}
+                      <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                        Digite ao menos 2 letras para buscar corretor aprovado.
+                      </p>
+                    {:else if searchingSellerBrokers}
+                      <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Buscando corretores aprovados...</p>
+                    {:else if sellerBrokerOptions.length === 0}
+                      <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nenhum corretor encontrado.</p>
+                    {:else}
+                      {#each sellerBrokerOptions as option (`${option.id}`)}
+                        <button
+                          type="button"
+                          class="flex w-full items-center justify-between border-t border-gray-100 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-800"
+                          on:click={() => selectSellerBroker(option)}
+                        >
+                          <span>{option.name}</span>
+                          {#if option.creci}
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{option.creci}</span>
+                          {/if}
+                        </button>
+                      {/each}
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+
+              {#if selectedSellerBrokerId != null}
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Corretor vendedor selecionado: {selectedSellerBrokerName || `#${selectedSellerBrokerId}`}
+                </p>
+              {/if}
+              {#if sellerBrokerError}
+                <p class="text-xs font-medium text-red-600 dark:text-red-400">{sellerBrokerError}</p>
+              {/if}
+            </div>
+          {/if}
+        </div>
+
+        <div class="mt-4">
+          <label
+            for="reject-reason"
+            class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Motivo da rejeição (obrigatório para rejeitar)
+          </label>
+          <textarea
+            id="reject-reason"
+            bind:value={rejectReason}
+            maxlength="500"
+            rows={4}
+            class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+            placeholder="Descreva o motivo da rejeição..."
+          ></textarea>
+        </div>
       </div>
 
-      <div class="mt-4">
-        <label
-          for="reject-reason"
-          class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-        >
-          Motivo da rejeição (obrigatório para rejeitar)
-        </label>
-        <textarea
-          id="reject-reason"
-          bind:value={rejectReason}
-          maxlength="500"
-          rows={4}
-          class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-          placeholder="Descreva o motivo da rejeição..."
-        ></textarea>
-      </div>
-
-      <div class="mt-5 flex flex-wrap items-center justify-end gap-2">
+      <div class="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
         <Button
           variant="destructive"
           className="bg-red-600 text-white hover:bg-red-700"
@@ -1293,6 +1340,29 @@
           Aprovar
         </Button>
       </div>
+    </div>
+  </div>
+{/if}
+
+{#if isImagePreviewOpen && previewImageUrl}
+  <div
+    class="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4"
+    role="button"
+    tabindex="0"
+    aria-label="Fechar visualização da imagem"
+    on:click={closeImagePreview}
+    on:keydown={handlePreviewKeydown}
+  >
+    <div class="relative max-h-[90vh] max-w-[95vw]" role="presentation">
+      <img src={previewImageUrl} alt={previewImageAlt} class="max-h-[90vh] max-w-[95vw] rounded-md object-contain" />
+      <button
+        type="button"
+        class="absolute right-2 top-2 rounded-full bg-black/55 p-2 text-white hover:bg-black/75"
+        aria-label="Fechar"
+        on:click={closeImagePreview}
+      >
+        <X class="h-4 w-4" />
+      </button>
     </div>
   </div>
 {/if}

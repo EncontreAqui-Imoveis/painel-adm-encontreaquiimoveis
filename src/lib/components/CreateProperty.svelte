@@ -10,11 +10,13 @@
     clampAreaInput,
     clampCountInput,
     extractApiErrorMessage,
+    formatPromotionPercentageInput,
     formatCurrencyInput,
     formatPhoneBr,
     hasValidPhoneBr,
     normalizeDecimal,
     parseCurrency,
+    parsePromotionPercentage,
     onlyDigits,
     resolveCreatePropertyPrices,
     sanitizeDecimalInput,
@@ -128,6 +130,8 @@
   let semLote = false;
   /** Unidade da área construída informada (o backend grava em m² + esta unidade). */
   let areaConstruidaUnidade: 'm2' | 'hectare' | 'alqueire' = 'm2';
+  /** Unidade da área de terreno informada. */
+  let areaTerrenoUnidade: 'm2' | 'hectare' | 'alqueire' = 'm2';
   let complemento = '';
   let tipoLote = '';
   let bedrooms = '';
@@ -189,26 +193,14 @@
     return ALLOWED_IMAGE_EXTENSIONS.has(extension);
   }
 
-  function parsePercentage(value: string): number | null {
-    if (!value.trim()) return null;
-    const normalized = value.replace('%', '').replace(',', '.').trim();
-    const parsed = Number(normalized);
-    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 100) {
-      return null;
-    }
-    return Number(parsed.toFixed(2));
-  }
-
-  function formatPercentageInput(value: string): string {
-    const sanitized = value.replace(/[^\d.,]/g, '').replace(',', '.');
-    if (!sanitized) return '';
-    const parsed = Number(sanitized);
-    if (!Number.isFinite(parsed)) return '';
-    return Math.min(100, Math.max(0, parsed)).toString();
-  }
-
   function calculateDiscountedValue(basePrice: number | null, percentage: number | null): number | null {
-    if (basePrice == null || basePrice <= 0 || percentage == null || percentage <= 0 || percentage >= 100) {
+    if (
+      basePrice == null ||
+      basePrice <= 0 ||
+      percentage == null ||
+      percentage <= 0 ||
+      percentage > 99.99
+    ) {
       return null;
     }
     return Number((basePrice * (1 - percentage / 100)).toFixed(2));
@@ -231,8 +223,8 @@
     promotionSalePercentage = '';
   }
 
-  $: salePromotionPercentageValue = parsePercentage(promotionSalePercentage);
-  $: rentPromotionPercentageValue = parsePercentage(promotionRentPercentage);
+  $: salePromotionPercentageValue = parsePromotionPercentage(promotionSalePercentage);
+  $: rentPromotionPercentageValue = parsePromotionPercentage(promotionRentPercentage);
   $: salePriceValue = parseCurrency(priceSale);
   $: rentPriceValue = parseCurrency(priceRent);
   $: promotionPriceSale = toCurrencyDisplay(
@@ -732,9 +724,9 @@
     const supportsSale = purpose.toLowerCase().includes('vend');
     const supportsRent = purpose.toLowerCase().includes('alug');
     const parsedPromotionPercentageSale =
-      supportsSale ? parsePercentage(promotionSalePercentage) : null;
+      supportsSale ? parsePromotionPercentage(promotionSalePercentage) : null;
     const parsedPromotionPercentageRent =
-      supportsRent ? parsePercentage(promotionRentPercentage) : null;
+      supportsRent ? parsePromotionPercentage(promotionRentPercentage) : null;
     const parsedPromotionPriceSale =
       supportsSale ? parseCurrency(promotionPriceSale) : null;
     const parsedPromotionPriceRent =
@@ -896,6 +888,7 @@
         area_construida: parsedAreaConstruida,
         area_construida_unidade: areaConstruidaUnidade,
         area_terreno: parsedAreaTerreno,
+        area_terreno_unidade: areaTerrenoUnidade,
         garage_spots: parsedGarage,
         has_wifi: hasWifi ? 1 : 0,
         tem_piscina: temPiscina ? 1 : 0,
@@ -951,6 +944,7 @@
       semQuadra = false;
       semLote = false;
       areaConstruidaUnidade = 'm2';
+      areaTerrenoUnidade = 'm2';
       complemento = '';
       tipoLote = '';
       bedrooms = '';
@@ -1238,10 +1232,10 @@
               class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               bind:value={promotionSalePercentage}
               inputmode="decimal"
-              placeholder="Ex: 8.5"
+              placeholder="Ex: 08,5%"
               on:input={(event) => {
                 const target = event.target as HTMLInputElement;
-                promotionSalePercentage = formatPercentageInput(target.value);
+                promotionSalePercentage = formatPromotionPercentageInput(target.value);
               }}
             />
             <span class="text-xs text-emerald-700 dark:text-emerald-300">
@@ -1258,10 +1252,10 @@
               class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               bind:value={promotionRentPercentage}
               inputmode="decimal"
-              placeholder="Ex: 12"
+              placeholder="Ex: 12,0%"
               on:input={(event) => {
                 const target = event.target as HTMLInputElement;
-                promotionRentPercentage = formatPercentageInput(target.value);
+                promotionRentPercentage = formatPromotionPercentageInput(target.value);
               }}
             />
             <span class="text-xs text-emerald-700 dark:text-emerald-300">
@@ -1392,21 +1386,33 @@
             >Valor armazenado em m² após conversão.</span
           >
         </div>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Área do terreno (m²) *
-          <input
-            id="create-property-area-terreno"
-            name="area_terreno"
-            maxlength="12"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={areaTerreno}
-            inputmode="decimal"
-            on:input={(event) => {
-              const target = event.target as HTMLInputElement;
-              areaTerreno = clampAreaInput(target.value);
-            }}
-          />
-        </label>
+        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <span>Área do terreno *</span>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+            <input
+              id="create-property-area-terreno"
+              name="area_terreno"
+              maxlength="12"
+              class="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              bind:value={areaTerreno}
+              inputmode="decimal"
+              on:input={(event) => {
+                const target = event.target as HTMLInputElement;
+                areaTerreno = clampAreaInput(target.value);
+              }}
+            />
+            <select
+              id="create-property-area-terreno-unidade"
+              name="area_terreno_unidade"
+              class="w-full shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:w-44 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              bind:value={areaTerrenoUnidade}
+            >
+              <option value="m2">m²</option>
+              <option value="hectare">Hectare (ha)</option>
+              <option value="alqueire">Alqueire</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div class="grid gap-4 md:grid-cols-2">

@@ -108,6 +108,49 @@ export function parseCurrency(value: string): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+const MAX_PROMOTION_PERCENT = 99.99;
+
+function normalizePromotionPercentageRaw(value: string): number | null {
+  const normalized = String(value ?? '')
+    .replace('%', '')
+    .replace(/\s+/g, '')
+    .replace(',', '.')
+    .trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > MAX_PROMOTION_PERCENT) {
+    return null;
+  }
+  return Number(parsed.toFixed(2));
+}
+
+/** Máscara 00,00% com teto 99,99% (4 dígitos = centésimos de ponto percentual). */
+export function formatPromotionPercentageInput(value: string): string {
+  const digits = String(value ?? '').replace(/\D/g, '').slice(0, 4);
+  if (!digits) return '';
+  const intVal = Number.parseInt(digits, 10);
+  if (!Number.isFinite(intVal)) return '';
+  const parsed = intVal / 100;
+  const bounded = Math.min(MAX_PROMOTION_PERCENT, Math.max(0, parsed));
+  return `${bounded.toFixed(2).replace('.', ',')}%`;
+}
+
+export function parsePromotionPercentage(value: string): number | null {
+  const parsed = normalizePromotionPercentageRaw(value);
+  if (parsed == null || parsed <= 0 || parsed > MAX_PROMOTION_PERCENT) return null;
+  return parsed;
+}
+
+export function formatPromotionPercentageDisplay(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value <= 0 || value > MAX_PROMOTION_PERCENT) {
+    return '';
+  }
+  return `${value.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
 function extractMessageFromValue(value: unknown, depth = 0): string | null {
   if (depth > 5) return null;
   if (typeof value === 'string') {

@@ -9,7 +9,14 @@
   import * as Select from '$lib/components/ui/select';
   import { Input } from '$lib/components/ui/input';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
-  import { clampAreaInput, clampCountInput, extractApiErrorMessage } from '$lib/components/create-property-helpers';
+  import {
+    clampAreaInput,
+    clampCountInput,
+    extractApiErrorMessage,
+    formatPromotionPercentageDisplay,
+    formatPromotionPercentageInput,
+    parsePromotionPercentage,
+  } from '$lib/components/create-property-helpers';
   import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
   import Pagination from '$lib/Pagination.svelte';
   import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';
@@ -188,13 +195,20 @@
     });
   }
 
-  function openImagePreview(url: string, index = 0) {
+  function openImagePreview(url: string, index = 0, sourceImages: NormalizedImage[] | null = null) {
     if (brokenPreviewImages.has(url)) {
       return;
     }
-    previewImagesSnapshot = selectedPropertyImages();
-    previewImageIndex = index;
-    previewImageUrl = url;
+    const validImages =
+      (sourceImages ?? selectedPropertyImages()).filter(
+        (image): image is NormalizedImage => Boolean(image?.url)
+      );
+    if (validImages.length === 0) return;
+    previewImagesSnapshot = validImages;
+    const resolvedIndex = validImages.findIndex((image) => image.url === url);
+    previewImageIndex =
+      resolvedIndex >= 0 ? resolvedIndex : Math.max(0, Math.min(index, validImages.length - 1));
+    previewImageUrl = validImages[previewImageIndex]?.url ?? null;
     isImagePreviewOpen = true;
   }
 
@@ -518,23 +532,15 @@
   }
 
   function parsePercentage(value: string): number | null {
-    const normalized = String(value ?? '').replace('%', '').replace(',', '.').trim();
-    if (!normalized) return null;
-    const parsed = Number(normalized);
-    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 100) return null;
-    return Number(parsed.toFixed(2));
+    return parsePromotionPercentage(value);
   }
 
   function formatPercentageInput(value: string): string {
-    const sanitized = String(value ?? '').replace(/[^\d.,]/g, '').replace(',', '.');
-    if (!sanitized) return '';
-    const parsed = Number(sanitized);
-    if (!Number.isFinite(parsed)) return '';
-    return Math.min(100, Math.max(0, parsed)).toString();
+    return formatPromotionPercentageInput(value);
   }
 
   function calculateDiscountedValue(basePrice: number | null, percentage: number | null): number | null {
-    if (basePrice == null || basePrice <= 0 || percentage == null || percentage <= 0 || percentage >= 100) {
+    if (basePrice == null || basePrice <= 0 || percentage == null || percentage <= 0 || percentage > 100) {
       return null;
     }
     return Number((basePrice * (1 - percentage / 100)).toFixed(2));
@@ -855,6 +861,15 @@
     return null;
   }
 
+  function openCoverPreviewFromList(property: PropertySummary, event: Event) {
+    event.stopPropagation();
+    const images = normalizeImages(property.images ?? null).filter(
+      (image): image is NormalizedImage => Boolean(image?.url)
+    );
+    if (images.length === 0) return;
+    openImagePreview(images[0].url, 0, images);
+  }
+
   function isSemNumeroValue(value: unknown): boolean {
     const normalized = String(value ?? '').trim();
     return normalized === '' || normalized === '0';
@@ -913,14 +928,12 @@
 
     editPriceSaleDisplay = resolvedSale != null ? formatCurrency(Number(resolvedSale)) : '';
     editPriceRentDisplay = resolvedRent != null ? formatCurrency(Number(resolvedRent)) : '';
-    editPromotionSalePercentageDisplay =
-      resolvedSalePromotionPercentage != null
-        ? String(resolvedSalePromotionPercentage)
-        : '';
-    editPromotionRentPercentageDisplay =
-      resolvedRentPromotionPercentage != null
-        ? String(resolvedRentPromotionPercentage)
-        : '';
+    editPromotionSalePercentageDisplay = formatPromotionPercentageDisplay(
+      resolvedSalePromotionPercentage
+    );
+    editPromotionRentPercentageDisplay = formatPromotionPercentageDisplay(
+      resolvedRentPromotionPercentage
+    );
     editPromotionPriceSaleDisplay = salePromoPrice != null ? formatCurrency(salePromoPrice) : '';
     editPromotionPriceRentDisplay = rentPromoPrice != null ? formatCurrency(rentPromoPrice) : '';
   }
@@ -2001,26 +2014,38 @@
   {:else}
     <div class="space-y-3 md:hidden">
       {#each properties as property}
-        <button
-          type="button"
+        <div
           class={`w-full rounded-lg border p-4 text-left shadow-sm transition ${
             isReviewOnly
               ? 'border-green-200 bg-green-50/40 dark:border-green-800/60 dark:bg-gray-900/70'
               : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900'
           }`}
-          on:click={(event) => reviewProperty(property, event)}
         >
           <div class="flex items-start justify-between gap-3">
             <div class="flex min-w-0 items-start gap-3">
               <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-100 text-[10px] font-semibold text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
                 {#if getPropertyCoverUrl(property)}
-                  <img
-                    src={getPropertyCoverUrl(property)}
-                    alt={`Capa do imóvel ${property.title}`}
-                    class="h-full w-full object-cover"
-                    loading="lazy"
-                    on:error={() => markThumbnailAsBroken(property.id)}
-                  />
+                  <div
+                    role="button"
+                    tabindex="0"
+                    class="h-full w-full"
+                    aria-label={`Abrir capa do imóvel ${property.title} em tela cheia`}
+                    on:click|stopPropagation={(event) => openCoverPreviewFromList(property, event)}
+                    on:keydown|stopPropagation={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openCoverPreviewFromList(property, event);
+                      }
+                    }}
+                  >
+                    <img
+                      src={getPropertyCoverUrl(property)}
+                      alt=""
+                      class="h-full w-full object-cover"
+                      loading="lazy"
+                      on:error={() => markThumbnailAsBroken(property.id)}
+                    />
+                  </div>
                 {:else}
                   Sem imagem
                 {/if}
@@ -2083,7 +2108,7 @@
               {/if}
             </Button>
           </div>
-        </button>
+        </div>
       {/each}
     </div>
     <div
@@ -2140,13 +2165,20 @@
                 <div class="flex min-w-0 items-start gap-3">
                   <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-100 text-[10px] font-semibold text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
                     {#if getPropertyCoverUrl(property)}
-                      <img
-                        src={getPropertyCoverUrl(property)}
-                        alt={`Capa do imóvel ${property.title}`}
-                        class="h-full w-full object-cover"
-                        loading="lazy"
-                        on:error={() => markThumbnailAsBroken(property.id)}
-                      />
+                      <button
+                        type="button"
+                        class="h-full w-full"
+                        aria-label={`Abrir capa do imóvel ${property.title} em tela cheia`}
+                        on:click={(event) => openCoverPreviewFromList(property, event)}
+                      >
+                        <img
+                          src={getPropertyCoverUrl(property)}
+                          alt={`Capa do imóvel ${property.title}`}
+                          class="h-full w-full object-cover"
+                          loading="lazy"
+                          on:error={() => markThumbnailAsBroken(property.id)}
+                        />
+                      </button>
                     {:else}
                       Sem imagem
                     {/if}
@@ -2349,7 +2381,7 @@
                       type="text"
                       inputmode="decimal"
                       bind:value={editPromotionSalePercentageDisplay}
-                      placeholder="Ex: 8.5"
+                      placeholder="Ex: 08,5%"
                       on:input={(event) => {
                         const target = event.target as HTMLInputElement;
                         editPromotionSalePercentageDisplay = formatPercentageInput(target.value);
@@ -2368,7 +2400,7 @@
                       type="text"
                       inputmode="decimal"
                       bind:value={editPromotionRentPercentageDisplay}
-                      placeholder="Ex: 12"
+                      placeholder="Ex: 12,0%"
                       on:input={(event) => {
                         const target = event.target as HTMLInputElement;
                         editPromotionRentPercentageDisplay = formatPercentageInput(target.value);
@@ -2389,7 +2421,7 @@
                     type="text"
                     inputmode="decimal"
                     bind:value={editPromotionRentPercentageDisplay}
-                    placeholder="Ex: 12"
+                    placeholder="Ex: 12,0%"
                     on:input={(event) => {
                       const target = event.target as HTMLInputElement;
                       editPromotionRentPercentageDisplay = formatPercentageInput(target.value);
@@ -2409,7 +2441,7 @@
                     type="text"
                     inputmode="decimal"
                     bind:value={editPromotionSalePercentageDisplay}
-                    placeholder="Ex: 8.5"
+                    placeholder="Ex: 08,5%"
                     on:input={(event) => {
                       const target = event.target as HTMLInputElement;
                       editPromotionSalePercentageDisplay = formatPercentageInput(target.value);
