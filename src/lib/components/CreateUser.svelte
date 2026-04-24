@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { onMount } from 'svelte';
   import { toast } from 'svelte-sonner';
@@ -13,7 +15,7 @@
     sanitizeDigitsInput,
   } from './create-property-helpers';
 
-  type UserKind = 'client' | 'broker';
+  type UserKind = 'client' | 'broker' | 'auxiliary_administrative';
 
   const states = [
     'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS',
@@ -21,29 +23,29 @@
     'SE', 'SP', 'TO',
   ];
 
-  let isSubmitting = false;
-  let userKind: UserKind = 'client';
-  let brokerStatus = 'approved';
+  let isSubmitting = $state(false);
+  let userKind: UserKind = $state('client');
+  let brokerStatus = $state('approved');
 
-  let name = '';
-  let email = '';
-  let phone = '';
-  let password = '';
-  let showPassword = false;
-  let creci = '';
+  let name = $state('');
+  let email = $state('');
+  let phone = $state('');
+  let password = $state('');
+  let showPassword = $state(false);
+  let creci = $state('');
 
-  let street = '';
-  let number = '';
-  let complement = '';
-  let bairro = '';
-  let city = '';
-  let state = 'GO';
-  let cep = '';
-  let cities: string[] = [];
-  let citiesLoading = false;
-  let citiesError: string | null = null;
-  let cepLookupError: string | null = null;
-  let lastCepLookup = '';
+  let street = $state('');
+  let number = $state('');
+  let complement = $state('');
+  let bairro = $state('');
+  let city = $state('');
+  let selectedState = $state('GO');
+  let cep = $state('');
+  let cities: string[] = $state([]);
+  let citiesLoading = $state(false);
+  let citiesError: string | null = $state(null);
+  let cepLookupError: string | null = $state(null);
+  let lastCepLookup = $state('');
   const cityCache: Record<string, string[]> = {};
 
   let creciFrontFile: File | null = null;
@@ -62,7 +64,7 @@
     complement = '';
     bairro = '';
     city = '';
-    state = 'GO';
+    selectedState = 'GO';
     cep = '';
     brokerStatus = 'approved';
     creciFrontFile = null;
@@ -92,7 +94,7 @@
     if (!onlyDigits(cep).trim()) return 'Informe o CEP.';
     if (onlyDigits(cep).length !== 8) return 'CEP inválido.';
     if (!city.trim()) return 'Informe a cidade.';
-    if (!state.trim()) return 'Informe o estado.';
+    if (!selectedState.trim()) return 'Informe o estado.';
     return null;
   }
 
@@ -139,8 +141,8 @@
       const data = await response.json();
       if (data?.erro) return;
       if (data?.uf) {
-        state = String(data.uf);
-        await fetchCitiesForState(state);
+        selectedState = String(data.uf);
+        await fetchCitiesForState(selectedState);
       }
       if (data?.logradouro) {
         street = String(data.logradouro);
@@ -166,7 +168,7 @@
 
     isSubmitting = true;
     try {
-      if (userKind === 'client') {
+      if (userKind === 'client' || userKind === 'auxiliary_administrative') {
         await api.post('/admin/users', {
           name: name.trim(),
           email: email.trim(),
@@ -177,10 +179,17 @@
           complement: complement.trim() || undefined,
           bairro: bairro.trim(),
           city: city.trim(),
-          state: state.trim(),
+          state: selectedState.trim(),
           cep: onlyDigits(cep),
+          ...(userKind === 'auxiliary_administrative'
+            ? { profileType: 'auxiliary_administrative' }
+            : {}),
         });
-        toast.success('Cliente cadastrado com sucesso.');
+        toast.success(
+          userKind === 'auxiliary_administrative'
+            ? 'Auxiliar administrativo cadastrado com sucesso.'
+            : 'Cliente cadastrado com sucesso.'
+        );
         resetForm();
         return;
       }
@@ -208,7 +217,7 @@
       }
       formData.append('bairro', bairro.trim());
       formData.append('city', city.trim());
-      formData.append('state', state.trim());
+      formData.append('state', selectedState.trim());
       formData.append('cep', onlyDigits(cep));
       formData.append('creciFront', creciFrontFile);
       formData.append('creciBack', creciBackFile);
@@ -225,7 +234,7 @@
   }
 
   onMount(() => {
-    fetchCitiesForState(state);
+    fetchCitiesForState(selectedState);
   });
 </script>
 
@@ -248,6 +257,7 @@
       >
         <option value="client">Cliente</option>
         <option value="broker">Corretor</option>
+        <option value="auxiliary_administrative">Auxiliar Administrativo</option>
       </select>
     </label>
 
@@ -286,7 +296,7 @@
         bind:value={phone}
         inputmode="numeric"
         placeholder="+55 (00) 00000-0000"
-        on:input={(event) => {
+        oninput={(event) => {
           const target = event.target as HTMLInputElement;
           phone = formatPhoneBr(target.value);
         }}
@@ -307,7 +317,7 @@
         <button
           type="button"
           class="absolute inset-y-0 right-0 inline-flex items-center px-3 text-xs font-semibold text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
-          on:click={() => (showPassword = !showPassword)}
+          onclick={() => (showPassword = !showPassword)}
           aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
         >
           {showPassword ? 'Ocultar' : 'Mostrar'}
@@ -326,7 +336,7 @@
           bind:value={creci}
           inputmode="numeric"
           placeholder="4 a 8 números"
-          on:input={(event) => {
+          oninput={(event) => {
             const target = event.target as HTMLInputElement;
             creci = sanitizeCreciInput(target.value);
           }}
@@ -368,7 +378,7 @@
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={number}
         inputmode="numeric"
-        on:input={(event) => {
+        oninput={(event) => {
           const target = event.target as HTMLInputElement;
           number = sanitizeDigitsInput(target.value);
         }}
@@ -403,7 +413,7 @@
         bind:value={cep}
         inputmode="numeric"
         placeholder="00000-000"
-        on:input={(event) => {
+        oninput={(event) => {
           const target = event.target as HTMLInputElement;
           cep = formatCep(target.value);
           if (onlyDigits(cep).length === 8) {
@@ -424,7 +434,7 @@
         placeholder={citiesLoading ? 'Carregando cidades...' : 'Digite ou selecione'}
       />
       <datalist id="cities-list-user">
-        {#each cities as option}
+        {#each cities as option (option)}
           <option value={option}></option>
         {/each}
       </datalist>
@@ -441,10 +451,10 @@
         id="create-user-state"
         name="state"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        bind:value={state}
-        on:change={() => fetchCitiesForState(state)}
+        bind:value={selectedState}
+        onchange={() => fetchCitiesForState(selectedState)}
       >
-        {#each states as uf}
+        {#each states as uf (uf)}
           <option value={uf}>{uf}</option>
         {/each}
       </select>
@@ -461,7 +471,7 @@
           type="file"
           accept="image/*"
           class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          on:change={(event) => {
+          onchange={(event) => {
             creciFrontFile = readFile(event);
           }}
         />
@@ -474,7 +484,7 @@
           type="file"
           accept="image/*"
           class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          on:change={(event) => {
+          onchange={(event) => {
             creciBackFile = readFile(event);
           }}
         />
@@ -487,7 +497,7 @@
           type="file"
           accept="image/*"
           class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          on:change={(event) => {
+          onchange={(event) => {
             selfieFile = readFile(event);
           }}
         />
@@ -499,7 +509,7 @@
     <button
       type="button"
       class="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
-      on:click={handleSubmit}
+      onclick={handleSubmit}
       disabled={isSubmitting}
     >
       {isSubmitting ? 'Salvando...' : 'Cadastrar usuário'}
