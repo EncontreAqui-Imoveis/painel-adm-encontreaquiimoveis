@@ -166,7 +166,7 @@
     </div>
   </div>
 
-  <div class="grid gap-6 px-6 py-6 lg:grid-cols-2">
+  <div class="space-y-6 px-6 py-6">
     <div class="space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">

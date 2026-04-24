@@ -31,6 +31,7 @@
     payment?: PaymentBreakdown | null;
     updatedAt?: string | null;
     signedDocumentId?: number | null;
+    signedDocumentFileName?: string | null;
     capturingBrokerId?: string | number | null;
     sellingBrokerId?: string | number | null;
   };
@@ -238,6 +239,14 @@
     return selectedProposal?.signedDocumentId == null;
   }
 
+  function signedPdfDisplayName(): string {
+    if (selectedSignedPdfFile?.name) return selectedSignedPdfFile.name;
+    const persistedName = selectedProposal?.signedDocumentFileName?.trim();
+    if (persistedName) return persistedName;
+    if (selectedProposal?.signedDocumentId != null) return 'proposta_assinada.pdf';
+    return 'Envie sua proposta assinada';
+  }
+
   function requiresSellerBrokerSelection() {
     return !sameAsCapturing && selectedSellerBrokerId == null;
   }
@@ -338,6 +347,30 @@
       if (typeof candidate === 'string' && candidate.trim().length > 0) {
         const parsed = Number(candidate);
         if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+
+    return null;
+  }
+
+  function extractSignedDocumentFileName(payload: unknown): string | null {
+    const sources: unknown[] = [payload];
+    if (payload && typeof payload === 'object') {
+      sources.push((payload as Record<string, unknown>).data);
+    }
+
+    for (const source of sources) {
+      if (!source || typeof source !== 'object') continue;
+      const record = source as Record<string, unknown>;
+      const candidate =
+        record.signedDocumentFileName ??
+        record.signed_document_file_name ??
+        record.fileName ??
+        record.file_name ??
+        record.originalFileName ??
+        record.original_file_name;
+      if (typeof candidate === 'string' && candidate.trim().length > 0) {
+        return candidate.trim();
       }
     }
 
@@ -520,6 +553,7 @@
     }
 
     const hadSignedPdf = selectedProposal.signedDocumentId != null;
+    const uploadedFileName = selectedSignedPdfFile.name;
     uploadingSignedPdf = true;
     try {
       const formData = new FormData();
@@ -537,7 +571,12 @@
         toast.error('Resposta do servidor sem identificador do documento. Tente novamente.');
         return;
       }
-      syncProposalInState(selectedProposal.id, { signedDocumentId: nextSignedDocumentId });
+      const nextSignedDocumentFileName =
+        extractSignedDocumentFileName(response?.data) ?? uploadedFileName;
+      syncProposalInState(selectedProposal.id, {
+        signedDocumentId: nextSignedDocumentId,
+        signedDocumentFileName: nextSignedDocumentFileName,
+      });
       clearSignedPdfSelection();
       toast.success(
         hadSignedPdf
@@ -564,7 +603,7 @@
     deletingSignedPdf = true;
     try {
       await api.delete(`/admin/negotiations/${selectedProposal.id}/signed-proposal`);
-      syncProposalInState(selectedProposal.id, { signedDocumentId: null });
+      syncProposalInState(selectedProposal.id, { signedDocumentId: null, signedDocumentFileName: null });
       clearSignedPdfSelection();
       toast.success('PDF assinado excluído com sucesso.');
     } catch (error) {
@@ -1161,7 +1200,7 @@
             {/if}
           </p>
           <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">
-            {selectedSignedPdfFile?.name ?? 'Envie sua proposta assinada'}
+            {signedPdfDisplayName()}
           </p>
 
           {#if requiresSignedPdf()}
