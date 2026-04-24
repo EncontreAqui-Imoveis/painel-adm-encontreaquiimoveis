@@ -65,6 +65,20 @@
     return 'Aviso';
   }
 
+  function parseMetadata(value: Notification['metadata_json']) {
+    if (!value) return null;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+      } catch {
+        return null;
+      }
+    }
+    if (typeof value === 'object') return value as Record<string, unknown>;
+    return null;
+  }
+
   async function fetchNotifications() {
     isLoading = true;
     error = null;
@@ -217,6 +231,31 @@
             <p class="mt-3 text-sm text-gray-700 dark:text-gray-100 pl-8">
               {item.message}
             </p>
+            {#if parseMetadata(item.metadata_json)?.clientPhone}
+              <p class="mt-1 pl-8 text-xs text-gray-500 dark:text-gray-400">
+                Telefone do cliente: {String(parseMetadata(item.metadata_json)?.clientPhone)}
+              </p>
+            {/if}
+            {#if parseMetadata(item.metadata_json)?.clientPhoneRaw && parseMetadata(item.metadata_json)?.clientPhoneRaw !== parseMetadata(item.metadata_json)?.clientPhone}
+              <p class="mt-1 pl-8 text-xs text-gray-500 dark:text-gray-400">
+                Telefone informado: {String(parseMetadata(item.metadata_json)?.clientPhoneRaw)}
+              </p>
+            {/if}
+            {#if parseMetadata(item.metadata_json)?.clientEmail}
+              <p class="mt-1 pl-8 text-xs text-gray-500 dark:text-gray-400">
+                E-mail do cliente: {String(parseMetadata(item.metadata_json)?.clientEmail)}
+              </p>
+            {/if}
+            {#if parseMetadata(item.metadata_json)?.whatsappUrl}
+              <a
+                class="mt-1 inline-block pl-8 text-xs text-green-600 hover:underline dark:text-green-400"
+                href={String(parseMetadata(item.metadata_json)?.whatsappUrl)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Abrir conversa no WhatsApp
+              </a>
+            {/if}
             {#if item.related_entity_id}
               <span class="mt-2 inline-block pl-8 text-[11px] text-gray-400 dark:text-gray-500">
                 ID relacionado: {item.related_entity_id}

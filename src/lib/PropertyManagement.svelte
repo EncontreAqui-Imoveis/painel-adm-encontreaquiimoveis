@@ -19,6 +19,7 @@
   } from '$lib/components/create-property-helpers';
   import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
   import Pagination from '$lib/Pagination.svelte';
+  import PromotionNotificationModal from '$lib/components/PromotionNotificationModal.svelte';
   import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';
   import { clearSessionToken, hasSessionToken } from './sessionState';
   import type { PropertyStatus, PropertyImage as PropertyImageType } from './types';
@@ -170,6 +171,10 @@
   let previewImagesSnapshot: NormalizedImage[] = [];
   let brokenPreviewImages = new Set<string>();
   let brokenListThumbnails = new Set<number>();
+  let isPromotionNotificationModalOpen = false;
+  let promotionNotificationMessage = '';
+  let promotionNotificationTitle = '';
+  let promotionNotificationPropertyId: number | null = null;
   const MAX_TOTAL_IMAGES = 20;
   const cloudinaryCloudName = String(import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME ?? '').trim();
   const areaUnitOptions: Array<{ value: AreaUnit; label: string }> = [
@@ -1255,6 +1260,70 @@
     exportToCsv(properties, `imoveis_${new Date().toISOString().split('T')[0]}.csv`);
   }
 
+  function buildPromotionMessage(options: {
+    title: string;
+    salePercent: number | null;
+    rentPercent: number | null;
+  }) {
+    const title = options.title.trim() || 'Imóvel';
+    const salePercentText =
+      typeof options.salePercent === 'number' && Number.isFinite(options.salePercent)
+        ? options.salePercent.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+        : null;
+    const rentPercentText =
+      typeof options.rentPercent === 'number' && Number.isFinite(options.rentPercent)
+        ? options.rentPercent.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+        : null;
+    if (salePercentText && rentPercentText) {
+      return `Imóvel "${title}" entrou em promoção: ${salePercentText}% (venda) e ${rentPercentText}% (aluguel).`;
+    }
+    if (salePercentText) {
+      return `Imóvel "${title}" entrou em promoção: ${salePercentText}% de desconto na venda.`;
+    }
+    if (rentPercentText) {
+      return `Imóvel "${title}" entrou em promoção: ${rentPercentText}% de desconto no aluguel.`;
+    }
+    return `Imóvel "${title}" entrou em promoção.`;
+  }
+
+  function openPromotionNotificationModal(options: {
+    propertyId: number;
+    title: string;
+    salePercent: number | null;
+    rentPercent: number | null;
+  }) {
+    promotionNotificationPropertyId = options.propertyId;
+    promotionNotificationTitle = options.title;
+    promotionNotificationMessage = buildPromotionMessage({
+      title: options.title,
+      salePercent: options.salePercent,
+      rentPercent: options.rentPercent,
+    });
+    isPromotionNotificationModalOpen = true;
+  }
+
+  function openPromotionNotificationFromSelected() {
+    if (!selectedProperty) return;
+    openPromotionNotificationModal({
+      propertyId: selectedProperty.id,
+      title: selectedProperty.title ?? 'Imóvel',
+      salePercent:
+        selectedProperty.promotion_percentage != null
+          ? Number(selectedProperty.promotion_percentage)
+          : null,
+      rentPercent:
+        selectedProperty.promotional_rent_percentage != null
+          ? Number(selectedProperty.promotional_rent_percentage)
+          : null,
+    });
+  }
+
   async function saveEdits() {
     if (!selectedProperty || !editableProperty) return;
 
@@ -1486,6 +1555,17 @@
       // Atualiza estado local para refletir a ?ltima versao
       selectedProperty = { ...(selectedProperty as PropertySummary), ...(payload as any) } as PropertySummary;
       editableProperty = sanitizeEditable(selectedProperty as any);
+
+      if ((payload as any).is_promoted === 1) {
+        const salePercent = Number((payload as any).promotion_percentage ?? NaN);
+        const rentPercent = Number((payload as any).promotional_rent_percentage ?? NaN);
+        openPromotionNotificationModal({
+          propertyId: selectedProperty.id,
+          title: selectedProperty.title ?? 'Imóvel',
+          salePercent: Number.isFinite(salePercent) ? salePercent : null,
+          rentPercent: Number.isFinite(rentPercent) ? rentPercent : null,
+        });
+      }
     } catch (err: any) {
       console.error('Erro ao salvar imóvel:', err);
       const status = err?.response?.status;
@@ -2480,6 +2560,25 @@
                   {isEditMode ? 'Cancelar edicao' : 'Editar dados'}
                 </Button>
                 {#if isEditMode && editableProperty}
+                  <Button
+                    className="bg-emerald-500 text-white hover:bg-emerald-600"
+                    on:click={saveEdits}
+                    disabled={isSavingEdit || isProcessing}
+                  >
+                    {#if isSavingEdit}
+                      <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                    {/if}
+                    Salvar
+                  </Button>
+                {/if}
+                <Button
+                  variant="destructive"
+                  on:click={handleDeleteProperty}
+                  disabled={isProcessing || isSavingEdit}
+                >
+                  Excluir
+                </Button>
+                {#if isEditMode && editableProperty}
                   <div class="flex items-center gap-2">
                     <label class="text-xs text-gray-500 dark:text-gray-400" for="status-select">Status</label>
                     <select
@@ -3078,6 +3177,15 @@
         <Button variant="outline" on:click={closeModal} disabled={isProcessing}>
           Sair
         </Button>
+        {#if selectedProperty}
+          <Button
+            variant="outline"
+            on:click={openPromotionNotificationFromSelected}
+            disabled={isProcessing || isSavingEdit}
+          >
+            Notificar promoção
+          </Button>
+        {/if}
         {#if allowApproval}
           {#if selectedProperty.status !== 'rejected'}
             <Button variant="destructive" on:click={() => handleStatusUpdate('rejected')} disabled={isProcessing}>
@@ -3175,6 +3283,19 @@
   isSubmitting={isProcessing}
   error={deleteError}
   on:confirm={(event) => confirmDeleteProperty(event.detail.password)}
+/>
+
+<PromotionNotificationModal
+  open={isPromotionNotificationModalOpen}
+  propertyId={promotionNotificationPropertyId}
+  propertyTitle={promotionNotificationTitle}
+  defaultMessage={promotionNotificationMessage}
+  on:close={() => {
+    isPromotionNotificationModalOpen = false;
+  }}
+  on:sent={() => {
+    isPromotionNotificationModalOpen = false;
+  }}
 />
 
 <svelte:window on:keydown={handlePreviewKeydown} />

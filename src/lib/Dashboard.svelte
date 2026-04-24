@@ -116,6 +116,71 @@
     let lastReadAnnouncementMarker: AnnouncementReadMarker | null = null;
     let isAnnouncementsLoading = false;
     let announcementsError: string | null = null;
+    const externalDashboardShortcuts = [
+        {
+            name: "Google Search Console",
+            url: "https://search.google.com/search-console",
+            description: "SEO e indexação",
+            badgeClass:
+                "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+        },
+        {
+            name: "Vercel",
+            url: "https://vercel.com/dashboard",
+            description: "Deploy e logs web",
+            badgeClass:
+                "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900",
+        },
+        {
+            name: "Railway",
+            url: "https://railway.com/project",
+            description: "Infra backend",
+            badgeClass:
+                "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+        },
+        {
+            name: "Cloudinary",
+            url: "https://console.cloudinary.com/",
+            description: "Mídia e transformação",
+            badgeClass:
+                "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
+        },
+        {
+            name: "Cloudflare",
+            url: "https://dash.cloudflare.com/",
+            description: "DNS, WAF e cache",
+            badgeClass:
+                "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+        },
+        {
+            name: "Brevo",
+            url: "https://app.brevo.com/",
+            description: "E-mails transacionais",
+            badgeClass:
+                "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+        },
+        {
+            name: "Firebase",
+            url: "https://console.firebase.google.com/",
+            description: "Auth e push",
+            badgeClass:
+                "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+        },
+        {
+            name: "Play Console",
+            url: "https://play.google.com/console",
+            description: "App Android",
+            badgeClass:
+                "bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300",
+        },
+        {
+            name: "Apple",
+            url: "https://appstoreconnect.apple.com/",
+            description: "App Store Connect",
+            badgeClass:
+                "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+        },
+    ] as const;
 
     async function ensureDashboardCharts() {
         if (!StatusPieChartComponent) {
@@ -1332,6 +1397,41 @@
                                                 />
                                             </svg>
                                         </a>
+                                    </div>
+                                </div>
+
+                                <div class="mb-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#0b0f1a]">
+                                    <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
+                                        <div>
+                                            <h3 class="text-sm font-black uppercase tracking-[0.18em] text-gray-900 dark:text-white">
+                                                Atalhos Operacionais
+                                            </h3>
+                                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                Acessos rápidos para monitoramento, deploy e canais oficiais.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                        {#each externalDashboardShortcuts as shortcut}
+                                            <a
+                                                href={shortcut.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="group rounded-2xl border border-gray-200 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900/60 dark:hover:border-indigo-500/40"
+                                            >
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                                        {shortcut.name}
+                                                    </p>
+                                                    <span class={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${shortcut.badgeClass}`}>
+                                                        Link
+                                                    </span>
+                                                </div>
+                                                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                                    {shortcut.description}
+                                                </p>
+                                            </a>
+                                        {/each}
                                     </div>
                                 </div>
 

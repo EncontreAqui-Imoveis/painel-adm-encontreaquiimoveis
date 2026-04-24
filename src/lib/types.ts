@@ -119,6 +119,8 @@ export interface Notification {
   metadata_json?:
     | {
         clientPhone?: string | null;
+        clientPhoneRaw?: string | null;
+        clientEmail?: string | null;
         whatsappUrl?: string | null;
         [key: string]: unknown;
       }
