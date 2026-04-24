@@ -360,10 +360,10 @@
             Código / Imóvel
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Corretor
+            Captador
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Cliente
+            Comprador
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Valor
@@ -661,7 +661,7 @@
           maxlength="500"
           rows={4}
           class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-          placeholder="Digite o motivo do cancelamento (Ex: Cliente não obteve financiamento)..."
+          placeholder="Digite o motivo do cancelamento (Ex: Comprador não obteve financiamento)..."
         ></textarea>
       </div>
       <div class="mt-5 flex justify-end gap-2">

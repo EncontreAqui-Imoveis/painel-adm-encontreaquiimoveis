@@ -42,6 +42,20 @@
     creci?: string | null;
   };
 
+  type ResponsibleOption = {
+    id: number;
+    name: string;
+    email?: string | null;
+  };
+
+  type ProposalFilterKey = 'sent' | 'signed' | 'refused';
+
+  const PROPOSAL_FILTERS: Array<{ key: ProposalFilterKey; label: string; status: string }> = [
+    { key: 'sent', label: 'Propostas Enviadas', status: 'PROPOSAL_UNSIGNED' },
+    { key: 'signed', label: 'Propostas Assinadas', status: 'PROPOSAL_SIGNED' },
+    { key: 'refused', label: 'Propostas Recusadas', status: 'REFUSED' },
+  ];
+
   type TopProposal = {
     negotiationId: string;
     value?: number | null;
@@ -95,9 +109,21 @@
   let uploadingSignedPdf = false;
   let deletingSignedPdf = false;
   let savingSellerBroker = false;
+  let savingResponsibles = false;
   let selectedSignedPdfFile: File | null = null;
   let signedPdfInputRenderKey = 0;
   let signedPdfFileInput: HTMLInputElement | null = null;
+  let selectedProposalFilter: ProposalFilterKey = 'signed';
+  let responsiblesLoading = false;
+  let responsibleSearchQuery = '';
+  let responsibleOptions: ResponsibleOption[] = [];
+  let searchingResponsibles = false;
+  let selectedResponsibles: ResponsibleOption[] = [];
+  let responsiblesSnapshot = '';
+  let responsibleError = '';
+  let responsibleSearchDebounce: ReturnType<typeof setTimeout> | null = null;
+  let responsibleDropdownOpen = false;
+  let responsibleBlurTimeout: ReturnType<typeof setTimeout> | null = null;
   let sameAsCapturing = true;
   let sellerBrokerSearchQuery = '';
   let sellerBrokerOptions: ApprovedBrokerOption[] = [];
@@ -164,6 +190,9 @@
   function getStatusLabel(status?: string, internalStatus?: string): string {
     const value = String(status ?? internalStatus ?? '').trim().toUpperCase();
     if (!value) return '-';
+    if (value === 'PROPOSAL_UNSIGNED') return 'Proposta enviada';
+    if (value === 'PROPOSAL_SIGNED') return 'Proposta assinada';
+    if (value === 'REFUSED') return 'Recusada';
     if (value === 'UNDER_REVIEW' || value === 'DOCUMENTATION_PHASE') return 'Em análise';
     if (value === 'APPROVED' || value === 'IN_NEGOTIATION') return 'Aprovada';
     if (value === 'PROPOSAL_SENT') return 'Proposta enviada';
@@ -175,6 +204,15 @@
 
   function getStatusBadgeClass(status?: string, internalStatus?: string): string {
     const value = String(status ?? internalStatus ?? '').trim().toUpperCase();
+    if (value === 'PROPOSAL_SIGNED') {
+      return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    }
+    if (value === 'PROPOSAL_UNSIGNED') {
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+    }
+    if (value === 'REFUSED') {
+      return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    }
     if (value === 'APPROVED' || value === 'IN_NEGOTIATION') {
       return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
     }
@@ -232,7 +270,7 @@
   }
 
   function isApproveBusy() {
-    return processingAction || uploadingSignedPdf || deletingSignedPdf || savingSellerBroker;
+    return processingAction || uploadingSignedPdf || deletingSignedPdf || savingResponsibles;
   }
 
   function requiresSignedPdf() {
@@ -283,9 +321,196 @@
     signedPdfInputRenderKey += 1;
   }
 
+  function selectedFilterStatus(): string {
+    return PROPOSAL_FILTERS.find((item) => item.key === selectedProposalFilter)?.status ?? 'PROPOSAL_SIGNED';
+  }
+
+  function isSignedProposal(item: NegotiationItem | null): boolean {
+    const value = String(item?.status ?? item?.internalStatus ?? '').trim().toUpperCase();
+    return value === 'PROPOSAL_SIGNED';
+  }
+
+  function clearResponsibleSearchDebounce() {
+    if (!responsibleSearchDebounce) return;
+    clearTimeout(responsibleSearchDebounce);
+    responsibleSearchDebounce = null;
+  }
+
+  function clearResponsibleBlurTimeout() {
+    if (!responsibleBlurTimeout) return;
+    clearTimeout(responsibleBlurTimeout);
+    responsibleBlurTimeout = null;
+  }
+
+  function responsibleSnapshot(list: ResponsibleOption[]): string {
+    return [...list]
+      .map((item) => item.id)
+      .sort((a, b) => a - b)
+      .join(',');
+  }
+
+  function normalizeResponsibleOption(item: unknown): ResponsibleOption | null {
+    if (!item || typeof item !== 'object') return null;
+    const raw = item as Record<string, unknown>;
+    const rawId = raw.id ?? raw.userId ?? raw.responsibleId;
+    const parsedId = Number(rawId);
+    if (!Number.isFinite(parsedId)) return null;
+
+    const rawName = raw.name ?? raw.fullName ?? raw.nome;
+    const name =
+      typeof rawName === 'string' && rawName.trim().length > 0
+        ? rawName.trim()
+        : `Responsável #${parsedId}`;
+    const email = typeof raw.email === 'string' ? raw.email : null;
+    return { id: parsedId, name, email };
+  }
+
+  function onResponsibleSearchInput(event: Event) {
+    const input = event.currentTarget as HTMLInputElement | null;
+    responsibleSearchQuery = input?.value ?? '';
+    responsibleError = '';
+    responsibleDropdownOpen = true;
+
+    clearResponsibleSearchDebounce();
+    const query = responsibleSearchQuery.trim();
+    if (query.length < 2) {
+      searchingResponsibles = false;
+      responsibleOptions = [];
+      return;
+    }
+
+    responsibleSearchDebounce = setTimeout(() => {
+      void searchResponsibles(query);
+    }, 300);
+  }
+
+  function openResponsibleDropdown() {
+    clearResponsibleBlurTimeout();
+    responsibleDropdownOpen = true;
+  }
+
+  function scheduleCloseResponsibleDropdown() {
+    clearResponsibleBlurTimeout();
+    responsibleBlurTimeout = setTimeout(() => {
+      responsibleDropdownOpen = false;
+    }, 120);
+  }
+
+  function addResponsible(option: ResponsibleOption) {
+    if (selectedResponsibles.some((item) => item.id === option.id)) {
+      return;
+    }
+    if (selectedResponsibles.length >= 5) {
+      responsibleError = 'Você pode selecionar no máximo 5 responsáveis.';
+      toast.error('Limite máximo de 5 responsáveis.');
+      return;
+    }
+    selectedResponsibles = [...selectedResponsibles, option];
+    responsibleError = '';
+    responsibleSearchQuery = '';
+    responsibleOptions = [];
+    responsibleDropdownOpen = false;
+  }
+
+  function removeResponsible(id: number) {
+    selectedResponsibles = selectedResponsibles.filter((item) => item.id !== id);
+    responsibleError = '';
+  }
+
+  async function searchResponsibles(query: string) {
+    searchingResponsibles = true;
+    try {
+      const params = new URLSearchParams();
+      params.set('search', query);
+      params.set('page', '1');
+      params.set('limit', '10');
+      params.set('includeBrokers', 'true');
+      const response = await api.get<PaginatedResponse<Record<string, unknown>>>(
+        `/admin/users?${params.toString()}`
+      );
+      const options = Array.isArray(response?.data)
+        ? response.data
+            .map((item) => normalizeResponsibleOption(item))
+            .filter((item): item is ResponsibleOption => item != null)
+            .filter((item) => !selectedResponsibles.some((selected) => selected.id === item.id))
+        : [];
+      responsibleOptions = options;
+    } catch (error) {
+      console.error('Erro ao buscar responsáveis:', error);
+      responsibleOptions = [];
+      toast.error(normalizeErrorMessage(error, 'Não foi possível buscar responsáveis.'));
+    } finally {
+      searchingResponsibles = false;
+    }
+  }
+
+  async function fetchResponsibles(proposalId: string) {
+    responsiblesLoading = true;
+    responsibleError = '';
+    try {
+      const response = await api.get<{ data?: unknown[] } | unknown[]>(
+        `/admin/negotiations/${proposalId}/responsibles`
+      );
+      const raw = Array.isArray(response) ? response : response?.data;
+      const normalized = Array.isArray(raw)
+        ? raw
+            .map((item) => normalizeResponsibleOption(item))
+            .filter((item): item is ResponsibleOption => item != null)
+        : [];
+      selectedResponsibles = normalized.slice(0, 5);
+      responsiblesSnapshot = responsibleSnapshot(selectedResponsibles);
+    } catch (error) {
+      console.error('Erro ao carregar responsáveis:', error);
+      selectedResponsibles = [];
+      responsiblesSnapshot = '';
+      toast.error(normalizeErrorMessage(error, 'Não foi possível carregar os responsáveis.'));
+    } finally {
+      responsiblesLoading = false;
+    }
+  }
+
+  function hasResponsibleChanges(): boolean {
+    return responsibleSnapshot(selectedResponsibles) !== responsiblesSnapshot;
+  }
+
+  async function saveResponsiblesSelection(proposalId: string, silent = false): Promise<boolean> {
+    if (selectedResponsibles.length > 5) {
+      responsibleError = 'Você pode selecionar no máximo 5 responsáveis.';
+      return false;
+    }
+
+    savingResponsibles = true;
+    try {
+      await api.put(`/admin/negotiations/${proposalId}/responsibles`, {
+        responsibleIds: selectedResponsibles.map((item) => item.id),
+      });
+      responsiblesSnapshot = responsibleSnapshot(selectedResponsibles);
+      responsibleError = '';
+      if (!silent) {
+        toast.success('Responsáveis atualizados com sucesso.');
+      }
+      return true;
+    } catch (error) {
+      console.error('Erro ao salvar responsáveis:', error);
+      toast.error(normalizeErrorMessage(error, 'Não foi possível salvar os responsáveis.'));
+      return false;
+    } finally {
+      savingResponsibles = false;
+    }
+  }
+
   function resetDetailState() {
     rejectReason = '';
     clearSignedPdfSelection();
+    selectedResponsibles = [];
+    responsiblesSnapshot = '';
+    responsibleSearchQuery = '';
+    responsibleOptions = [];
+    responsibleError = '';
+    searchingResponsibles = false;
+    clearResponsibleSearchDebounce();
+    clearResponsibleBlurTimeout();
+    responsibleDropdownOpen = false;
     sameAsCapturing = true;
     sellerBrokerSearchQuery = '';
     sellerBrokerOptions = [];
@@ -390,7 +615,7 @@
     summaryLoading = true;
     try {
       const params = new URLSearchParams();
-      params.set('status', 'UNDER_REVIEW');
+      params.set('status', selectedFilterStatus());
       params.set('page', String(summaryPage));
       params.set('limit', String(summaryItemsPerPage));
 
@@ -419,7 +644,7 @@
     propertyLoading = true;
     try {
       const params = new URLSearchParams();
-      params.set('status', 'UNDER_REVIEW');
+      params.set('status', selectedFilterStatus());
       params.set('page', String(propertyPage));
       params.set('limit', String(propertyItemsPerPage));
 
@@ -451,7 +676,7 @@
     requestPropertyFetch(true);
   }
 
-  function openProposalDetail(item: NegotiationItem) {
+  async function openProposalDetail(item: NegotiationItem) {
     selectedProposal = { ...item };
     resetDetailState();
     sameAsCapturing = getSelectedProposalDefaultSameBroker(item);
@@ -467,6 +692,7 @@
       }
     }
     showDetailModal = true;
+    await fetchResponsibles(item.id);
   }
 
   function closeDetailModal(force = false) {
@@ -781,24 +1007,24 @@
 
   async function approveSelected() {
     if (!selectedProposal) return;
+    if (!isSignedProposal(selectedProposal)) {
+      toast.error('A aprovação está disponível apenas para propostas assinadas.');
+      return;
+    }
     if (requiresSignedPdf()) {
       toast.error('Para aprovar, é obrigatório anexar um PDF assinado.');
       return;
     }
-    if (requiresSellerBrokerSelection()) {
-      sellerBrokerError = 'Selecione um corretor vendedor para aprovar.';
-      toast.error('Selecione um corretor vendedor para aprovar.');
-      return;
-    }
-
     const confirmed = window.confirm(
       'Confirma aprovação desta proposta? Esta ação encaminha a negociação para contratos.'
     );
     if (!confirmed) return;
 
     const proposalId = selectedProposal.id;
-    const brokerSaved = await saveSellingBrokerSelection(proposalId);
-    if (!brokerSaved) return;
+    if (hasResponsibleChanges()) {
+      const responsiblesSaved = await saveResponsiblesSelection(proposalId, true);
+      if (!responsiblesSaved) return;
+    }
 
     processingAction = true;
     try {
@@ -839,6 +1065,10 @@
 
   async function rejectSelected() {
     if (!selectedProposal) return;
+    if (!isSignedProposal(selectedProposal)) {
+      toast.error('A rejeição está disponível apenas para propostas assinadas.');
+      return;
+    }
     if (!rejectReason.trim()) {
       toast.error('Informe o motivo da rejeição.');
       return;
@@ -876,6 +1106,7 @@
   $: if (hasMounted) {
     summaryPage;
     summaryRefreshKey;
+    selectedProposalFilter;
     fetchSummary();
   }
 
@@ -894,7 +1125,7 @@
     <div>
       <h2 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Solicitação de Propostas</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400">
-        Acompanhe imóveis com propostas assinadas e revise cada solicitação.
+        Acompanhe propostas enviadas, assinadas e recusadas por imóvel.
       </p>
     </div>
     <Button variant="outline" on:click={() => requestSummaryFetch()} disabled={summaryLoading}>
@@ -903,6 +1134,25 @@
       {/if}
       Atualizar
     </Button>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-2">
+    {#each PROPOSAL_FILTERS as filter (filter.key)}
+      <button
+        type="button"
+        class={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+          selectedProposalFilter === filter.key
+            ? 'bg-emerald-600 text-white'
+            : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
+        }`}
+        on:click={() => {
+          selectedProposalFilter = filter.key;
+          requestSummaryFetch(true);
+        }}
+      >
+        {filter.label}
+      </button>
+    {/each}
   </div>
 
   <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
@@ -939,7 +1189,7 @@
         {:else if summaryItems.length === 0}
           <tr>
             <td colspan="6" class="px-6 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-              Nenhuma proposta aguardando análise.
+              Nenhuma proposta encontrada para este filtro.
             </td>
           </tr>
         {:else}
@@ -1062,7 +1312,7 @@
           </div>
         {:else if propertyRequests.length === 0}
           <div class="rounded-md border border-gray-200 p-4 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-            Nenhuma proposta pendente para este imóvel.
+            Nenhuma proposta encontrada para este imóvel neste filtro.
           </div>
         {:else}
           {#each propertyRequests as item (item.id)}
@@ -1075,12 +1325,12 @@
                     </span>
                   </div>
                   <div>
-                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cliente</p>
+                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Comprador</p>
                     <p class="text-sm text-gray-900 dark:text-gray-100">{readClientName(item)}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(item)}</p>
                   </div>
                   <div>
-                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Corretor</p>
+                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Captador</p>
                     <p class="text-sm text-gray-700 dark:text-gray-300">{getBrokerName(item)}</p>
                   </div>
                   <div>
@@ -1157,7 +1407,7 @@
       <div class="min-h-0 max-h-[min(70vh,32rem)] flex-1 overflow-y-auto pr-1 sm:max-h-[min(65vh,40rem)]">
         <div class="grid gap-4 md:grid-cols-2">
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cliente</p>
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Comprador</p>
             <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{readClientName(selectedProposal)}</p>
             <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(selectedProposal)}</p>
           </div>
@@ -1265,79 +1515,99 @@
         </div>
 
         <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
-          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Corretor vendedor</p>
-          <label class="mt-2 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-            <input
-              type="checkbox"
-              checked={sameAsCapturing}
-              on:change={onSameAsCapturingChange}
-              class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-700"
-            />
-            O corretor vendedor também é o captador?
-          </label>
+          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+            Responsável por acompanhar o processo
+          </p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Selecione até 5 pessoas para acompanhar esta proposta.
+          </p>
 
-          {#if sameAsCapturing}
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              O corretor captador será utilizado como corretor vendedor.
-            </p>
-          {:else}
-            <div class="mt-3 space-y-2">
-              <div class="relative">
-                <input
-                  type="text"
-                  value={sellerBrokerSearchQuery}
-                  on:focus={openSellerBrokerDropdown}
-                  on:blur={scheduleCloseSellerBrokerDropdown}
-                  on:input={onSellerBrokerSearchInput}
-                  placeholder="Digite ao menos 2 letras para buscar corretor"
-                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-green-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                />
+          <div class="mt-3 space-y-2">
+            <div class="relative">
+              <input
+                type="text"
+                value={responsibleSearchQuery}
+                on:focus={openResponsibleDropdown}
+                on:blur={scheduleCloseResponsibleDropdown}
+                on:input={onResponsibleSearchInput}
+                placeholder="Digite ao menos 2 letras para buscar responsável"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-green-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                disabled={responsiblesLoading || savingResponsibles}
+              />
 
-                {#if sellerBrokerDropdownOpen}
-                  <div class="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
-                    <button
-                      type="button"
-                      class="w-full border-b border-gray-200 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                      on:click={clearSellerBrokerSelection}
-                    >
-                      Limpar corretor vendedor
-                    </button>
-                    {#if sellerBrokerSearchQuery.trim().length < 2}
-                      <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-                        Digite ao menos 2 letras para buscar corretor aprovado.
-                      </p>
-                    {:else if searchingSellerBrokers}
-                      <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Buscando corretores aprovados...</p>
-                    {:else if sellerBrokerOptions.length === 0}
-                      <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nenhum corretor encontrado.</p>
-                    {:else}
-                      {#each sellerBrokerOptions as option (`${option.id}`)}
-                        <button
-                          type="button"
-                          class="flex w-full items-center justify-between border-t border-gray-100 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-800"
-                          on:click={() => selectSellerBroker(option)}
-                        >
-                          <span>{option.name}</span>
-                          {#if option.creci}
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{option.creci}</span>
-                          {/if}
-                        </button>
-                      {/each}
-                    {/if}
-                  </div>
-                {/if}
-              </div>
-
-              {#if selectedSellerBrokerId != null}
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  Corretor vendedor selecionado: {selectedSellerBrokerName || `#${selectedSellerBrokerId}`}
-                </p>
-              {/if}
-              {#if sellerBrokerError}
-                <p class="text-xs font-medium text-red-600 dark:text-red-400">{sellerBrokerError}</p>
+              {#if responsibleDropdownOpen}
+                <div class="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                  {#if responsibleSearchQuery.trim().length < 2}
+                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                      Digite ao menos 2 letras para buscar.
+                    </p>
+                  {:else if searchingResponsibles}
+                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Buscando responsáveis...</p>
+                  {:else if responsibleOptions.length === 0}
+                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nenhum responsável encontrado.</p>
+                  {:else}
+                    {#each responsibleOptions as option (`${option.id}`)}
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between border-t border-gray-100 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-800"
+                        on:click={() => addResponsible(option)}
+                      >
+                        <span>{option.name}</span>
+                        {#if option.email}
+                          <span class="text-xs text-gray-500 dark:text-gray-400">{option.email}</span>
+                        {/if}
+                      </button>
+                    {/each}
+                  {/if}
+                </div>
               {/if}
             </div>
-          {/if}
+
+            {#if responsiblesLoading}
+              <p class="text-xs text-gray-500 dark:text-gray-400">Carregando responsáveis...</p>
+            {/if}
+
+            {#if selectedResponsibles.length > 0}
+              <div class="flex flex-wrap gap-2">
+                {#each selectedResponsibles as responsible (responsible.id)}
+                  <span class="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                    {responsible.name}
+                    <button
+                      type="button"
+                      aria-label={`Remover ${responsible.name}`}
+                      class="text-gray-500 hover:text-red-600 dark:text-gray-300 dark:hover:text-red-300"
+                      on:click={() => removeResponsible(responsible.id)}
+                      disabled={savingResponsibles}
+                    >
+                      ×
+                    </button>
+                  </span>
+                {/each}
+              </div>
+            {:else}
+              <p class="text-xs text-gray-500 dark:text-gray-400">Nenhum responsável selecionado.</p>
+            {/if}
+
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {selectedResponsibles.length}/5 responsáveis selecionados.
+            </p>
+            {#if responsibleError}
+              <p class="text-xs font-medium text-red-600 dark:text-red-400">{responsibleError}</p>
+            {/if}
+            <div>
+              <Button
+                size="sm"
+                variant="outline"
+                on:click={() => selectedProposal && saveResponsiblesSelection(selectedProposal.id)}
+                disabled={savingResponsibles || responsiblesLoading || !hasResponsibleChanges()}
+              >
+                {#if savingResponsibles}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                Salvar responsáveis
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div class="mt-4">
@@ -1359,28 +1629,34 @@
       </div>
 
       <div class="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
-        <Button
-          variant="destructive"
-          className="bg-red-600 text-white hover:bg-red-700"
-          on:click={rejectSelected}
-          disabled={isApproveBusy()}
-        >
-          {#if processingAction}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-          {/if}
-          Rejeitar
-        </Button>
-        <Button
-          variant="outline"
-          className="bg-green-600 text-white hover:bg-green-700"
-          on:click={approveSelected}
-          disabled={isApproveBusy() || requiresSignedPdf()}
-        >
-          {#if processingAction || savingSellerBroker}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-          {/if}
-          Aprovar
-        </Button>
+        {#if isSignedProposal(selectedProposal)}
+          <Button
+            variant="destructive"
+            className="bg-red-600 text-white hover:bg-red-700"
+            on:click={rejectSelected}
+            disabled={isApproveBusy()}
+          >
+            {#if processingAction}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Rejeitar
+          </Button>
+          <Button
+            variant="outline"
+            className="bg-green-600 text-white hover:bg-green-700"
+            on:click={approveSelected}
+            disabled={isApproveBusy() || requiresSignedPdf()}
+          >
+            {#if processingAction || savingResponsibles}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Aprovar
+          </Button>
+        {:else}
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            Aprovação/Rejeição disponível apenas para propostas assinadas.
+          </p>
+        {/if}
       </div>
     </div>
   </div>

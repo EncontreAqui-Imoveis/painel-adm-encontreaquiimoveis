@@ -138,7 +138,7 @@ describe('PropertyEditRequests', () => {
     expect(updatedPriceRow).not.toBeNull();
 
     const rejectionReason = within(updatedPriceRow!).getByPlaceholderText(
-      'Motivo da rejeição para este campo',
+      'Motivo da Alteração',
     ) as HTMLTextAreaElement;
 
     await fireEvent.input(rejectionReason, {
@@ -149,6 +149,6 @@ describe('PropertyEditRequests', () => {
     });
 
     expect(rejectionReason.value).toBe('Preço fora da política.');
-    expect(within(updatedPriceRow!).getByPlaceholderText('Motivo da rejeição para este campo')).toBeInTheDocument();
+    expect(within(updatedPriceRow!).getByPlaceholderText('Motivo da Alteração')).toBeInTheDocument();
   });
 });

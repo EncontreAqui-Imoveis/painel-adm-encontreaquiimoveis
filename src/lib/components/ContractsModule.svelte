@@ -275,7 +275,7 @@
   function documentSideLabel(doc?: ContractDocument | null): string {
     const side = doc ? getDocumentSide(doc) : null;
     if (side === 'seller') return 'Captador';
-    if (side === 'buyer') return 'Vendedor';
+    if (side === 'buyer') return 'Comprador';
     return '';
   }
 
@@ -402,7 +402,7 @@
       return [
         {
           key: 'seller',
-          label: 'Corretor',
+          label: 'Captador',
           status: contract.sellerApprovalStatus,
           reason: readReasonText(contract.sellerApprovalReason),
         },
@@ -418,7 +418,7 @@
       },
       {
         key: 'buyer',
-        label: 'Vendedor',
+        label: 'Comprador',
         status: contract.buyerApprovalStatus,
         reason: readReasonText(contract.buyerApprovalReason),
       },
@@ -974,7 +974,7 @@
         missing.push(`${documentLabel(row.documentType)} (Captador)`);
       }
       if (row.buyerRequired && buyerDoc == null) {
-        missing.push(`${documentLabel(row.documentType)} (Vendedor)`);
+        missing.push(`${documentLabel(row.documentType)} (Comprador)`);
       }
     }
 
@@ -993,7 +993,7 @@
       }
 
       const side = getDocumentSide(doc);
-      const sideLabel = side === 'seller' ? ' (Captador)' : side === 'buyer' ? ' (Vendedor)' : '';
+      const sideLabel = side === 'seller' ? ' (Captador)' : side === 'buyer' ? ' (Comprador)' : '';
       const label = documentLabel(doc.documentType) + sideLabel;
       return `${label}: ${status === 'REJECTED' ? 'rejeitado' : 'pendente'}`;
     })
@@ -1016,7 +1016,7 @@
     }
 
     if (missingBuyerInfo.length > 0) {
-      reasons.push(`Vendedor sem: ${missingBuyerInfo.join(', ')}`);
+      reasons.push(`Comprador sem: ${missingBuyerInfo.join(', ')}`);
     }
 
     if (missingDocuments.length > 0) {
@@ -1344,7 +1344,7 @@
       finalizedDocumentRequiresSide(signedDocType) &&
       !selectedSignedDocSide
     ) {
-      toast.error('Selecione se o documento pertence ao Captador ou ao Vendedor.');
+      toast.error('Selecione se o documento pertence ao Captador ou ao Comprador.');
       return;
     }
 
@@ -1708,7 +1708,7 @@
               <dd class="text-right">{item.capturingBrokerName ?? '-'}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
-              <dt>Vendedor</dt>
+              <dt>Comprador</dt>
               <dd class="text-right">{item.sellingBrokerName ?? '-'}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
@@ -1752,7 +1752,7 @@
             Captador
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Vendedor
+            Comprador
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Data
@@ -1903,7 +1903,7 @@
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <div class="flex items-center justify-between">
                 <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                  Dados do Corretor
+                  Dados Captador
                 </p>
                 <span
                   class={`rounded-full px-2 py-1 text-xs font-semibold ${approvalBadgeClass(
@@ -1957,7 +1957,7 @@
               <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
                 <div class="flex items-center justify-between">
                   <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                    Dados Vendedor
+                    Dados Comprador
                   </p>
                   <span
                     class={`rounded-full px-2 py-1 text-xs font-semibold ${approvalBadgeClass(
@@ -1999,14 +1999,14 @@
                     </th>
                     {#if isDoubleEndedDeal(selected)}
                       <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
-                        Corretor
+                        Captador
                       </th>
                     {:else}
                       <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
                         Captador
                       </th>
                       <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
-                        Vendedor
+                        Comprador
                       </th>
                     {/if}
                   </tr>
@@ -2240,7 +2240,7 @@
             {#if !isDoubleEndedDeal(selected)}
               <div>
                 <p class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                  Avaliação Vendedor
+                  Avaliação Comprador
                 </p>
                 <div class="flex flex-wrap gap-2">
                   <Button
@@ -2250,7 +2250,7 @@
                     disabled={evaluatingSide === 'buyer' || !isReadyToApprove}
                     title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
                   >
-                    Aprovar<span class="sr-only"> vendedor</span>
+                    Aprovar<span class="sr-only"> comprador</span>
                   </Button>
                   <Button
                     size="sm"
@@ -2258,7 +2258,7 @@
                     className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
                     on:click={() => evaluateContractSide('buyer', 'APPROVED_WITH_RES')}
                   >
-                    Aprovar c/ ressalvas<span class="sr-only"> vendedor</span>
+                    Aprovar c/ ressalvas<span class="sr-only"> comprador</span>
                   </Button>
                   <Button
                     size="sm"
@@ -2851,7 +2851,7 @@
                     class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                   >
                     <option value="seller">Captador</option>
-                    <option value="buyer">Vendedor</option>
+                    <option value="buyer">Comprador</option>
                   </select>
                 </label>
               {/if}
