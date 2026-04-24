@@ -282,6 +282,13 @@
     return responsiblesLoadedProposalId !== proposalId;
   }
 
+  /** Com PDF já anexado, aprovar não pode depender do carregamento de responsáveis. */
+  function responsiblesBlockApproval(proposal: NegotiationItem | null): boolean {
+    if (!proposal) return true;
+    if (proposal.signedDocumentId != null) return false;
+    return hasResponsiblesInconsistentState(proposal.id);
+  }
+
   function requiresSignedPdf() {
     return selectedProposal?.signedDocumentId == null;
   }
@@ -1047,7 +1054,7 @@
     if (!confirmed) return;
 
     const proposalId = selectedProposal.id;
-    if (hasResponsiblesInconsistentState(proposalId)) {
+    if (responsiblesBlockApproval(selectedProposal)) {
       const message = 'Não foi possível validar os responsáveis. Recarregue e tente novamente.';
       responsibleError = message;
       toast.error(message);
@@ -1686,7 +1693,7 @@
         <p class="order-last text-left text-sm text-gray-500 dark:text-gray-400 sm:order-first sm:mr-auto sm:max-w-md">
           {#if !isSignedProposal(selectedProposal) || requiresSignedPdf()}
             Anexe o PDF assinado para aprovar ou rejeitar esta proposta.
-          {:else if hasResponsiblesInconsistentState(selectedProposal?.id ?? null)}
+          {:else if responsiblesBlockApproval(selectedProposal)}
             Valide/corrija o carregamento dos responsáveis para aprovar. Rejeitar ainda pode ser usado.
           {/if}
         </p>
@@ -1707,8 +1714,8 @@
             variant="outline"
             className="bg-green-600 text-white hover:bg-green-700"
             on:click={approveSelected}
-            disabled={isApproveBusy() || requiresSignedPdf() || hasResponsiblesInconsistentState(selectedProposal?.id ?? null) || !isSignedProposal(selectedProposal)}
-            title={requiresSignedPdf() ? 'Anexe o PDF assinado' : hasResponsiblesInconsistentState(selectedProposal?.id ?? null) ? 'Corrija responsáveis' : 'Aprovar e seguir para contratos'}
+            disabled={isApproveBusy() || requiresSignedPdf() || responsiblesBlockApproval(selectedProposal) || !isSignedProposal(selectedProposal)}
+            title={requiresSignedPdf() ? 'Anexe o PDF assinado' : responsiblesBlockApproval(selectedProposal) ? 'Corrija responsáveis' : 'Aprovar e seguir para contratos'}
           >
             {#if processingAction || savingResponsibles}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
