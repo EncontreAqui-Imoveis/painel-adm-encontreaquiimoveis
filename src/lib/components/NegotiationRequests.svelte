@@ -121,6 +121,8 @@
   let selectedResponsibles: ResponsibleOption[] = [];
   let responsiblesSnapshot = '';
   let responsibleError = '';
+  let responsiblesLoadError = '';
+  let responsiblesLoadedProposalId: string | null = null;
   let responsibleSearchDebounce: ReturnType<typeof setTimeout> | null = null;
   let responsibleDropdownOpen = false;
   let responsibleBlurTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -271,6 +273,13 @@
 
   function isApproveBusy() {
     return processingAction || uploadingSignedPdf || deletingSignedPdf || savingResponsibles;
+  }
+
+  function hasResponsiblesInconsistentState(proposalId?: string | null): boolean {
+    if (!proposalId) return true;
+    if (responsiblesLoading) return true;
+    if (responsiblesLoadError.trim().length > 0) return true;
+    return responsiblesLoadedProposalId !== proposalId;
   }
 
   function requiresSignedPdf() {
@@ -447,6 +456,8 @@
   async function fetchResponsibles(proposalId: string) {
     responsiblesLoading = true;
     responsibleError = '';
+    responsiblesLoadError = '';
+    responsiblesLoadedProposalId = null;
     try {
       const response = await api.get<{ data?: unknown[] } | unknown[]>(
         `/admin/negotiations/${proposalId}/responsibles`
@@ -459,10 +470,13 @@
         : [];
       selectedResponsibles = normalized.slice(0, 5);
       responsiblesSnapshot = responsibleSnapshot(selectedResponsibles);
+      responsiblesLoadedProposalId = proposalId;
     } catch (error) {
       console.error('Erro ao carregar responsáveis:', error);
       selectedResponsibles = [];
       responsiblesSnapshot = '';
+      responsiblesLoadError = normalizeErrorMessage(error, 'Não foi possível carregar os responsáveis.');
+      responsibleError = responsiblesLoadError;
       toast.error(normalizeErrorMessage(error, 'Não foi possível carregar os responsáveis.'));
     } finally {
       responsiblesLoading = false;
@@ -470,10 +484,15 @@
   }
 
   function hasResponsibleChanges(): boolean {
+    if (hasResponsiblesInconsistentState(selectedProposal?.id ?? null)) return true;
     return responsibleSnapshot(selectedResponsibles) !== responsiblesSnapshot;
   }
 
   async function saveResponsiblesSelection(proposalId: string, silent = false): Promise<boolean> {
+    if (hasResponsiblesInconsistentState(proposalId)) {
+      responsibleError = 'Recarregue os responsáveis antes de salvar.';
+      return false;
+    }
     if (selectedResponsibles.length > 5) {
       responsibleError = 'Você pode selecionar no máximo 5 responsáveis.';
       return false;
@@ -486,6 +505,8 @@
       });
       responsiblesSnapshot = responsibleSnapshot(selectedResponsibles);
       responsibleError = '';
+      responsiblesLoadError = '';
+      responsiblesLoadedProposalId = proposalId;
       if (!silent) {
         toast.success('Responsáveis atualizados com sucesso.');
       }
@@ -507,6 +528,8 @@
     responsibleSearchQuery = '';
     responsibleOptions = [];
     responsibleError = '';
+    responsiblesLoadError = '';
+    responsiblesLoadedProposalId = null;
     searchingResponsibles = false;
     clearResponsibleSearchDebounce();
     clearResponsibleBlurTimeout();
@@ -1021,6 +1044,12 @@
     if (!confirmed) return;
 
     const proposalId = selectedProposal.id;
+    if (hasResponsiblesInconsistentState(proposalId)) {
+      const message = 'Não foi possível validar os responsáveis. Recarregue e tente novamente.';
+      responsibleError = message;
+      toast.error(message);
+      return;
+    }
     if (hasResponsibleChanges()) {
       const responsiblesSaved = await saveResponsiblesSelection(proposalId, true);
       if (!responsiblesSaved) return;
@@ -1330,7 +1359,7 @@
                     <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(item)}</p>
                   </div>
                   <div>
-                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Captador</p>
+                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Usuário</p>
                     <p class="text-sm text-gray-700 dark:text-gray-300">{getBrokerName(item)}</p>
                   </div>
                   <div>
@@ -1566,6 +1595,25 @@
             {#if responsiblesLoading}
               <p class="text-xs text-gray-500 dark:text-gray-400">Carregando responsáveis...</p>
             {/if}
+            {#if responsiblesLoadError}
+              <div class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+                <p>{responsiblesLoadError}</p>
+                {#if selectedProposal}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2"
+                    on:click={() => fetchResponsibles(selectedProposal.id)}
+                    disabled={responsiblesLoading || savingResponsibles || processingAction}
+                  >
+                    {#if responsiblesLoading}
+                      <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                    {/if}
+                    Tentar novamente
+                  </Button>
+                {/if}
+              </div>
+            {/if}
 
             {#if selectedResponsibles.length > 0}
               <div class="flex flex-wrap gap-2">
@@ -1599,7 +1647,7 @@
                 size="sm"
                 variant="outline"
                 on:click={() => selectedProposal && saveResponsiblesSelection(selectedProposal.id)}
-                disabled={savingResponsibles || responsiblesLoading || !hasResponsibleChanges()}
+                disabled={savingResponsibles || responsiblesLoading || hasResponsiblesInconsistentState(selectedProposal?.id ?? null) || !hasResponsibleChanges()}
               >
                 {#if savingResponsibles}
                   <Loader2 class="mr-2 h-4 w-4 animate-spin" />
@@ -1645,7 +1693,7 @@
             variant="outline"
             className="bg-green-600 text-white hover:bg-green-700"
             on:click={approveSelected}
-            disabled={isApproveBusy() || requiresSignedPdf()}
+            disabled={isApproveBusy() || requiresSignedPdf() || hasResponsiblesInconsistentState(selectedProposal?.id ?? null)}
           >
             {#if processingAction || savingResponsibles}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />

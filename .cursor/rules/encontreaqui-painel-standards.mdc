@@ -1,5 +1,5 @@
 ---
-description: Regras de estilo, UX/UI e arquitetura para o painel administrativo Svelte do EncontreAqui Imóveis.
+description: Regras de estilo, UX/UI e arquitetura para o painel administrativo Svelte do Encontre Aqui Imóveis.
 globs:
   - "src/**/*.svelte"
   - "src/**/*.ts"

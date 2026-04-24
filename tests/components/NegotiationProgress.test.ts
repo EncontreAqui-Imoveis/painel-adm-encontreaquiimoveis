@@ -84,6 +84,7 @@ describe('NegotiationProgress', () => {
   it('exibe foto na tabela e permite revisar detalhes do imóvel', async () => {
     render(NegotiationProgress);
 
+    expect(await screen.findByText('Usuário')).toBeInTheDocument();
     expect((await screen.findAllByText('Casa em negociação')).length).toBeGreaterThan(0);
     expect(screen.getByRole('img', { name: 'Casa em negociação' })).toBeInTheDocument();
 

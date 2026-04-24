@@ -5,6 +5,6 @@
 
 <img 
     src={logo} 
-    alt="EncontreAqui Imóveis" 
+    alt="Encontre Aqui Imóveis"
     class={className}
 />
