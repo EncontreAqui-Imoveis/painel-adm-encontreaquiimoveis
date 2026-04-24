@@ -36,12 +36,6 @@
     sellingBrokerId?: string | number | null;
   };
 
-  type ApprovedBrokerOption = {
-    id: string | number;
-    name: string;
-    creci?: string | null;
-  };
-
   type ResponsibleOption = {
     id: number;
     name: string;
@@ -108,7 +102,6 @@
   let viewingPdf = false;
   let uploadingSignedPdf = false;
   let deletingSignedPdf = false;
-  let savingSellerBroker = false;
   let savingResponsibles = false;
   let selectedSignedPdfFile: File | null = null;
   let signedPdfInputRenderKey = 0;
@@ -126,16 +119,6 @@
   let responsibleSearchDebounce: ReturnType<typeof setTimeout> | null = null;
   let responsibleDropdownOpen = false;
   let responsibleBlurTimeout: ReturnType<typeof setTimeout> | null = null;
-  let sameAsCapturing = true;
-  let sellerBrokerSearchQuery = '';
-  let sellerBrokerOptions: ApprovedBrokerOption[] = [];
-  let searchingSellerBrokers = false;
-  let selectedSellerBrokerId: string | number | null = null;
-  let selectedSellerBrokerName = '';
-  let sellerBrokerError = '';
-  let sellerSearchDebounce: ReturnType<typeof setTimeout> | null = null;
-  let sellerBrokerDropdownOpen = false;
-  let sellerBrokerBlurTimeout: ReturnType<typeof setTimeout> | null = null;
   let isImagePreviewOpen = false;
   let previewImageUrl: string | null = null;
   let previewImageAlt = 'Pré-visualização do imóvel';
@@ -186,7 +169,7 @@
   }
 
   function getBrokerName(item: NegotiationItem): string {
-    return item.brokerName ?? item.capturingBrokerName ?? item.sellingBrokerName ?? '-';
+    return item.brokerName ?? item.capturingBrokerName ?? '-';
   }
 
   function getStatusLabel(status?: string, internalStatus?: string): string {
@@ -301,10 +284,6 @@
     return 'Envie sua proposta assinada';
   }
 
-  function requiresSellerBrokerSelection() {
-    return !sameAsCapturing && selectedSellerBrokerId == null;
-  }
-
   function normalizeErrorMessage(error: unknown, fallback: string): string {
     if (error && typeof error === 'object') {
       const maybeError = error as {
@@ -318,18 +297,6 @@
       }
     }
     return fallback;
-  }
-
-  function clearSellerSearchDebounce() {
-    if (!sellerSearchDebounce) return;
-    clearTimeout(sellerSearchDebounce);
-    sellerSearchDebounce = null;
-  }
-
-  function clearSellerBrokerBlurTimeout() {
-    if (!sellerBrokerBlurTimeout) return;
-    clearTimeout(sellerBrokerBlurTimeout);
-    sellerBrokerBlurTimeout = null;
   }
 
   function clearSignedPdfSelection() {
@@ -544,15 +511,6 @@
     clearResponsibleSearchDebounce();
     clearResponsibleBlurTimeout();
     responsibleDropdownOpen = false;
-    sameAsCapturing = true;
-    sellerBrokerSearchQuery = '';
-    sellerBrokerOptions = [];
-    selectedSellerBrokerId = null;
-    selectedSellerBrokerName = '';
-    sellerBrokerError = '';
-    clearSellerSearchDebounce();
-    clearSellerBrokerBlurTimeout();
-    sellerBrokerDropdownOpen = false;
   }
 
   function syncProposalInState(proposalId: string, patch: Partial<NegotiationItem>) {
@@ -562,25 +520,6 @@
     if (selectedProposal?.id === proposalId) {
       selectedProposal = { ...selectedProposal, ...patch };
     }
-  }
-
-  function getSelectedProposalDefaultSameBroker(item: NegotiationItem): boolean {
-    return item.sellingBrokerId == null || idsMatch(item.sellingBrokerId, item.capturingBrokerId);
-  }
-
-  function normalizeBrokerOption(item: unknown): ApprovedBrokerOption | null {
-    if (!item || typeof item !== 'object') return null;
-    const raw = item as Record<string, unknown>;
-    const id = raw.id ?? raw.brokerId ?? raw.userId;
-    if (id == null || (typeof id !== 'string' && typeof id !== 'number')) {
-      return null;
-    }
-    const rawName = raw.name ?? raw.fullName ?? raw.nome;
-    const name = typeof rawName === 'string' && rawName.trim().length > 0
-      ? rawName.trim()
-      : `Corretor #${id}`;
-    const creci = typeof raw.creci === 'string' ? raw.creci : null;
-    return { id, name, creci };
   }
 
   function extractSignedDocumentId(payload: unknown): number | null {
@@ -712,18 +651,6 @@
   async function openProposalDetail(item: NegotiationItem) {
     selectedProposal = { ...item };
     resetDetailState();
-    sameAsCapturing = getSelectedProposalDefaultSameBroker(item);
-    if (sameAsCapturing) {
-      selectedSellerBrokerId = item.capturingBrokerId ?? null;
-      selectedSellerBrokerName = item.capturingBrokerName ?? item.brokerName ?? '';
-    } else {
-      selectedSellerBrokerId = item.sellingBrokerId ?? null;
-      selectedSellerBrokerName = item.sellingBrokerName ?? '';
-      sellerBrokerSearchQuery = selectedSellerBrokerName;
-      if (selectedSellerBrokerId != null && selectedSellerBrokerName) {
-        sellerBrokerOptions = [{ id: selectedSellerBrokerId, name: selectedSellerBrokerName }];
-      }
-    }
     showDetailModal = true;
     await fetchResponsibles(item.id);
   }
@@ -870,171 +797,6 @@
       toast.error(normalizeErrorMessage(error, 'Não foi possível excluir o PDF assinado.'));
     } finally {
       deletingSignedPdf = false;
-    }
-  }
-
-  async function searchApprovedBrokers(query: string) {
-    searchingSellerBrokers = true;
-    try {
-      const params = new URLSearchParams();
-      params.set('status', 'approved');
-      params.set('search', query);
-      params.set('page', '1');
-      params.set('limit', '10');
-      const response = await api.get<PaginatedResponse<Record<string, unknown>>>(
-        `/admin/brokers?${params.toString()}`
-      );
-      const options = Array.isArray(response?.data)
-        ? response.data.map((item) => normalizeBrokerOption(item)).filter((item): item is ApprovedBrokerOption => item != null)
-        : [];
-
-      if (
-        selectedSellerBrokerId != null &&
-        selectedSellerBrokerName &&
-        !options.some((item) => idsMatch(item.id, selectedSellerBrokerId))
-      ) {
-        sellerBrokerOptions = [
-          { id: selectedSellerBrokerId, name: selectedSellerBrokerName },
-          ...options,
-        ];
-      } else {
-        sellerBrokerOptions = options;
-      }
-    } catch (error) {
-      console.error('Erro ao buscar corretores aprovados:', error);
-      sellerBrokerOptions = [];
-      toast.error(normalizeErrorMessage(error, 'Não foi possível buscar corretores aprovados.'));
-    } finally {
-      searchingSellerBrokers = false;
-    }
-  }
-
-  function onSellerBrokerSearchInput(event: Event) {
-    const input = event.currentTarget as HTMLInputElement | null;
-    sellerBrokerSearchQuery = input?.value ?? '';
-    sellerBrokerError = '';
-    sellerBrokerDropdownOpen = true;
-
-    const typedQuery = sellerBrokerSearchQuery.trim();
-    const selectedName = selectedSellerBrokerName.trim();
-    if (
-      selectedSellerBrokerId != null &&
-      (!selectedName || typedQuery.localeCompare(selectedName, 'pt-BR', { sensitivity: 'accent' }) !== 0)
-    ) {
-      selectedSellerBrokerId = null;
-      selectedSellerBrokerName = '';
-    }
-
-    clearSellerSearchDebounce();
-    if (sameAsCapturing) return;
-
-    const query = typedQuery;
-    if (query.length < 2) {
-      sellerBrokerOptions = [];
-      searchingSellerBrokers = false;
-      return;
-    }
-
-    sellerSearchDebounce = setTimeout(() => {
-      void searchApprovedBrokers(query);
-    }, 300);
-  }
-
-  function onSameAsCapturingChange(event: Event) {
-    const input = event.currentTarget as HTMLInputElement | null;
-    const checked = input?.checked ?? false;
-    sameAsCapturing = checked;
-    sellerBrokerError = '';
-    clearSellerSearchDebounce();
-    clearSellerBrokerBlurTimeout();
-    sellerBrokerOptions = [];
-    searchingSellerBrokers = false;
-    sellerBrokerDropdownOpen = false;
-
-    if (checked) {
-      selectedSellerBrokerId = selectedProposal?.capturingBrokerId ?? null;
-      selectedSellerBrokerName = selectedProposal?.capturingBrokerName ?? selectedProposal?.brokerName ?? '';
-      sellerBrokerSearchQuery = '';
-      return;
-    }
-
-    const currentSellingId = selectedProposal?.sellingBrokerId ?? null;
-    const hasDifferentSellingBroker =
-      currentSellingId != null && !idsMatch(currentSellingId, selectedProposal?.capturingBrokerId ?? null);
-    if (hasDifferentSellingBroker) {
-      selectedSellerBrokerId = currentSellingId;
-      selectedSellerBrokerName = selectedProposal?.sellingBrokerName ?? '';
-      sellerBrokerSearchQuery = selectedSellerBrokerName;
-      if (selectedSellerBrokerName) {
-        sellerBrokerOptions = [{ id: currentSellingId, name: selectedSellerBrokerName }];
-      }
-    } else {
-      selectedSellerBrokerId = null;
-      selectedSellerBrokerName = '';
-      sellerBrokerSearchQuery = '';
-    }
-  }
-
-  function selectSellerBroker(option: ApprovedBrokerOption) {
-    selectedSellerBrokerId = option.id;
-    selectedSellerBrokerName = option.name;
-    sellerBrokerSearchQuery = option.name;
-    sellerBrokerError = '';
-    sellerBrokerDropdownOpen = false;
-  }
-
-  function clearSellerBrokerSelection() {
-    selectedSellerBrokerId = null;
-    selectedSellerBrokerName = '';
-    sellerBrokerSearchQuery = '';
-    sellerBrokerOptions = [];
-    sellerBrokerError = '';
-    searchingSellerBrokers = false;
-    clearSellerSearchDebounce();
-    sellerBrokerDropdownOpen = false;
-  }
-
-  function openSellerBrokerDropdown() {
-    if (sameAsCapturing) return;
-    clearSellerBrokerBlurTimeout();
-    sellerBrokerDropdownOpen = true;
-  }
-
-  function scheduleCloseSellerBrokerDropdown() {
-    clearSellerBrokerBlurTimeout();
-    sellerBrokerBlurTimeout = setTimeout(() => {
-      sellerBrokerDropdownOpen = false;
-    }, 120);
-  }
-
-  async function saveSellingBrokerSelection(proposalId: string): Promise<boolean> {
-    if (!selectedProposal) return false;
-    if (!sameAsCapturing && selectedSellerBrokerId == null) {
-      sellerBrokerError = 'Selecione um corretor vendedor para aprovar.';
-      toast.error('Selecione um corretor vendedor para aprovar.');
-      return false;
-    }
-
-    savingSellerBroker = true;
-    try {
-      const payload = {
-        sameAsCapturing,
-        sellingBrokerId: sameAsCapturing ? null : selectedSellerBrokerId,
-      };
-      await api.put(`/admin/negotiations/${proposalId}/selling-broker`, payload);
-      syncProposalInState(proposalId, {
-        sellingBrokerId: payload.sellingBrokerId,
-        sellingBrokerName: sameAsCapturing
-          ? selectedProposal.capturingBrokerName ?? selectedProposal.brokerName ?? null
-          : selectedSellerBrokerName || selectedProposal.sellingBrokerName || null,
-      });
-      return true;
-    } catch (error) {
-      console.error('Erro ao salvar corretor vendedor:', error);
-      toast.error(normalizeErrorMessage(error, 'Não foi possível salvar o corretor vendedor.'));
-      return false;
-    } finally {
-      savingSellerBroker = false;
     }
   }
 
@@ -1364,12 +1126,12 @@
                     </span>
                   </div>
                   <div>
-                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Comprador</p>
+                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Comprador / Proponente</p>
                     <p class="text-sm text-gray-900 dark:text-gray-100">{readClientName(item)}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(item)}</p>
                   </div>
                   <div>
-                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Usuário</p>
+                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Captador</p>
                     <p class="text-sm text-gray-700 dark:text-gray-300">{getBrokerName(item)}</p>
                   </div>
                   <div>
@@ -1446,7 +1208,7 @@
       <div class="min-h-0 max-h-[min(70vh,32rem)] flex-1 overflow-y-auto pr-1 sm:max-h-[min(65vh,40rem)]">
         <div class="grid gap-4 md:grid-cols-2">
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Comprador</p>
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Comprador / Proponente</p>
             <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{readClientName(selectedProposal)}</p>
             <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(selectedProposal)}</p>
           </div>

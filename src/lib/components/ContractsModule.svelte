@@ -249,6 +249,19 @@
     });
   }
 
+  function getBuyerDisplayName(contract: ContractItem): string {
+    const buyerInfo = contract.buyerInfo ?? null;
+    const fromInfo = getRecordValueRaw(buyerInfo, [
+      'nome',
+      'name',
+      'nome_completo',
+      'fullName',
+      'clientName',
+      'client_name',
+    ]);
+    return fromInfo || '-';
+  }
+
   function formatDate(value?: string | null): string {
     if (!value) return '-';
     const parsed = new Date(value);
@@ -1000,10 +1013,10 @@
     for (const row of rows) {
       const sellerDoc = getDocumentForMatrixCell(contract, row.documentType, 'seller');
       const buyerDoc = getDocumentForMatrixCell(contract, row.documentType, 'buyer');
-      if (row.sellerRequired && sellerDoc == null) {
+      if (row.documentType !== 'outro' && row.sellerRequired && sellerDoc == null) {
         missing.push(`${documentLabel(row.documentType)} (Captador)`);
       }
-      if (row.buyerRequired && buyerDoc == null) {
+      if (row.documentType !== 'outro' && row.buyerRequired && buyerDoc == null) {
         missing.push(`${documentLabel(row.documentType)} (Comprador)`);
       }
     }
@@ -1015,6 +1028,9 @@
     return getNonProposalDocuments(contract)
       .map((doc) => {
       const status = String(doc.status ?? '').trim().toUpperCase();
+      if (String(doc.documentType ?? '').trim().toLowerCase() === 'outro') {
+        return null;
+      }
       if (!status) {
         return null;
       }
@@ -1818,7 +1834,7 @@
             </div>
             <div class="flex items-center justify-between gap-3">
               <dt>Comprador</dt>
-              <dd class="text-right">{item.sellingBrokerName ?? '-'}</dd>
+              <dd class="text-right">{getBuyerDisplayName(item)}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
               <dt>Data</dt>
@@ -1908,7 +1924,7 @@
                 {item.capturingBrokerName ?? '-'}
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                {item.sellingBrokerName ?? '-'}
+                {getBuyerDisplayName(item)}
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                 {formatDate(item.updatedAt ?? item.createdAt)}
