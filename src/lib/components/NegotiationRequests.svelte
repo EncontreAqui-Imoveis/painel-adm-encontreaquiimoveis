@@ -31,6 +31,14 @@
     payment?: PaymentBreakdown | null;
     updatedAt?: string | null;
     signedDocumentId?: number | null;
+    capturingBrokerId?: string | number | null;
+    sellingBrokerId?: string | number | null;
+  };
+
+  type ApprovedBrokerOption = {
+    id: string | number;
+    name: string;
+    creci?: string | null;
   };
 
   type TopProposal = {
@@ -83,6 +91,21 @@
   let showDetailModal = false;
   let rejectReason = '';
   let viewingPdf = false;
+  let uploadingSignedPdf = false;
+  let deletingSignedPdf = false;
+  let savingSellerBroker = false;
+  let selectedSignedPdfFile: File | null = null;
+  let signedPdfInputRenderKey = 0;
+  let sameAsCapturing = true;
+  let sellerBrokerSearchQuery = '';
+  let sellerBrokerOptions: ApprovedBrokerOption[] = [];
+  let searchingSellerBrokers = false;
+  let selectedSellerBrokerId: string | number | null = null;
+  let selectedSellerBrokerName = '';
+  let sellerBrokerError = '';
+  let sellerSearchDebounce: ReturnType<typeof setTimeout> | null = null;
+  let sellerBrokerDropdownOpen = false;
+  let sellerBrokerBlurTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function normalizeClient(item: NegotiationItem | null): { name: string; cpf: string } {
     if (!item) return { name: '-', cpf: '-' };
@@ -198,6 +221,124 @@
     ];
   }
 
+  function idsMatch(a?: string | number | null, b?: string | number | null): boolean {
+    if (a == null || b == null) return false;
+    return String(a) === String(b);
+  }
+
+  function isApproveBusy() {
+    return processingAction || uploadingSignedPdf || deletingSignedPdf || savingSellerBroker;
+  }
+
+  function requiresSignedPdf() {
+    return selectedProposal?.signedDocumentId == null;
+  }
+
+  function requiresSellerBrokerSelection() {
+    return !sameAsCapturing && selectedSellerBrokerId == null;
+  }
+
+  function normalizeErrorMessage(error: unknown, fallback: string): string {
+    if (error && typeof error === 'object') {
+      const maybeError = error as {
+        response?: { data?: { message?: string; error?: string } };
+        message?: string;
+      };
+      const apiMessage =
+        maybeError.response?.data?.message ?? maybeError.response?.data?.error ?? maybeError.message;
+      if (typeof apiMessage === 'string' && apiMessage.trim().length > 0) {
+        return apiMessage;
+      }
+    }
+    return fallback;
+  }
+
+  function clearSellerSearchDebounce() {
+    if (!sellerSearchDebounce) return;
+    clearTimeout(sellerSearchDebounce);
+    sellerSearchDebounce = null;
+  }
+
+  function clearSellerBrokerBlurTimeout() {
+    if (!sellerBrokerBlurTimeout) return;
+    clearTimeout(sellerBrokerBlurTimeout);
+    sellerBrokerBlurTimeout = null;
+  }
+
+  function clearSignedPdfSelection() {
+    selectedSignedPdfFile = null;
+    signedPdfInputRenderKey += 1;
+  }
+
+  function resetDetailState() {
+    rejectReason = '';
+    clearSignedPdfSelection();
+    sameAsCapturing = true;
+    sellerBrokerSearchQuery = '';
+    sellerBrokerOptions = [];
+    selectedSellerBrokerId = null;
+    selectedSellerBrokerName = '';
+    sellerBrokerError = '';
+    clearSellerSearchDebounce();
+    clearSellerBrokerBlurTimeout();
+    sellerBrokerDropdownOpen = false;
+  }
+
+  function syncProposalInState(proposalId: string, patch: Partial<NegotiationItem>) {
+    propertyRequests = propertyRequests.map((item) =>
+      item.id === proposalId ? { ...item, ...patch } : item
+    );
+    if (selectedProposal?.id === proposalId) {
+      selectedProposal = { ...selectedProposal, ...patch };
+    }
+  }
+
+  function getSelectedProposalDefaultSameBroker(item: NegotiationItem): boolean {
+    return item.sellingBrokerId == null || idsMatch(item.sellingBrokerId, item.capturingBrokerId);
+  }
+
+  function normalizeBrokerOption(item: unknown): ApprovedBrokerOption | null {
+    if (!item || typeof item !== 'object') return null;
+    const raw = item as Record<string, unknown>;
+    const id = raw.id ?? raw.brokerId ?? raw.userId;
+    if (id == null || (typeof id !== 'string' && typeof id !== 'number')) {
+      return null;
+    }
+    const rawName = raw.name ?? raw.fullName ?? raw.nome;
+    const name = typeof rawName === 'string' && rawName.trim().length > 0
+      ? rawName.trim()
+      : `Corretor #${id}`;
+    const creci = typeof raw.creci === 'string' ? raw.creci : null;
+    return { id, name, creci };
+  }
+
+  function extractSignedDocumentId(payload: unknown): number | null {
+    const sources: unknown[] = [payload];
+    if (payload && typeof payload === 'object') {
+      const nested = (payload as Record<string, unknown>).data;
+      sources.push(nested);
+    }
+
+    for (const source of sources) {
+      if (!source || typeof source !== 'object') continue;
+      const record = source as Record<string, unknown>;
+      const candidate =
+        record.signedDocumentId ??
+        record.signed_document_id ??
+        record.signedProposalDocumentId ??
+        record.documentId;
+      if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+        return candidate;
+      }
+      if (typeof candidate === 'string' && candidate.trim().length > 0) {
+        const parsed = Number(candidate);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+
+    return null;
+  }
+
   function clearPropertyModalState() {
     showPropertyModal = false;
     selectedProperty = null;
@@ -273,16 +414,28 @@
   }
 
   function openProposalDetail(item: NegotiationItem) {
-    selectedProposal = item;
-    rejectReason = '';
+    selectedProposal = { ...item };
+    resetDetailState();
+    sameAsCapturing = getSelectedProposalDefaultSameBroker(item);
+    if (sameAsCapturing) {
+      selectedSellerBrokerId = item.capturingBrokerId ?? null;
+      selectedSellerBrokerName = item.capturingBrokerName ?? item.brokerName ?? '';
+    } else {
+      selectedSellerBrokerId = item.sellingBrokerId ?? null;
+      selectedSellerBrokerName = item.sellingBrokerName ?? '';
+      sellerBrokerSearchQuery = selectedSellerBrokerName;
+      if (selectedSellerBrokerId != null && selectedSellerBrokerName) {
+        sellerBrokerOptions = [{ id: selectedSellerBrokerId, name: selectedSellerBrokerName }];
+      }
+    }
     showDetailModal = true;
   }
 
   function closeDetailModal(force = false) {
-    if (processingAction && !force) return;
+    if (isApproveBusy() && !force) return;
     showDetailModal = false;
     selectedProposal = null;
-    rejectReason = '';
+    resetDetailState();
   }
 
   function closePropertyModal() {
@@ -291,7 +444,10 @@
   }
 
   async function viewSignedPdf() {
-    if (!selectedProposal) return;
+    if (!selectedProposal?.signedDocumentId) {
+      toast.error('Nenhum PDF assinado anexado para visualização.');
+      return;
+    }
     viewingPdf = true;
     try {
       const response = await apiClient.get(
@@ -314,13 +470,268 @@
     }
   }
 
+  function handleSignedPdfChange(event: Event) {
+    const input = event.currentTarget as HTMLInputElement | null;
+    const file = input?.files?.[0] ?? null;
+    if (!file) {
+      selectedSignedPdfFile = null;
+      return;
+    }
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      toast.error('Selecione um arquivo PDF válido.');
+      clearSignedPdfSelection();
+      return;
+    }
+    selectedSignedPdfFile = file;
+  }
+
+  async function uploadSignedPdf() {
+    if (!selectedProposal) return;
+    if (!selectedSignedPdfFile) {
+      toast.error('Selecione um PDF assinado para enviar.');
+      return;
+    }
+
+    const hadSignedPdf = selectedProposal.signedDocumentId != null;
+    uploadingSignedPdf = true;
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedSignedPdfFile);
+      const response = await apiClient.post(
+        `/admin/negotiations/${selectedProposal.id}/signed-proposal`,
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        }
+      );
+
+      const nextSignedDocumentId =
+        extractSignedDocumentId(response?.data) ?? selectedProposal.signedDocumentId ?? Date.now();
+      syncProposalInState(selectedProposal.id, { signedDocumentId: nextSignedDocumentId });
+      clearSignedPdfSelection();
+      toast.success(
+        hadSignedPdf
+          ? 'PDF assinado substituído com sucesso.'
+          : 'PDF assinado enviado com sucesso.'
+      );
+    } catch (error) {
+      console.error('Erro ao enviar PDF assinado:', error);
+      toast.error(normalizeErrorMessage(error, 'Não foi possível enviar o PDF assinado.'));
+    } finally {
+      uploadingSignedPdf = false;
+    }
+  }
+
+  async function deleteSignedPdf() {
+    if (!selectedProposal?.signedDocumentId) {
+      toast.error('Não há PDF assinado para excluir.');
+      return;
+    }
+
+    const confirmed = window.confirm('Confirma excluir o PDF assinado desta proposta?');
+    if (!confirmed) return;
+
+    deletingSignedPdf = true;
+    try {
+      await api.delete(`/admin/negotiations/${selectedProposal.id}/signed-proposal`);
+      syncProposalInState(selectedProposal.id, { signedDocumentId: null });
+      clearSignedPdfSelection();
+      toast.success('PDF assinado excluído com sucesso.');
+    } catch (error) {
+      console.error('Erro ao excluir PDF assinado:', error);
+      toast.error(normalizeErrorMessage(error, 'Não foi possível excluir o PDF assinado.'));
+    } finally {
+      deletingSignedPdf = false;
+    }
+  }
+
+  async function searchApprovedBrokers(query: string) {
+    searchingSellerBrokers = true;
+    try {
+      const params = new URLSearchParams();
+      params.set('status', 'approved');
+      params.set('search', query);
+      params.set('page', '1');
+      params.set('limit', '10');
+      const response = await api.get<PaginatedResponse<Record<string, unknown>>>(
+        `/admin/brokers?${params.toString()}`
+      );
+      const options = Array.isArray(response?.data)
+        ? response.data.map((item) => normalizeBrokerOption(item)).filter((item): item is ApprovedBrokerOption => item != null)
+        : [];
+
+      if (
+        selectedSellerBrokerId != null &&
+        selectedSellerBrokerName &&
+        !options.some((item) => idsMatch(item.id, selectedSellerBrokerId))
+      ) {
+        sellerBrokerOptions = [
+          { id: selectedSellerBrokerId, name: selectedSellerBrokerName },
+          ...options,
+        ];
+      } else {
+        sellerBrokerOptions = options;
+      }
+    } catch (error) {
+      console.error('Erro ao buscar corretores aprovados:', error);
+      sellerBrokerOptions = [];
+      toast.error(normalizeErrorMessage(error, 'Não foi possível buscar corretores aprovados.'));
+    } finally {
+      searchingSellerBrokers = false;
+    }
+  }
+
+  function onSellerBrokerSearchInput(event: Event) {
+    const input = event.currentTarget as HTMLInputElement | null;
+    sellerBrokerSearchQuery = input?.value ?? '';
+    sellerBrokerError = '';
+    sellerBrokerDropdownOpen = true;
+
+    const typedQuery = sellerBrokerSearchQuery.trim();
+    const selectedName = selectedSellerBrokerName.trim();
+    if (
+      selectedSellerBrokerId != null &&
+      (!selectedName || typedQuery.localeCompare(selectedName, 'pt-BR', { sensitivity: 'accent' }) !== 0)
+    ) {
+      selectedSellerBrokerId = null;
+      selectedSellerBrokerName = '';
+    }
+
+    clearSellerSearchDebounce();
+    if (sameAsCapturing) return;
+
+    const query = typedQuery;
+    if (query.length < 2) {
+      sellerBrokerOptions = [];
+      searchingSellerBrokers = false;
+      return;
+    }
+
+    sellerSearchDebounce = setTimeout(() => {
+      void searchApprovedBrokers(query);
+    }, 300);
+  }
+
+  function onSameAsCapturingChange(event: Event) {
+    const input = event.currentTarget as HTMLInputElement | null;
+    const checked = input?.checked ?? false;
+    sameAsCapturing = checked;
+    sellerBrokerError = '';
+    clearSellerSearchDebounce();
+    clearSellerBrokerBlurTimeout();
+    sellerBrokerOptions = [];
+    searchingSellerBrokers = false;
+    sellerBrokerDropdownOpen = false;
+
+    if (checked) {
+      selectedSellerBrokerId = selectedProposal?.capturingBrokerId ?? null;
+      selectedSellerBrokerName = selectedProposal?.capturingBrokerName ?? selectedProposal?.brokerName ?? '';
+      sellerBrokerSearchQuery = '';
+      return;
+    }
+
+    const currentSellingId = selectedProposal?.sellingBrokerId ?? null;
+    const hasDifferentSellingBroker =
+      currentSellingId != null && !idsMatch(currentSellingId, selectedProposal?.capturingBrokerId ?? null);
+    if (hasDifferentSellingBroker) {
+      selectedSellerBrokerId = currentSellingId;
+      selectedSellerBrokerName = selectedProposal?.sellingBrokerName ?? '';
+      sellerBrokerSearchQuery = selectedSellerBrokerName;
+      if (selectedSellerBrokerName) {
+        sellerBrokerOptions = [{ id: currentSellingId, name: selectedSellerBrokerName }];
+      }
+    } else {
+      selectedSellerBrokerId = null;
+      selectedSellerBrokerName = '';
+      sellerBrokerSearchQuery = '';
+    }
+  }
+
+  function selectSellerBroker(option: ApprovedBrokerOption) {
+    selectedSellerBrokerId = option.id;
+    selectedSellerBrokerName = option.name;
+    sellerBrokerSearchQuery = option.name;
+    sellerBrokerError = '';
+    sellerBrokerDropdownOpen = false;
+  }
+
+  function clearSellerBrokerSelection() {
+    selectedSellerBrokerId = null;
+    selectedSellerBrokerName = '';
+    sellerBrokerSearchQuery = '';
+    sellerBrokerOptions = [];
+    sellerBrokerError = '';
+    searchingSellerBrokers = false;
+    clearSellerSearchDebounce();
+    sellerBrokerDropdownOpen = false;
+  }
+
+  function openSellerBrokerDropdown() {
+    if (sameAsCapturing) return;
+    clearSellerBrokerBlurTimeout();
+    sellerBrokerDropdownOpen = true;
+  }
+
+  function scheduleCloseSellerBrokerDropdown() {
+    clearSellerBrokerBlurTimeout();
+    sellerBrokerBlurTimeout = setTimeout(() => {
+      sellerBrokerDropdownOpen = false;
+    }, 120);
+  }
+
+  async function saveSellingBrokerSelection(proposalId: string): Promise<boolean> {
+    if (!selectedProposal) return false;
+    if (!sameAsCapturing && selectedSellerBrokerId == null) {
+      sellerBrokerError = 'Selecione um corretor vendedor para aprovar.';
+      toast.error('Selecione um corretor vendedor para aprovar.');
+      return false;
+    }
+
+    savingSellerBroker = true;
+    try {
+      const payload = {
+        sameAsCapturing,
+        sellingBrokerId: sameAsCapturing ? null : selectedSellerBrokerId,
+      };
+      await api.put(`/admin/negotiations/${proposalId}/selling-broker`, payload);
+      syncProposalInState(proposalId, {
+        sellingBrokerId: payload.sellingBrokerId,
+        sellingBrokerName: sameAsCapturing
+          ? selectedProposal.capturingBrokerName ?? selectedProposal.brokerName ?? null
+          : selectedSellerBrokerName || selectedProposal.sellingBrokerName || null,
+      });
+      return true;
+    } catch (error) {
+      console.error('Erro ao salvar corretor vendedor:', error);
+      toast.error(normalizeErrorMessage(error, 'Não foi possível salvar o corretor vendedor.'));
+      return false;
+    } finally {
+      savingSellerBroker = false;
+    }
+  }
+
   async function approveSelected() {
     if (!selectedProposal) return;
+    if (requiresSignedPdf()) {
+      toast.error('Para aprovar, é obrigatório anexar um PDF assinado.');
+      return;
+    }
+    if (requiresSellerBrokerSelection()) {
+      sellerBrokerError = 'Selecione um corretor vendedor para aprovar.';
+      toast.error('Selecione um corretor vendedor para aprovar.');
+      return;
+    }
+
     const confirmed = window.confirm(
       'Confirma aprovação desta proposta? Esta ação encaminha a negociação para contratos.'
     );
     if (!confirmed) return;
+
     const proposalId = selectedProposal.id;
+    const brokerSaved = await saveSellingBrokerSelection(proposalId);
+    if (!brokerSaved) return;
+
     processingAction = true;
     try {
       await api.put(`/admin/negotiations/${proposalId}/approve`, {});
@@ -331,7 +742,28 @@
       requestPropertyFetch();
     } catch (error) {
       console.error('Erro ao aprovar proposta:', error);
-      toast.error('Falha ao aprovar proposta.');
+      const responseCode =
+        error && typeof error === 'object'
+          ? (
+              error as {
+                response?: {
+                  data?: { code?: string; errorCode?: string };
+                };
+              }
+            ).response?.data?.code ??
+            (
+              error as {
+                response?: {
+                  data?: { code?: string; errorCode?: string };
+                };
+              }
+            ).response?.data?.errorCode
+          : null;
+      if (responseCode === 'SIGNED_PROPOSAL_REQUIRED') {
+        toast.error('Para aprovar, é obrigatório anexar um PDF assinado.');
+        return;
+      }
+      toast.error(normalizeErrorMessage(error, 'Falha ao aprovar proposta.'));
     } finally {
       processingAction = false;
     }
@@ -362,7 +794,7 @@
       requestPropertyFetch();
     } catch (error) {
       console.error('Erro ao rejeitar proposta:', error);
-      toast.error('Falha ao rejeitar proposta.');
+      toast.error(normalizeErrorMessage(error, 'Falha ao rejeitar proposta.'));
     } finally {
       processingAction = false;
     }
@@ -638,7 +1070,7 @@
             {/if}
           </p>
         </div>
-        <Button variant="outline" size="sm" title="Fechar modal" className="px-2" on:click={() => closeDetailModal()} disabled={processingAction}>
+        <Button variant="outline" size="sm" title="Fechar modal" className="px-2" on:click={() => closeDetailModal()} disabled={isApproveBusy()}>
           <X class="h-4 w-4" />
         </Button>
       </div>
@@ -671,6 +1103,155 @@
         </p>
       </div>
 
+      <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
+        <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">PDF assinado</p>
+        <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+          {#if selectedProposal.signedDocumentId != null}
+            PDF assinado anexado.
+          {:else}
+            Nenhum PDF assinado anexado.
+          {/if}
+        </p>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {#if selectedProposal.signedDocumentId != null}
+            Você pode visualizar, excluir ou substituir.
+          {:else}
+            Envie um PDF assinado para habilitar a aprovação.
+          {/if}
+        </p>
+
+        {#if requiresSignedPdf()}
+          <p class="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+            Para aprovar, é obrigatório anexar um PDF assinado.
+          </p>
+        {/if}
+
+        <div class="mt-3">
+          {#key signedPdfInputRenderKey}
+            <input
+              type="file"
+              accept="application/pdf"
+              on:change={handleSignedPdfChange}
+              class="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:file:bg-gray-800 dark:file:text-gray-100 dark:hover:file:bg-gray-700"
+            />
+          {/key}
+          {#if selectedSignedPdfFile}
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Arquivo selecionado: {selectedSignedPdfFile.name}
+            </p>
+          {/if}
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            on:click={uploadSignedPdf}
+            disabled={uploadingSignedPdf || deletingSignedPdf || processingAction || !selectedSignedPdfFile}
+          >
+            {#if uploadingSignedPdf}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Enviar/Substituir PDF
+          </Button>
+          <Button
+            variant="outline"
+            on:click={deleteSignedPdf}
+            disabled={deletingSignedPdf || uploadingSignedPdf || processingAction || selectedProposal.signedDocumentId == null}
+          >
+            {#if deletingSignedPdf}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Excluir PDF
+          </Button>
+          <Button
+            variant="outline"
+            on:click={viewSignedPdf}
+            disabled={viewingPdf || uploadingSignedPdf || deletingSignedPdf || selectedProposal.signedDocumentId == null}
+          >
+            {#if viewingPdf}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Visualizar PDF Assinado
+          </Button>
+        </div>
+      </div>
+
+      <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
+        <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Corretor vendedor</p>
+        <label class="mt-2 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={sameAsCapturing}
+            on:change={onSameAsCapturingChange}
+            class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 dark:border-gray-700"
+          />
+          O corretor vendedor também é o captador?
+        </label>
+
+        {#if sameAsCapturing}
+          <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            O corretor captador será utilizado como corretor vendedor.
+          </p>
+        {:else}
+          <div class="mt-3 space-y-2">
+            <div class="relative">
+              <input
+                type="text"
+                value={sellerBrokerSearchQuery}
+                on:focus={openSellerBrokerDropdown}
+                on:blur={scheduleCloseSellerBrokerDropdown}
+                on:input={onSellerBrokerSearchInput}
+                placeholder="Digite ao menos 2 letras para buscar corretor"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-green-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+              />
+
+              {#if sellerBrokerDropdownOpen}
+                <div class="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                  <button
+                    type="button"
+                    class="w-full border-b border-gray-200 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                    on:click={clearSellerBrokerSelection}
+                  >
+                    Limpar corretor vendedor
+                  </button>
+                  {#if sellerBrokerSearchQuery.trim().length < 2}
+                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                      Digite ao menos 2 letras para buscar corretor aprovado.
+                    </p>
+                  {:else if searchingSellerBrokers}
+                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Buscando corretores aprovados...</p>
+                  {:else if sellerBrokerOptions.length === 0}
+                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nenhum corretor encontrado.</p>
+                  {:else}
+                    {#each sellerBrokerOptions as option (`${option.id}`)}
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between border-t border-gray-100 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-800"
+                        on:click={() => selectSellerBroker(option)}
+                      >
+                        <span>{option.name}</span>
+                        {#if option.creci}
+                          <span class="text-xs text-gray-500 dark:text-gray-400">{option.creci}</span>
+                        {/if}
+                      </button>
+                    {/each}
+                  {/if}
+                </div>
+              {/if}
+            </div>
+
+            {#if selectedSellerBrokerId != null}
+              <p class="text-xs text-gray-500 dark:text-gray-400">
+                Corretor vendedor selecionado: {selectedSellerBrokerName || `#${selectedSellerBrokerId}`}
+              </p>
+            {/if}
+            {#if sellerBrokerError}
+              <p class="text-xs font-medium text-red-600 dark:text-red-400">{sellerBrokerError}</p>
+            {/if}
+          </div>
+        {/if}
+      </div>
+
       <div class="mt-4">
         <label
           for="reject-reason"
@@ -689,17 +1270,11 @@
       </div>
 
       <div class="mt-5 flex flex-wrap items-center justify-end gap-2">
-        <Button variant="outline" on:click={viewSignedPdf} disabled={viewingPdf || processingAction}>
-          {#if viewingPdf}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-          {/if}
-          Visualizar PDF Assinado
-        </Button>
         <Button
           variant="destructive"
           className="bg-red-600 text-white hover:bg-red-700"
           on:click={rejectSelected}
-          disabled={processingAction}
+          disabled={isApproveBusy()}
         >
           {#if processingAction}
             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
@@ -710,9 +1285,9 @@
           variant="outline"
           className="bg-green-600 text-white hover:bg-green-700"
           on:click={approveSelected}
-          disabled={processingAction}
+          disabled={isApproveBusy() || requiresSignedPdf()}
         >
-          {#if processingAction}
+          {#if processingAction || savingSellerBroker}
             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
           {/if}
           Aprovar
