@@ -65,6 +65,8 @@
     address?: string | null;
     quadra?: string | null;
     lote?: string | null;
+    sem_quadra?: number | boolean | null;
+    sem_lote?: number | boolean | null;
     numero?: string | null;
     bairro?: string | null;
     complemento?: string | null;
@@ -137,6 +139,8 @@
   let isEditMode = false;
   let editableProperty: PropertyDetails | null = null;
   let editSemNumero = false;
+  let editSemQuadra = false;
+  let editSemLote = false;
   let editBedroomsAsZero = false;
   let editBathroomsAsZero = false;
   let editGarageSpotsAsZero = false;
@@ -977,6 +981,13 @@
     editGarageSpotsAsZero = Number(property.garage_spots ?? -1) === 0;
   }
 
+  function syncEditLotFlags(property: PropertyDetails) {
+    const quadra = String(property.quadra ?? '').trim();
+    const lote = String(property.lote ?? '').trim();
+    editSemQuadra = Boolean(property.sem_quadra) || quadra === '';
+    editSemLote = Boolean(property.sem_lote) || lote === '';
+  }
+
   function toggleEditMode() {
     if (!selectedProperty) return;
     isEditMode = !isEditMode;
@@ -984,13 +995,22 @@
     if (isEditMode && editableProperty) {
       syncEditPriceDisplays(editableProperty);
       editSemNumero = isSemNumeroValue(editableProperty.numero);
+      syncEditLotFlags(editableProperty);
       syncEditZeroFlags(editableProperty);
       if (editSemNumero) {
         editableProperty.numero = '';
       }
+      if (editSemQuadra) {
+        editableProperty.quadra = '';
+      }
+      if (editSemLote) {
+        editableProperty.lote = '';
+      }
     } else {
       editableProperty = sanitizeEditable(selectedProperty as PropertyDetails);
       editSemNumero = false;
+      editSemQuadra = false;
+      editSemLote = false;
       editBedroomsAsZero = false;
       editBathroomsAsZero = false;
       editGarageSpotsAsZero = false;
@@ -1038,9 +1058,16 @@
             : null,
       });
       editSemNumero = isSemNumeroValue(merged.numero);
+      syncEditLotFlags(merged);
       syncEditZeroFlags(merged);
       if (editSemNumero && editableProperty) {
         editableProperty.numero = '';
+      }
+      if (editSemQuadra && editableProperty) {
+        editableProperty.quadra = '';
+      }
+      if (editSemLote && editableProperty) {
+        editableProperty.lote = '';
       }
       if (editableProperty) {
         syncEditPriceDisplays(editableProperty);
@@ -1070,6 +1097,8 @@
     selectedProperty = null;
     editableProperty = null;
     editSemNumero = false;
+    editSemQuadra = false;
+    editSemLote = false;
     editBedroomsAsZero = false;
     editBathroomsAsZero = false;
     editGarageSpotsAsZero = false;
@@ -1494,8 +1523,10 @@
         numero: editSemNumero ? null : (numeroDigits.length > 0 ? numeroDigits : null),
         sem_numero: editSemNumero ? 1 : 0,
         complemento: editableProperty.complemento,
-        quadra: editableProperty.quadra,
-        lote: editableProperty.lote,
+        sem_quadra: editSemQuadra ? 1 : 0,
+        sem_lote: editSemLote ? 1 : 0,
+        quadra: editSemQuadra ? null : editableProperty.quadra,
+        lote: editSemLote ? null : editableProperty.lote,
         tipo_lote: editableProperty.tipo_lote,
         bedrooms: editableProperty.bedrooms,
         bathrooms: editableProperty.bathrooms,
@@ -2921,11 +2952,49 @@
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Quadra:</strong>
-                <input name="quadra" maxlength="25" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.quadra} />
+                <input
+                  name="quadra"
+                  maxlength="25"
+                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
+                  bind:value={editableProperty.quadra}
+                  disabled={editSemQuadra}
+                />
+              </label>
+              <label class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="sem_quadra"
+                  bind:checked={editSemQuadra}
+                  on:change={() => {
+                    if (editSemQuadra && editableProperty) {
+                      editableProperty.quadra = '';
+                    }
+                  }}
+                />
+                <span>Sem quadra</span>
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Lote:</strong>
-                <input name="lote" maxlength="25" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.lote} />
+                <input
+                  name="lote"
+                  maxlength="25"
+                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
+                  bind:value={editableProperty.lote}
+                  disabled={editSemLote}
+                />
+              </label>
+              <label class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="sem_lote"
+                  bind:checked={editSemLote}
+                  on:change={() => {
+                    if (editSemLote && editableProperty) {
+                      editableProperty.lote = '';
+                    }
+                  }}
+                />
+                <span>Sem lote</span>
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Tipo do lote:</strong>

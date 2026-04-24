@@ -1169,7 +1169,7 @@
 
           <div class="mt-3">
             <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
-              O envio inicia automaticamente ao selecionar o arquivo (Substituir PDF).
+              O envio inicia automaticamente ao selecionar o arquivo.
             </p>
             {#key signedPdfInputRenderKey}
               <input
@@ -1190,7 +1190,7 @@
                 {#if uploadingSignedPdf}
                   <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                 {/if}
-                Substituir PDF
+                {selectedProposal?.signedDocumentId != null ? 'Substituir PDF' : 'Enviar PDF'}
               </Button>
             </div>
             {#if uploadingSignedPdf}

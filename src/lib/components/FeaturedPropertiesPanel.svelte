@@ -5,13 +5,17 @@
 
   type FeaturedProperty = {
     id: number;
+    code?: string | null;
     title: string;
+    bairro?: string | null;
     city?: string | null;
     state?: string | null;
     price?: number | null;
     price_sale?: number | null;
     price_rent?: number | null;
     purpose?: string | null;
+    broker_name?: string | null;
+    property_image_url?: string | null;
     position?: number | null;
   };
 
@@ -38,6 +42,13 @@
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
+  function formatLocation(item: FeaturedProperty): string {
+    const parts = [item.bairro, item.city, item.state]
+      .map((value) => String(value ?? '').trim())
+      .filter((value) => value.length > 0);
+    return parts.length > 0 ? parts.join(' - ') : '-';
+  }
+
   async function loadFeatured() {
     isLoadingFeatured = true;
     try {
@@ -58,7 +69,7 @@
       const params = new URLSearchParams();
       params.append('status', 'approved');
       const trimmedSearch = search.trim();
-      params.append('limit', trimmedSearch ? '100' : '5');
+      params.append('limit', trimmedSearch ? '100' : '12');
       params.append('page', '1');
       params.append('sortBy', 'p.created_at');
       params.append('sortOrder', 'desc');
@@ -235,7 +246,7 @@
           name="featured_search"
           maxlength="120"
           class="w-44 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-          placeholder="Buscar..."
+          placeholder="Buscar por título, ID, código, cidade ou anunciante..."
           value={search}
           on:input={handleSearchInput}
         />
@@ -248,31 +259,62 @@
           Nenhum imóvel aprovado encontrado.
         </div>
       {:else}
-        <div class="space-y-3">
-          {#each candidates as item}
-            <div class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-950">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    {item.title}
-                  </p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    {item.city ?? '-'} / {item.state ?? '-'}
-                  </p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    {formatCurrency(item.price_sale ?? item.price)} • {item.purpose ?? 'Sem finalidade'}
-                  </p>
-                </div>
-                <button
-                  class="rounded-md border border-green-200 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-900/30"
-                  on:click={() => addFeatured(item)}
-                  disabled={selectedIds.has(item.id) || featured.length >= MAX_FEATURED}
-                >
-                  {selectedIds.has(item.id) ? 'Adicionado' : 'Adicionar'}
-                </button>
-              </div>
-            </div>
-          {/each}
+        <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
+          <table class="w-full min-w-[720px] text-sm">
+            <thead class="bg-gray-50 dark:bg-gray-900/60">
+              <tr>
+                <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Foto</th>
+                <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">ID/Código</th>
+                <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Localização</th>
+                <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Valor</th>
+                <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Anunciante</th>
+                <th class="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-200">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each candidates as item}
+                <tr class="border-t border-gray-200 dark:border-gray-800">
+                  <td class="px-3 py-2">
+                    {#if item.property_image_url}
+                      <img
+                        src={item.property_image_url}
+                        alt={item.title}
+                        class="h-12 w-16 rounded-md object-cover"
+                        loading="lazy"
+                      />
+                    {:else}
+                      <div class="flex h-12 w-16 items-center justify-center rounded-md bg-gray-100 text-[10px] text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                        Sem foto
+                      </div>
+                    {/if}
+                  </td>
+                  <td class="px-3 py-2 text-gray-700 dark:text-gray-200">
+                    <div class="font-semibold">#{item.id}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">{item.code ?? '-'}</div>
+                  </td>
+                  <td class="px-3 py-2 text-gray-700 dark:text-gray-200">
+                    <div class="font-medium">{item.title}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">{formatLocation(item)}</div>
+                  </td>
+                  <td class="px-3 py-2 text-gray-700 dark:text-gray-200">
+                    {formatCurrency(item.price_sale ?? item.price)}
+                  </td>
+                  <td class="px-3 py-2 text-gray-700 dark:text-gray-200">
+                    {item.broker_name ?? '-'}
+                  </td>
+                  <td class="px-3 py-2 text-right">
+                    <button
+                      class="rounded-md border border-green-200 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-900/30"
+                      on:click={() => addFeatured(item)}
+                      disabled={selectedIds.has(item.id) || featured.length >= MAX_FEATURED}
+                    >
+                      {selectedIds.has(item.id) ? 'Adicionado' : 'Adicionar'}
+                    </button>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
         </div>
       {/if}
     </div>
