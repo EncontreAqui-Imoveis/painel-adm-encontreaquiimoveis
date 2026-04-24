@@ -8,7 +8,6 @@
   import { Button } from '$lib/components/ui/button';
   import * as Select from '$lib/components/ui/select';
   import { Input } from '$lib/components/ui/input';
-  import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import {
     clampAreaInput,
     clampCountInput,
@@ -135,8 +134,6 @@
   let selectedProperty: PropertyDetails | null = null;
   let isDetailLoading = false;
   let isProcessing = false;
-  let isDeleteDialogOpen = false;
-  let deleteError: string | null = null;
   let isEditMode = false;
   let editableProperty: PropertyDetails | null = null;
   let editSemNumero = false;
@@ -751,6 +748,32 @@
     return normalizeImages(selectedProperty?.images ?? null);
   }
 
+  function patchSelectedPropertyMedia(
+    patch: Partial<Pick<PropertyDetails, 'images' | 'video_url'>>,
+  ) {
+    if (!selectedProperty) return;
+    selectedProperty = { ...selectedProperty, ...patch };
+    properties = properties.map((item) =>
+      item.id === selectedProperty?.id ? { ...item, ...patch } : item,
+    );
+
+    if ('images' in patch) {
+      const nextImages = normalizeImages(patch.images ?? null);
+      if (isImagePreviewOpen) {
+        previewImagesSnapshot = nextImages;
+        if (nextImages.length === 0) {
+          previewImageIndex = 0;
+          previewImageUrl = null;
+        } else {
+          previewImageIndex = Math.min(previewImageIndex, nextImages.length - 1);
+          previewImageUrl = nextImages[previewImageIndex]?.url ?? null;
+        }
+      } else {
+        previewImagesSnapshot = [];
+      }
+    }
+  }
+
   function humanizeStatus(status: PropertyStatus, purpose?: string | null): string {
     if (status === 'approved' && purpose) {
       return purpose;
@@ -1098,8 +1121,6 @@
     clearStagedImages();
     clearStagedVideo();
     isModalOpen = false;
-    isDeleteDialogOpen = false;
-    deleteError = null;
     selectedProperty = null;
     editableProperty = null;
     editSemNumero = false;
@@ -1149,52 +1170,6 @@
         clearSessionToken();
       } else {
         toast.error(extractApiErrorMessage(err, 'Falha ao atualizar o status.'));
-      }
-    } finally {
-      isProcessing = false;
-    }
-  }
-
-  async function handleDeleteProperty() {
-    if (!selectedProperty) {
-      toast.error('Erro de estado: o imóvel selecionado esta nulo. Tente fechar e reabrir o modal.');
-      return;
-    }
-
-    isDeleteDialogOpen = true;
-  }
-
-  async function confirmDeleteProperty(password: string) {
-    if (!selectedProperty) {
-      return;
-    }
-
-    isProcessing = true;
-    deleteError = null;
-    try {
-      const response = await api.post<{ reauthToken: string }>('/admin/reauth', {
-        password,
-      });
-      await api.delete(`/admin/properties/${selectedProperty.id}`, {
-        headers: {
-          'X-Admin-Reauth': response.reauthToken,
-        },
-      });
-      toast.success('Imóvel marcado como vendido.');
-      isDeleteDialogOpen = false;
-      isModalOpen = false;
-      clearStagedImages();
-      clearStagedVideo();
-      selectedProperty = null;
-      await fetchProperties();
-    } catch (err) {
-      console.error('Falha ao excluir o imóvel:', err);
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 401) {
-        toast.error('Sua sessão expirou. Por favor, faca login novamente.');
-        clearSessionToken();
-      } else {
-        deleteError = extractApiErrorMessage(err, 'Falha ao excluir o imóvel.');
       }
     } finally {
       isProcessing = false;
@@ -1756,11 +1731,14 @@
       return;
     }
     imageDeleteError = null;
+    const previousImages = selectedPropertyImages();
+    const nextImages = previousImages.filter((image) => image.id !== imageId);
     try {
+      patchSelectedPropertyMedia({ images: nextImages });
       await api.delete(`/admin/properties/${selectedProperty.id}/images/${imageId}`);
       toast.success('Imagem removida com sucesso.');
-      await reviewProperty(selectedProperty as PropertySummary);
     } catch (err: any) {
+      patchSelectedPropertyMedia({ images: previousImages });
       console.error('Erro ao remover imagem:', err);
       const status = err?.response?.status;
       if (status === 401) {
@@ -1782,7 +1760,13 @@
     previewImageDeleteBusy = true;
     try {
       await handleImageDelete(img.id);
-      closeImagePreview();
+      const remaining = previewImages;
+      if (remaining.length === 0) {
+        closeImagePreview();
+        return;
+      }
+      previewImageIndex = Math.min(previewImageIndex, remaining.length - 1);
+      previewImageUrl = remaining[previewImageIndex]?.url ?? null;
     } finally {
       previewImageDeleteBusy = false;
     }
@@ -1794,15 +1778,17 @@
     if (!confirmed) return;
     videoDeleting = true;
     videoDeleteError = null;
+    const previousVideoUrl = selectedProperty.video_url ?? null;
     try {
+      patchSelectedPropertyMedia({ video_url: null });
       await api.delete(`/admin/properties/${selectedProperty.id}/video`);
       toast.success('Vídeo removido com sucesso.');
-      await reviewProperty(selectedProperty as PropertySummary);
       clearStagedVideo();
       if (videoInputEl) {
         videoInputEl.value = '';
       }
     } catch (err: any) {
+      patchSelectedPropertyMedia({ video_url: previousVideoUrl });
       console.error('Erro ao remover vídeo:', err);
       const status = err?.response?.status;
       if (status === 401) {
@@ -1865,16 +1851,28 @@
     if (!selectedProperty || !stagedVideo) return;
     videoUploading = true;
     videoDeleteError = null;
+    const optimisticVideoUrl = stagedVideoPreview;
+    const previousVideoUrl = selectedProperty.video_url ?? null;
     try {
+      patchSelectedPropertyMedia({ video_url: optimisticVideoUrl });
       const form = new FormData();
       form.append('video', stagedVideo);
-      await apiClient.post(`/admin/properties/${selectedProperty.id}/video`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const response = await apiClient.post<{ video?: string | null }>(
+        `/admin/properties/${selectedProperty.id}/video`,
+        form,
+      );
+      const responseData = response.data;
+      const persistedVideoUrl =
+        typeof responseData?.video === 'string' && responseData.video.trim().length > 0
+          ? responseData.video.trim()
+          : null;
+      if (persistedVideoUrl) {
+        patchSelectedPropertyMedia({ video_url: persistedVideoUrl });
+      }
       toast.success('Vídeo enviado com sucesso.');
       clearStagedVideo();
-      await reviewProperty(selectedProperty as PropertySummary);
     } catch (err: any) {
+      patchSelectedPropertyMedia({ video_url: previousVideoUrl });
       console.error('Erro ao enviar video:', err);
       videoDeleteError =
         extractApiErrorMessage(err, '') ||
@@ -2421,10 +2419,32 @@
                   on:change={() => {
                     const flags = getPurposeFlags(editableProperty?.purpose ?? null);
                     if (!flags.supportsSale) {
+                      if (editableProperty) {
+                        editableProperty.price_sale = null;
+                        editableProperty.promotion_price = null;
+                        editableProperty.promotion_percentage = null;
+                      }
+                      editPriceSaleDisplay = '';
                       editPromotionSalePercentageDisplay = '';
+                      editPromotionPriceSaleDisplay = '';
                     }
                     if (!flags.supportsRent) {
+                      if (editableProperty) {
+                        editableProperty.price_rent = null;
+                        editableProperty.promotional_rent_price = null;
+                        editableProperty.promotional_rent_percentage = null;
+                      }
+                      editPriceRentDisplay = '';
                       editPromotionRentPercentageDisplay = '';
+                      editPromotionPriceRentDisplay = '';
+                    }
+                    if (editableProperty) {
+                      editableProperty.price =
+                        flags.supportsSale && !flags.supportsRent
+                          ? editableProperty.price_sale
+                          : flags.supportsRent && !flags.supportsSale
+                            ? editableProperty.price_rent
+                            : null;
                     }
                     refreshPromotionPreviewDisplays();
                   }}
@@ -2630,13 +2650,6 @@
                     Salvar
                   </Button>
                 {/if}
-                <Button
-                  variant="destructive"
-                  on:click={handleDeleteProperty}
-                  disabled={isProcessing || isSavingEdit}
-                >
-                  Marcar como vendido
-                </Button>
                 {#if selectedProperty}
                   <Button
                     variant="outline"
@@ -3305,13 +3318,6 @@
               Rejeitar
             </Button>
           {/if}
-        {:else}
-          <Button variant="destructive" on:click={handleDeleteProperty} disabled={isProcessing}>
-            {#if isProcessing}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Marcar como vendido
-          </Button>
         {/if}
           {#if isEditMode && editableProperty}
             <Button
@@ -3347,11 +3353,25 @@
 {#if rejectDialogOpen}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
     <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
-      <div class="space-y-2">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Rejeitar imóvel</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-300">
-          Informe a observação que justifica a rejeição antes de concluir a ação.
-        </p>
+      <div class="flex items-start justify-between gap-3">
+        <div class="space-y-2">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Rejeitar imóvel</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-300">
+            Informe a observação que justifica a rejeição antes de concluir a ação.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          on:click={() => {
+            rejectDialogOpen = false;
+            rejectObservation = '';
+            rejectObservationError = null;
+          }}
+          aria-label="Fechar modal"
+        >
+          ×
+        </button>
       </div>
       <label class="mt-4 block">
         <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Observação</span>
@@ -3384,18 +3404,6 @@
     </div>
   </div>
 {/if}
-
-<AdminPasswordConfirmDialog
-  bind:open={isDeleteDialogOpen}
-  title="Marcar imóvel como vendido"
-  description={selectedProperty
-    ? `LGPD: o cadastro nao e apagado. Confirme sua senha para marcar "${selectedProperty.title}" como vendido e retirar da vitrine.`
-    : ''}
-  confirmLabel="Confirmar (vendido)"
-  isSubmitting={isProcessing}
-  error={deleteError}
-  on:confirm={(event) => confirmDeleteProperty(event.detail.password)}
-/>
 
 <PromotionNotificationModal
   open={isPromotionNotificationModalOpen}

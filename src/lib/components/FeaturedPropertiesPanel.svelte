@@ -39,6 +39,26 @@
 
   $: canSave = !isSaving && !isLoadingFeatured;
 
+  function sortFeaturedList(items: FeaturedProperty[]): FeaturedProperty[] {
+    return items
+      .map((item, index) => ({ item, index }))
+      .sort((a, b) => {
+        const aPosition = Number.isFinite(Number(a.item.position)) ? Number(a.item.position) : Number.MAX_SAFE_INTEGER;
+        const bPosition = Number.isFinite(Number(b.item.position)) ? Number(b.item.position) : Number.MAX_SAFE_INTEGER;
+        if (aPosition !== bPosition) return aPosition - bPosition;
+        return a.index - b.index;
+      })
+      .map(({ item }) => item);
+  }
+
+  function mergeCandidatesWithFeatured(items: FeaturedProperty[]): FeaturedProperty[] {
+    const merged = new Map<number, FeaturedProperty>();
+    for (const item of [...featuredSale, ...featuredRent, ...items]) {
+      merged.set(item.id, { ...(merged.get(item.id) ?? {}), ...item });
+    }
+    return Array.from(merged.values());
+  }
+
   onMount(() => {
     loadFeatured();
     loadCandidates();
@@ -128,13 +148,13 @@
       }>('/admin/featured-properties');
       const data = payload?.data;
       if (Array.isArray(data)) {
-        featuredSale = data;
+        featuredSale = sortFeaturedList(data);
         featuredRent = [];
         return;
       }
       if (data && typeof data === 'object' && 'sale' in data && 'rent' in data) {
-        featuredSale = Array.isArray(data.sale) ? data.sale : [];
-        featuredRent = Array.isArray(data.rent) ? data.rent : [];
+        featuredSale = sortFeaturedList(Array.isArray(data.sale) ? data.sale : []);
+        featuredRent = sortFeaturedList(Array.isArray(data.rent) ? data.rent : []);
         return;
       }
       featuredSale = [];
@@ -166,7 +186,7 @@
       const payload = await api.get<{ data?: FeaturedProperty[] }>(
         `/admin/properties-with-brokers?${params.toString()}`
       );
-      candidates = payload?.data ?? [];
+      candidates = mergeCandidatesWithFeatured(payload?.data ?? []);
     } catch (err) {
       console.error('Erro ao carregar imóveis aprovados:', err);
       toast.error('Erro ao carregar imóveis aprovados.');
@@ -256,9 +276,41 @@
     const inS = featuredSale.some((i) => i.id === item.id);
     const inR = featuredRent.some((i) => i.id === item.id);
     if (inS && inR) return 'Nos dois';
-    if (isDualPurpose(item.purpose) && inS && !inR) return '+ Aluguel';
-    if (isDualPurpose(item.purpose) && inR && !inS) return '+ Venda';
+    if (isDualPurpose(item.purpose) && inS && !inR) return 'Adicionar aluguel';
+    if (isDualPurpose(item.purpose) && inR && !inS) return 'Adicionar venda';
     return 'Adicionar';
+  }
+
+  function membershipLabel(item: FeaturedProperty): string | null {
+    const inS = featuredSale.some((i) => i.id === item.id);
+    const inR = featuredRent.some((i) => i.id === item.id);
+    if (inS && inR) return 'Já está em Venda e Aluguel';
+    if (inS) return 'Já está em Venda';
+    if (inR) return 'Já está em Aluguel';
+    return null;
+  }
+
+  function candidatePriceLabel(item: FeaturedProperty): string {
+    const supportsSale = purposeSupportsSale(item.purpose);
+    const supportsRent = purposeSupportsRent(item.purpose);
+    const saleValue = item.price_sale ?? (supportsSale && !supportsRent ? item.price : null);
+    const rentValue = item.price_rent ?? (supportsRent && !supportsSale ? item.price : null);
+
+    if (supportsSale && supportsRent) {
+      return `Venda: ${formatCurrency(saleValue)} · Aluguel: ${formatCurrency(rentValue)}`;
+    }
+    if (supportsSale) return formatCurrency(saleValue);
+    if (supportsRent) return formatCurrency(rentValue);
+    return formatCurrency(item.price);
+  }
+
+  function crossScopeBadge(scope: 'sale' | 'rent', item: FeaturedProperty): string | null {
+    const isAlsoInSale = featuredSale.some((featured) => featured.id === item.id);
+    const isAlsoInRent = featuredRent.some((featured) => featured.id === item.id);
+
+    if (scope === 'sale' && isAlsoInRent) return 'Também em Aluguel';
+    if (scope === 'rent' && isAlsoInSale) return 'Também em Venda';
+    return null;
   }
 
   function rowAddDisabled(item: FeaturedProperty): boolean {
@@ -361,9 +413,16 @@
               <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-950">
                 <div class="flex items-start justify-between gap-3">
                   <div>
-                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      {index + 1}. {item.title}
-                    </p>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {index + 1}. {item.title}
+                      </p>
+                      {#if crossScopeBadge('sale', item)}
+                        <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+                          {crossScopeBadge('sale', item)}
+                        </span>
+                      {/if}
+                    </div>
                     <p class="text-xs text-gray-500 dark:text-gray-400">
                       {item.city ?? '-'} / {item.state ?? '-'}
                     </p>
@@ -434,9 +493,16 @@
               <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-950">
                 <div class="flex items-start justify-between gap-3">
                   <div>
-                    <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      {index + 1}. {item.title}
-                    </p>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {index + 1}. {item.title}
+                      </p>
+                      {#if crossScopeBadge('rent', item)}
+                        <span class="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800 dark:bg-sky-900/50 dark:text-sky-200">
+                          {crossScopeBadge('rent', item)}
+                        </span>
+                      {/if}
+                    </div>
                     <p class="text-xs text-gray-500 dark:text-gray-400">
                       {item.city ?? '-'} / {item.state ?? '-'}
                     </p>
@@ -556,20 +622,27 @@
                     {item.purpose ?? '-'}
                   </td>
                   <td class="px-3 py-2 text-gray-700 dark:text-gray-200">
-                    {formatCurrency(item.price_sale ?? item.price_rent ?? item.price)}
+                    {candidatePriceLabel(item)}
                   </td>
                   <td class="px-3 py-2 text-gray-700 dark:text-gray-200">
                     {item.broker_name ?? '-'}
                   </td>
                   <td class="px-3 py-2 text-right">
-                    <button
-                      class="rounded-md border border-green-200 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-900/30"
-                      type="button"
-                      on:click={() => requestAdd(item)}
-                      disabled={rowAddDisabled(item)}
-                    >
-                      {addStateLabel(item)}
-                    </button>
+                    <div class="flex flex-col items-end gap-1">
+                      <button
+                        class="rounded-md border border-green-200 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-900/30"
+                        type="button"
+                        on:click={() => requestAdd(item)}
+                        disabled={rowAddDisabled(item)}
+                      >
+                        {addStateLabel(item)}
+                      </button>
+                      {#if membershipLabel(item)}
+                        <span class="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                          {membershipLabel(item)}
+                        </span>
+                      {/if}
+                    </div>
                   </td>
                 </tr>
               {/each}
@@ -594,12 +667,24 @@
       aria-modal="true"
       aria-labelledby="dual-modal-title"
     >
-      <h3 id="dual-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        Onde exibir?
-      </h3>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        {dual.title} — venda e aluguel. Escolha a(s) vitrine(s).
-      </p>
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h3 id="dual-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Onde exibir?
+          </h3>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {dual.title} — venda e aluguel. Escolha a(s) vitrine(s).
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          on:click={closeDualModal}
+          aria-label="Fechar modal"
+        >
+          ×
+        </button>
+      </div>
       <div class="mt-4 space-y-3">
         <label class="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
           <input

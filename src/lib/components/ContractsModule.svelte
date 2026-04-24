@@ -1976,25 +1976,35 @@
       aria-labelledby="contract-modal-title"
       aria-describedby="contract-modal-description"
     >
-      <div class="mb-4">
-        <h3 id="contract-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          {modalMode === 'review_docs'
-            ? 'Análise de Documentação'
-            : modalMode === 'upload_draft'
-            ? 'Anexar Minuta'
-            : modalMode === 'finalize'
-            ? 'Finalizar Venda/Locação'
-            : 'Editar Contrato Finalizado'}
-        </h3>
-        <p id="contract-modal-description" class="text-sm text-gray-500 dark:text-gray-400">
-          ID {selected.propertyId}{#if selected.propertyCode}{' · Código '}{selected.propertyCode}{/if}
-          {#if selected.propertyTitle}
-            {' — '}{selected.propertyTitle}
-          {/if}
-        </p>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Etapa: {statusLabel(selected.status)}
-        </p>
+      <div class="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h3 id="contract-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            {modalMode === 'review_docs'
+              ? 'Análise de Documentação'
+              : modalMode === 'upload_draft'
+              ? 'Anexar Minuta'
+              : modalMode === 'finalize'
+              ? 'Finalizar Venda/Locação'
+              : 'Editar Contrato Finalizado'}
+          </h3>
+          <p id="contract-modal-description" class="text-sm text-gray-500 dark:text-gray-400">
+            ID {selected.propertyId}{#if selected.propertyCode}{' · Código '}{selected.propertyCode}{/if}
+            {#if selected.propertyTitle}
+              {' — '}{selected.propertyTitle}
+            {/if}
+          </p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Etapa: {statusLabel(selected.status)}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          on:click={() => closeModal()}
+          aria-label="Fechar modal"
+        >
+          ×
+        </button>
       </div>
 
       {#if modalMode !== 'review_docs' && getApprovalRemarkSummaries(selected).length > 0}

@@ -264,11 +264,26 @@
 {#if rejectDialogOpen}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
     <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
-      <div class="space-y-2">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Rejeitar imóvel</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-300">
-          Informe uma observação para justificar a rejeição.
-        </p>
+      <div class="flex items-start justify-between gap-3">
+        <div class="space-y-2">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Rejeitar imóvel</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-300">
+            Informe uma observação para justificar a rejeição.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          on:click={() => {
+            rejectDialogOpen = false;
+            selectedRejectId = null;
+            rejectObservation = '';
+            rejectObservationError = null;
+          }}
+          aria-label="Fechar modal"
+        >
+          ×
+        </button>
       </div>
       <label class="mt-4 block">
         <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Observação</span>

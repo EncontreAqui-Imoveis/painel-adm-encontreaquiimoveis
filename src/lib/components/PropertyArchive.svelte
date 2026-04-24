@@ -748,13 +748,25 @@
     on:keydown={() => {}}
   >
     <div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900">
-      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Disponibilizar Imóvel</h3>
-      <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-        Tem certeza que deseja disponibilizar este imóvel novamente? Ele retornará imediatamente para o catálogo do aplicativo de todos os corretores.
-      </p>
-      <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
-        <strong>Imóvel:</strong> {selected.code ? `${selected.code} - ` : ''}{selected.title}
-      </p>
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Disponibilizar Imóvel</h3>
+          <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            Tem certeza que deseja disponibilizar este imóvel novamente? Ele retornará imediatamente para o catálogo do aplicativo de todos os corretores.
+          </p>
+          <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
+            <strong>Imóvel:</strong> {selected.code ? `${selected.code} - ` : ''}{selected.title}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          on:click={() => closeModal()}
+          aria-label="Fechar modal"
+        >
+          ×
+        </button>
+      </div>
 
       <div class="mt-5 flex justify-end gap-2">
         <Button

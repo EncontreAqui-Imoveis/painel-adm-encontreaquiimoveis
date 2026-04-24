@@ -805,13 +805,23 @@
       aria-modal="true"
       aria-labelledby="commission-edit-title"
     >
-      <div class="mb-4">
-        <h3 id="commission-edit-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Editar VGV
-        </h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400">
-          {propertyLabel(selectedTransaction)}
-        </p>
+      <div class="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h3 id="commission-edit-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Editar VGV
+          </h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            {propertyLabel(selectedTransaction)}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          on:click={closeEditModal}
+          aria-label="Fechar modal"
+        >
+          ×
+        </button>
       </div>
 
       <div class="space-y-4">
