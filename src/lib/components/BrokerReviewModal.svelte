@@ -123,12 +123,13 @@
 
     isProcessing = true;
     try {
-      const response = await api.patch<{ role?: string; status?: string }>(`/admin/brokers/${broker.id}/status`, {
+      const response = await api.patch<{ role?: string; status?: string; data?: { role?: string; status?: string } }>(`/admin/brokers/${broker.id}/status`, {
         status: newStatus,
       });
-      const resolvedStatus = String(response?.status ?? newStatus).trim() || newStatus;
+      const payload = response?.data && typeof response.data === 'object' ? response.data : response;
+      const resolvedStatus = String(payload?.status ?? newStatus).trim() || newStatus;
       const resolvedRole =
-        response?.role ?? (resolvedStatus === 'approved' ? 'broker' : 'client');
+        payload?.role ?? (resolvedStatus === 'approved' ? 'broker' : 'client');
       brokerDetail = brokerDetail
         ? {
             ...brokerDetail,

@@ -25,7 +25,8 @@
     | 'PENDING'
     | 'APPROVED'
     | 'APPROVED_WITH_RES'
-    | 'REJECTED';
+    | 'REJECTED'
+    | 'NOT_APPLICABLE';
 
   type ContractDocument = {
     id: number;
@@ -290,13 +291,21 @@
 
   function hasDocumentReviewStatus(doc?: ContractDocument | null): boolean {
     const status = normalizeDocumentStatus(doc);
-    return status === 'APPROVED' || status === 'REJECTED' || status === 'PENDING';
+    return (
+      status === 'APPROVED' ||
+      status === 'APPROVED_WITH_RES' ||
+      status === 'REJECTED' ||
+      status === 'NOT_APPLICABLE' ||
+      status === 'PENDING'
+    );
   }
 
   function documentStatusLabel(doc?: ContractDocument | null): string {
     const status = normalizeDocumentStatus(doc);
     if (status === 'APPROVED') return 'Aprovado';
+    if (status === 'APPROVED_WITH_RES') return 'Aprovado com ressalvas';
     if (status === 'REJECTED') return 'Rejeitado';
+    if (status === 'NOT_APPLICABLE') return 'Não aplicável';
     if (status === 'PENDING') return 'Pendente';
     return '';
   }
@@ -306,8 +315,14 @@
     if (status === 'APPROVED') {
       return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
     }
+    if (status === 'APPROVED_WITH_RES') {
+      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+    }
     if (status === 'REJECTED') {
       return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
+    }
+    if (status === 'NOT_APPLICABLE') {
+      return 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300';
     }
     if (status === 'PENDING') {
       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
@@ -689,10 +704,9 @@
     return null;
   }
 
-  function isDoubleEndedDeal(contract: ContractItem): boolean {
-    const capturing = Number(contract.capturingBrokerId ?? 0);
-    const selling = Number(contract.sellingBrokerId ?? 0);
-    return capturing > 0 && selling > 0 && capturing === selling;
+  function isDoubleEndedDeal(_contract: ContractItem): boolean {
+    // "corretor vendedor/selling broker" virou legado e não participa mais da UI.
+    return false;
   }
 
   function requiresExactSaleSplit(contract: ContractItem | null): boolean {
@@ -720,7 +734,6 @@
     if (side === 'seller') return 'seller';
     if (side === 'buyer') return 'buyer';
     if (side === 'captador' || side === 'capturing') return 'seller';
-    if (side === 'vendedor' || side === 'selling') return 'buyer';
     return null;
   }
 
@@ -2852,7 +2865,7 @@
                 />
               </label>
               <label class="text-sm text-gray-700 dark:text-gray-200">
-                Comissão Vendedor {finalizeSplitMode === 'amount' ? '(R$)' : '(%)'}
+                Comissão complementar {finalizeSplitMode === 'amount' ? '(R$)' : '(%)'}
                 <input
                   type="text"
                   inputmode="decimal"

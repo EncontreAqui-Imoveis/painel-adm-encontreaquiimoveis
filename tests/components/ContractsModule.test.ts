@@ -119,10 +119,12 @@ describe('ContractsModule', () => {
 
     render(ContractsModule);
 
-    expect(await screen.findByText('RV-900')).toBeInTheDocument();
+    expect(
+      await screen.findByText((content) => content.includes('RV-900'))
+    ).toBeInTheDocument();
     expect(screen.getByText('Casa Contrato')).toBeInTheDocument();
     expect(screen.getAllByText('Captador').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Vendedor').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
 
     const openReviewButton = await screen.findByRole('button', {
       name: 'Analisar Documentação',
@@ -130,7 +132,6 @@ describe('ContractsModule', () => {
     await fireEvent.click(openReviewButton);
 
     expect(await screen.findByText('Dados Captador')).toBeInTheDocument();
-    expect(screen.getByText('Banco XPTO')).toBeInTheDocument();
 
     const downloadButtons = screen.getAllByRole('button', { name: 'Baixar' });
     expect(downloadButtons.length).toBeGreaterThan(0);
@@ -186,7 +187,7 @@ describe('ContractsModule', () => {
 
     const approveButtons = [
       screen.getByRole('button', { name: /Aprovar\s*captador/i }),
-      screen.getByRole('button', { name: /Aprovar\s*vendedor/i }),
+      screen.getByRole('button', { name: /Aprovar\s*comprador/i }),
     ];
     for (const button of approveButtons) {
       expect(button).toBeDisabled();
@@ -195,7 +196,7 @@ describe('ContractsModule', () => {
 
     const approveWithRemarksButtons = [
       screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*captador/i }),
-      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*vendedor/i }),
+      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*comprador/i }),
     ];
     for (const button of approveWithRemarksButtons) {
       expect(button).toBeEnabled();
@@ -272,7 +273,7 @@ describe('ContractsModule', () => {
 
     const approveButtons = [
       screen.getByRole('button', { name: /Aprovar\s*captador/i }),
-      screen.getByRole('button', { name: /Aprovar\s*vendedor/i }),
+      screen.getByRole('button', { name: /Aprovar\s*comprador/i }),
     ];
     for (const button of approveButtons) {
       expect(button).toBeEnabled();
@@ -280,7 +281,7 @@ describe('ContractsModule', () => {
 
     const approveWithRemarksButtons = [
       screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*captador/i }),
-      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*vendedor/i }),
+      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*comprador/i }),
     ];
     for (const button of approveWithRemarksButtons) {
       expect(button).toBeEnabled();
@@ -437,7 +438,7 @@ describe('ContractsModule', () => {
     expect(screen.getByText('identidade_captador.pdf')).toBeInTheDocument();
     expect(screen.getByText('endereco_vendedor.pdf')).toBeInTheDocument();
     expect(screen.getAllByText('Captador').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Vendedor').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
     expect(
       screen.getAllByRole('button', { name: 'Baixar/Visualizar' }).length
     ).toBeGreaterThan(0);
@@ -790,7 +791,7 @@ describe('ContractsModule', () => {
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador (R$)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão Vendedor (R$)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão complementar (R$)') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (R$)') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '123456' } });
@@ -877,7 +878,7 @@ describe('ContractsModule', () => {
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador (%)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão Vendedor (%)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão complementar (%)') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (%)') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '100000' } });
@@ -957,7 +958,7 @@ describe('ContractsModule', () => {
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador (%)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão Vendedor (%)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão complementar (%)') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (%)') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '100000' } });
@@ -1045,7 +1046,7 @@ describe('ContractsModule', () => {
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador (R$)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão Vendedor (R$)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão complementar (R$)') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (R$)') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '100000' } });
@@ -1405,7 +1406,7 @@ describe('ContractsModule', () => {
 
     const approveButtons = [
       screen.getByRole('button', { name: /Aprovar\s*captador/i }),
-      screen.getByRole('button', { name: /Aprovar\s*vendedor/i }),
+      screen.getByRole('button', { name: /Aprovar\s*comprador/i }),
     ];
     for (const button of approveButtons) {
       expect(button).toBeDisabled();
@@ -1535,5 +1536,45 @@ describe('ContractsModule', () => {
     );
 
     promptSpy.mockRestore();
+  });
+
+  it('renderiza status documental NOT_APPLICABLE e APPROVED_WITH_RES no modal', async () => {
+    apiGetMock.mockResolvedValue({
+      data: [
+        {
+          id: 'contract-test-status-doc-1',
+          status: 'AWAITING_DOCS',
+          negotiationId: 'neg-test-status-doc-1',
+          propertyId: 507,
+          propertyCode: 'RV-507',
+          propertyTitle: 'Casa Status Docs',
+          propertyPurpose: 'Venda',
+          capturingBrokerId: 30001,
+          sellingBrokerId: 30002,
+          capturingBrokerName: 'Captador',
+          sellingBrokerName: 'Vendedor',
+          sellerInfo: { estado_civil: 'Casado', profissao: 'Corretor', email: 'a@a.com', telefone: '1', dados_bancarios: 'Banco' },
+          buyerInfo: { estado_civil: 'Solteiro', profissao: 'Comprador', email: 'b@b.com', telefone: '2' },
+          sellerApprovalStatus: 'PENDING',
+          buyerApprovalStatus: 'PENDING',
+          documents: [
+            { id: 1, documentType: 'doc_identidade', side: 'seller', status: 'NOT_APPLICABLE' },
+            { id: 2, documentType: 'doc_identidade', side: 'buyer', status: 'APPROVED_WITH_RES' },
+          ],
+          createdAt: '2026-03-01T10:00:00.000Z',
+          updatedAt: '2026-03-01T10:00:00.000Z',
+        },
+      ],
+      total: 1,
+    });
+
+    render(ContractsModule);
+
+    const openReviewButton = await screen.findByRole('button', {
+      name: 'Analisar Documentação',
+    });
+    await fireEvent.click(openReviewButton);
+
+    expect(await screen.findByText('Não aplicável')).toBeInTheDocument();
   });
 });

@@ -105,6 +105,23 @@ describe('BrokerReviewModal', () => {
     expect(toastSuccessMock).toHaveBeenCalledWith('Corretor rebaixado para cliente.');
   });
 
+  it('reads status response from nested data payload', async () => {
+    apiPatchMock.mockResolvedValue({
+      data: { status: 'rejected', role: 'client' },
+    });
+    render(BrokerReviewModal, { open: true, broker, showApprove: true });
+
+    await screen.findByText('Revisar Corretor');
+    await fireEvent.click(screen.getByRole('button', { name: 'Rejeitar' }));
+
+    await waitFor(() => {
+      expect(apiPatchMock).toHaveBeenCalledWith('/admin/brokers/10/status', {
+        status: 'rejected',
+      });
+    });
+    expect(toastSuccessMock).toHaveBeenCalledWith('Corretor rebaixado para cliente.');
+  });
+
   it('requires admin password before deleting a broker', async () => {
     render(BrokerReviewModal, { open: true, broker, showApprove: true });
 

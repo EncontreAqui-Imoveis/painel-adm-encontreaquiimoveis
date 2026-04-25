@@ -11,7 +11,8 @@
   type CommissionsSummary = {
     totalVGV: number;
     totalCaptadores: number;
-    totalVendedores: number;
+    totalComplementar: number;
+    totalVendedores?: number;
     totalPlataforma: number;
   };
 
@@ -23,14 +24,13 @@
     propertyCode?: string | null;
     propertyPurpose?: string | null;
     capturingBrokerName?: string | null;
-    sellingBrokerName?: string | null;
     finalizedAt?: string | null;
     signedProposalDocumentId?: number | string | null;
     signedProposalDocumentSource?: 'negotiation_documents' | null;
     commissionData: {
       valorVenda: number;
       comissaoCaptador: number;
-      comissaoVendedor: number;
+    comissaoVendedor: number;
       taxaPlataforma: number;
     };
   };
@@ -80,7 +80,7 @@
   let summary: CommissionsSummary = {
     totalVGV: 0,
     totalCaptadores: 0,
-    totalVendedores: 0,
+    totalComplementar: 0,
     totalPlataforma: 0,
   };
   let signedProposalLoadingByNegotiation: Record<string, boolean> = {};
@@ -450,21 +450,18 @@
       'VGV',
       'Captador',
       'Comissao Captador',
-      'Vendedor',
-      'Comissao Vendedor',
+      'Comissão Complementar',
       'Receita Encontre Aqui',
     ];
 
     const rows = transactions.map((item) => {
       const captador = String(item.capturingBrokerName ?? '').trim() || '-';
-      const vendedor = String(item.sellingBrokerName ?? '').trim() || '-';
       return [
         formatDate(item.finalizedAt),
         propertyLabel(item),
         numberCsv(item.commissionData?.valorVenda),
         captador,
         numberCsv(item.commissionData?.comissaoCaptador),
-        vendedor,
         numberCsv(item.commissionData?.comissaoVendedor),
         numberCsv(item.commissionData?.taxaPlataforma),
       ];
@@ -505,7 +502,7 @@
       summary = {
         totalVGV: toNumber(summaryPayload.totalVGV),
         totalCaptadores: toNumber(summaryPayload.totalCaptadores),
-        totalVendedores: toNumber(summaryPayload.totalVendedores),
+        totalComplementar: toNumber(summaryPayload.totalVendedores),
         totalPlataforma: toNumber(summaryPayload.totalPlataforma),
       };
       transactions = list.map((item) => {
@@ -525,7 +522,7 @@
       summary = {
         totalVGV: 0,
         totalCaptadores: 0,
-        totalVendedores: 0,
+        totalComplementar: 0,
         totalPlataforma: 0,
       };
     } finally {
@@ -620,9 +617,9 @@
       </p>
     </div>
     <div class="rounded-lg border border-violet-200 bg-violet-50 p-4 dark:border-violet-800 dark:bg-violet-900/20">
-      <p class="text-xs font-semibold uppercase text-violet-700 dark:text-violet-300">Repasse Vendedores</p>
+      <p class="text-xs font-semibold uppercase text-violet-700 dark:text-violet-300">Repasse Complementar</p>
       <p class="mt-2 text-2xl font-bold text-violet-900 dark:text-violet-100">
-        {formatCurrency(summary.totalVendedores)}
+        {formatCurrency(summary.totalComplementar)}
       </p>
     </div>
   </div>
@@ -665,7 +662,7 @@
               <dd class="text-right">{formatCurrency(toNumber(item.commissionData?.comissaoCaptador))}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
-              <dt>Vendedor</dt>
+              <dt>Complementar</dt>
               <dd class="text-right">{formatCurrency(toNumber(item.commissionData?.comissaoVendedor))}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
@@ -711,7 +708,7 @@
             Comissão Captador
           </th>
           <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Comissão Vendedor
+            Comissão Complementar
           </th>
           <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Receita Plataforma
@@ -883,7 +880,7 @@
               />
             </label>
             <label class="text-sm text-gray-700 dark:text-gray-200">
-              Comissão Vendedor {commissionSplitMode === 'amount' ? '(R$)' : '(%)'}
+              Comissão Complementar {commissionSplitMode === 'amount' ? '(R$)' : '(%)'}
               <input
                 type="text"
                 inputmode="decimal"

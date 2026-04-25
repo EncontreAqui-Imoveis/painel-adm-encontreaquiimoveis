@@ -82,7 +82,7 @@ describe('CommissionsModule', () => {
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador (R$)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão Vendedor (R$)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão Complementar (R$)') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (R$)') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '100000' } });
@@ -115,7 +115,7 @@ describe('CommissionsModule', () => {
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador (%)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão Vendedor (%)') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão Complementar (%)') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (%)') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '100000' } });
