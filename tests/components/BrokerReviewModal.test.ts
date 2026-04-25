@@ -122,6 +122,24 @@ describe('BrokerReviewModal', () => {
     expect(toastSuccessMock).toHaveBeenCalledWith('Corretor rebaixado para cliente.');
   });
 
+  it('shows explicit demote action for approved broker and calls demote endpoint', async () => {
+    render(BrokerReviewModal, {
+      open: true,
+      broker: { ...broker, status: 'approved' },
+      showApprove: false,
+      showReject: false,
+      showDemote: true,
+    });
+
+    await screen.findByText('Revisar Corretor');
+    await fireEvent.click(screen.getByRole('button', { name: 'Tornar Usuário' }));
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith('/admin/clients/10/demote-broker');
+    });
+    expect(toastSuccessMock).toHaveBeenCalledWith('Usuario voltou para cliente.');
+  });
+
   it('requires admin password before deleting a broker', async () => {
     render(BrokerReviewModal, { open: true, broker, showApprove: true });
 

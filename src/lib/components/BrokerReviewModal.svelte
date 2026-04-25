@@ -29,6 +29,7 @@
   export let broker: any | null = null;
   export let showApprove = false;
   export let showReject = true;
+  export let showDemote = false;
 
   let isProcessing = false;
   let brokerDetail: BrokerDetail | null = null;
@@ -153,6 +154,40 @@
     } catch (error) {
       console.error('Erro ao atualizar status do corretor:', error);
       toast.error(error instanceof Error ? error.message : 'Falha ao atualizar status.');
+    } finally {
+      isProcessing = false;
+    }
+  }
+
+  async function handleDemoteToClient() {
+    if (!broker) return;
+
+    isProcessing = true;
+    try {
+      const response = await api.post<{ role?: string; status?: string; data?: { role?: string; status?: string } }>(
+        `/admin/clients/${broker.id}/demote-broker`,
+        {}
+      );
+      const payload = response?.data && typeof response.data === 'object' ? response.data : response;
+      const resolvedStatus = String(payload?.status ?? 'rejected').trim() || 'rejected';
+      const resolvedRole = payload?.role ?? 'client';
+      brokerDetail = brokerDetail
+        ? {
+            ...brokerDetail,
+            status: resolvedStatus,
+          }
+        : brokerDetail;
+      toast.success('Usuario voltou para cliente.');
+
+      dispatch('update', {
+        brokerId: broker.id,
+        status: resolvedStatus,
+        role: resolvedRole,
+      });
+      close();
+    } catch (error) {
+      console.error('Erro ao tornar usuario cliente:', error);
+      toast.error(error instanceof Error ? error.message : 'Falha ao tornar usuario cliente.');
     } finally {
       isProcessing = false;
     }
@@ -421,6 +456,19 @@
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
             {/if}
             Rejeitar
+          </Button>
+        {/if}
+        {#if showDemote}
+          <Button
+            variant="destructive"
+            className="bg-amber-600 text-white hover:bg-amber-700"
+            on:click={handleDemoteToClient}
+            disabled={isProcessing}
+          >
+            {#if isProcessing}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Tornar Usuário
           </Button>
         {/if}
         <Button className="bg-red-700 text-white hover:bg-red-800" on:click={() => (isDeleteDialogOpen = true)} disabled={isProcessing}>

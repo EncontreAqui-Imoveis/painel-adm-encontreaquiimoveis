@@ -622,6 +622,7 @@
   bind:open={isReviewModalOpen}
   broker={brokerUnderReview}
   showReject={false}
+  showDemote={true}
   on:update={handleBrokerReviewUpdate}
   on:close={() => (brokerUnderReview = null)}
 />
