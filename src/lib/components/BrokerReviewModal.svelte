@@ -4,7 +4,7 @@
   import { api } from '$lib/apiClient';
   import * as Dialog from '$lib/components/ui/dialog';
   import { Button } from '$lib/components/ui/button';
-  import { Loader2 } from 'lucide-svelte';
+  import { Loader2, Trash2, Upload, Eye, X } from 'lucide-svelte';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
 
@@ -23,6 +23,10 @@
     creci?: string | null;
     status?: string | null;
     created_at?: string | null;
+    creci_front_url?: string | null;
+    creci_back_url?: string | null;
+    selfie_url?: string | null;
+    document_status?: string | null;
   };
 
   export let open = false;
@@ -41,6 +45,12 @@
   let isEditMode = false;
   let deleteError: string | null = null;
   let isDeleteDialogOpen = false;
+  let isDocumentPreviewOpen = false;
+  let previewUrl = '';
+  let previewTitle = '';
+  let isDeletingDocument = false;
+  let isUploadingDocument = false;
+  let documentInputEl: HTMLInputElement;
   let brokerForm = {
     name: '',
     email: '',
@@ -259,6 +269,58 @@
       isProcessing = false;
     }
   }
+
+  async function handleDocumentDelete(docType: string) {
+    if (!brokerDetail) return;
+    if (!confirm(`Tem certeza que deseja excluir o documento?`)) return;
+
+    isDeletingDocument = true;
+    try {
+      await api.delete(`/admin/brokers/${brokerDetail.id}/documents/${docType}`);
+      toast.success('Documento excluído.');
+      await fetchBrokerDetail(brokerDetail.id);
+    } catch (error) {
+      console.error('Erro ao excluir documento:', error);
+      toast.error('Falha ao excluir documento.');
+    } finally {
+      isDeletingDocument = false;
+    }
+  }
+
+  let currentUploadDocType = '';
+  function triggerDocumentUpload(docType: string) {
+    currentUploadDocType = docType;
+    documentInputEl.click();
+  }
+
+  async function handleDocumentFileChange(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0 || !brokerDetail) return;
+
+    const file = input.files[0];
+    isUploadingDocument = true;
+
+    try {
+      const formData = new FormData();
+      formData.append(currentUploadDocType, file);
+
+      await api.post(`/admin/brokers/${brokerDetail.id}/documents`, formData);
+      toast.success('Documento enviado com sucesso.');
+      await fetchBrokerDetail(brokerDetail.id);
+    } catch (error) {
+      console.error('Erro ao enviar documento:', error);
+      toast.error('Falha ao enviar documento.');
+    } finally {
+      isUploadingDocument = false;
+      input.value = '';
+    }
+  }
+
+  function openPreview(url: string, title: string) {
+    previewUrl = url;
+    previewTitle = title;
+    isDocumentPreviewOpen = true;
+  }
 </script>
 
 <Dialog.Root bind:open={open}>
@@ -369,55 +431,165 @@
               </div>
             </div>
 
-            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-              <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Endereco</div>
-              <div class="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                {brokerDetail?.street ?? '-'}
-              </div>
-              <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Numero</div>
-                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {brokerDetail?.number ?? '-'}
-                  </div>
+            </div>
+
+            <div class="mt-6 space-y-4">
+              <h4 class="text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Documentação</h4>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <!-- Frente CRECI -->
+                <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
+                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">Frente do CRECI</div>
+                  {#if brokerDetail?.creci_front_url}
+                    <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                      <img src={brokerDetail.creci_front_url} alt="Frente do CRECI" class="h-full w-full object-cover" />
+                      <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                        <div class="flex gap-2">
+                          <button
+                            type="button"
+                            class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+                            on:click={() => openPreview(brokerDetail!.creci_front_url!, 'Frente do CRECI')}
+                            title="Visualizar"
+                          >
+                            <Eye class="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-full bg-red-500 p-2 text-white shadow-sm hover:bg-red-600"
+                            on:click={() => handleDocumentDelete('creciFront')}
+                            disabled={isDeletingDocument}
+                            title="Excluir"
+                          >
+                            {#if isDeletingDocument}
+                              <Loader2 class="h-4 w-4 animate-spin" />
+                            {:else}
+                              <Trash2 class="h-4 w-4" />
+                            {/if}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  {:else}
+                    <button
+                      type="button"
+                      class="flex flex-col items-center gap-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400"
+                      on:click={() => triggerDocumentUpload('creciFront')}
+                      disabled={isUploadingDocument}
+                    >
+                      <div class="rounded-full border border-gray-300 p-2 dark:border-gray-600">
+                        <Upload class="h-5 w-5" />
+                      </div>
+                      <span class="text-[10px] font-medium uppercase tracking-wider">Enviar Documento</span>
+                    </button>
+                  {/if}
                 </div>
-                <div>
-                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Complemento</div>
-                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {brokerDetail?.complement ?? '-'}
-                  </div>
+
+                <!-- Verso CRECI -->
+                <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
+                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">Verso do CRECI</div>
+                  {#if brokerDetail?.creci_back_url}
+                    <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                      <img src={brokerDetail.creci_back_url} alt="Verso do CRECI" class="h-full w-full object-cover" />
+                      <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                        <div class="flex gap-2">
+                          <button
+                            type="button"
+                            class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+                            on:click={() => openPreview(brokerDetail!.creci_back_url!, 'Verso do CRECI')}
+                            title="Visualizar"
+                          >
+                            <Eye class="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-full bg-red-500 p-2 text-white shadow-sm hover:bg-red-600"
+                            on:click={() => handleDocumentDelete('creciBack')}
+                            disabled={isDeletingDocument}
+                            title="Excluir"
+                          >
+                            {#if isDeletingDocument}
+                              <Loader2 class="h-4 w-4 animate-spin" />
+                            {:else}
+                              <Trash2 class="h-4 w-4" />
+                            {/if}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  {:else}
+                    <button
+                      type="button"
+                      class="flex flex-col items-center gap-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400"
+                      on:click={() => triggerDocumentUpload('creciBack')}
+                      disabled={isUploadingDocument}
+                    >
+                      <div class="rounded-full border border-gray-300 p-2 dark:border-gray-600">
+                        <Upload class="h-5 w-5" />
+                      </div>
+                      <span class="text-[10px] font-medium uppercase tracking-wider">Enviar Documento</span>
+                    </button>
+                  {/if}
                 </div>
-                <div>
-                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Bairro</div>
-                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {brokerDetail?.bairro ?? '-'}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CEP</div>
-                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {brokerDetail?.cep ?? '-'}
-                  </div>
-                </div>
-              </div>
-              <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cidade</div>
-                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {brokerDetail?.city ?? '-'}
-                  </div>
-                </div>
-                <div>
-                  <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Estado</div>
-                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {brokerDetail?.state ?? '-'}
-                  </div>
+
+                <!-- Selfie -->
+                <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
+                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">Selfie com CRECI</div>
+                  {#if brokerDetail?.selfie_url}
+                    <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                      <img src={brokerDetail.selfie_url} alt="Selfie" class="h-full w-full object-cover" />
+                      <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                        <div class="flex gap-2">
+                          <button
+                            type="button"
+                            class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+                            on:click={() => openPreview(brokerDetail!.selfie_url!, 'Selfie com CRECI')}
+                            title="Visualizar"
+                          >
+                            <Eye class="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-full bg-red-500 p-2 text-white shadow-sm hover:bg-red-600"
+                            on:click={() => handleDocumentDelete('selfie')}
+                            disabled={isDeletingDocument}
+                            title="Excluir"
+                          >
+                            {#if isDeletingDocument}
+                              <Loader2 class="h-4 w-4 animate-spin" />
+                            {:else}
+                              <Trash2 class="h-4 w-4" />
+                            {/if}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  {:else}
+                    <button
+                      type="button"
+                      class="flex flex-col items-center gap-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400"
+                      on:click={() => triggerDocumentUpload('selfie')}
+                      disabled={isUploadingDocument}
+                    >
+                      <div class="rounded-full border border-gray-300 p-2 dark:border-gray-600">
+                        <Upload class="h-5 w-5" />
+                      </div>
+                      <span class="text-[10px] font-medium uppercase tracking-wider">Enviar Documento</span>
+                    </button>
+                  {/if}
                 </div>
               </div>
             </div>
           {/if}
         {/if}
       </div>
+
+      <input
+        type="file"
+        accept="image/*"
+        class="hidden"
+        bind:this={documentInputEl}
+        on:change={handleDocumentFileChange}
+      />
+
 
       <Dialog.Footer className="flex gap-2">
         <Button variant="outline" on:click={close} disabled={isProcessing}>
@@ -489,3 +661,23 @@
   error={deleteError}
   on:confirm={(event) => handleDelete(event.detail.password)}
 />
+
+{#if isDocumentPreviewOpen}
+  <div
+    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+    role="presentation"
+    on:click={() => (isDocumentPreviewOpen = false)}
+  >
+    <div class="relative max-h-full max-w-full overflow-hidden">
+      <button
+        type="button"
+        class="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+        on:click={() => (isDocumentPreviewOpen = false)}
+      >
+        <X class="h-6 w-6" />
+      </button>
+      <img src={previewUrl} alt={previewTitle} class="max-h-[90vh] max-w-full rounded-lg object-contain" />
+      <div class="mt-4 text-center text-white font-medium">{previewTitle}</div>
+    </div>
+  </div>
+{/if}

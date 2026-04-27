@@ -6,6 +6,8 @@
   import { Button } from '$lib/components/ui/button';
   import Pagination from '$lib/Pagination.svelte';
   import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
+  import { apiClient } from '$lib/apiClient';
+  import PromotionNotificationModal from '$lib/components/PromotionNotificationModal.svelte';
 
   type ArchiveStatus = 'sold' | 'rented';
 
@@ -78,6 +80,10 @@
   let isImagePreviewOpen = false;
   let previewImageUrl: string | null = null;
   let previewImageAlt = 'Capa do imóvel';
+  let isPromotionNotificationModalOpen = false;
+  let promotionNotificationPropertyId: number | null = null;
+  let promotionNotificationTitle = '';
+  let promotionNotificationMessage = '';
 
   function formatDate(value?: string | null): string {
     if (!value) return '-';
@@ -95,6 +101,13 @@
       return 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
     }
     return 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100';
+  }
+
+  function openNotificationModal(item: ArchiveItem) {
+    promotionNotificationPropertyId = item.id;
+    promotionNotificationTitle = `Imóvel ${item.status === 'sold' ? 'Vendido' : 'Alugado'}: ${item.title}`;
+    promotionNotificationMessage = `O imóvel ${item.code || `#${item.id}`} foi ${item.status === 'sold' ? 'vendido' : 'alugado'} com sucesso!`;
+    isPromotionNotificationModalOpen = true;
   }
 
   function propertyStatusLabel(status?: string | null): string {
@@ -452,8 +465,15 @@
               Revisar
             </Button>
             {#if item.status === 'rented' || item.status === 'sold'}
-              <Button on:click={() => openRelistModal(item)}>
+              <Button variant="outline" on:click={() => openRelistModal(item)}>
                 Voltar para Disponível
+              </Button>
+              <Button
+                variant="outline"
+                className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                on:click={() => openNotificationModal(item)}
+              >
+                Notificar {item.status === 'sold' ? 'Venda' : 'Aluguel'}
               </Button>
             {/if}
           </div>
@@ -539,8 +559,16 @@
                     Revisar
                   </Button>
                   {#if item.status === 'rented' || item.status === 'sold'}
-                    <Button size="sm" on:click={() => openRelistModal(item)}>
+                    <Button size="sm" variant="outline" on:click={() => openRelistModal(item)}>
                       Voltar para Disponível
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                      on:click={() => openNotificationModal(item)}
+                    >
+                      Notificar
                     </Button>
                   {/if}
                 </div>
@@ -784,3 +812,10 @@
     </div>
   </div>
 {/if}
+
+<PromotionNotificationModal
+  bind:open={isPromotionNotificationModalOpen}
+  propertyId={promotionNotificationPropertyId}
+  defaultTitle={promotionNotificationTitle}
+  defaultMessage={promotionNotificationMessage}
+/>

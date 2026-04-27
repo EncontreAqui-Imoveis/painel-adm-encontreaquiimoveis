@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { toast } from 'svelte-sonner';
   import { Loader2 } from 'lucide-svelte';
   import * as Dialog from '$lib/components/ui/dialog';
@@ -22,6 +22,7 @@
   import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';
   import { clearSessionToken, hasSessionToken } from './sessionState';
   import type { PropertyStatus, PropertyImage as PropertyImageType } from './types';
+  const dispatch = createEventDispatcher();
 
   interface PropertySummary {
     id: number;
@@ -109,6 +110,7 @@
     status: PropertyStatus | 'all';
     city: string;
     search: string;
+    purpose: 'all' | 'Venda' | 'Aluguel';
   };
   type PropertyRequestTypeFilter = 'all' | 'creation' | 'edit';
 
@@ -126,6 +128,7 @@
     status: initialStatus,
     city: 'all',
     search: '',
+    purpose: 'all',
   };
   let currentPage = 1;
   let itemsPerPage = 10;
@@ -184,7 +187,7 @@
   let promotionNotificationPropertyId: number | null = null;
   let skipAutoPromotionModalOnce = false;
   // Advertiser search (corretores + clientes)
-  type AdvertiserResult = { id: number; name: string; email: string; phone?: string | null; role: string };
+  type AdvertiserResult = { id: number; name: string; email: string; phone?: string | null; role: string; creci?: string | null; };
   let advertiserQuery = '';
   let advertiserResults: AdvertiserResult[] = [];
   let advertiserSearchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -375,6 +378,9 @@
       }
       if (filters.city !== 'all') {
         params.append('city', filters.city);
+      }
+      if (filters.purpose !== 'all') {
+        params.append('purpose', filters.purpose);
       }
       if (isReviewOnly && reviewRequestType !== 'all') {
         params.append('requestType', reviewRequestType);
@@ -1622,6 +1628,9 @@
       isEditMode = false;
       closeModal();
       await fetchProperties();
+      if (requestedStatus === 'sold' || requestedStatus === 'rented') {
+        dispatch('viewChange', 'sold_properties');
+      }
     } catch (err: any) {
       console.error('Erro ao salvar imóvel:', err);
       const status = err?.response?.status;
@@ -1984,6 +1993,7 @@
     advertiserDropdownOpen = false;
     if (editableProperty) {
       editableProperty.broker_id = adv.role === 'broker' ? adv.id : null;
+      editableProperty.broker_creci = adv.creci ?? null;
       editableProperty.owner_id = adv.id;
       editableProperty.owner_name = adv.name;
       editableProperty.owner_phone = adv.phone ?? null;
@@ -2055,6 +2065,7 @@
       resetSoldDialogState();
       closeModal();
       await fetchProperties();
+      dispatch('viewChange', 'sold_properties');
     } catch (err: any) {
       console.error('Erro ao salvar venda:', err);
       toast.error(
@@ -2248,6 +2259,65 @@
     </div>
   {:else}
     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          on:click={() => {
+            filters.purpose = 'all';
+            requestFetch(true);
+          }}
+          class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+            filters.purpose === 'all'
+              ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+          }`}
+        >
+          Todos
+        </button>
+        <button
+          type="button"
+          on:click={() => {
+            filters.purpose = 'Venda';
+            requestFetch(true);
+          }}
+          class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+            filters.purpose === 'Venda'
+              ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+          }`}
+        >
+          Venda
+        </button>
+        <button
+          type="button"
+          on:click={() => {
+            filters.purpose = 'Aluguel';
+            requestFetch(true);
+          }}
+          class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+            filters.purpose === 'Aluguel'
+              ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+          }`}
+        >
+          Aluguel
+        </button>
+        <div class="mx-2 h-6 w-px bg-gray-200 dark:bg-gray-700" />
+        <button
+          type="button"
+          on:click={() => dispatch('viewChange', 'sold_properties')}
+          class="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          Vendidos
+        </button>
+        <button
+          type="button"
+          on:click={() => dispatch('viewChange', 'sold_properties')}
+          class="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          Alugados
+        </button>
+      </div>
       <Input
         className="w-full md:w-80"
         type="search"
@@ -2838,8 +2908,12 @@
                       bind:value={editableProperty.status}
                     >
                       <option value="approved">Disponível</option>
-                      <option value="rented">Alugado</option>
-                      <option value="sold">Vendido</option>
+                      {#if editableProperty.purpose === 'Aluguel' || editableProperty.purpose === 'Venda e Aluguel'}
+                        <option value="rented">Alugado</option>
+                      {/if}
+                      {#if editableProperty.purpose === 'Venda' || editableProperty.purpose === 'Venda e Aluguel'}
+                        <option value="sold">Vendido</option>
+                      {/if}
                     </select>
                   </div>
                 {/if}
@@ -3480,7 +3554,7 @@
               </label>
               <label class="flex flex-col gap-1">
                 <strong>Código interno:</strong>
-                <input name="code" maxlength="50" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.code} />
+                <input name="code" class="w-full rounded border px-2 py-1 text-sm bg-gray-100 text-gray-500 cursor-not-allowed dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400" value={editableProperty.code || '-'} disabled readonly />
               </label>
               <p><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Não'}</p>
               {#if isBrokerCredenciado(selectedProperty)}

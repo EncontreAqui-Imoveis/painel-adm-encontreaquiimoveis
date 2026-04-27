@@ -2182,7 +2182,10 @@
                 </div>
             {:else if activeView === "properties"}
                 {#if PropertyManagementComponent}
-                    <svelte:component this={PropertyManagementComponent} />
+                    <svelte:component
+                        this={PropertyManagementComponent}
+                        on:viewChange={(e) => (activeView = e.detail)}
+                    />
                 {:else}
                     <div class="flex justify-center items-center h-64">
                         <div

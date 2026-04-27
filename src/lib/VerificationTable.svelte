@@ -97,9 +97,6 @@
         </div>
     {:else}
         {#each pendingBrokers as broker}
-            {@const creciFrontUrl = resolveDocumentField(broker, 'creci_front_url')}
-            {@const creciBackUrl = resolveDocumentField(broker, 'creci_back_url')}
-            {@const selfieUrl = resolveDocumentField(broker, 'selfie_url')}
             <article class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div class="flex items-start justify-between gap-3">
                     <div>
@@ -111,25 +108,8 @@
                         {getStatusText(broker.status)}
                     </span>
                 </div>
-                <div class="mt-3 space-y-2 text-sm">
-                    {#if creciFrontUrl && isUrlAccessible(creciFrontUrl)}
-                        <a href={getDocumentUrl(creciFrontUrl)} target="_blank"
-                           class="inline-flex items-center text-green-600 hover:text-green-900 dark:text-green-400 transition-colors">
-                            Frente do CRECI
-                        </a>
-                    {/if}
-                    {#if creciBackUrl && isUrlAccessible(creciBackUrl)}
-                        <a href={getDocumentUrl(creciBackUrl)} target="_blank"
-                           class="inline-flex items-center text-green-600 hover:text-green-900 dark:text-green-400 transition-colors">
-                            Verso do CRECI
-                        </a>
-                    {/if}
-                    {#if selfieUrl && isUrlAccessible(selfieUrl)}
-                        <a href={getDocumentUrl(selfieUrl)} target="_blank"
-                           class="inline-flex items-center text-green-600 hover:text-green-900 dark:text-green-400 transition-colors">
-                            Selfie
-                        </a>
-                    {/if}
+                <div class="mt-3 space-y-2 text-sm text-gray-500 italic">
+                    Veja documentos no botão Revisar
                 </div>
                 <div class="mt-4 flex justify-end">
                     <Button variant="outline" size="sm" on:click={() => reviewBroker(broker)}>
@@ -167,9 +147,6 @@
                 </tr>
             {:else}
                 {#each pendingBrokers as broker}
-                    {@const creciFrontUrl = resolveDocumentField(broker, 'creci_front_url')}
-                    {@const creciBackUrl = resolveDocumentField(broker, 'creci_back_url')}
-                    {@const selfieUrl = resolveDocumentField(broker, 'selfie_url')}
                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                             {broker.id}
@@ -187,48 +164,8 @@
                             </span>
                         </td>
                         <td class="px-6 py-4">
-                            <div class="flex flex-col space-y-2 min-w-[200px]">
-                                {#if creciFrontUrl && isUrlAccessible(creciFrontUrl)}
-                                    <a href={getDocumentUrl(creciFrontUrl)} target="_blank"
-                                       class="inline-flex items-center text-sm text-green-600 hover:text-green-900 dark:text-green-400 transition-colors">
-                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        Frente do CRECI
-                                    </a>
-                                {:else}
-                                    <span class="text-xs text-gray-400 italic">
-                                        {creciFrontUrl ? 'URL não acessível' : 'Frente do CRECI não enviada'}
-                                    </span>
-                                {/if}
-
-                                {#if creciBackUrl && isUrlAccessible(creciBackUrl)}
-                                    <a href={getDocumentUrl(creciBackUrl)} target="_blank"
-                                       class="inline-flex items-center text-sm text-green-600 hover:text-green-900 dark:text-green-400 transition-colors">
-                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        Verso do CRECI
-                                    </a>
-                                {:else}
-                                    <span class="text-xs text-gray-400 italic">
-                                        {creciBackUrl ? 'URL não acessível' : 'Verso do CRECI não enviado'}
-                                    </span>
-                                {/if}
-
-                                {#if selfieUrl && isUrlAccessible(selfieUrl)}
-                                    <a href={getDocumentUrl(selfieUrl)} target="_blank"
-                                       class="inline-flex items-center text-sm text-green-600 hover:text-green-900 dark:text-green-400 transition-colors">
-                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                        </svg>
-                                        Selfie
-                                    </a>
-                                {:else}
-                                    <span class="text-xs text-gray-400 italic">
-                                        {selfieUrl ? 'URL não acessível' : 'Selfie não enviada'}
-                                    </span>
-                                {/if}
+                            <div class="flex flex-col space-y-2 min-w-[200px] text-xs text-gray-400 italic">
+                                Documentação disponível no modal de revisão
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">

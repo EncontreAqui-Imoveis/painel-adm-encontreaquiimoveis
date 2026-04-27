@@ -30,6 +30,8 @@
   let filteredUsers: UserItem[] = [];
   let selectedRecipients = new Set<string>();
   let searchTerm = '';
+  let pushAction: string | null = 'promotion';
+  let title = '';
   let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
   onMount(() => {
@@ -38,6 +40,8 @@
 
   $: if (open) {
     message = defaultMessage;
+    title = propertyTitle;
+    pushAction = 'promotion';
     audience = 'favorites';
     sendToAll = true;
     selectedRecipients = new Set();
@@ -146,6 +150,8 @@
         audience,
         related_entity_type: 'property',
         related_entity_id: propertyId,
+        pushAction,
+        title,
       };
       const result = await api.post<{ push?: { requested?: number; success?: number; failure?: number } }>(
         '/admin/notifications/send',
@@ -287,6 +293,19 @@
             {/if}
           </div>
         {/if}
+
+        <div>
+          <label for="promotion-title" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Título da Notificação</label>
+          <input
+            id="promotion-title"
+            type="text"
+            maxlength="100"
+            class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            bind:value={title}
+            disabled={isSubmitting}
+            placeholder="Ex: Imóvel em Promoção"
+          />
+        </div>
 
         <div>
           <label for="promotion-message" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Mensagem</label>
