@@ -85,6 +85,11 @@
     promotional_rent_price?: number | null;
     promotional_rent_percentage?: number | null;
     valor_condominio?: number | null;
+    valor_iptu?: number | null;
+    code?: string | null;
+    sale_value?: number | null;
+    commission_rate?: number | null;
+    commission_value?: number | null;
     video_url?: string | null;
     has_wifi?: boolean | null;
     tem_piscina?: boolean | null;
@@ -178,6 +183,32 @@
   let promotionNotificationTitle = '';
   let promotionNotificationPropertyId: number | null = null;
   let skipAutoPromotionModalOnce = false;
+  // Advertiser search (corretores + clientes)
+  type AdvertiserResult = { id: number; name: string; email: string; phone?: string | null; role: string };
+  let advertiserQuery = '';
+  let advertiserResults: AdvertiserResult[] = [];
+  let advertiserSearchTimer: ReturnType<typeof setTimeout> | null = null;
+  let advertiserDropdownOpen = false;
+  let advertiserSearchLoading = false;
+  let selectedAdvertiser: AdvertiserResult | null = null;
+  // Sold dialog
+  let soldDialogOpen = false;
+  let soldByPlatform: boolean | null = null;
+  let soldSaleValue = '';
+  let soldCommissionRate = '';
+  let soldCommissionValue = '';
+  let isSavingSold = false;
+  // Property types (same as CreateProperty)
+  const propertyTypes = [
+    'Casa', 'Apartamento', 'Terreno', 'Flat', 'Condomínio Fechado',
+    'Área rural', 'Rancho', 'Galpão / Barracão', 'Chácara',
+    'Imóvel comercial', 'Área comercial', 'Cobertura / Penthouse',
+    'Cobertura', 'Sobrado', 'Kitnet', 'Sala comercial', 'Sala Comercial',
+    'Loja', 'Fazenda', 'Galpão', 'Empresa', 'Prédio',
+  ];
+  // Display values for condominio/IPTU
+  let editValorCondominioDisplay = '';
+  let editValorIptuDisplay = '';
   const MAX_TOTAL_IMAGES = 20;
   const cloudinaryCloudName = String(import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME ?? '').trim();
   const areaUnitOptions: Array<{ value: AreaUnit; label: string }> = [
@@ -1023,6 +1054,7 @@
     editError = null;
     if (isEditMode && editableProperty) {
       syncEditPriceDisplays(editableProperty);
+      syncEditExtraDisplays(editableProperty);
       editSemNumero = isSemNumeroValue(editableProperty.numero);
       syncEditLotFlags(editableProperty);
       syncEditZeroFlags(editableProperty);
@@ -1100,6 +1132,7 @@
       }
       if (editableProperty) {
         syncEditPriceDisplays(editableProperty);
+        syncEditExtraDisplays(editableProperty);
       }
       isModalOpen = true;
     } catch (err) {
@@ -1135,6 +1168,8 @@
     rejectDialogOpen = false;
     rejectObservation = '';
     rejectObservationError = null;
+    resetAdvertiserState();
+    resetSoldDialogState();
   }
 
   async function handleStatusUpdate(newStatus: 'approved' | 'rejected') {
@@ -1358,6 +1393,8 @@
         'sale_value',
         'commission_rate',
         'commission_value',
+        'valor_condominio',
+        'valor_iptu',
       ]);
 
       const normalizeInput = (value: unknown) =>
@@ -1483,12 +1520,12 @@
         description: editableProperty.description,
         purpose: editableProperty.purpose,
         price: resolvedPriceValue ?? undefined,
-        price_sale: resolvedPriceSaleValue ?? undefined,
-        price_rent: resolvedPriceRentValue ?? undefined,
-        promotion_price: promotionPriceSaleValue,
-        promotional_rent_price: promotionPriceRentValue,
-        promotion_percentage: promotionSalePercentageValue,
-        promotional_rent_percentage: promotionRentPercentageValue,
+        price_sale: purposeFlags.supportsSale ? (resolvedPriceSaleValue ?? undefined) : null,
+        price_rent: purposeFlags.supportsRent ? (resolvedPriceRentValue ?? undefined) : null,
+        promotion_price: purposeFlags.supportsSale ? promotionPriceSaleValue : null,
+        promotional_rent_price: purposeFlags.supportsRent ? promotionPriceRentValue : null,
+        promotion_percentage: purposeFlags.supportsSale ? promotionSalePercentageValue : null,
+        promotional_rent_percentage: purposeFlags.supportsRent ? promotionRentPercentageValue : null,
         is_promoted:
           (promotionPriceSaleValue ?? 0) > 0 ||
           (promotionPriceRentValue ?? 0) > 0 ||
@@ -1525,6 +1562,14 @@
         tem_ar_condicionado: editableProperty.tem_ar_condicionado,
         eh_mobiliada: editableProperty.eh_mobiliada,
         video_url: editableProperty.video_url,
+        type: editableProperty.type,
+        owner_name: editableProperty.owner_name,
+        owner_phone: editableProperty.owner_phone,
+        valor_condominio: parseCurrency(editValorCondominioDisplay),
+        valor_iptu: parseCurrency(editValorIptuDisplay),
+        code: editableProperty.code,
+        broker_id: editableProperty.broker_id,
+        owner_id: editableProperty.owner_id,
         status: editableProperty.status ?? selectedProperty.status,
       };
 
@@ -1548,6 +1593,17 @@
         rejectObservation = '';
         rejectObservationError = null;
         rejectDialogOpen = true;
+        isSavingEdit = false;
+        return;
+      }
+
+      if (requestedStatus === 'sold') {
+        soldDialogOpen = true;
+        soldByPlatform = null;
+        soldSaleValue = '';
+        soldCommissionRate = '';
+        soldCommissionValue = '';
+        isSavingEdit = false;
         return;
       }
 
@@ -1564,25 +1620,8 @@
       }
       toast.success('Imóvel atualizado com sucesso.');
       isEditMode = false;
+      closeModal();
       await fetchProperties();
-      // Atualiza estado local para refletir a ?ltima versao
-      selectedProperty = { ...(selectedProperty as PropertySummary), ...(payload as any) } as PropertySummary;
-      editableProperty = sanitizeEditable(selectedProperty as any);
-
-      if ((payload as any).is_promoted === 1) {
-        if (skipAutoPromotionModalOnce) {
-          skipAutoPromotionModalOnce = false;
-        } else {
-          const salePercent = Number((payload as any).promotion_percentage ?? NaN);
-          const rentPercent = Number((payload as any).promotional_rent_percentage ?? NaN);
-          openPromotionNotificationModal({
-            propertyId: selectedProperty.id,
-            title: selectedProperty.title ?? 'Imóvel',
-            salePercent: Number.isFinite(salePercent) ? salePercent : null,
-            rentPercent: Number.isFinite(rentPercent) ? rentPercent : null,
-          });
-        }
-      }
     } catch (err: any) {
       console.error('Erro ao salvar imóvel:', err);
       const status = err?.response?.status;
@@ -1735,6 +1774,9 @@
     const nextImages = previousImages.filter((image) => image.id !== imageId);
     try {
       patchSelectedPropertyMedia({ images: nextImages });
+      if (editableProperty) {
+        editableProperty = { ...editableProperty, images: nextImages };
+      }
       await api.delete(`/admin/properties/${selectedProperty.id}/images/${imageId}`);
       toast.success('Imagem removida com sucesso.');
     } catch (err: any) {
@@ -1894,6 +1936,133 @@
     debounceTimer = setTimeout(() => {
       requestFetch(true);
     }, 300);
+  }
+
+  async function fetchAdvertisers(searchTerm: string) {
+    const trimmed = searchTerm.trim();
+    if (trimmed.length < 2) {
+      advertiserResults = [];
+      return;
+    }
+    advertiserSearchLoading = true;
+    try {
+      const params = new URLSearchParams();
+      params.append('includeBrokers', 'true');
+      params.append('search', trimmed);
+      params.append('page', '1');
+      params.append('limit', '20');
+      const response = await api.get<{ data?: AdvertiserResult[]; total?: number } | AdvertiserResult[]>(
+        `/admin/users?${params.toString()}`
+      );
+      const data = Array.isArray(response) ? response : response?.data;
+      advertiserResults = Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Erro ao buscar anunciantes:', err);
+      advertiserResults = [];
+    } finally {
+      advertiserSearchLoading = false;
+    }
+  }
+
+  function handleAdvertiserQueryInput(value: string) {
+    advertiserQuery = value;
+    advertiserDropdownOpen = true;
+    if (selectedAdvertiser && value.trim() !== (selectedAdvertiser.name ?? '').trim()) {
+      selectedAdvertiser = null;
+    }
+    if (advertiserSearchTimer) {
+      clearTimeout(advertiserSearchTimer);
+    }
+    advertiserSearchTimer = setTimeout(() => {
+      fetchAdvertisers(value);
+    }, 300);
+  }
+
+  function selectAdvertiser(adv: AdvertiserResult) {
+    selectedAdvertiser = adv;
+    advertiserQuery = adv.name ?? '';
+    advertiserDropdownOpen = false;
+    if (editableProperty) {
+      editableProperty.broker_id = adv.role === 'broker' ? adv.id : null;
+      editableProperty.owner_id = adv.id;
+      editableProperty.owner_name = adv.name;
+      editableProperty.owner_phone = adv.phone ?? null;
+      editableProperty.broker_name = adv.name;
+      editableProperty.broker_phone = adv.phone ?? null;
+    }
+  }
+
+  function clearAdvertiserSelection() {
+    selectedAdvertiser = null;
+    advertiserQuery = '';
+    advertiserResults = [];
+    advertiserDropdownOpen = false;
+    if (editableProperty) {
+      editableProperty.broker_id = null;
+      editableProperty.owner_id = null;
+    }
+  }
+
+  function resetAdvertiserState() {
+    advertiserQuery = '';
+    advertiserResults = [];
+    advertiserDropdownOpen = false;
+    advertiserSearchLoading = false;
+    selectedAdvertiser = null;
+    if (advertiserSearchTimer) {
+      clearTimeout(advertiserSearchTimer);
+      advertiserSearchTimer = null;
+    }
+  }
+
+  function resetSoldDialogState() {
+    soldDialogOpen = false;
+    soldByPlatform = null;
+    soldSaleValue = '';
+    soldCommissionRate = '';
+    soldCommissionValue = '';
+    isSavingSold = false;
+  }
+
+  function syncEditExtraDisplays(property: PropertyDetails) {
+    editValorCondominioDisplay = property.valor_condominio != null ? formatCurrency(Number(property.valor_condominio)) : '';
+    editValorIptuDisplay = property.valor_iptu != null ? formatCurrency(Number(property.valor_iptu)) : '';
+    // Sync advertiser query
+    advertiserQuery = property.broker_name ?? property.owner_name ?? '';
+    selectedAdvertiser = null;
+  }
+
+  async function handleSoldSave() {
+    if (!selectedProperty || !editableProperty) return;
+    isSavingSold = true;
+
+    try {
+      const payload: Record<string, unknown> = {
+        status: 'sold',
+      };
+
+      if (soldByPlatform) {
+        const sv = parseCurrency(soldSaleValue);
+        const cr = parseCurrency(soldCommissionRate);
+        const cv = parseCurrency(soldCommissionValue);
+        if (sv != null) payload.sale_value = sv;
+        if (cr != null) payload.commission_rate = cr;
+        if (cv != null) payload.commission_value = cv;
+      }
+
+      await apiClient.put(`/admin/properties/${selectedProperty.id}`, payload);
+      toast.success('Imóvel marcado como vendido com sucesso.');
+      resetSoldDialogState();
+      closeModal();
+      await fetchProperties();
+    } catch (err: any) {
+      console.error('Erro ao salvar venda:', err);
+      toast.error(
+        extractApiErrorMessage(err, 'Falha ao salvar dados da venda.')
+      );
+    } finally {
+      isSavingSold = false;
+    }
   }
 </script>
 
@@ -3211,10 +3380,108 @@
                   </select>
                 </div>
               </label>
-              <p><strong>Proprietário:</strong> {selectedProperty.owner_name ?? '-'}</p>
-              <p><strong>Telefone do proprietário:</strong> {formatPhoneDisplayBr(selectedProperty.owner_phone)}</p>
-              <p><strong>Anunciante:</strong> {selectedProperty.broker_name ?? '-'}</p>
-              <p><strong>Telefone:</strong> {formatPhoneDisplayBr(selectedProperty.broker_phone)}</p>
+              <label class="flex flex-col gap-1 md:col-span-2">
+                <strong>Tipo do imóvel:</strong>
+                <select
+                  name="type"
+                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  bind:value={editableProperty.type}
+                >
+                  {#each propertyTypes as pt}
+                    <option value={pt}>{pt}</option>
+                  {/each}
+                </select>
+              </label>
+              <label class="flex flex-col gap-1">
+                <strong>Proprietário:</strong>
+                <input name="owner_name" maxlength="120" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.owner_name} />
+              </label>
+              <label class="flex flex-col gap-1">
+                <strong>Telefone do proprietário:</strong>
+                <input name="owner_phone" maxlength="20" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.owner_phone} />
+              </label>
+              <div class="relative flex flex-col gap-1 md:col-span-2">
+                <strong>Anunciante (corretor ou cliente):</strong>
+                <div class="relative">
+                  <input
+                    name="advertiser_query"
+                    maxlength="120"
+                    class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
+                    placeholder="Digite ao menos 2 letras para buscar"
+                    bind:value={advertiserQuery}
+                    on:input={(event) => {
+                      const target = event.target as HTMLInputElement;
+                      handleAdvertiserQueryInput(target.value);
+                    }}
+                    on:focus={() => { if (advertiserQuery.trim().length >= 2) advertiserDropdownOpen = true; }}
+                    on:blur={() => setTimeout(() => { advertiserDropdownOpen = false; }, 200)}
+                  />
+                  {#if selectedAdvertiser}
+                    <button
+                      type="button"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-red-500 hover:text-red-700"
+                      on:click|preventDefault={clearAdvertiserSelection}
+                    >Limpar</button>
+                  {/if}
+                </div>
+                {#if advertiserDropdownOpen && advertiserQuery.trim().length >= 2}
+                  <div class="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    {#if advertiserSearchLoading}
+                      <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Buscando...</p>
+                    {:else if advertiserResults.length === 0}
+                      <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nenhum resultado encontrado.</p>
+                    {:else}
+                      {#each advertiserResults as adv}
+                        <button
+                          type="button"
+                          class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                          on:mousedown|preventDefault={() => selectAdvertiser(adv)}
+                        >
+                          <span class="font-medium">{adv.name}</span>
+                          <span class="text-xs text-gray-400">{adv.email}</span>
+                          <span class={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${adv.role === 'broker' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}`}>
+                            {adv.role === 'broker' ? 'Corretor' : 'Cliente'}
+                          </span>
+                        </button>
+                      {/each}
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+              <label class="flex flex-col gap-1">
+                <strong>Valor do condomínio:</strong>
+                <input
+                  name="valor_condominio"
+                  type="text"
+                  inputmode="numeric"
+                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  bind:value={editValorCondominioDisplay}
+                  placeholder="R$ 0,00"
+                  on:input={(event) => {
+                    const target = event.target as HTMLInputElement;
+                    editValorCondominioDisplay = formatCurrencyInput(target.value);
+                  }}
+                />
+              </label>
+              <label class="flex flex-col gap-1">
+                <strong>Valor do IPTU:</strong>
+                <input
+                  name="valor_iptu"
+                  type="text"
+                  inputmode="numeric"
+                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
+                  bind:value={editValorIptuDisplay}
+                  placeholder="R$ 0,00"
+                  on:input={(event) => {
+                    const target = event.target as HTMLInputElement;
+                    editValorIptuDisplay = formatCurrencyInput(target.value);
+                  }}
+                />
+              </label>
+              <label class="flex flex-col gap-1">
+                <strong>Código interno:</strong>
+                <input name="code" maxlength="50" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.code} />
+              </label>
               <p><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Não'}</p>
               {#if isBrokerCredenciado(selectedProperty)}
                 <p><strong>CRECI:</strong> {selectedProperty.broker_creci ?? '-'}</p>
@@ -3401,6 +3668,123 @@
           Confirmar rejeição
         </Button>
       </div>
+    </div>
+  </div>
+{/if}
+
+{#if soldDialogOpen}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+    <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
+      <div class="flex items-start justify-between gap-3">
+        <div class="space-y-2">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Imóvel vendido</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-300">
+            Esse imóvel foi vendido pelo Encontre Aqui?
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          on:click={() => { resetSoldDialogState(); }}
+          aria-label="Fechar modal"
+        >×</button>
+      </div>
+
+      {#if soldByPlatform === null}
+        <div class="mt-6 flex justify-center gap-4">
+          <Button
+            className="bg-emerald-500 text-white hover:bg-emerald-600"
+            on:click={() => { soldByPlatform = true; }}
+          >Sim, vendido pelo Encontre Aqui</Button>
+          <Button
+            variant="outline"
+            on:click={() => { soldByPlatform = false; }}
+          >Não</Button>
+        </div>
+      {:else if soldByPlatform === false}
+        <p class="mt-4 text-sm text-gray-600 dark:text-gray-300">
+          O imóvel será marcado como vendido e movido para a lista de imóveis vendidos.
+        </p>
+        <div class="mt-6 flex justify-end gap-2">
+          <Button variant="outline" on:click={() => { resetSoldDialogState(); }} disabled={isSavingSold}>
+            Cancelar
+          </Button>
+          <Button
+            className="bg-emerald-500 text-white hover:bg-emerald-600"
+            on:click={handleSoldSave}
+            disabled={isSavingSold}
+          >
+            {#if isSavingSold}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Confirmar
+          </Button>
+        </div>
+      {:else}
+        <div class="mt-4 space-y-3">
+          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200">Comissão (VGV)</h4>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs text-gray-500 dark:text-gray-400">Valor da venda (VGV)</span>
+            <input
+              name="sold_sale_value"
+              type="text"
+              inputmode="numeric"
+              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              bind:value={soldSaleValue}
+              placeholder="R$ 0,00"
+              on:input={(event) => {
+                const target = event.target as HTMLInputElement;
+                soldSaleValue = formatCurrencyInput(target.value);
+              }}
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs text-gray-500 dark:text-gray-400">Taxa de comissão (%)</span>
+            <input
+              name="sold_commission_rate"
+              type="text"
+              inputmode="decimal"
+              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              bind:value={soldCommissionRate}
+              placeholder="Ex: 5,00"
+              on:input={(event) => {
+                const target = event.target as HTMLInputElement;
+                soldCommissionRate = formatCurrencyInput(target.value);
+              }}
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-xs text-gray-500 dark:text-gray-400">Valor da comissão</span>
+            <input
+              name="sold_commission_value"
+              type="text"
+              inputmode="numeric"
+              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              bind:value={soldCommissionValue}
+              placeholder="R$ 0,00"
+              on:input={(event) => {
+                const target = event.target as HTMLInputElement;
+                soldCommissionValue = formatCurrencyInput(target.value);
+              }}
+            />
+          </label>
+        </div>
+        <div class="mt-6 flex justify-end gap-2">
+          <Button variant="outline" on:click={() => { resetSoldDialogState(); }} disabled={isSavingSold}>
+            Cancelar
+          </Button>
+          <Button
+            className="bg-emerald-500 text-white hover:bg-emerald-600"
+            on:click={handleSoldSave}
+            disabled={isSavingSold}
+          >
+            {#if isSavingSold}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Salvar e marcar como vendido
+          </Button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
