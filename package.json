@@ -11,8 +11,8 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:architecture": "node scripts/check-architecture-discipline.cjs",
-    "test:e2e": "cross-env VITE_API_URL=https://127.0.0.1:4011 npm run build && playwright test",
-    "test:e2e:headed": "cross-env VITE_API_URL=https://127.0.0.1:4011 npm run build && playwright test --headed",
+    "test:e2e": "cross-env VITE_API_URL=https://127.0.0.1:4011 npm run build -- --mode test && playwright test",
+    "test:e2e:headed": "cross-env VITE_API_URL=https://127.0.0.1:4011 npm run build -- --mode test && playwright test --headed",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "ci:verify": "npm run check && npm run test:architecture && npm run test:coverage && npm run build",
     "security:audit": "npm audit --audit-level=high"

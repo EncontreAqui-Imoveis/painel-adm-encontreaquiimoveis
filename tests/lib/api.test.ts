@@ -22,6 +22,26 @@ describe('api helpers', () => {
     expect(sessionStorage.getItem('authToken')).toBe('admin-token');
   });
 
+  it('usa fallback local no modo de teste sem VITE_API_URL', async () => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+    vi.stubEnv('VITE_TEST_MODE', '1');
+    vi.stubEnv('VITE_API_URL', '');
+
+    const apiModule = await import('../../src/lib/api');
+    expect(apiModule.baseURL).toBe('http://localhost:3333');
+  });
+
+  it('falha explicitamente quando VITE_API_URL não é definido fora de dev/test', async () => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+    vi.stubEnv('VITE_API_URL', 'ht!tp://invalid-url');
+
+    await expect(async () => {
+      await import('../../src/lib/api');
+    }).rejects.toThrow('VITE_API_URL inválida');
+  });
+
   it('returns true and clears the stored session for 401 responses', async () => {
     const storeModule = await import('../../src/lib/store');
     storeModule.authToken.set('admin-token');

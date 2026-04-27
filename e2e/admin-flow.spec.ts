@@ -201,7 +201,7 @@ test('rota de contratos abre o módulo principal e permite revisar documentaçã
 
   await expect(page.getByRole('heading', { level: 1, name: 'Contratos' })).toBeVisible();
   await page.getByRole('button', { name: 'Analisar Documentação' }).click();
-  await expect(page.getByText('Dados Captador')).toBeVisible();
+  await expect(page.getByText('Dados Captador', { exact: true }).first()).toBeVisible();
 });
 
 test('fluxo de solicitações de imóvel abre a aba de edição e conclui uma revisão', async ({ page }) => {

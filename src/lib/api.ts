@@ -1,14 +1,18 @@
 import { authToken, clearStoredAuthToken } from './store';
 
-const metaEnv = (import.meta as { env?: Record<string, unknown> })?.env ?? {};
-const envBase = metaEnv.VITE_API_URL;
+const metaEnv = (import.meta as { env?: Record<string, string | boolean | undefined> })?.env ?? {};
+const envBase =
+  metaEnv.VITE_API_URL ??
+  '';
 const isDev = Boolean(metaEnv.DEV);
+const mode = String(metaEnv.MODE ?? '');
+const isTestMode = mode === 'test' || mode === 'smoke' || String(metaEnv.VITE_TEST_MODE || '') === '1';
 const resolvedBase =
   typeof envBase === 'string' && envBase.trim().length > 0
     ? envBase.trim()
-    : isDev
+    : isDev || isTestMode
       ? 'http://localhost:3333'
-      : '';
+      : 'https://backend-production-6acc.up.railway.app';
 
 if (!resolvedBase) {
   throw new Error('VITE_API_URL não configurado. Configure no .env do painel.');
