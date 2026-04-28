@@ -816,6 +816,6 @@
 <PromotionNotificationModal
   bind:open={isPromotionNotificationModalOpen}
   propertyId={promotionNotificationPropertyId}
-  defaultTitle={promotionNotificationTitle}
+  propertyTitle={promotionNotificationTitle}
   defaultMessage={promotionNotificationMessage}
 />

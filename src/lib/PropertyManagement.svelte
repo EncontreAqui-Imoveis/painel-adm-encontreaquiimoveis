@@ -2302,7 +2302,7 @@
         >
           Aluguel
         </button>
-        <div class="mx-2 h-6 w-px bg-gray-200 dark:bg-gray-700" />
+        <div class="mx-2 h-6 w-px bg-gray-200 dark:bg-gray-700"></div>
         <button
           type="button"
           on:click={() => dispatch('viewChange', 'sold_properties')}

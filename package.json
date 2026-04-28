@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
+    "test:property-archive": "vitest run tests/components/PropertyArchive.test.ts --no-file-parallelism",
     "test:architecture": "node scripts/check-architecture-discipline.cjs",
     "test:e2e": "cross-env VITE_API_URL=https://127.0.0.1:4011 npm run build -- --mode test && playwright test",
     "test:e2e:headed": "cross-env VITE_API_URL=https://127.0.0.1:4011 npm run build -- --mode test && playwright test --headed",

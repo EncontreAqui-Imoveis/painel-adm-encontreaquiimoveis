@@ -431,8 +431,6 @@
               </div>
             </div>
 
-            </div>
-
             <div class="mt-6 space-y-4">
               <h4 class="text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Documentação</h4>
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -447,7 +445,7 @@
                           <button
                             type="button"
                             class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(brokerDetail!.creci_front_url!, 'Frente do CRECI')}
+                            on:click={() => openPreview(brokerDetail?.creci_front_url ?? '', 'Frente do CRECI')}
                             title="Visualizar"
                           >
                             <Eye class="h-4 w-4" />
@@ -494,7 +492,7 @@
                           <button
                             type="button"
                             class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(brokerDetail!.creci_back_url!, 'Verso do CRECI')}
+                            on:click={() => openPreview(brokerDetail?.creci_back_url ?? '', 'Verso do CRECI')}
                             title="Visualizar"
                           >
                             <Eye class="h-4 w-4" />
@@ -541,7 +539,7 @@
                           <button
                             type="button"
                             class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(brokerDetail!.selfie_url!, 'Selfie com CRECI')}
+                            on:click={() => openPreview(brokerDetail?.selfie_url ?? '', 'Selfie com CRECI')}
                             title="Visualizar"
                           >
                             <Eye class="h-4 w-4" />

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
     import { Button } from '$lib/components/ui/button';
-    import BrokerReviewModal from '$lib/components/BrokerReviewModal.svelte';
+    import BrokerReviewModal from './components/BrokerReviewModal.svelte';
     import type { Broker, BrokerDocuments } from './types';
 
     export let pendingBrokers: Broker[] = [];

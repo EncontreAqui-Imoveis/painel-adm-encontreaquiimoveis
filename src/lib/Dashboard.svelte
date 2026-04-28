@@ -442,6 +442,13 @@
         return view in viewConfig;
     }
 
+    function handlePropertyManagementViewChange(event: CustomEvent<string>) {
+        const nextView = event.detail;
+        if (isValidView(nextView)) {
+            activeView = nextView;
+        }
+    }
+
     $: if (!hasAppliedInitialView) {
         activeView = isValidView(initialView) ? initialView : "dashboard";
         hasAppliedInitialView = true;
@@ -2184,7 +2191,7 @@
                 {#if PropertyManagementComponent}
                     <svelte:component
                         this={PropertyManagementComponent}
-                        on:viewChange={(e) => (activeView = e.detail)}
+                        on:viewChange={handlePropertyManagementViewChange}
                     />
                 {:else}
                     <div class="flex justify-center items-center h-64">
@@ -2577,7 +2584,7 @@
                         bind:editingId
                         bind:editableItemData
                         {isSaving}
-                        on:delete={(e) => openDeleteModal(e.detail)}
+                        on:delete={(e: any) => openDeleteModal(e.detail)}
                         on:editStart={handleEditStart}
                         on:save={handleSave}
                         on:editCancel={handleEditCancel}

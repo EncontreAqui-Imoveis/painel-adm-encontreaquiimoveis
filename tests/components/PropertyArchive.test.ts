@@ -58,6 +58,19 @@ describe('PropertyArchive', () => {
         };
       }
 
+      if (endpoint === '/admin/users?page=1&limit=200&includeBrokers=true') {
+        return {
+          data: [
+            {
+              id: 101,
+              name: 'João Teste',
+              email: 'joao.teste@example.com',
+              role: 'broker',
+            },
+          ],
+        };
+      }
+
       if (endpoint === '/admin/properties/10') {
         return {
           id: 10,

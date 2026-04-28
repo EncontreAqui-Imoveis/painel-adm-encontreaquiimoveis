@@ -20,9 +20,9 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.{test,spec}.ts'],
     css: true,
+    pool: 'threads',
     fileParallelism: false,
     maxWorkers: 1,
-    minWorkers: 1,
     testTimeout: 60000,
     hookTimeout: 60000,
     coverage: {
