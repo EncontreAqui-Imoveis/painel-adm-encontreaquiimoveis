@@ -70,4 +70,41 @@ describe('VerificationTable', () => {
     expect(await screen.findByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rejeitar' })).toBeInTheDocument();
   });
+
+  it('separates brokers with and without real documents', async () => {
+    render(VerificationTable, {
+      pendingBrokers: [
+        {
+          id: 15,
+          name: 'Broker Com Doc',
+          email: 'comdoc@test.com',
+          creci: '11111',
+          status: 'pending_verification',
+          created_at: '2026-01-10T10:00:00.000Z',
+          documents: {
+            creci_front_url: 'https://example.com/front.jpg',
+            creci_back_url: null,
+            selfie_url: null,
+          },
+        },
+        {
+          id: 16,
+          name: 'Broker Sem Doc',
+          email: 'semdoc@test.com',
+          creci: '22222',
+          status: 'pending_verification',
+          created_at: '2026-01-11T10:00:00.000Z',
+          documents: {
+            creci_front_url: null,
+            creci_back_url: '/uploads/creci-back.jpg',
+            selfie_url: null,
+          },
+        },
+      ],
+    });
+
+    expect(screen.getByText('Broker Com Doc')).toBeInTheDocument();
+    expect(screen.getByText('Documentos pendentes (1)')).toBeInTheDocument();
+    expect(screen.getByText('Broker Sem Doc')).toBeInTheDocument();
+  });
 });

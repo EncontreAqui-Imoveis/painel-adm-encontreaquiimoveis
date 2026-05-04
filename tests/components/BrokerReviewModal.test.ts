@@ -135,7 +135,10 @@ describe('BrokerReviewModal', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Tornar Usuário' }));
 
     await waitFor(() => {
-      expect(apiPostMock).toHaveBeenCalledWith('/admin/clients/10/demote-broker');
+      expect(apiPostMock).toHaveBeenCalledWith(
+        '/admin/clients/10/demote-broker',
+        {},
+      );
     });
     expect(toastSuccessMock).toHaveBeenCalledWith('Usuario voltou para cliente.');
   });
@@ -161,5 +164,31 @@ describe('BrokerReviewModal', () => {
         'X-Admin-Reauth': 'reauth-broker',
       },
     });
+  });
+
+  it('does not render empty/invalid document URLs as real documents', async () => {
+    apiGetMock.mockResolvedValueOnce({
+      data: {
+        ...broker,
+        creci_front_url: '',
+        creci_back_url: '/uploads/creci-back.jpg',
+        selfie_url: '   ',
+        documents: {
+          creci_front_url: '',
+          creci_back_url: '/uploads/creci-back.jpg',
+          selfie_url: '   ',
+        },
+      },
+    });
+
+    render(BrokerReviewModal, { open: true, broker, showApprove: true });
+
+    await screen.findByText('Revisar Corretor');
+    expect(
+      screen.queryByText('O corretor ainda não enviou documentos reais para revisão.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByAltText('Frente do CRECI')).not.toBeInTheDocument();
+    expect(screen.queryByAltText('Verso do CRECI')).not.toBeInTheDocument();
+    expect(screen.queryByAltText('Selfie')).not.toBeInTheDocument();
   });
 });

@@ -20,6 +20,7 @@
     import type {
         Property,
         Broker,
+    BrokerDocuments,
         User,
         Notification,
         NotificationsSubTab,
@@ -343,6 +344,7 @@
 
     // Estado para dados de verificacao
     let pendingBrokers: Broker[] = [];
+    let pendingDocumentBrokers: Broker[] = [];
 
     const viewConfig: Record<View, ViewConfig> = {
         dashboard: {
@@ -535,13 +537,27 @@
                     throw new Error("Falha ao buscar solicitações pendentes");
 
                 const result = await response.json();
-                pendingBrokers = result.data || result;
+                const requestList = readListData<Broker>(result);
+                pendingBrokers = requestList.filter((broker) =>
+                    hasRealDocuments(broker),
+                );
+                pendingDocumentBrokers = requestList.filter(
+                    (broker) => !hasRealDocuments(broker),
+                );
+                totalItems = pendingBrokers.length;
+                totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+                if (currentPage > totalPages) {
+                    currentPage = 1;
+                }
             } catch (error) {
                 console.error(
                     "Erro ao buscar solicitações de verificação:",
                     error,
                 );
                 pendingBrokers = [];
+                pendingDocumentBrokers = [];
+                totalItems = 0;
+                totalPages = 1;
             } finally {
                 isLoading = false;
             }
@@ -613,6 +629,45 @@
             if (Array.isArray(data)) return data as T[];
         }
         return [];
+    }
+
+    function getDocumentUrl(url: string | null | undefined): string {
+        if (!url) return "";
+        const trimmedUrl = url.trim();
+        if (!trimmedUrl) return "";
+        if (trimmedUrl.startsWith("http") || trimmedUrl.includes("cloudinary")) {
+            return trimmedUrl;
+        }
+        if (trimmedUrl.startsWith("/uploads/") || trimmedUrl.startsWith("uploads/")) {
+            return "";
+        }
+        return trimmedUrl;
+    }
+
+    function resolveBrokerDocumentField(
+        broker: Broker,
+        field: keyof BrokerDocuments,
+    ): string | null {
+        const fromDocuments = broker.documents?.[field];
+        if (typeof fromDocuments === "string" && fromDocuments.trim().length > 0) {
+            return fromDocuments;
+        }
+
+        const legacySource = broker as unknown as Record<string, unknown>;
+        const legacyValue = legacySource[field as string];
+        if (typeof legacyValue === "string" && legacyValue.trim().length > 0) {
+            return legacyValue;
+        }
+
+        return null;
+    }
+
+    function hasRealDocuments(broker: Broker): boolean {
+        return (
+            Boolean(getDocumentUrl(resolveBrokerDocumentField(broker, "creci_front_url"))) ||
+            Boolean(getDocumentUrl(resolveBrokerDocumentField(broker, "creci_back_url"))) ||
+            Boolean(getDocumentUrl(resolveBrokerDocumentField(broker, "selfie_url")))
+        );
     }
 
     function formatNotificationDate(value: string): string {
@@ -2132,11 +2187,16 @@
                                 >
                                     Solicitações de Corretores
                                 </h2>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                {pendingBrokers.length} solicitação(ões) em análise com documentos enviados
+                            </p>
+                            {#if pendingDocumentBrokers.length > 0}
                                 <p
-                                    class="text-sm text-gray-600 dark:text-gray-400 mt-1"
+                                    class="text-sm text-amber-700 dark:text-amber-300 mt-1"
                                 >
-                                    {totalItems} solicitaçõ(es) pendente(s)
+                                    {pendingDocumentBrokers.length} solicitação(ões) com documentos pendentes
                                 </p>
+                            {/if}
                             </div>
                             <div
                                 class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
@@ -2176,6 +2236,7 @@
 
                     <VerificationTable
                         {pendingBrokers}
+                        {pendingDocumentBrokers}
                         on:refresh={fetchData}
                     />
                     <div class="p-4 border-t dark:border-gray-700">

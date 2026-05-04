@@ -7,6 +7,7 @@
   import { Loader2, Trash2, Upload, Eye, X } from 'lucide-svelte';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
+  import type { BrokerDocuments } from '$lib/types';
 
   type BrokerDetail = {
     id: number;
@@ -26,7 +27,12 @@
     creci_front_url?: string | null;
     creci_back_url?: string | null;
     selfie_url?: string | null;
+    documents?: BrokerDocuments;
     document_status?: string | null;
+  };
+  type BrokerLike = {
+    documents?: BrokerDocuments;
+    [key: string]: unknown;
   };
 
   export let open = false;
@@ -51,6 +57,9 @@
   let isDeletingDocument = false;
   let isUploadingDocument = false;
   let documentInputEl: HTMLInputElement;
+  let resolvedCreciFrontUrl = '';
+  let resolvedCreciBackUrl = '';
+  let resolvedSelfieUrl = '';
   let brokerForm = {
     name: '',
     email: '',
@@ -84,6 +93,44 @@
     deleteError = null;
     isDeleteDialogOpen = false;
   }
+
+  $: {
+    const source = (brokerDetail as BrokerLike | null) ?? (broker as BrokerLike | null);
+    const fromSource = (key: keyof BrokerDocuments): string | null => {
+      if (source == null) return null;
+      const fromDocuments = source.documents?.[key];
+      if (typeof fromDocuments === 'string' && fromDocuments.trim().length > 0) {
+        return fromDocuments;
+      }
+      const legacyValue = source[key as string];
+      if (typeof legacyValue === 'string' && legacyValue.trim().length > 0) {
+        return legacyValue;
+      }
+      return null;
+    };
+
+    const normalizeDocumentUrl = (url: string | null | undefined): string => {
+      if (!url) return '';
+      const trimmedUrl = url.trim();
+      if (!trimmedUrl) return '';
+      if (trimmedUrl.startsWith('http') || trimmedUrl.includes('cloudinary')) {
+        return trimmedUrl;
+      }
+      if (trimmedUrl.startsWith('/uploads/') || trimmedUrl.startsWith('uploads/')) {
+        return '';
+      }
+      return trimmedUrl;
+    };
+
+    resolvedCreciFrontUrl = normalizeDocumentUrl(fromSource('creci_front_url'));
+    resolvedCreciBackUrl = normalizeDocumentUrl(fromSource('creci_back_url'));
+    resolvedSelfieUrl = normalizeDocumentUrl(fromSource('selfie_url'));
+  }
+
+  $: hasRealDocuments =
+    Boolean(resolvedCreciFrontUrl) ||
+    Boolean(resolvedCreciBackUrl) ||
+    Boolean(resolvedSelfieUrl);
 
   function formatDate(value?: string | null) {
     if (!value) return '-';
@@ -433,19 +480,24 @@
 
             <div class="mt-6 space-y-4">
               <h4 class="text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Documentação</h4>
+              {#if !hasRealDocuments}
+                <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                  O corretor ainda não enviou documentos reais para revisão.
+                </p>
+              {/if}
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <!-- Frente CRECI -->
                 <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
                   <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">Frente do CRECI</div>
-                  {#if brokerDetail?.creci_front_url}
+                  {#if resolvedCreciFrontUrl}
                     <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                      <img src={brokerDetail.creci_front_url} alt="Frente do CRECI" class="h-full w-full object-cover" />
+                      <img src={resolvedCreciFrontUrl} alt="Frente do CRECI" class="h-full w-full object-cover" />
                       <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                         <div class="flex gap-2">
                           <button
                             type="button"
                             class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(brokerDetail?.creci_front_url ?? '', 'Frente do CRECI')}
+                            on:click={() => openPreview(resolvedCreciFrontUrl, 'Frente do CRECI')}
                             title="Visualizar"
                           >
                             <Eye class="h-4 w-4" />
@@ -484,15 +536,15 @@
                 <!-- Verso CRECI -->
                 <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
                   <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">Verso do CRECI</div>
-                  {#if brokerDetail?.creci_back_url}
+                  {#if resolvedCreciBackUrl}
                     <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                      <img src={brokerDetail.creci_back_url} alt="Verso do CRECI" class="h-full w-full object-cover" />
+                      <img src={resolvedCreciBackUrl} alt="Verso do CRECI" class="h-full w-full object-cover" />
                       <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                         <div class="flex gap-2">
                           <button
                             type="button"
                             class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(brokerDetail?.creci_back_url ?? '', 'Verso do CRECI')}
+                            on:click={() => openPreview(resolvedCreciBackUrl, 'Verso do CRECI')}
                             title="Visualizar"
                           >
                             <Eye class="h-4 w-4" />
@@ -531,15 +583,15 @@
                 <!-- Selfie -->
                 <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
                   <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">Selfie com CRECI</div>
-                  {#if brokerDetail?.selfie_url}
+                  {#if resolvedSelfieUrl}
                     <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                      <img src={brokerDetail.selfie_url} alt="Selfie" class="h-full w-full object-cover" />
+                      <img src={resolvedSelfieUrl} alt="Selfie" class="h-full w-full object-cover" />
                       <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                         <div class="flex gap-2">
                           <button
                             type="button"
                             class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(brokerDetail?.selfie_url ?? '', 'Selfie com CRECI')}
+                            on:click={() => openPreview(resolvedSelfieUrl, 'Selfie com CRECI')}
                             title="Visualizar"
                           >
                             <Eye class="h-4 w-4" />
