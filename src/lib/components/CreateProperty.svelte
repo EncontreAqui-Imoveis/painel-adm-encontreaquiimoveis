@@ -22,6 +22,7 @@
     sanitizeDecimalInput,
     sanitizeDigitsInput,
   } from '$lib/components/create-property-helpers';
+  import { PROPERTY_AMENITY_OPTIONS, toggleAmenity, normalizeAmenityList } from '$lib/propertyAmenities';
 
   const propertyTypes = [
     'Casa',
@@ -166,6 +167,7 @@
   let temAutomacao = false;
   let temArCondicionado = false;
   let ehMobiliada = false;
+  let selectedAmenities: string[] = [];
 
   const cityCache: Record<string, string[]> = {};
   const bairroCache: Record<string, string[]> = {};
@@ -805,6 +807,11 @@
       (parsedPromotionPercentageSale ?? 0) > 0 ||
       (parsedPromotionPercentageRent ?? 0) > 0;
 
+    const normalizedAmenities = normalizeAmenityList([
+      ...selectedAmenities,
+      ...(ehMobiliada ? ['MOBILIADA'] : []),
+    ]);
+
     const parsedBedrooms = resolvedBedrooms ? Number(resolvedBedrooms) : null;
     const parsedBathrooms = resolvedBathrooms ? Number(resolvedBathrooms) : null;
     const parsedGarage = resolvedGarageSpots ? Number(resolvedGarageSpots) : null;
@@ -935,6 +942,7 @@
         tem_automacao: temAutomacao ? 1 : 0,
         tem_ar_condicionado: temArCondicionado ? 1 : 0,
         eh_mobiliada: ehMobiliada ? 1 : 0,
+        amenities: normalizedAmenities,
         image_urls: uploadedImageUrls,
         video_url: uploadedVideoUrl,
       };
@@ -1006,6 +1014,7 @@
       temAutomacao = false;
       temArCondicionado = false;
       ehMobiliada = false;
+      selectedAmenities = [];
       if (imagesInput) imagesInput.value = '';
       clearVideoSelection();
       dispatch('created', { propertyId });
@@ -1681,10 +1690,24 @@
             <input id="create-property-tem-ar-condicionado" name="tem_ar_condicionado" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" bind:checked={temArCondicionado} />
             Ar condicionado
           </label>
-          <label class="inline-flex items-center gap-2">
-            <input id="create-property-eh-mobiliada" name="eh_mobiliada" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" bind:checked={ehMobiliada} />
-            Mobiliada
-          </label>
+          {#each PROPERTY_AMENITY_OPTIONS as amenity}
+            <label class="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                id={`create-property-amenity-${amenity.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}`}
+                class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                checked={selectedAmenities.includes(amenity)}
+                on:change={(event) => {
+                  const nextChecked = (event.target as HTMLInputElement).checked;
+                  selectedAmenities = toggleAmenity(selectedAmenities, amenity, nextChecked);
+                  if (amenity === 'MOBILIADA') {
+                    ehMobiliada = nextChecked;
+                  }
+                }}
+              />
+              {amenity}
+            </label>
+          {/each}
         </div>
       </div>
 

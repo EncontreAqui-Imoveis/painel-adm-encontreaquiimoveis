@@ -22,6 +22,7 @@
   import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';
   import { clearSessionToken, hasSessionToken } from './sessionState';
   import type { PropertyStatus, PropertyImage as PropertyImageType } from './types';
+  import { PROPERTY_AMENITY_OPTIONS, hasAmenity, normalizeAmenityList, toggleAmenity } from '$lib/propertyAmenities';
   const dispatch = createEventDispatcher();
 
   interface PropertySummary {
@@ -54,6 +55,7 @@
     request_type?: 'creation' | 'edit' | null;
     area_construida_unidade?: AreaUnit | null;
     area_terreno_unidade?: AreaUnit | null;
+    amenities?: string[] | null;
     images?: Array<NormalizedImage | PropertyImageType | string> | string | null;
   }
 
@@ -98,8 +100,18 @@
     tem_automacao?: boolean | null;
     tem_ar_condicionado?: boolean | null;
     eh_mobiliada?: boolean | null;
+    amenities?: string[] | null;
     images?: Array<NormalizedImage | PropertyImageType | string> | string | null;
   };
+
+  const propertyAmenityOptions = PROPERTY_AMENITY_OPTIONS;
+  const boolAmenityLabels = [
+    { label: 'Wi-Fi', key: 'has_wifi' as const },
+    { label: 'Piscina', key: 'tem_piscina' as const },
+    { label: 'Energia solar', key: 'tem_energia_solar' as const },
+    { label: 'Automação', key: 'tem_automacao' as const },
+    { label: 'Ar condicionado', key: 'tem_ar_condicionado' as const },
+  ] as const;
 
   type SortConfig = {
     key: string;
@@ -419,6 +431,7 @@
           const promotionalRentPercentageValue = record['promotional_rent_percentage'];
           const brokerIdValue = record['broker_id'];
           const ownerIdValue = record['owner_id'];
+          const amenityRawValue = record['amenities'];
           const ownerNameValue = record['owner_name'];
           const ownerPhoneValue = record['owner_phone'];
           const brokerPhoneValue = record['broker_phone'];
@@ -476,6 +489,7 @@
                 : requestTypeValue === 'creation'
                 ? 'creation'
                 : null,
+            amenities: amenityRawValue != null ? getAmenityPayload(amenityRawValue) : null,
             images:
               (record['images'] as
                 | Array<NormalizedImage | PropertyImageType | string>
@@ -725,6 +739,35 @@
       .filter((img): img is NormalizedImage => Boolean(img));
   }
 
+  function getAmenityPayload(amenities: unknown): string[] {
+    return normalizeAmenityList(amenities);
+  }
+
+  function isAmenityChecked(
+    property: PropertySummary | PropertyDetails | null | undefined,
+    amenity: (typeof propertyAmenityOptions)[number]
+  ): boolean {
+    if (!property) return false;
+    if (
+      amenity === 'MOBILIADA' &&
+      Boolean((property as Partial<PropertyDetails>).eh_mobiliada)
+    ) {
+      return true;
+    }
+    return hasAmenity(property.amenities, amenity);
+  }
+
+  function updateAmenitySelection(
+    details: PropertyDetails,
+    amenity: (typeof propertyAmenityOptions)[number],
+    checked: boolean
+  ): void {
+    details.amenities = toggleAmenity(details.amenities, amenity, checked);
+    if (amenity === 'MOBILIADA') {
+      details.eh_mobiliada = checked;
+    }
+  }
+
   function normalizeImages(
     images?:
       | Array<NormalizedImage | PropertyImageType | Record<string, unknown> | string>
@@ -896,6 +939,14 @@
     for (const key of booleanKeys) {
       coerced[key] = Boolean((data as any)?.[key]);
     }
+    const amenitiesFromPayload = normalizeAmenityList(data.amenities);
+    const hasMobiliada = Boolean((data as Partial<PropertyDetails>).eh_mobiliada);
+    const mergedMobiliada = hasMobiliada || amenitiesFromPayload.includes('MOBILIADA');
+    const mergedAmenities = mergedMobiliada && !amenitiesFromPayload.includes('MOBILIADA')
+      ? [...amenitiesFromPayload, 'MOBILIADA']
+      : amenitiesFromPayload;
+    coerced.amenities = mergedAmenities;
+    coerced.eh_mobiliada = mergedMobiliada;
     return coerced as unknown as PropertyDetails;
   }
 
@@ -1567,6 +1618,7 @@
         tem_automacao: editableProperty.tem_automacao,
         tem_ar_condicionado: editableProperty.tem_ar_condicionado,
         eh_mobiliada: editableProperty.eh_mobiliada,
+        amenities: editableProperty.amenities,
         video_url: editableProperty.video_url,
         type: editableProperty.type,
         owner_name: editableProperty.owner_name,
@@ -3593,41 +3645,46 @@
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Comodidades</h3>
           <div class="mt-2 flex flex-wrap gap-2 text-sm">
             {#if isEditMode && editableProperty}
-              <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
-                <input type="checkbox" name="has_wifi" bind:checked={editableProperty.has_wifi} />
-                Wi-Fi
-              </label>
-              <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
-                <input type="checkbox" name="tem_piscina" bind:checked={editableProperty.tem_piscina} />
-                Piscina
-              </label>
-              <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
-                <input type="checkbox" name="tem_energia_solar" bind:checked={editableProperty.tem_energia_solar} />
-                Energia solar
-              </label>
-              <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
-                <input type="checkbox" name="tem_automacao" bind:checked={editableProperty.tem_automacao} />
-                Automação
-              </label>
-              <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
-                <input type="checkbox" name="tem_ar_condicionado" bind:checked={editableProperty.tem_ar_condicionado} />
-                Ar-condicionado
-              </label>
-              <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
-                <input type="checkbox" name="eh_mobiliada" bind:checked={editableProperty.eh_mobiliada} />
-                Mobiliada
-              </label>
+              {#each boolAmenityLabels as amenity}
+                <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
+                  <input
+                    type="checkbox"
+                    name={amenity.key}
+                    checked={Boolean(editableProperty[amenity.key])}
+                    on:change={(event) => {
+                      const checked = (event.target as HTMLInputElement).checked;
+                      (editableProperty as Record<string, any>)[amenity.key] = checked;
+                    }}
+                  />
+                  {amenity.label}
+                </label>
+              {/each}
+              {#each propertyAmenityOptions as amenity}
+                <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
+                  <input
+                    type="checkbox"
+                    name={`amenity-${amenity.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}`}
+                    checked={isAmenityChecked(editableProperty, amenity)}
+                    on:change={(event) => {
+                      const checked = (event.target as HTMLInputElement).checked;
+                      if (editableProperty) {
+                        updateAmenitySelection(editableProperty, amenity, checked);
+                      }
+                    }}
+                  />
+                  {amenity}
+                </label>
+              {/each}
             {:else}
-              {#each [
-                { label: 'Wi-Fi', value: selectedProperty.has_wifi },
-                { label: 'Piscina', value: selectedProperty.tem_piscina },
-                { label: 'Energia solar', value: selectedProperty.tem_energia_solar },
-                { label: 'Automação', value: selectedProperty.tem_automacao },
-                { label: 'Ar condicionado', value: selectedProperty.tem_ar_condicionado },
-                { label: 'Mobiliada', value: selectedProperty.eh_mobiliada }
-              ] as amenity}
-                <span class={`rounded-full px-3 py-1 ${amenity.value ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>
-                  {amenity.label}: {amenity.value ? 'Sim' : 'Não'}
+              {#each boolAmenityLabels as amenity}
+                <span class={`rounded-full px-3 py-1 ${Boolean(selectedProperty[amenity.key]) ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>
+                  {amenity.label}: {Boolean(selectedProperty[amenity.key]) ? 'Sim' : 'Não'}
+                </span>
+              {/each}
+              {#each propertyAmenityOptions as amenity}
+                {@const isChecked = isAmenityChecked(selectedProperty, amenity)}
+                <span class={`rounded-full px-3 py-1 ${isChecked ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>
+                  {amenity}: {isChecked ? 'Sim' : 'Não'}
                 </span>
               {/each}
             {/if}

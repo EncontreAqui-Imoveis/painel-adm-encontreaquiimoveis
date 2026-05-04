@@ -127,7 +127,7 @@ describe('CreateProperty', () => {
     await fireEvent.input(getInputById('create-property-area-construida'), {
       target: { value: '145,5' },
     });
-    await fireEvent.input(screen.getByLabelText('Área do terreno (m²) *'), {
+    await fireEvent.input(getInputById('create-property-area-terreno'), {
       target: { value: '210,0' },
     });
     await fireEvent.input(screen.getByLabelText('Preço de venda *'), {
@@ -145,6 +145,8 @@ describe('CreateProperty', () => {
     render(CreateProperty);
 
     await fillRequiredFields();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'MOBILIADA' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'ACADEMIA' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar imóvel' }));
 
     await waitFor(() => {
@@ -153,6 +155,7 @@ describe('CreateProperty', () => {
         expect.objectContaining({
           title: 'Casa teste painel',
           city: 'Rio Verde',
+          amenities: expect.arrayContaining(['MOBILIADA', 'ACADEMIA']),
           image_urls: [
             'https://res.cloudinary.com/demo/image/upload/v1/conectimovel/properties/admin/foto.jpg',
           ],
@@ -196,5 +199,25 @@ describe('CreateProperty', () => {
     expect(
       screen.getByText('Campo obrigatorio ausente: quadra')
     ).toBeInTheDocument();
+  });
+
+  it('aceita quartos = 0 via opcao "Sem quarto"', async () => {
+    render(CreateProperty);
+
+    await fillRequiredFields();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Sem quarto' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar imóvel' }));
+
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledWith(
+        '/admin/properties',
+        expect.objectContaining({
+          bedrooms: 0,
+          bathrooms: 2,
+          garage_spots: 2,
+        }),
+        expect.anything()
+      );
+    });
   });
 });

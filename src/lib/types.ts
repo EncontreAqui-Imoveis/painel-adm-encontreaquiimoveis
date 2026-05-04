@@ -40,6 +40,7 @@ export interface Property {
   area_terreno?: number | null;
   area_terreno_unidade?: 'm2' | 'hectare' | 'alqueire' | null;
   garage_spots?: number | null;
+  amenities?: string[] | null;
   has_wifi?: boolean;
   tem_piscina?: boolean;
   tem_energia_solar?: boolean;
