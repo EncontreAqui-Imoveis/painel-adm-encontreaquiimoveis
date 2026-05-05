@@ -7,6 +7,7 @@
   import { Loader2, Trash2, Upload, Eye, X } from 'lucide-svelte';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
+import { extractApiErrorMessage } from '$lib/components/create-property-helpers';
   import type { BrokerDocuments } from '$lib/types';
 
   type BrokerDetail = {
@@ -346,20 +347,28 @@
 
     const file = input.files[0];
     isUploadingDocument = true;
+    let uploadSucceeded = false;
 
     try {
       const formData = new FormData();
       formData.append(currentUploadDocType, file);
 
       await api.post(`/admin/brokers/${brokerDetail.id}/documents`, formData);
+      uploadSucceeded = true;
       toast.success('Documento enviado com sucesso.');
       await fetchBrokerDetail(brokerDetail.id);
     } catch (error) {
       console.error('Erro ao enviar documento:', error);
-      toast.error('Falha ao enviar documento.');
+      const errorMessage = extractApiErrorMessage(
+        error,
+        'Falha ao enviar documento. Se persistir, tente novamente.'
+      );
+      toast.error(errorMessage);
     } finally {
       isUploadingDocument = false;
-      input.value = '';
+      if (uploadSucceeded) {
+        input.value = '';
+      }
     }
   }
 

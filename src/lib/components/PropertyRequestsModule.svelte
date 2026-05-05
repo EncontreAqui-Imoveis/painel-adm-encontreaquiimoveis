@@ -94,7 +94,11 @@
   </div>
 
   {#if activeTab === 'creation'}
-    <PropertyManagement initialStatus="pending_approval" allowApproval={true} />
+    <PropertyManagement
+      initialStatus="pending_approval"
+      allowApproval={true}
+      initialReviewRequestType="creation"
+    />
   {:else}
     <PropertyEditRequests />
   {/if}

@@ -140,8 +140,9 @@
 
   export let initialStatus: PropertyStatus | 'all' = 'approved';
   export let allowApproval = false;
+  export let initialReviewRequestType: PropertyRequestTypeFilter = 'all';
   let isReviewOnly = false;
-  let reviewRequestType: PropertyRequestTypeFilter = 'all';
+  let reviewRequestType: PropertyRequestTypeFilter = initialReviewRequestType;
   $: isReviewOnly = allowApproval;
 
     let properties: PropertySummary[] = [];

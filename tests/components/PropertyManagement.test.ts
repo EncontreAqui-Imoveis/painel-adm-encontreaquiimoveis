@@ -142,6 +142,24 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+type Deferred<T = void> = {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+};
+
+function createDeferred<T = void>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+
+  const promise = new Promise<T>((localResolve, localReject) => {
+    resolve = localResolve;
+    reject = localReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
 function buildPropertySummary(property: PropertyMockState): Record<string, unknown> {
   return {
     id: property.id,
@@ -268,6 +286,12 @@ function mockPropertyManagementRequests({
   apiPatchMock.mockResolvedValue({});
 }
 
+function getPropertiesListCallCount(): number {
+  return apiGetMock.mock.calls.filter(([endpoint]) =>
+    String(endpoint).includes('/admin/properties-with-brokers')
+  ).length;
+}
+
 function getRevisarButtons() {
   return screen.getAllByRole('button', { name: 'Revisar' });
 }
@@ -382,6 +406,80 @@ describe('PropertyManagement', () => {
     expect(findListItemByLabel(reopenedDialog, 'Área construída')).toHaveTextContent('2332 ha');
     expect(findAmenityPill(reopenedDialog, 'Mobiliada')).toHaveTextContent('Sim');
     expect(findAmenityPill(reopenedDialog, 'Academia')).toHaveTextContent('Sim');
+  });
+
+  it('fecha modal somente após PUT 2xx e atualiza a lista pelo refetch', async () => {
+    const releasePut = createDeferred<void>();
+    let property = clone(basePropertyState);
+
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/admin/properties-with-brokers')) {
+        return {
+          data: [buildPropertySummary(property)],
+          total: 1,
+        };
+      }
+
+      if (endpoint.startsWith('/admin/properties/')) {
+        return buildPropertySummary(property);
+      }
+
+      if (endpoint.startsWith('/admin/users')) {
+        return [];
+      }
+
+      throw new Error(`Endpoint não esperado no teste: ${endpoint}`);
+    });
+
+    apiPutMock.mockImplementation(async (_endpoint: string, payload: SavePayload) => {
+      await releasePut.promise;
+      applyServerPatch(property, payload);
+      return {};
+    });
+    apiPatchMock.mockResolvedValue({});
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    const firstRevisar = getRevisarButtons()[0];
+    await fireEvent.click(firstRevisar);
+
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    await fireEvent.input(
+      within(dialog).getByPlaceholderText('Descricao do imóvel'),
+      { target: { value: 'Persistência após resposta real' } }
+    );
+    const saveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
+    const saveButton = saveButtons[0];
+
+    const listCallsBeforeSave = getPropertiesListCallCount();
+    await fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+    expect(getPropertiesListCallCount()).toBe(listCallsBeforeSave);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(saveButton).toBeDisabled();
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+
+    releasePut.resolve();
+
+    await waitFor(() => {
+      expect(getPropertiesListCallCount()).toBeGreaterThan(listCallsBeforeSave);
+      expect(toastSuccessMock).toHaveBeenCalledWith('Imóvel atualizado com sucesso.');
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    await fireEvent.click(getRevisarButtons()[0]);
+    const reopenedDialog = await screen.findByRole('dialog');
+    expect(await within(reopenedDialog).findByText('Persistência após resposta real')).toBeInTheDocument();
+    await fireEvent.click(within(reopenedDialog).getByRole('button', { name: 'Sair' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('salva solicitação de edição com public_code e não envia status inválido no PUT', async () => {

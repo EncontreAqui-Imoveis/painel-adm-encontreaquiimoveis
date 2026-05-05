@@ -191,4 +191,40 @@ describe('BrokerReviewModal', () => {
     expect(screen.queryByAltText('Verso do CRECI')).not.toBeInTheDocument();
     expect(screen.queryByAltText('Selfie')).not.toBeInTheDocument();
   });
+
+  it('mostra erro ao reenviar documento quando o endpoint responde falha', async () => {
+    apiPostMock.mockRejectedValueOnce({
+      response: {
+        data: {
+          error: 'Arquivo inválido para upload.',
+        },
+      },
+    });
+
+    render(BrokerReviewModal, { open: true, broker, showApprove: true });
+
+    await screen.findByText('Revisar Corretor');
+    const uploadButtons = screen.getAllByRole('button', { name: 'Enviar Documento' });
+    await fireEvent.click(uploadButtons[0]);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(fileInput).toBeTruthy();
+    await fireEvent.change(fileInput, {
+      target: {
+        files: [new File(['conteudo'], 'doc-rejeitado.png', { type: 'image/png' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith(
+        '/admin/brokers/10/documents',
+        expect.any(FormData),
+      );
+    });
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith('Arquivo inválido para upload.');
+    });
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
 });
