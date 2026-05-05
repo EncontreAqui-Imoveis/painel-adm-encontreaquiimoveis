@@ -42,6 +42,8 @@
     promotional_rent_percentage?: number | null;
     status: PropertyStatus;
     purpose?: string | null;
+    public_id?: number | null;
+    public_code?: string | null;
     broker_id?: number | null;
     owner_id?: number | null;
     owner_name?: string | null;
@@ -55,6 +57,10 @@
     request_type?: 'creation' | 'edit' | null;
     area_construida_unidade?: AreaUnit | null;
     area_terreno_unidade?: AreaUnit | null;
+    area_construida_valor?: number | null;
+    area_terreno_valor?: number | null;
+    area_construida_m2?: number | null;
+    area_terreno_m2?: number | null;
     amenities?: string[] | null;
     images?: Array<NormalizedImage | PropertyImageType | string> | string | null;
   }
@@ -81,6 +87,12 @@
     area_construida_unidade?: AreaUnit | null;
     area_terreno?: number | null;
     area_terreno_unidade?: AreaUnit | null;
+    area_construida_valor?: number | null;
+    area_terreno_valor?: number | null;
+    area_construida_m2?: number | null;
+    area_terreno_m2?: number | null;
+    public_code?: string | null;
+    public_id?: number | null;
     price_sale?: number | null;
     price_rent?: number | null;
     promotion_percentage?: number | null;
@@ -431,6 +443,12 @@
           const promotionalRentPercentageValue = record['promotional_rent_percentage'];
           const brokerIdValue = record['broker_id'];
           const ownerIdValue = record['owner_id'];
+          const publicIdValue = record['public_id'];
+          const publicCodeValue = record['public_code'];
+          const areaConstruidaValorRaw = record['area_construida_valor'];
+          const areaTerrenoValorRaw = record['area_terreno_valor'];
+          const areaConstruidaM2Raw = record['area_construida_m2'];
+          const areaTerrenoM2Raw = record['area_terreno_m2'];
           const amenityRawValue = record['amenities'];
           const ownerNameValue = record['owner_name'];
           const ownerPhoneValue = record['owner_phone'];
@@ -446,6 +464,15 @@
             record['area_terreno_unidade'] ?? record['area_terreno_medida'];
           const areaTerrenoUnidade =
             normalizeAreaUnit(areaTerrenoUnidadeRaw) ?? areaConstruidaUnidade ?? 'm2';
+          const parseNullableNumber = (value: unknown): number | null => {
+            if (value == null || value === '') return null;
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : null;
+          };
+          const areaConstruidaValor = parseNullableNumber(areaConstruidaValorRaw);
+          const areaTerrenoValor = parseNullableNumber(areaTerrenoValorRaw);
+          const areaConstruidaM2 = parseNullableNumber(areaConstruidaM2Raw);
+          const areaTerrenoM2 = parseNullableNumber(areaTerrenoM2Raw);
 
           return {
             id,
@@ -457,8 +484,16 @@
             price: priceValue != null ? Number(priceValue) : null,
             price_sale: priceSaleValue != null ? Number(priceSaleValue) : null,
             price_rent: priceRentValue != null ? Number(priceRentValue) : null,
+            area_construida_valor: areaConstruidaValor,
+            area_terreno_valor: areaTerrenoValor,
+            area_construida_m2: areaConstruidaM2 ?? parseNullableNumber(record['area_construida']),
+            area_terreno_m2: areaTerrenoM2 ?? parseNullableNumber(record['area_terreno']),
+            area_construida: areaConstruidaM2 ?? parseNullableNumber(record['area_construida']),
             area_construida_unidade: areaConstruidaUnidade,
             area_terreno_unidade: areaTerrenoUnidade,
+            area_terreno: areaTerrenoM2 ?? parseNullableNumber(record['area_terreno']),
+            public_id: publicIdValue != null ? Number(publicIdValue) : null,
+            public_code: publicCodeValue != null ? String(publicCodeValue) : null,
             promotion_percentage:
               promotionPercentageValue != null ? Number(promotionPercentageValue) : null,
             promotion_price:
@@ -749,7 +784,7 @@
   ): boolean {
     if (!property) return false;
     if (
-      amenity === 'MOBILIADA' &&
+      amenity === 'Mobiliada' &&
       Boolean((property as Partial<PropertyDetails>).eh_mobiliada)
     ) {
       return true;
@@ -763,7 +798,7 @@
     checked: boolean
   ): void {
     details.amenities = toggleAmenity(details.amenities, amenity, checked);
-    if (amenity === 'MOBILIADA') {
+    if (amenity === 'Mobiliada') {
       details.eh_mobiliada = checked;
     }
   }
@@ -934,16 +969,33 @@
     const areaConstruidaUnidade = normalizeAreaUnit(data.area_construida_unidade) ?? 'm2';
     const areaTerrenoUnidade =
       normalizeAreaUnit(data.area_terreno_unidade) ?? areaConstruidaUnidade;
+    const areaConstruidaValor = data.area_construida_valor ?? data.area_construida;
+    const areaTerrenoValor = data.area_terreno_valor ?? data.area_terreno;
+    const parsedAreaConstruidaM2 =
+      data.area_construida_m2 ?? data.area_construida;
+    const parsedAreaTerrenoM2 =
+      data.area_terreno_m2 ?? data.area_terreno;
+
+    const parseNullableNumber = (value: unknown): number | null => {
+      if (value == null || value === '') return null;
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    };
+
     coerced.area_construida_unidade = areaConstruidaUnidade;
     coerced.area_terreno_unidade = areaTerrenoUnidade;
+    coerced.area_construida_valor = parseNullableNumber(areaConstruidaValor);
+    coerced.area_terreno_valor = parseNullableNumber(areaTerrenoValor);
+    coerced.area_construida = parseNullableNumber(parsedAreaConstruidaM2);
+    coerced.area_terreno = parseNullableNumber(parsedAreaTerrenoM2);
     for (const key of booleanKeys) {
       coerced[key] = Boolean((data as any)?.[key]);
     }
     const amenitiesFromPayload = normalizeAmenityList(data.amenities);
     const hasMobiliada = Boolean((data as Partial<PropertyDetails>).eh_mobiliada);
-    const mergedMobiliada = hasMobiliada || amenitiesFromPayload.includes('MOBILIADA');
-    const mergedAmenities = mergedMobiliada && !amenitiesFromPayload.includes('MOBILIADA')
-      ? [...amenitiesFromPayload, 'MOBILIADA']
+    const mergedMobiliada = hasMobiliada || amenitiesFromPayload.includes('Mobiliada');
+    const mergedAmenities = mergedMobiliada && !amenitiesFromPayload.includes('Mobiliada')
+      ? [...amenitiesFromPayload, 'Mobiliada']
       : amenitiesFromPayload;
     coerced.amenities = mergedAmenities;
     coerced.eh_mobiliada = mergedMobiliada;
@@ -1444,6 +1496,8 @@
         'promotional_rent_price',
         'area_construida',
         'area_terreno',
+        'area_construida_valor',
+        'area_terreno_valor',
         'bedrooms',
         'bathrooms',
         'garage_spots',
@@ -1606,8 +1660,10 @@
         bedrooms: editableProperty.bedrooms,
         bathrooms: editableProperty.bathrooms,
         area_construida: editableProperty.area_construida,
+        area_construida_valor: editableProperty.area_construida_valor,
         area_construida_unidade: editableProperty.area_construida_unidade ?? 'm2',
         area_terreno: editableProperty.area_terreno,
+        area_terreno_valor: editableProperty.area_terreno_valor,
         area_terreno_unidade:
           editableProperty.area_terreno_unidade ??
           editableProperty.area_construida_unidade ??
@@ -2691,7 +2747,7 @@
           </span>
         </Dialog.Description>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Dashboard / Imóveis / Revisão #{selectedProperty.id}
+          Dashboard / Imóveis / Referência {selectedProperty.public_code ?? `#${selectedProperty.id}`}
         </p>
       </Dialog.Header>
 
@@ -3447,20 +3503,22 @@
               <label class="flex flex-col gap-1">
                 <strong>Área construída:</strong>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                  <input
-                    name="area_construida"
+                    <input
+                    name="area_construida_valor"
                     type="text"
                     inputmode="decimal"
                     maxlength="12"
                     class="w-full min-w-0 rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
-                    bind:value={editableProperty.area_construida}
+                    bind:value={editableProperty.area_construida_valor}
                     on:input={(event) => {
                       const target = event.target as HTMLInputElement;
                       if (editableProperty) {
                         const sanitized = clampAreaInput(target.value);
-                        editableProperty.area_construida = sanitized
+                        const parsed = sanitized
                           ? Number(sanitized.replace(',', '.'))
                           : null;
+                        editableProperty.area_construida_valor = parsed;
+                        editableProperty.area_construida = parsed;
                       }
                     }}
                   />
@@ -3478,20 +3536,22 @@
               <label class="flex flex-col gap-1">
                 <strong>Área do terreno:</strong>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                  <input
-                    name="area_terreno"
+                    <input
+                    name="area_terreno_valor"
                     type="text"
                     inputmode="decimal"
                     maxlength="12"
                     class="w-full min-w-0 rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
-                    bind:value={editableProperty.area_terreno}
+                    bind:value={editableProperty.area_terreno_valor}
                     on:input={(event) => {
                       const target = event.target as HTMLInputElement;
                       if (editableProperty) {
                         const sanitized = clampAreaInput(target.value);
-                        editableProperty.area_terreno = sanitized
+                        const parsed = sanitized
                           ? Number(sanitized.replace(',', '.'))
                           : null;
+                        editableProperty.area_terreno_valor = parsed;
+                        editableProperty.area_terreno = parsed;
                       }
                     }}
                   />
@@ -3604,9 +3664,9 @@
                   }}
                 />
               </label>
-              <label class="flex flex-col gap-1">
-                <strong>Código interno:</strong>
-                <input name="code" class="w-full rounded border px-2 py-1 text-sm bg-gray-100 text-gray-500 cursor-not-allowed dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400" value={editableProperty.code || '-'} disabled readonly />
+                <label class="flex flex-col gap-1">
+                <strong>Código de referência:</strong>
+                <input name="code" class="w-full rounded border px-2 py-1 text-sm bg-gray-100 text-gray-500 cursor-not-allowed dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400" value={editableProperty.public_code || editableProperty.code || '-'} disabled readonly />
               </label>
               <p><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Não'}</p>
               {#if isBrokerCredenciado(selectedProperty)}
@@ -3627,8 +3687,9 @@
               <li><strong>Quartos:</strong> {selectedProperty.bedrooms ?? '-'}</li>
               <li><strong>Banheiros:</strong> {selectedProperty.bathrooms ?? '-'}</li>
               <li><strong>Garagens:</strong> {selectedProperty.garage_spots ?? '-'}</li>
-              <li><strong>Área construída:</strong> {formatAreaWithUnit(selectedProperty.area_construida, selectedProperty.area_construida_unidade)}</li>
-              <li><strong>Área do terreno:</strong> {formatAreaWithUnit(selectedProperty.area_terreno, selectedProperty.area_terreno_unidade ?? selectedProperty.area_construida_unidade)}</li>
+              <li><strong>Referência pública:</strong> {selectedProperty.public_code ?? '-'}</li>
+              <li><strong>Área construída:</strong> {formatAreaWithUnit(selectedProperty.area_construida_valor ?? selectedProperty.area_construida, selectedProperty.area_construida_unidade)}</li>
+              <li><strong>Área do terreno:</strong> {formatAreaWithUnit(selectedProperty.area_terreno_valor ?? selectedProperty.area_terreno, selectedProperty.area_terreno_unidade ?? selectedProperty.area_construida_unidade)}</li>
               <li><strong>Proprietário:</strong> {selectedProperty.owner_name ?? '-'}</li>
               <li><strong>Telefone do proprietário:</strong> {formatPhoneDisplayBr(selectedProperty.owner_phone)}</li>
               <li><strong>Anunciante:</strong> {selectedProperty.broker_name ?? '-'}</li>

@@ -809,7 +809,7 @@
 
     const normalizedAmenities = normalizeAmenityList([
       ...selectedAmenities,
-      ...(ehMobiliada ? ['MOBILIADA'] : []),
+      ...(ehMobiliada ? ['Mobiliada'] : []),
     ]);
 
     const parsedBedrooms = resolvedBedrooms ? Number(resolvedBedrooms) : null;
@@ -932,8 +932,10 @@
         bedrooms: parsedBedrooms,
         bathrooms: parsedBathrooms,
         area_construida: parsedAreaConstruida,
+        area_construida_valor: parsedAreaConstruida,
         area_construida_unidade: areaConstruidaUnidade,
         area_terreno: parsedAreaTerreno,
+        area_terreno_valor: parsedAreaTerreno,
         area_terreno_unidade: areaTerrenoUnidade,
         garage_spots: parsedGarage,
         has_wifi: hasWifi ? 1 : 0,
@@ -954,7 +956,10 @@
         skipErrorToast: true,
       } as Parameters<typeof apiClient.post>[2]);
 
-      const createdPayload = createResponse.data as { propertyId?: unknown };
+      const createdPayload = createResponse.data as {
+        propertyId?: unknown;
+        public_code?: unknown;
+      };
       const propertyId = Number(createdPayload?.propertyId ?? 0);
       if (!Number.isFinite(propertyId) || propertyId <= 0) {
         throw new Error('Imóvel criado sem ID retornado pelo backend.');
@@ -963,7 +968,9 @@
       void syncBrokerPhoneIfNeeded();
       submitFeedback = {
         type: 'success',
-        message: `Imóvel criado com sucesso. Código interno: #${propertyId}.`,
+        message: `Imóvel criado com sucesso. Referência pública: #${String(
+          createdPayload.public_code ?? propertyId
+        )}.`,
       };
       toast.success('Imóvel criado com sucesso.');
       title = '';
@@ -1700,7 +1707,7 @@
                 on:change={(event) => {
                   const nextChecked = (event.target as HTMLInputElement).checked;
                   selectedAmenities = toggleAmenity(selectedAmenities, amenity, nextChecked);
-                  if (amenity === 'MOBILIADA') {
+                  if (amenity === 'Mobiliada') {
                     ehMobiliada = nextChecked;
                   }
                 }}

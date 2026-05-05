@@ -74,6 +74,7 @@ describe('CreateProperty', () => {
     apiClientPostMock.mockResolvedValue({
       data: {
         propertyId: 321,
+        public_code: 'REFA-321',
       },
     });
 
@@ -145,8 +146,8 @@ describe('CreateProperty', () => {
     render(CreateProperty);
 
     await fillRequiredFields();
-    await fireEvent.click(screen.getByRole('checkbox', { name: 'MOBILIADA' }));
-    await fireEvent.click(screen.getByRole('checkbox', { name: 'ACADEMIA' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Mobiliada' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Academia' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar imóvel' }));
 
     await waitFor(() => {
@@ -155,7 +156,11 @@ describe('CreateProperty', () => {
         expect.objectContaining({
           title: 'Casa teste painel',
           city: 'Rio Verde',
-          amenities: expect.arrayContaining(['MOBILIADA', 'ACADEMIA']),
+          amenities: expect.arrayContaining(['Mobiliada', 'Academia']),
+          area_construida_valor: 145.5,
+          area_terreno_valor: 210,
+          area_construida_unidade: 'm2',
+          area_terreno_unidade: 'm2',
           image_urls: [
             'https://res.cloudinary.com/demo/image/upload/v1/conectimovel/properties/admin/foto.jpg',
           ],
@@ -172,7 +177,7 @@ describe('CreateProperty', () => {
 
     expect(toastSuccessMock).toHaveBeenCalledWith('Imóvel criado com sucesso.');
     expect(
-      screen.getByText('Imóvel criado com sucesso. Código interno: #321.')
+      screen.getByText('Imóvel criado com sucesso. Referência pública: #REFA-321.')
     ).toBeInTheDocument();
   });
 
@@ -212,9 +217,40 @@ describe('CreateProperty', () => {
       expect(apiClientPostMock).toHaveBeenCalledWith(
         '/admin/properties',
         expect.objectContaining({
+          area_construida: 145.5,
+          area_terreno: 210,
+          area_construida_valor: 145.5,
+          area_terreno_valor: 210,
           bedrooms: 0,
           bathrooms: 2,
           garage_spots: 2,
+        }),
+        expect.anything()
+      );
+    });
+  });
+
+  it('envia área construída com unidade personalizada (2332 ha) no payload', async () => {
+    render(CreateProperty);
+
+    await fillRequiredFields();
+    const areaConstruidaInput = getInputById('create-property-area-construida');
+    const areaConstruidaUnidade = getInputById('create-property-area-construida-unidade');
+    await fireEvent.input(areaConstruidaInput, { target: { value: '2332' } });
+    await fireEvent.change(areaConstruidaUnidade, { target: { value: 'hectare' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Mobiliada' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Academia' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar imóvel' }));
+
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledWith(
+        '/admin/properties',
+        expect.objectContaining({
+          area_construida_valor: 2332,
+          area_construida_unidade: 'hectare',
+          area_terreno_valor: 210,
+          area_terreno_unidade: 'm2',
+          amenities: expect.arrayContaining(['Mobiliada', 'Academia']),
         }),
         expect.anything()
       );

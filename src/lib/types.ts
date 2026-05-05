@@ -39,6 +39,12 @@ export interface Property {
   area_construida_unidade?: 'm2' | 'hectare' | 'alqueire' | null;
   area_terreno?: number | null;
   area_terreno_unidade?: 'm2' | 'hectare' | 'alqueire' | null;
+  area_construida_valor?: number | null;
+  area_terreno_valor?: number | null;
+  area_construida_m2?: number | null;
+  area_terreno_m2?: number | null;
+  public_code?: string | null;
+  public_id?: number | null;
   garage_spots?: number | null;
   amenities?: string[] | null;
   has_wifi?: boolean;
