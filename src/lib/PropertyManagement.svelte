@@ -493,7 +493,7 @@
             area_terreno_unidade: areaTerrenoUnidade,
             area_terreno: areaTerrenoM2 ?? parseNullableNumber(record['area_terreno']),
             public_id: publicIdValue != null ? Number(publicIdValue) : null,
-            public_code: publicCodeValue != null ? String(publicCodeValue) : null,
+            public_code: normalizePublicCode(publicCodeValue),
             promotion_percentage:
               promotionPercentageValue != null ? Number(promotionPercentageValue) : null,
             promotion_price:
@@ -1022,6 +1022,12 @@
     return `${value} ${areaUnitLabel(unit)}`;
   }
 
+  function normalizePublicCode(value: unknown): string | null {
+    const normalized = String(value ?? '').trim();
+    if (!normalized || normalized === '-') return null;
+    return normalized;
+  }
+
   function isOptionalBairroPropertyType(value: unknown): boolean {
     const normalized = String(value ?? '').trim().toLowerCase();
     return normalized === 'área rural' || normalized === 'chácara' || normalized === 'rancho';
@@ -1201,7 +1207,12 @@
 
     try {
       const details = await api.get<PropertyDetails>(`/admin/properties/${property.id}`);
-      const merged = { ...property, ...details } as PropertyDetails;
+      const mergedPublicCode = normalizePublicCode((details as PropertyDetails)?.public_code ?? property.public_code);
+      const merged = {
+        ...property,
+        ...details,
+        public_code: mergedPublicCode,
+      } as PropertyDetails;
       const { supportsSale, supportsRent } = getPurposeFlags(merged.purpose ?? null);
       const resolvedSale =
         merged.price_sale ?? (supportsSale && !supportsRent ? merged.price ?? null : null);
@@ -1510,6 +1521,17 @@
 
       const normalizeInput = (value: unknown) =>
         value === '' || value === undefined || value === null ? null : value;
+      const requestedStatus: PropertyStatus | null = (() => {
+        switch (editableProperty.status) {
+          case 'approved':
+          case 'sold':
+          case 'rented':
+          case 'rejected':
+            return editableProperty.status;
+          default:
+            return null;
+        }
+      })();
       const numeroRaw = String(editableProperty.numero ?? '').trim();
       const numeroDigits = sanitizeDigitsInput(numeroRaw);
       if (!editSemNumero && numeroRaw.length > 0 && numeroDigits.length === 0) {
@@ -1626,7 +1648,7 @@
         return value;
       };
 
-      const basePayload = {
+      const basePayload: Record<string, unknown> = {
         title: editableProperty.title,
         description: editableProperty.description,
         purpose: editableProperty.purpose,
@@ -1684,8 +1706,10 @@
         code: editableProperty.code,
         broker_id: editableProperty.broker_id,
         owner_id: editableProperty.owner_id,
-        status: editableProperty.status ?? selectedProperty.status,
       };
+      if (requestedStatus) {
+        basePayload.status = requestedStatus;
+      }
 
       // Enviar todos os campos normalizados (inclusive booleans) para garantir persistência
       const payload = Object.fromEntries(
@@ -1695,13 +1719,11 @@
       );
 
       const original = selectedProperty as PropertyDetails;
-      const statusChanged =
-        (payload as any).status && (payload as any).status !== original.status;
+      const statusChanged = requestedStatus != null && requestedStatus !== original.status;
 
       const fieldsBesidesStatus = Object.keys(payload).filter((k) => k !== 'status');
       const onlyStatusChanged =
         statusChanged && fieldsBesidesStatus.every((k) => (payload as any)[k] === (original as any)[k]);
-      const requestedStatus = (payload as any).status;
 
       if (requestedStatus === 'rejected') {
         rejectObservation = '';
@@ -1736,7 +1758,7 @@
       isEditMode = false;
       closeModal();
       await fetchProperties();
-      if (requestedStatus === 'sold' || requestedStatus === 'rented') {
+      if (requestedStatus && ['sold', 'rented'].includes(requestedStatus)) {
         dispatch('viewChange', 'sold_properties');
       }
     } catch (err: any) {
