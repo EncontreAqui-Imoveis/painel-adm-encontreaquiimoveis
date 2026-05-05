@@ -971,10 +971,6 @@
       normalizeAreaUnit(data.area_terreno_unidade) ?? areaConstruidaUnidade;
     const areaConstruidaValor = data.area_construida_valor ?? data.area_construida;
     const areaTerrenoValor = data.area_terreno_valor ?? data.area_terreno;
-    const parsedAreaConstruidaM2 =
-      data.area_construida_m2 ?? data.area_construida;
-    const parsedAreaTerrenoM2 =
-      data.area_terreno_m2 ?? data.area_terreno;
 
     const parseNullableNumber = (value: unknown): number | null => {
       if (value == null || value === '') return null;
@@ -982,12 +978,15 @@
       return Number.isFinite(numeric) ? numeric : null;
     };
 
+    const parsedAreaConstruidaValor = parseNullableNumber(areaConstruidaValor);
+    const parsedAreaTerrenoValor = parseNullableNumber(areaTerrenoValor);
+
     coerced.area_construida_unidade = areaConstruidaUnidade;
     coerced.area_terreno_unidade = areaTerrenoUnidade;
-    coerced.area_construida_valor = parseNullableNumber(areaConstruidaValor);
-    coerced.area_terreno_valor = parseNullableNumber(areaTerrenoValor);
-    coerced.area_construida = parseNullableNumber(parsedAreaConstruidaM2);
-    coerced.area_terreno = parseNullableNumber(parsedAreaTerrenoM2);
+    coerced.area_construida_valor = parsedAreaConstruidaValor;
+    coerced.area_terreno_valor = parsedAreaTerrenoValor;
+    coerced.area_construida = parseNullableNumber(data.area_construida_m2 ?? areaConstruidaValor);
+    coerced.area_terreno = parseNullableNumber(data.area_terreno_m2 ?? areaTerrenoValor);
     for (const key of booleanKeys) {
       coerced[key] = Boolean((data as any)?.[key]);
     }
@@ -1007,6 +1006,12 @@
     if (normalized === 'm2' || normalized === 'hectare' || normalized === 'alqueire') {
       return normalized;
     }
+    if (normalized === 'm²' || normalized === 'm 2') {
+      return 'm2';
+    }
+    if (normalized === 'ha' || normalized === 'ha.' || normalized === 'hectares') {
+      return 'hectare';
+    }
     return null;
   }
 
@@ -1020,6 +1025,15 @@
   function formatAreaWithUnit(value: unknown, unit: unknown): string {
     if (value === null || value === undefined || value === '') return '-';
     return `${value} ${areaUnitLabel(unit)}`;
+  }
+
+  function publicCodeLabel(value: unknown, fallback = 'Sem referência pública') {
+    const normalized = normalizePublicCode(value);
+    return normalized || fallback;
+  }
+
+  function resolveSelectedPropertyPublicCode(property: PropertySummary | null): string {
+    return publicCodeLabel(property?.public_code);
   }
 
   function normalizePublicCode(value: unknown): string | null {
@@ -1681,10 +1695,9 @@
         sem_cep: editableProperty.sem_cep ? 1 : 0,
         bedrooms: editableProperty.bedrooms,
         bathrooms: editableProperty.bathrooms,
-        area_construida: editableProperty.area_construida,
+        garage_spots: editableProperty.garage_spots,
         area_construida_valor: editableProperty.area_construida_valor,
         area_construida_unidade: editableProperty.area_construida_unidade ?? 'm2',
-        area_terreno: editableProperty.area_terreno,
         area_terreno_valor: editableProperty.area_terreno_valor,
         area_terreno_unidade:
           editableProperty.area_terreno_unidade ??
@@ -1696,14 +1709,13 @@
         tem_automacao: editableProperty.tem_automacao,
         tem_ar_condicionado: editableProperty.tem_ar_condicionado,
         eh_mobiliada: editableProperty.eh_mobiliada,
-        amenities: editableProperty.amenities,
+        amenities: normalizeAmenityList(editableProperty.amenities),
         video_url: editableProperty.video_url,
         type: editableProperty.type,
         owner_name: editableProperty.owner_name,
         owner_phone: editableProperty.owner_phone,
         valor_condominio: parseCurrency(editValorCondominioDisplay),
         valor_iptu: parseCurrency(editValorIptuDisplay),
-        code: editableProperty.code,
         broker_id: editableProperty.broker_id,
         owner_id: editableProperty.owner_id,
       };
@@ -2769,7 +2781,7 @@
           </span>
         </Dialog.Description>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Dashboard / Imóveis / Referência {selectedProperty.public_code ?? `#${selectedProperty.id}`}
+            Dashboard / Imóveis / Referência {resolveSelectedPropertyPublicCode(selectedProperty)}
         </p>
       </Dialog.Header>
 
@@ -3451,7 +3463,7 @@
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
                       const digits = clampCountInput(target.value);
-                      editableProperty.bedrooms = digits ? Number(digits) : null;
+                      editableProperty.bedrooms = digits !== '' ? Number(digits) : null;
                     }
                   }}
                 />
@@ -3484,7 +3496,7 @@
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
                       const digits = clampCountInput(target.value);
-                      editableProperty.bathrooms = digits ? Number(digits) : null;
+                      editableProperty.bathrooms = digits !== '' ? Number(digits) : null;
                     }
                   }}
                 />
@@ -3517,7 +3529,7 @@
                     const target = event.target as HTMLInputElement;
                     if (editableProperty) {
                       const digits = clampCountInput(target.value);
-                      editableProperty.garage_spots = digits ? Number(digits) : null;
+                      editableProperty.garage_spots = digits !== '' ? Number(digits) : null;
                     }
                   }}
                 />
@@ -3688,7 +3700,7 @@
               </label>
                 <label class="flex flex-col gap-1">
                 <strong>Código de referência:</strong>
-                <input name="code" class="w-full rounded border px-2 py-1 text-sm bg-gray-100 text-gray-500 cursor-not-allowed dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400" value={editableProperty.public_code || editableProperty.code || '-'} disabled readonly />
+                <input name="code" class="w-full rounded border px-2 py-1 text-sm bg-gray-100 text-gray-500 cursor-not-allowed dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400" value={publicCodeLabel(editableProperty.public_code)} disabled readonly />
               </label>
               <p><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Não'}</p>
               {#if isBrokerCredenciado(selectedProperty)}

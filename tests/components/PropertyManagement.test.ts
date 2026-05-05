@@ -193,12 +193,51 @@ function buildPropertySummary(property: PropertyMockState): Record<string, unkno
   };
 }
 
+function applyServerPatch(property: PropertyMockState, payload: SavePayload): void {
+  if (typeof payload.title === 'string') {
+    property.title = payload.title;
+  }
+  if (typeof payload.description === 'string') {
+    property.description = payload.description;
+  }
+  if ('status' in payload) {
+    property.status = String(payload.status ?? property.status) as PropertyMockState['status'];
+  }
+  if (typeof payload.public_code === 'string') {
+    property.public_code = payload.public_code;
+  }
+  if ('bedrooms' in payload) {
+    property.bedrooms = payload.bedrooms == null ? null : Number(payload.bedrooms);
+  }
+  if ('area_construida_valor' in payload) {
+    property.area_construida_valor =
+      payload.area_construida_valor == null ? null : Number(payload.area_construida_valor);
+  }
+  if (typeof payload.area_construida_unidade === 'string') {
+    property.area_construida_unidade = payload.area_construida_unidade as PropertyMockState['area_construida_unidade'];
+  }
+  if ('area_terreno_valor' in payload) {
+    property.area_terreno_valor =
+      payload.area_terreno_valor == null ? null : Number(payload.area_terreno_valor);
+  }
+  if (typeof payload.area_terreno_unidade === 'string') {
+    property.area_terreno_unidade = payload.area_terreno_unidade as PropertyMockState['area_terreno_unidade'];
+  }
+  if (Array.isArray(payload.amenities)) {
+    property.amenities = payload.amenities;
+  }
+  if (typeof payload.area_construida === 'number' && Number.isFinite(payload.area_construida)) {
+    property.area_construida_m2 = Number(payload.area_construida);
+  }
+  if (typeof payload.area_terreno === 'number' && Number.isFinite(payload.area_terreno)) {
+    property.area_terreno_m2 = Number(payload.area_terreno);
+  }
+}
+
 function mockPropertyManagementRequests({
   initialProperty,
-  onSaved,
 }: {
   initialProperty: PropertyMockState;
-  onSaved?: (payload: SavePayload) => void;
 }) {
   let property = clone(initialProperty);
 
@@ -222,34 +261,7 @@ function mockPropertyManagementRequests({
   });
 
   apiPutMock.mockImplementation(async (_endpoint: string, payload: SavePayload) => {
-    onSaved?.(payload);
-
-    property = {
-      ...property,
-      description: typeof payload.description === 'string' ? payload.description : property.description,
-      bedrooms:
-        payload.bedrooms != null ? Number(payload.bedrooms) : property.bedrooms,
-      bathrooms:
-        payload.bathrooms != null ? Number(payload.bathrooms) : property.bathrooms,
-      area_construida_valor:
-        payload.area_construida_valor != null
-          ? Number(payload.area_construida_valor)
-          : property.area_construida_valor,
-      area_construida_unidade:
-        typeof payload.area_construida_unidade === 'string'
-          ? (payload.area_construida_unidade as PropertyMockState['area_construida_unidade'])
-          : property.area_construida_unidade,
-      area_terreno_valor:
-        payload.area_terreno_valor != null
-          ? Number(payload.area_terreno_valor)
-          : property.area_terreno_valor,
-      area_terreno_unidade:
-        typeof payload.area_terreno_unidade === 'string'
-          ? (payload.area_terreno_unidade as PropertyMockState['area_terreno_unidade'])
-          : property.area_terreno_unidade,
-      amenities: Array.isArray(payload.amenities) ? (payload.amenities as string[]) : property.amenities,
-    };
-
+    applyServerPatch(property, payload);
     return {};
   });
 
@@ -288,15 +300,11 @@ describe('PropertyManagement', () => {
   });
 
   it('salva edição normal e reapresenta texto, área, quartos e amenities persistidos', async () => {
-    let lastPayload: SavePayload = {};
     mockPropertyManagementRequests({
       initialProperty: {
         ...basePropertyState,
         status: 'approved',
         request_type: null,
-      },
-      onSaved: (payload) => {
-        lastPayload = payload;
       },
     });
 
@@ -339,7 +347,9 @@ describe('PropertyManagement', () => {
     await waitFor(() => {
       expect(apiPutMock).toHaveBeenCalledTimes(1);
     });
-    const [, putPayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    const [putEndpoint, putPayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    expect(putEndpoint).toBe('/admin/properties/501');
+    expect(apiPatchMock).not.toHaveBeenCalled();
     expect(putPayload).toMatchObject({
       title: 'Casa Horizonte',
       description: 'Nova descrição salva com sucesso',
@@ -350,6 +360,10 @@ describe('PropertyManagement', () => {
       area_terreno_unidade: 'm2',
     });
     expect(putPayload).toMatchObject({ status: 'approved' });
+    expect(putPayload).toHaveProperty('area_construida_valor', 2332);
+    expect(putPayload).toHaveProperty('area_terreno_valor', 1500);
+    expect(putPayload).toHaveProperty('area_construida_unidade', 'hectare');
+    expect(putPayload).toHaveProperty('area_terreno_unidade', 'm2');
     expect(putPayload.amenities).toEqual(expect.arrayContaining(['Mobiliada', 'Academia']));
 
     await waitFor(() => {
@@ -368,7 +382,6 @@ describe('PropertyManagement', () => {
     expect(findListItemByLabel(reopenedDialog, 'Área construída')).toHaveTextContent('2332 ha');
     expect(findAmenityPill(reopenedDialog, 'Mobiliada')).toHaveTextContent('Sim');
     expect(findAmenityPill(reopenedDialog, 'Academia')).toHaveTextContent('Sim');
-    expect(lastPayload).toBe(putPayload);
   });
 
   it('salva solicitação de edição com public_code e não envia status inválido no PUT', async () => {
@@ -415,7 +428,8 @@ describe('PropertyManagement', () => {
       expect(apiPutMock).toHaveBeenCalledTimes(1);
     });
 
-    const [, requestPayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    const [requestEndpoint, requestPayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    expect(requestEndpoint).toBe('/admin/properties/501');
     expect(apiPatchMock).not.toHaveBeenCalled();
     expect(requestPayload).toMatchObject({
       description: 'Correção de solicitação pendente',
@@ -434,10 +448,164 @@ describe('PropertyManagement', () => {
     await fireEvent.click(getRevisarButtons()[0]);
     const reopenedDialog = await screen.findByRole('dialog');
     expect(await within(reopenedDialog).findByText(/Dashboard \/ Imóveis \/ Referência PUB-PEND-01/)).toBeInTheDocument();
+    expect(findListItemByLabel(reopenedDialog, 'Área construída')).toHaveTextContent('3210 ha');
+    expect(findAmenityPill(reopenedDialog, 'Mobiliada')).toHaveTextContent('Sim');
+    expect(findAmenityPill(reopenedDialog, 'Academia')).toHaveTextContent('Sim');
     expect(
       within(reopenedDialog)
         .getAllByRole('listitem')
         .some((item) => item.textContent?.includes('PUB-PEND-01'))
     ).toBe(true);
+  });
+
+  it('persiste múltiplas amenities e mantém todas reabertas', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'approved',
+        request_type: null,
+        amenities: [],
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    const firstRevisar = getRevisarButtons()[0];
+    await fireEvent.click(firstRevisar);
+
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    await fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Mobiliada' }));
+    await fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Academia' }));
+    await fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Sauna' }));
+    await fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Poço Artesiano' }));
+
+    const saveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
+    await fireEvent.click(saveButtons[0]);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+    const [, amenitiesPayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    expect(amenitiesPayload.amenities).toEqual(
+      expect.arrayContaining(['Poço Artesiano', 'Mobiliada', 'Academia', 'Sauna'])
+    );
+    expect(amenitiesPayload.amenities).toHaveLength(4);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    await fireEvent.click(getRevisarButtons()[0]);
+    const reopenedDialog = await screen.findByRole('dialog');
+    expect(findAmenityPill(reopenedDialog, 'Poço Artesiano')).toHaveTextContent('Sim');
+    expect(findAmenityPill(reopenedDialog, 'Mobiliada')).toHaveTextContent('Sim');
+    expect(findAmenityPill(reopenedDialog, 'Academia')).toHaveTextContent('Sim');
+    expect(findAmenityPill(reopenedDialog, 'Sauna')).toHaveTextContent('Sim');
+  });
+
+  it('permite valor zero em campos numéricos e envia payload sem status inválido', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'approved',
+        request_type: null,
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    const bedroomsInput = dialog.querySelector('input[name="bedrooms"]');
+    const bathroomsInput = dialog.querySelector('input[name="bathrooms"]');
+    const garageInput = dialog.querySelector('input[name="garage_spots"]');
+    expect(bedroomsInput).toBeTruthy();
+    expect(bathroomsInput).toBeTruthy();
+    expect(garageInput).toBeTruthy();
+    await fireEvent.input(bedroomsInput as HTMLInputElement, { target: { value: '0' } });
+    await fireEvent.input(bathroomsInput as HTMLInputElement, { target: { value: '0' } });
+    await fireEvent.input(garageInput as HTMLInputElement, { target: { value: '0' } });
+    await fireEvent.input(within(dialog).getByPlaceholderText('Descricao do imóvel'), {
+      target: { value: 'Com zeros' },
+    });
+
+    const zeroSaveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
+    await fireEvent.click(zeroSaveButtons[0]);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+    const [, zeroPayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    expect(zeroPayload.bedrooms).toBe(0);
+    expect(zeroPayload.bathrooms).toBe(0);
+    expect(zeroPayload.garage_spots).toBe(0);
+    expect(apiPutMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(toastSuccessMock).toHaveBeenCalledWith('Imóvel atualizado com sucesso.');
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('mantém modal e mostra erro quando PUT retorna falha', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'approved',
+      },
+    });
+    apiPutMock.mockRejectedValueOnce(new Error('Falha de integração para validação'));
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    await fireEvent.input(within(dialog).getByPlaceholderText('Descricao do imóvel'), {
+      target: { value: 'Falha esperada' },
+    });
+    const errorSaveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
+    await fireEvent.click(errorSaveButtons[0]);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Falha de integração para validação')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+  });
+
+  it('exibe fallback de referência pública sem id sequencial quando public_code não existe', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        public_code: null,
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText('Dashboard / Imóveis / Referência Sem referência pública')
+    ).toBeInTheDocument();
+
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    const publicCodeInput = dialog.querySelector('input[name="code"]');
+    expect(publicCodeInput).toBeTruthy();
+    expect((publicCodeInput as HTMLInputElement).value).toBe('Sem referência pública');
   });
 });
