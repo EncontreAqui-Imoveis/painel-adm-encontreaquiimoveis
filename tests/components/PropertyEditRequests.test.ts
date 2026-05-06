@@ -70,6 +70,25 @@ const requestDetailPayload = {
 };
 
 describe('PropertyEditRequests', () => {
+  function setupMutableRequestList() {
+    let requestList = [...requestListPayload.data];
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/admin/property-edit-requests/9')) {
+        return requestDetailPayload;
+      }
+      return {
+        data: requestList,
+        total: requestList.length,
+      };
+    });
+
+    return {
+      markApproved() {
+        requestList = [];
+      },
+    };
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     apiGetMock.mockImplementation(async (endpoint: string) => {
@@ -92,6 +111,46 @@ describe('PropertyEditRequests', () => {
 
     await waitFor(() => {
       expect(apiPostMock).toHaveBeenCalledWith('/admin/property-edit-requests/9/approve', {});
+    });
+  });
+
+  it('fecha o modal e refaz a lista após aprovação inteira bem-sucedida', async () => {
+    const listInitialCalls = apiGetMock.mock.calls.length;
+    apiPostMock.mockResolvedValueOnce({ status: 'APPROVED' });
+
+    render(PropertyEditRequests);
+
+    await screen.findAllByRole('button', { name: 'Revisar edição' });
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Revisar edição' })[0]);
+    await screen.findByText('Ação rápida da solicitação inteira');
+    await fireEvent.click(screen.getByRole('button', { name: 'Aprovar solicitação inteira' }));
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith('/admin/property-edit-requests/9/approve', {});
+    });
+
+    expect(apiGetMock.mock.calls.length).toBeGreaterThan(listInitialCalls + 1);
+  });
+
+  it('atualiza a lista do pai para refletir aprovação e remove item após salvar', async () => {
+    const requestStore = setupMutableRequestList();
+    apiPostMock.mockImplementation(async () => {
+      requestStore.markApproved();
+      return { status: 'APPROVED' };
+    });
+
+    render(PropertyEditRequests);
+
+    await screen.findAllByRole('button', { name: 'Revisar edição' });
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Revisar edição' })[0]);
+    await screen.findByText('Ação rápida da solicitação inteira');
+    await fireEvent.click(screen.getByRole('button', { name: 'Aprovar solicitação inteira' }));
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith('/admin/property-edit-requests/9/approve', {});
+    });
+    await waitFor(() => {
+      expect(screen.queryAllByRole('button', { name: 'Revisar edição' }).length).toBe(0);
     });
   });
 
@@ -150,5 +209,24 @@ describe('PropertyEditRequests', () => {
 
     expect(rejectionReason.value).toBe('Preço fora da política.');
     expect(within(updatedPriceRow!).getByPlaceholderText('Motivo da Alteração')).toBeInTheDocument();
+  });
+
+  it('mantem modal aberto e não fecha quando a aprovação inteira falha', async () => {
+    apiPostMock.mockRejectedValueOnce(new Error('Falha no fluxo de aprovação'));
+
+    render(PropertyEditRequests);
+
+    await screen.findAllByRole('button', { name: 'Revisar edição' });
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Revisar edição' })[0]);
+    await screen.findByText('Ação rápida da solicitação inteira');
+    await fireEvent.click(screen.getByRole('button', { name: 'Aprovar solicitação inteira' }));
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith('/admin/property-edit-requests/9/approve', {});
+    });
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith('Falha no fluxo de aprovação');
+    });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

@@ -36,6 +36,46 @@ import { extractApiErrorMessage } from '$lib/components/create-property-helpers'
     [key: string]: unknown;
   };
 
+  function getRequestIdFromError(error: unknown): string {
+    const requestId = (error as { requestId?: unknown })?.requestId;
+    if (typeof requestId === 'string' && requestId.trim().length > 0) {
+      return requestId.trim();
+    }
+
+    const response = (error as {
+      response?: {
+        data?: { requestId?: unknown; request_id?: unknown };
+        headers?: unknown;
+      };
+    }).response;
+
+    const dataRequestId = typeof response?.data?.requestId === 'string'
+      ? response.data.requestId.trim()
+      : typeof response?.data?.request_id === 'string'
+        ? response.data.request_id.trim()
+        : '';
+    if (dataRequestId) return dataRequestId;
+
+    const headers = response?.headers;
+    if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
+      const headerMap = headers as Record<string, unknown>;
+      const rawHeader = headerMap['x-request-id'] ?? headerMap['X-Request-Id'] ?? headerMap['request-id'];
+      if (typeof rawHeader === 'string' && rawHeader.trim().length > 0) return rawHeader.trim();
+      if (Array.isArray(rawHeader) && rawHeader[0]) {
+        const value = String(rawHeader[0]).trim();
+        if (value) return value;
+      }
+    }
+
+    return '';
+  }
+
+  function formatErrorMessage(error: unknown, fallback: string): string {
+    const message = extractApiErrorMessage(error, fallback);
+    const requestId = getRequestIdFromError(error);
+    return requestId ? `${message} (requestId: ${requestId})` : message;
+  }
+
   export let open = false;
   export let broker: any | null = null;
   export let showApprove = false;
@@ -211,7 +251,7 @@ import { extractApiErrorMessage } from '$lib/components/create-property-helpers'
       close();
     } catch (error) {
       console.error('Erro ao atualizar status do corretor:', error);
-      toast.error(error instanceof Error ? error.message : 'Falha ao atualizar status.');
+      toast.error(formatErrorMessage(error, 'Falha ao atualizar status.'));
     } finally {
       isProcessing = false;
     }
@@ -245,7 +285,7 @@ import { extractApiErrorMessage } from '$lib/components/create-property-helpers'
       close();
     } catch (error) {
       console.error('Erro ao tornar usuario cliente:', error);
-      toast.error(error instanceof Error ? error.message : 'Falha ao tornar usuario cliente.');
+      toast.error(formatErrorMessage(error, 'Falha ao tornar usuario cliente.'));
     } finally {
       isProcessing = false;
     }
@@ -261,31 +301,45 @@ import { extractApiErrorMessage } from '$lib/components/create-property-helpers'
 
     isProcessing = true;
     try {
-      await api.put(`/admin/brokers/${broker.id}`, {
-        name: brokerForm.name.trim(),
-        email: brokerForm.email.trim(),
-        phone: brokerForm.phone.trim(),
-        street: brokerForm.street.trim(),
-        number: brokerForm.number.trim(),
-        complement: brokerForm.complement.trim(),
-        bairro: brokerForm.bairro.trim(),
-        city: brokerForm.city.trim(),
-        state: brokerForm.state.trim(),
-        cep: brokerForm.cep.trim(),
-        creci: brokerForm.creci.trim(),
-      });
+      const response = await api.put<{ status?: string; data?: { status?: string } }>(
+        `/admin/brokers/${broker.id}`,
+        {
+          name: brokerForm.name.trim(),
+          email: brokerForm.email.trim(),
+          phone: brokerForm.phone.trim(),
+          street: brokerForm.street.trim(),
+          number: brokerForm.number.trim(),
+          complement: brokerForm.complement.trim(),
+          bairro: brokerForm.bairro.trim(),
+          city: brokerForm.city.trim(),
+          state: brokerForm.state.trim(),
+          cep: brokerForm.cep.trim(),
+          creci: brokerForm.creci.trim(),
+        },
+      );
+      const responsePayload = response && typeof response === 'object' && 'data' in response
+        ? (response as { data?: { status?: string } }).data
+        : response;
+      const resolvedStatus = String(
+        responsePayload?.status ?? brokerDetail?.status ?? broker.status ?? 'pending_verification',
+      ).trim();
+      const mergedStatus = resolvedStatus || null;
       brokerDetail = {
         ...(brokerDetail ?? { id: broker.id }),
         ...brokerForm,
-        status: brokerDetail?.status ?? broker.status ?? null,
+        status: mergedStatus ?? brokerDetail?.status ?? broker.status ?? null,
         created_at: brokerDetail?.created_at ?? broker.created_at ?? null,
       };
       toast.success('Corretor atualizado.');
       isEditMode = false;
-      dispatch('update');
+      dispatch('update', {
+        brokerId: broker.id,
+        status: resolvedStatus,
+      });
+      close();
     } catch (error) {
       console.error('Erro ao atualizar corretor:', error);
-      toast.error('Falha ao atualizar corretor.');
+      toast.error(formatErrorMessage(error, 'Falha ao atualizar corretor.'));
     } finally {
       isProcessing = false;
     }

@@ -35,6 +35,10 @@ describe('CreateUser', () => {
     );
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   async function fillCommonRequiredFields() {
     await fireEvent.input(screen.getByLabelText('Nome *'), {
       target: { value: 'Auxiliar Teste' },
@@ -48,10 +52,10 @@ describe('CreateUser', () => {
     await fireEvent.input(screen.getByLabelText('Senha *'), {
       target: { value: 'SenhaSegura123' },
     });
-    await fireEvent.input(screen.getByLabelText('Endereço *'), {
+    await fireEvent.input(screen.getByLabelText('Rua *'), {
       target: { value: 'Rua das Flores' },
     });
-    await fireEvent.input(screen.getByLabelText('Número *'), {
+    await fireEvent.input(screen.getByLabelText('Número'), {
       target: { value: '100' },
     });
     await fireEvent.input(screen.getByLabelText('Bairro *'), {
@@ -112,5 +116,133 @@ describe('CreateUser', () => {
       expect(apiPostMock).toHaveBeenCalled();
     });
     expect(toastErrorMock).not.toHaveBeenCalledWith('CRECI deve conter entre 4 e 8 números.');
+  });
+
+  it('aceita cadastro sem CEP quando marcado Sem CEP', async () => {
+    render(CreateUser);
+
+    await fireEvent.change(screen.getByLabelText('Tipo de usuário *'), {
+      target: { value: 'client' },
+    });
+    await fillCommonRequiredFields();
+    await fireEvent.click(screen.getByLabelText('Sem CEP'));
+    await fireEvent.input(screen.getByLabelText('CEP *'), { target: { value: '' } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar usuário' }));
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith(
+        '/admin/users',
+        expect.objectContaining({
+          sem_cep: 1,
+          cep: '',
+        })
+      );
+    });
+    expect(toastErrorMock).not.toHaveBeenCalledWith('Informe o CEP.');
+  });
+
+  it('aceita cadastro sem número quando marcado Sem número', async () => {
+    render(CreateUser);
+
+    await fireEvent.change(screen.getByLabelText('Tipo de usuário *'), {
+      target: { value: 'client' },
+    });
+    await fillCommonRequiredFields();
+    await fireEvent.click(screen.getByLabelText('Sem número'));
+    await fireEvent.input(screen.getByLabelText('Número'), { target: { value: '' } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar usuário' }));
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith(
+        '/admin/users',
+        expect.objectContaining({
+          sem_numero: 1,
+          number: '',
+        })
+      );
+    });
+    expect(toastErrorMock).not.toHaveBeenCalledWith('Informe o número.');
+  });
+
+  it('preenche rua, bairro, cidade e estado ao informar CEP válido', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string) => {
+        if (String(url).includes('viacep.com.br')) {
+          return {
+            ok: true,
+            json: async () => ({
+              logradouro: 'Rua Automática',
+              bairro: 'Centro Novo',
+              localidade: 'Rio Verde',
+              uf: 'GO',
+            }),
+          } as Response;
+        }
+        return {
+          ok: true,
+          json: async () => [{ nome: 'Rio Verde' }],
+        } as Response;
+      }),
+    );
+
+    render(CreateUser);
+
+    await fireEvent.input(screen.getByLabelText('CEP *'), {
+      target: { value: '75900000' },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Rua *')).toHaveValue('Rua Automática');
+      expect(screen.getByLabelText('Bairro *')).toHaveValue('Centro Novo');
+      expect(screen.getByLabelText('Cidade *')).toHaveValue('Rio Verde');
+      expect(screen.getByLabelText('Estado *')).toHaveValue('GO');
+    });
+  });
+
+  it('envia sem_cep e sem_numero no payload do cadastro de corretor', async () => {
+    render(CreateUser);
+
+    await fireEvent.change(screen.getByLabelText('Tipo de usuário *'), {
+      target: { value: 'broker' },
+    });
+    await fillCommonRequiredFields();
+    await fireEvent.input(screen.getByLabelText('CRECI *'), {
+      target: { value: '12345' },
+    });
+    await fireEvent.click(screen.getByLabelText('Sem CEP'));
+    await fireEvent.click(screen.getByLabelText('Sem número'));
+
+    const front = screen.getByLabelText('Documento CRECI (frente)') as HTMLInputElement;
+    const back = screen.getByLabelText('Documento CRECI (verso)') as HTMLInputElement;
+    const selfie = screen.getByLabelText('Selfie') as HTMLInputElement;
+
+    Object.defineProperty(front, 'files', {
+      value: [new File(['front'], 'front.png', { type: 'image/png' })],
+    });
+    Object.defineProperty(back, 'files', {
+      value: [new File(['back'], 'back.png', { type: 'image/png' })],
+    });
+    Object.defineProperty(selfie, 'files', {
+      value: [new File(['selfie'], 'selfie.png', { type: 'image/png' })],
+    });
+    await fireEvent.change(front);
+    await fireEvent.change(back);
+    await fireEvent.change(selfie);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar usuário' }));
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalled();
+      const calls = apiPostMock.mock.calls;
+      const formData = calls.at(-1)?.[1];
+      expect(formData).toBeInstanceOf(FormData);
+      if (formData instanceof FormData) {
+        expect(formData.get('sem_cep')).toBe('1');
+        expect(formData.get('sem_numero')).toBe('1');
+      }
+    });
   });
 });

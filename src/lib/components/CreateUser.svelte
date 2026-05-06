@@ -41,6 +41,8 @@
   let city = $state('');
   let selectedState = $state('GO');
   let cep = $state('');
+  let semCep = $state(false);
+  let semNumero = $state(false);
   let cities: string[] = $state([]);
   let citiesLoading = $state(false);
   let citiesError: string | null = $state(null);
@@ -66,6 +68,8 @@
     city = '';
     selectedState = 'GO';
     cep = '';
+    semCep = false;
+    semNumero = false;
     brokerStatus = 'approved';
     creciFrontFile = null;
     creciBackFile = null;
@@ -88,11 +92,11 @@
     if (!hasValidPhoneBr(phone)) return 'Informe telefone no formato +55 (00) 00000-0000.';
     if (!password.trim()) return 'Informe a senha.';
     if (!street.trim()) return 'Informe o endereço.';
-    if (!number.trim()) return 'Informe o número.';
-    if (!onlyDigits(number)) return 'Número deve conter apenas dígitos.';
+    if (!semNumero && !number.trim()) return 'Informe o número.';
+    if (!semNumero && !onlyDigits(number)) return 'Número deve conter apenas dígitos.';
     if (!bairro.trim()) return 'Informe o bairro.';
-    if (!onlyDigits(cep).trim()) return 'Informe o CEP.';
-    if (onlyDigits(cep).length !== 8) return 'CEP inválido.';
+    if (!semCep && !onlyDigits(cep).trim()) return 'Informe o CEP.';
+    if (!semCep && onlyDigits(cep).length !== 8) return 'CEP inválido.';
     if (!city.trim()) return 'Informe a cidade.';
     if (!selectedState.trim()) return 'Informe o estado.';
     return null;
@@ -130,6 +134,7 @@
   }
 
   async function lookupCep(value: string) {
+    if (semCep) return;
     const digits = onlyDigits(value);
     if (digits.length !== 8) return;
     if (digits === lastCepLookup) return;
@@ -168,6 +173,8 @@
 
     isSubmitting = true;
     try {
+      const normalizedCep = semCep ? '' : onlyDigits(cep);
+      const normalizedNumber = semNumero ? '' : onlyDigits(number);
       if (userKind === 'client' || userKind === 'auxiliary_administrative') {
         await api.post('/admin/users', {
           name: name.trim(),
@@ -175,12 +182,14 @@
           phone: onlyDigits(phone),
           password: password.trim(),
           street: street.trim(),
-          number: onlyDigits(number),
+          number: normalizedNumber,
           complement: complement.trim() || undefined,
           bairro: bairro.trim(),
           city: city.trim(),
           state: selectedState.trim(),
-          cep: onlyDigits(cep),
+          cep: normalizedCep,
+          sem_numero: semNumero ? 1 : 0,
+          sem_cep: semCep ? 1 : 0,
           ...(userKind === 'auxiliary_administrative'
             ? { profileType: 'auxiliary_administrative' }
             : {}),
@@ -211,14 +220,16 @@
       formData.append('creci', onlyDigits(creci));
       formData.append('status', brokerStatus);
       formData.append('street', street.trim());
-      formData.append('number', onlyDigits(number));
+      formData.append('number', normalizedNumber);
       if (complement.trim()) {
         formData.append('complement', complement.trim());
       }
       formData.append('bairro', bairro.trim());
       formData.append('city', city.trim());
       formData.append('state', selectedState.trim());
-      formData.append('cep', onlyDigits(cep));
+      formData.append('cep', normalizedCep);
+      formData.append('sem_numero', semNumero ? '1' : '0');
+      formData.append('sem_cep', semCep ? '1' : '0');
       formData.append('creciFront', creciFrontFile);
       formData.append('creciBack', creciBackFile);
       formData.append('selfie', selfieFile);
@@ -359,8 +370,48 @@
   </div>
 
   <div class="mt-6 grid gap-4 md:grid-cols-2">
+    <div class="flex flex-col gap-2">
+      <label for="create-user-cep" class="text-sm font-medium text-gray-700 dark:text-gray-300">CEP *</label>
+      <input
+        id="create-user-cep"
+        name="cep"
+        class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        bind:value={cep}
+        inputmode="numeric"
+        placeholder="00000-000"
+        onchange={() => {
+          if (!semCep && onlyDigits(cep).length === 8) {
+            lookupCep(cep);
+          }
+        }}
+        oninput={(event) => {
+          const target = event.target as HTMLInputElement;
+          cep = formatCep(target.value);
+          if (!semCep && onlyDigits(cep).length === 8) {
+            lookupCep(cep);
+          }
+        }}
+      />
+      <div class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+        <input
+          id="create-user-sem-cep"
+          name="sem_cep"
+          type="checkbox"
+          class="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-500"
+          bind:checked={semCep}
+          onchange={() => {
+            if (semCep) {
+              cep = '';
+              lastCepLookup = '';
+              cepLookupError = null;
+            }
+          }}
+        />
+        <label for="create-user-sem-cep">Sem CEP</label>
+      </div>
+    </div>
     <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-      Endereço *
+      Rua *
       <input
         id="create-user-street"
         name="street"
@@ -369,8 +420,8 @@
         bind:value={street}
       />
     </label>
-    <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-      Número *
+    <div class="flex flex-col gap-2">
+      <label for="create-user-number" class="text-sm font-medium text-gray-700 dark:text-gray-300">Número</label>
       <input
         id="create-user-number"
         name="number"
@@ -378,12 +429,28 @@
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={number}
         inputmode="numeric"
+        disabled={semNumero}
         oninput={(event) => {
           const target = event.target as HTMLInputElement;
           number = sanitizeDigitsInput(target.value);
         }}
       />
-    </label>
+      <div class="inline-flex items-center gap-2 text-xs font-medium text-gray-400 dark:text-gray-500">
+        <input
+          id="create-user-sem-numero"
+          name="sem_numero"
+          type="checkbox"
+          class="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-500"
+          bind:checked={semNumero}
+          onchange={() => {
+            if (semNumero) {
+              number = '';
+            }
+          }}
+        />
+        <label for="create-user-sem-numero">Sem número</label>
+      </div>
+    </div>
     <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
       Complemento
       <input
@@ -399,31 +466,11 @@
       <input
         id="create-user-bairro"
         name="bairro"
-        maxlength="120"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={bairro}
       />
     </label>
-    <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-      CEP *
-      <input
-        id="create-user-cep"
-        name="cep"
-        class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        bind:value={cep}
-        inputmode="numeric"
-        placeholder="00000-000"
-        oninput={(event) => {
-          const target = event.target as HTMLInputElement;
-          cep = formatCep(target.value);
-          if (onlyDigits(cep).length === 8) {
-            lookupCep(cep);
-          }
-        }}
-      />
-    </label>
-    <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-      Cidade *
+    <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">Cidade *
       <input
         id="create-user-city"
         name="city"

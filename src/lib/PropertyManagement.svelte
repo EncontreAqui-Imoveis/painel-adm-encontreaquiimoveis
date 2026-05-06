@@ -25,6 +25,45 @@
   import { PROPERTY_AMENITY_OPTIONS, hasAmenity, normalizeAmenityList, toggleAmenity } from '$lib/propertyAmenities';
   const dispatch = createEventDispatcher();
 
+  function getRequestIdFromError(error: unknown): string {
+    const requestId = (error as { requestId?: unknown })?.requestId;
+    if (typeof requestId === 'string' && requestId.trim()) return requestId.trim();
+
+    const response = (error as {
+      response?: {
+        data?: { requestId?: unknown; request_id?: unknown };
+        headers?: unknown;
+      };
+    })?.response;
+
+    const payloadRequestId =
+      typeof response?.data?.requestId === 'string'
+        ? response.data.requestId.trim()
+        : typeof response?.data?.request_id === 'string'
+          ? response.data.request_id.trim()
+          : '';
+    if (payloadRequestId) return payloadRequestId;
+
+    const headers = response?.headers;
+    if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
+      const headerMap = headers as Record<string, unknown>;
+      const rawHeader = headerMap['x-request-id'] ?? headerMap['X-Request-Id'];
+      if (typeof rawHeader === 'string' && rawHeader.trim()) return rawHeader.trim();
+      if (Array.isArray(rawHeader) && rawHeader[0]) {
+        const value = String(rawHeader[0]).trim();
+        if (value) return value;
+      }
+    }
+
+    return '';
+  }
+
+  function formatSaveError(error: unknown, fallback: string): string {
+    const message = extractApiErrorMessage(error, fallback);
+    const requestId = getRequestIdFromError(error);
+    return requestId ? `${message} (requestId: ${requestId})` : message;
+  }
+
   interface PropertySummary {
     id: number;
     title: string;
@@ -1767,10 +1806,10 @@
       } else {
         await apiClient.put(`/admin/properties/${selectedProperty.id}`, payload);
       }
+      await fetchProperties();
       toast.success('Imóvel atualizado com sucesso.');
       isEditMode = false;
       closeModal();
-      await fetchProperties();
       if (requestedStatus && ['sold', 'rented'].includes(requestedStatus)) {
         dispatch('viewChange', 'sold_properties');
       }
@@ -1778,24 +1817,22 @@
       console.error('Erro ao salvar imóvel:', err);
       const status = err?.response?.status;
       if (status === 403) {
-        editError = extractApiErrorMessage(
+        editError = formatSaveError(
           err,
           'Permissão negada pelo servidor para atualizar este imóvel. Verifique campos obrigatórios e permissão do usuário.'
         );
       } else if (status === 404) {
-        editError = extractApiErrorMessage(
+        editError = formatSaveError(
           err,
           'Imóvel não encontrado ou rota de atualização ausente no servidor.'
         );
       } else if (status === 500) {
-        editError = extractApiErrorMessage(
+        editError = formatSaveError(
           err,
           'Erro interno no servidor ao salvar o imóvel. Tente novamente e revise os campos.'
         );
       } else {
-        editError =
-          extractApiErrorMessage(err, '') ||
-          (err instanceof Error ? err.message : 'Não foi possível salvar o imóvel.');
+        editError = formatSaveError(err, 'Não foi possível salvar o imóvel.');
       }
     } finally {
       isSavingEdit = false;

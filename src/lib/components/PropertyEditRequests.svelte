@@ -6,6 +6,48 @@
   import { Button } from '$lib/components/ui/button';
   import Pagination from '$lib/Pagination.svelte';
   import { api } from '$lib/apiClient';
+  import { extractApiErrorMessage } from '$lib/components/create-property-helpers';
+
+  function getRequestIdFromError(error: unknown): string {
+    const requestId = (error as { requestId?: unknown })?.requestId;
+    if (typeof requestId === 'string' && requestId.trim()) {
+      return requestId.trim();
+    }
+
+    const response = (error as {
+      response?: {
+        data?: { requestId?: unknown; request_id?: unknown };
+        headers?: unknown;
+      };
+    })?.response;
+
+    const payloadRequestId =
+      typeof response?.data?.requestId === 'string'
+        ? response.data.requestId.trim()
+        : typeof response?.data?.request_id === 'string'
+          ? response.data.request_id.trim()
+          : '';
+    if (payloadRequestId) return payloadRequestId;
+
+    const headers = response?.headers;
+    if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
+      const headerMap = headers as Record<string, unknown>;
+      const rawHeader = headerMap['x-request-id'] ?? headerMap['X-Request-Id'];
+      if (typeof rawHeader === 'string' && rawHeader.trim()) return rawHeader.trim();
+      if (Array.isArray(rawHeader) && rawHeader[0]) {
+        const value = String(rawHeader[0]).trim();
+        if (value) return value;
+      }
+    }
+
+    return '';
+  }
+
+  function formatApiErrorMessage(error: unknown, fallback: string): string {
+    const message = extractApiErrorMessage(error, fallback);
+    const requestId = getRequestIdFromError(error);
+    return requestId ? `${message} (requestId: ${requestId})` : message;
+  }
 
   interface PropertyEditRequest {
     id: number;
@@ -386,11 +428,16 @@
 
     isSubmitting = true;
     try {
-      const response = await api.post<{ status?: string }>(
+      const response = await api.post<{ status?: string; data?: { status?: string } }>(
         `/admin/property-edit-requests/${selected.id}/review`,
         { fieldReviews }
       );
-      const resolvedStatus = String(response?.status ?? '').trim().toUpperCase();
+      const responsePayload = response as
+        | { status?: string; data?: { status?: string } }
+        | undefined;
+      const resolvedStatus = String(
+        responsePayload?.status ?? responsePayload?.data?.status ?? ''
+      ).trim().toUpperCase();
       toast.success(
         resolvedStatus === 'PARTIALLY_APPROVED'
           ? 'Solicitação revisada com aprovação parcial.'
@@ -402,11 +449,7 @@
       refreshKey += 1;
     } catch (submitError) {
       console.error('Erro ao revisar solicitação de edição:', submitError);
-      toast.error(
-        submitError instanceof Error
-          ? submitError.message
-          : 'Não foi possível concluir a revisão.'
-      );
+      toast.error(formatApiErrorMessage(submitError, 'Não foi possível concluir a revisão.'));
     } finally {
       isSubmitting = false;
     }
@@ -421,11 +464,16 @@
 
     isSubmitting = true;
     try {
-      const response = await api.post<{ status?: string }>(
+      const response = await api.post<{ status?: string; data?: { status?: string } }>(
         `/admin/property-edit-requests/${selected.id}/${mode === 'approve_all' ? 'approve' : 'reject'}`,
         mode === 'reject_all' ? { reason: bulkRejectReason.trim() } : {}
       );
-      const resolvedStatus = String(response?.status ?? '').trim().toUpperCase();
+      const responsePayload = response as
+        | { status?: string; data?: { status?: string } }
+        | undefined;
+      const resolvedStatus = String(
+        responsePayload?.status ?? responsePayload?.data?.status ?? ''
+      ).trim().toUpperCase();
       toast.success(
         resolvedStatus === 'REJECTED'
           ? 'Solicitação rejeitada com sucesso.'
@@ -435,11 +483,7 @@
       refreshKey += 1;
     } catch (submitError) {
       console.error('Erro ao concluir revisão em massa:', submitError);
-      toast.error(
-        submitError instanceof Error
-          ? submitError.message
-          : 'Não foi possível concluir a revisão.'
-      );
+      toast.error(formatApiErrorMessage(submitError, 'Não foi possível concluir a revisão.'));
     } finally {
       isSubmitting = false;
     }

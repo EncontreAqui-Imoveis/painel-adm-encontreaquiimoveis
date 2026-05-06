@@ -496,7 +496,7 @@
       </p>
     </div>
   {:else}
-    <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <div class="broker-table-scroll overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead class="bg-gray-50 dark:bg-gray-900/60">
           <tr>
@@ -825,3 +825,29 @@
     </div>
   </div>
 {/if}
+
+<style>
+  .broker-table-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(16 185 129 / 0.55) rgb(148 163 184 / 0.25);
+  }
+
+  .broker-table-scroll::-webkit-scrollbar {
+    height: 12px;
+  }
+
+  .broker-table-scroll::-webkit-scrollbar-track {
+    background: rgb(203 213 225 / 0.45);
+    border-radius: 9999px;
+  }
+
+  .broker-table-scroll::-webkit-scrollbar-thumb {
+    background: linear-gradient(90deg, rgb(16 185 129 / 0.95), rgb(5 150 105 / 0.95));
+    border-radius: 9999px;
+    border: 3px solid rgb(255 255 255);
+  }
+
+  .broker-table-scroll::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(90deg, rgb(16 185 129 / 1), rgb(4 120 87 / 1));
+  }
+</style>

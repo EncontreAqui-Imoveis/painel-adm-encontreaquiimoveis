@@ -91,6 +91,30 @@ describe('BrokerReviewModal', () => {
     });
   });
 
+  it('mantem o modal visível e exibe erro se salvar corretor falhar', async () => {
+    apiPutMock.mockRejectedValueOnce(new Error('Falha de atualização'));
+
+    render(BrokerReviewModal, { open: true, broker, showApprove: true });
+
+    await screen.findByText('Revisar Corretor');
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+
+    const dialog = screen.getByRole('dialog');
+    const textboxes = within(dialog).getAllByRole('textbox');
+    await fireEvent.input(textboxes[2], { target: { value: '64988887777' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining('Falha de atualização'));
+    });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Salvar alterações' })).toBeInTheDocument();
+  });
+
+
   it('rejects broker through the unified status endpoint', async () => {
     render(BrokerReviewModal, { open: true, broker, showApprove: true });
 
