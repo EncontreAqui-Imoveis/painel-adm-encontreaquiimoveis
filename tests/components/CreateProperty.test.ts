@@ -44,7 +44,27 @@ vi.mock('svelte-sonner', () => ({
 
 import CreateProperty from '../../src/lib/components/CreateProperty.svelte';
 
+const ALL_COMMODITIES: string[] = [
+  'Poço Artesiano',
+  'Mobiliada',
+  'Elevador',
+  'Academia',
+  'Churrasqueira',
+  'Salão de festas',
+  'Quadra',
+  'Condomínio Fechado',
+  'Aceita pets',
+  'Sistema de segurança/câmera',
+  'Sauna',
+];
+
 describe('CreateProperty', () => {
+  async function selectAllAmenities(): Promise<void> {
+    for (const amenity of ALL_COMMODITIES) {
+      await fireEvent.click(screen.getByRole('checkbox', { name: amenity }));
+    }
+  }
+
   function getInputById(id: string): HTMLInputElement | HTMLSelectElement {
     const element = document.getElementById(id);
     if (!element || !(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
@@ -255,5 +275,30 @@ describe('CreateProperty', () => {
         expect.anything()
       );
     });
+  });
+
+  it('envia todas as comodidades disponíveis no payload', async () => {
+    render(CreateProperty);
+
+    await fillRequiredFields();
+    await selectAllAmenities();
+    await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar imóvel' }));
+
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledWith(
+        '/admin/properties',
+        expect.objectContaining({
+          amenities: expect.arrayContaining(ALL_COMMODITIES),
+          area_construida_valor: 145.5,
+          area_terreno_valor: 210,
+          area_construida_unidade: 'm2',
+          area_terreno_unidade: 'm2',
+        }),
+        expect.anything()
+      );
+    });
+
+    const [, payload] = apiClientPostMock.mock.calls[0] as [string, Record<string, unknown>, any];
+    expect(payload.amenities).toHaveLength(ALL_COMMODITIES.length);
   });
 });

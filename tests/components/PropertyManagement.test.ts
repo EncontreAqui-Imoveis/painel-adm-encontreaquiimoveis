@@ -307,6 +307,17 @@ function findAmenityPill(container: HTMLElement, label: string): HTMLElement {
   });
 }
 
+  async function setAmenityChecked(
+    container: HTMLElement,
+    amenity: string,
+    checked: boolean
+  ): Promise<void> {
+    const checkbox = within(container).getByRole('checkbox', { name: amenity }) as HTMLInputElement;
+    if (checkbox.checked !== checked) {
+      await fireEvent.click(checkbox);
+    }
+  }
+
 describe('PropertyManagement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -562,7 +573,7 @@ describe('PropertyManagement', () => {
         ...basePropertyState,
         status: 'approved',
         request_type: null,
-        amenities: [],
+        amenities: ['Poço Artesiano', 'Condomínio Fechado'],
       },
     });
 
@@ -574,10 +585,11 @@ describe('PropertyManagement', () => {
 
     const dialog = await screen.findByRole('dialog');
     await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
-    await fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Mobiliada' }));
-    await fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Academia' }));
-    await fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Sauna' }));
-    await fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Poço Artesiano' }));
+    await setAmenityChecked(dialog, 'Poço Artesiano', false);
+    await setAmenityChecked(dialog, 'Condomínio Fechado', false);
+    await setAmenityChecked(dialog, 'Mobiliada', true);
+    await setAmenityChecked(dialog, 'Academia', true);
+    await setAmenityChecked(dialog, 'Sauna', true);
 
     const saveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
     await fireEvent.click(saveButtons[0]);
@@ -586,10 +598,10 @@ describe('PropertyManagement', () => {
       expect(apiPutMock).toHaveBeenCalledTimes(1);
     });
     const [, amenitiesPayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
-    expect(amenitiesPayload.amenities).toEqual(
-      expect.arrayContaining(['Poço Artesiano', 'Mobiliada', 'Academia', 'Sauna'])
-    );
-    expect(amenitiesPayload.amenities).toHaveLength(4);
+    expect(amenitiesPayload.amenities).toEqual(expect.arrayContaining(['Mobiliada', 'Academia', 'Sauna']));
+    expect(amenitiesPayload.amenities).not.toContain('Poço Artesiano');
+    expect(amenitiesPayload.amenities).not.toContain('Condomínio Fechado');
+    expect(amenitiesPayload.amenities).toHaveLength(3);
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -597,10 +609,74 @@ describe('PropertyManagement', () => {
 
     await fireEvent.click(getRevisarButtons()[0]);
     const reopenedDialog = await screen.findByRole('dialog');
-    expect(findAmenityPill(reopenedDialog, 'Poço Artesiano')).toHaveTextContent('Sim');
+    expect(findAmenityPill(reopenedDialog, 'Poço Artesiano')).toHaveTextContent('Não');
     expect(findAmenityPill(reopenedDialog, 'Mobiliada')).toHaveTextContent('Sim');
     expect(findAmenityPill(reopenedDialog, 'Academia')).toHaveTextContent('Sim');
     expect(findAmenityPill(reopenedDialog, 'Sauna')).toHaveTextContent('Sim');
+    expect(findAmenityPill(reopenedDialog, 'Condomínio Fechado')).toHaveTextContent('Não');
+  });
+
+  it('remove todas as amenities e mantém retorno vazio', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'approved',
+        request_type: null,
+        amenities: ['Poço Artesiano', 'Mobiliada'],
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    const firstRevisar = getRevisarButtons()[0];
+    await fireEvent.click(firstRevisar);
+
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    await setAmenityChecked(dialog, 'Poço Artesiano', false);
+    await setAmenityChecked(dialog, 'Mobiliada', false);
+
+    const saveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
+    await fireEvent.click(saveButtons[0]);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+    const [, amenitiesPayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    expect(amenitiesPayload.amenities).toEqual([]);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    await fireEvent.click(getRevisarButtons()[0]);
+    const reopenedDialog = await screen.findByRole('dialog');
+    expect(findAmenityPill(reopenedDialog, 'Poço Artesiano')).toHaveTextContent('Não');
+    expect(findAmenityPill(reopenedDialog, 'Mobiliada')).toHaveTextContent('Não');
+  });
+
+  it('exibe 200 ha e 10 alqueire sem converter visualmente para m²', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'approved',
+        request_type: null,
+        area_construida_valor: 200,
+        area_terreno_valor: 10,
+        area_construida_unidade: 'hectare',
+        area_terreno_unidade: 'alqueire',
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(findListItemByLabel(dialog, 'Área construída')).toHaveTextContent('200 ha');
+    expect(findListItemByLabel(dialog, 'Área do terreno')).toHaveTextContent('10 alqueire');
   });
 
   it('permite valor zero em campos numéricos e envia payload sem status inválido', async () => {

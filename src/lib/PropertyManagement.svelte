@@ -503,7 +503,7 @@
           const areaTerrenoUnidadeRaw =
             record['area_terreno_unidade'] ?? record['area_terreno_medida'];
           const areaTerrenoUnidade =
-            normalizeAreaUnit(areaTerrenoUnidadeRaw) ?? areaConstruidaUnidade ?? 'm2';
+            normalizeAreaUnit(areaTerrenoUnidadeRaw) ?? 'm2';
           const parseNullableNumber = (value: unknown): number | null => {
             if (value == null || value === '') return null;
             const numeric = Number(value);
@@ -1008,7 +1008,7 @@
     const coerced: Record<string, unknown> = { ...data };
     const areaConstruidaUnidade = normalizeAreaUnit(data.area_construida_unidade) ?? 'm2';
     const areaTerrenoUnidade =
-      normalizeAreaUnit(data.area_terreno_unidade) ?? areaConstruidaUnidade;
+      normalizeAreaUnit(data.area_terreno_unidade) ?? 'm2';
     const areaConstruidaValor = data.area_construida_valor ?? data.area_construida;
     const areaTerrenoValor = data.area_terreno_valor ?? data.area_terreno;
 
@@ -1740,9 +1740,7 @@
         area_construida_unidade: editableProperty.area_construida_unidade ?? 'm2',
         area_terreno_valor: editableProperty.area_terreno_valor,
         area_terreno_unidade:
-          editableProperty.area_terreno_unidade ??
-          editableProperty.area_construida_unidade ??
-          'm2',
+          editableProperty.area_terreno_unidade ?? 'm2',
         has_wifi: editableProperty.has_wifi,
         tem_piscina: editableProperty.tem_piscina,
         tem_energia_solar: editableProperty.tem_energia_solar,
@@ -3761,7 +3759,7 @@
               <li><strong>Garagens:</strong> {selectedProperty.garage_spots ?? '-'}</li>
               <li><strong>Referência pública:</strong> {selectedProperty.public_code ?? '-'}</li>
               <li><strong>Área construída:</strong> {formatAreaWithUnit(selectedProperty.area_construida_valor ?? selectedProperty.area_construida, selectedProperty.area_construida_unidade)}</li>
-              <li><strong>Área do terreno:</strong> {formatAreaWithUnit(selectedProperty.area_terreno_valor ?? selectedProperty.area_terreno, selectedProperty.area_terreno_unidade ?? selectedProperty.area_construida_unidade)}</li>
+              <li><strong>Área do terreno:</strong> {formatAreaWithUnit(selectedProperty.area_terreno_valor ?? selectedProperty.area_terreno, selectedProperty.area_terreno_unidade)}</li>
               <li><strong>Proprietário:</strong> {selectedProperty.owner_name ?? '-'}</li>
               <li><strong>Telefone do proprietário:</strong> {formatPhoneDisplayBr(selectedProperty.owner_phone)}</li>
               <li><strong>Anunciante:</strong> {selectedProperty.broker_name ?? '-'}</li>
