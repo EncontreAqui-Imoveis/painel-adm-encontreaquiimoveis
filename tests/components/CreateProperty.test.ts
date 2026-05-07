@@ -69,6 +69,28 @@ describe('CreateProperty', () => {
     expect(normalizeAmenityList(['Planejados'])).toEqual([]);
   });
 
+  it('combina amenities canônicas e flags legadas sem duplicar', () => {
+    const normalized = normalizeAmenityList({
+      amenities: ['Ar condicionado'],
+      has_wifi: true,
+      hasPiscina: 1,
+      tem_churrasqueira: '1',
+      sistema_de_seguranca: 'sim',
+      unknownFlag: false,
+    });
+
+    expect(normalized).toEqual(
+      expect.arrayContaining([
+        'Ar condicionado',
+        'Wi-Fi',
+        'Piscina',
+        'Churrasqueira',
+        'Sistema de segurança/câmera',
+      ])
+    );
+    expect(normalized).toHaveLength(5);
+  });
+
   async function selectAllAmenities(): Promise<void> {
     for (const amenity of ALL_COMMODITIES) {
       await fireEvent.click(screen.getByRole('checkbox', { name: amenity }));

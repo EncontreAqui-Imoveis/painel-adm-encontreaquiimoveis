@@ -24,6 +24,16 @@
   import type { PropertyStatus, PropertyImage as PropertyImageType } from './types';
   import { PROPERTY_AMENITY_OPTIONS, hasAmenity, normalizeAmenityList, toggleAmenity } from '$lib/propertyAmenities';
   const dispatch = createEventDispatcher();
+function parseNullableNumber(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const normalized = String(value)
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) ? numeric : null;
+}
 
   function getRequestIdFromError(error: unknown): string {
     const requestId = (error as { requestId?: unknown })?.requestId;
@@ -476,7 +486,6 @@
           const areaTerrenoValorRaw = record['area_terreno_valor'];
           const areaConstruidaM2Raw = record['area_construida_m2'];
           const areaTerrenoM2Raw = record['area_terreno_m2'];
-          const amenityRawValue = record['amenities'];
           const ownerNameValue = record['owner_name'];
           const ownerPhoneValue = record['owner_phone'];
           const brokerPhoneValue = record['broker_phone'];
@@ -491,11 +500,6 @@
             record['area_terreno_unidade'] ?? record['area_terreno_medida'];
           const areaTerrenoUnidade =
             normalizeAreaUnit(areaTerrenoUnidadeRaw) ?? 'm2';
-          const parseNullableNumber = (value: unknown): number | null => {
-            if (value == null || value === '') return null;
-            const numeric = Number(value);
-            return Number.isFinite(numeric) ? numeric : null;
-          };
           const areaConstruidaValor = parseNullableNumber(areaConstruidaValorRaw);
           const areaTerrenoValor = parseNullableNumber(areaTerrenoValorRaw);
           const areaConstruidaM2 = parseNullableNumber(areaConstruidaM2Raw);
@@ -551,7 +555,7 @@
                 : requestTypeValue === 'creation'
                 ? 'creation'
                 : null,
-            amenities: amenityRawValue != null ? getAmenityPayload(amenityRawValue) : null,
+            amenities: getAmenityPayload(record as Record<string, unknown>),
             images:
               (record['images'] as
                 | Array<NormalizedImage | PropertyImageType | string>
@@ -801,8 +805,8 @@
       .filter((img): img is NormalizedImage => Boolean(img));
   }
 
-  function getAmenityPayload(amenities: unknown): string[] {
-    return normalizeAmenityList(amenities);
+  function getAmenityPayload(record: Record<string, unknown>): string[] {
+    return normalizeAmenityList(record);
   }
 
   function isAmenityChecked(
@@ -981,12 +985,6 @@
     const areaConstruidaValor = data.area_construida_valor;
     const areaTerrenoValor = data.area_terreno_valor;
 
-    const parseNullableNumber = (value: unknown): number | null => {
-      if (value == null || value === '') return null;
-      const numeric = Number(value);
-      return Number.isFinite(numeric) ? numeric : null;
-    };
-
     const parsedAreaConstruidaValor = parseNullableNumber(areaConstruidaValor);
     const parsedAreaTerrenoValor = parseNullableNumber(areaTerrenoValor);
 
@@ -996,7 +994,7 @@
     coerced.area_terreno_valor = parsedAreaTerrenoValor;
     coerced.area_construida = parseNullableNumber(data.area_construida_m2 ?? areaConstruidaValor);
     coerced.area_terreno = parseNullableNumber(data.area_terreno_m2 ?? areaTerrenoValor);
-    const amenitiesFromPayload = normalizeAmenityList(data.amenities);
+    const amenitiesFromPayload = normalizeAmenityList(data);
     coerced.amenities = amenitiesFromPayload;
     return coerced as unknown as PropertyDetails;
   }
@@ -1024,7 +1022,9 @@
 
   function formatAreaWithUnit(value: unknown, unit: unknown): string {
     if (value === null || value === undefined || value === '') return '-';
-    return `${value} ${areaUnitLabel(unit)}`;
+    const parsed = parseNullableNumber(value);
+    if (parsed === null) return `${String(value)} ${areaUnitLabel(unit)}`;
+    return `${parsed} ${areaUnitLabel(unit)}`;
   }
 
   function publicCodeLabel(value: unknown, fallback = 'Sem referência pública') {
@@ -2595,7 +2595,7 @@
             Anunciante: {property.broker_name ?? '-'}
           </div>
           <div class="mt-1 text-xs text-gray-600 dark:text-gray-300">
-            Telefone: {formatPhoneDisplayBr(property.broker_phone)}
+            Telefone do anunciante: {formatPhoneDisplayBr(property.broker_phone)}
           </div>
           <div class="mt-3 flex justify-end">
             <Button
@@ -2659,7 +2659,7 @@
               </th>
             {/if}
             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Anunciante</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Telefone</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Telefone do anunciante</th>
             <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Ações</th>
           </tr>
         </thead>
@@ -3711,13 +3711,13 @@
               <li><strong>Quartos:</strong> {selectedProperty.bedrooms ?? '-'}</li>
               <li><strong>Banheiros:</strong> {selectedProperty.bathrooms ?? '-'}</li>
               <li><strong>Garagens:</strong> {selectedProperty.garage_spots ?? '-'}</li>
-              <li><strong>Referência pública:</strong> {selectedProperty.public_code ?? '-'}</li>
+              <li><strong>Referência pública:</strong> {publicCodeLabel(selectedProperty.public_code)}</li>
               <li><strong>Área construída:</strong> {formatAreaWithUnit(selectedProperty.area_construida_valor, selectedProperty.area_construida_unidade)}</li>
               <li><strong>Área do terreno:</strong> {formatAreaWithUnit(selectedProperty.area_terreno_valor, selectedProperty.area_terreno_unidade)}</li>
               <li><strong>Proprietário:</strong> {selectedProperty.owner_name ?? '-'}</li>
               <li><strong>Telefone do proprietário:</strong> {formatPhoneDisplayBr(selectedProperty.owner_phone)}</li>
               <li><strong>Anunciante:</strong> {selectedProperty.broker_name ?? '-'}</li>
-              <li><strong>Telefone:</strong> {formatPhoneDisplayBr(selectedProperty.broker_phone)}</li>
+              <li><strong>Telefone do anunciante:</strong> {formatPhoneDisplayBr(selectedProperty.broker_phone)}</li>
               <li><strong>Corretor credenciado:</strong> {isBrokerCredenciado(selectedProperty) ? 'Sim' : 'Não'}</li>
               {#if isBrokerCredenciado(selectedProperty)}
                 <li><strong>CRECI:</strong> {selectedProperty.broker_creci ?? '-'}</li>
@@ -3747,12 +3747,34 @@
                 </label>
               {/each}
             {:else}
-              {#each propertyAmenityOptions as amenity}
-                {@const isChecked = isAmenityChecked(selectedProperty, amenity)}
-                <span class={`rounded-full px-3 py-1 ${isChecked ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>
-                  {amenity}: {isChecked ? 'Sim' : 'Não'}
-                </span>
-              {/each}
+              <div class="w-full">
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Ativas
+                </p>
+                <div class="mb-3 flex flex-wrap gap-2">
+                  {#each propertyAmenityOptions.filter((amenity) => isAmenityChecked(selectedProperty, amenity)) as amenity}
+                    <span class="rounded-full bg-green-100 px-3 py-1 text-green-800 dark:bg-green-900 dark:text-green-200">
+                      {amenity}
+                    </span>
+                  {/each}
+                  {#if propertyAmenityOptions.filter((amenity) => isAmenityChecked(selectedProperty, amenity)).length === 0}
+                    <span class="rounded-full bg-gray-100 px-3 py-1 text-gray-500 dark:bg-gray-800 dark:text-gray-300">
+                      Nenhuma
+                    </span>
+                  {/if}
+                </div>
+
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Inativas
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  {#each propertyAmenityOptions.filter((amenity) => !isAmenityChecked(selectedProperty, amenity)) as amenity}
+                    <span class="rounded-full bg-gray-100 px-3 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                      {amenity}
+                    </span>
+                  {/each}
+                </div>
+              </div>
             {/if}
           </div>
         </div>

@@ -73,6 +73,7 @@ type PropertyMockState = {
   area_construida_m2: number | null;
   area_terreno_m2: number | null;
   amenities: string[];
+  legacyAmenityFlags?: Record<string, unknown>;
   price: number;
   images: null;
 };
@@ -207,6 +208,7 @@ function buildPropertySummary(property: PropertyMockState): Record<string, unkno
     area_construida: property.area_construida_m2,
     area_terreno: property.area_terreno_m2,
     amenities: property.amenities,
+    ...(property.legacyAmenityFlags ?? {}),
     price: property.price,
     images: property.images,
   };
@@ -302,9 +304,18 @@ function findListItemByLabel(container: HTMLElement, label: string): HTMLElement
   return listItems.find((item) => item.textContent?.includes(label)) ?? null;
 }
 
-function findAmenityPill(container: HTMLElement, label: string): HTMLElement {
-  return within(container).getByText((content, element) => {
-    return element?.tagName === 'SPAN' && String(content).includes(label);
+function getAmenitySection(container: HTMLElement, isActive: boolean): HTMLElement {
+  const heading = within(container).getByText(isActive ? 'Ativas' : 'Inativas', { selector: 'p' });
+  const section = heading.nextElementSibling;
+  if (!(section instanceof HTMLElement)) {
+    throw new Error(`Seção ${isActive ? 'ativas' : 'inativas'} não encontrada`);
+  }
+  return section;
+}
+
+function findAmenityInActiveSection(container: HTMLElement, label: string): HTMLElement {
+  return within(getAmenitySection(container, true)).getByText((content, element) => {
+    return element?.tagName === 'SPAN' && String(content).trim() === label;
   });
 }
 
@@ -416,8 +427,75 @@ describe('PropertyManagement', () => {
     expect(await within(reopenedDialog).findByText('Nova descrição salva com sucesso')).toBeInTheDocument();
     expect(findListItemByLabel(reopenedDialog, 'Quartos')).toHaveTextContent('4');
     expect(findListItemByLabel(reopenedDialog, 'Área construída')).toHaveTextContent('2332 ha');
-    expect(findAmenityPill(reopenedDialog, 'Mobiliada')).toHaveTextContent('Sim');
-    expect(findAmenityPill(reopenedDialog, 'Academia')).toHaveTextContent('Sim');
+    expect(findAmenityInActiveSection(reopenedDialog, 'Mobiliada')).toBeInTheDocument();
+    expect(findAmenityInActiveSection(reopenedDialog, 'Academia')).toBeInTheDocument();
+  });
+
+  it('renderiza smoke legado/canônico e salva remoção e adição de amenities', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'approved',
+        request_type: null,
+        public_code: 'PUB-HA-001',
+        area_construida_valor: 0,
+        area_construida_unidade: 'm2',
+        area_terreno_valor: 2332,
+        area_terreno_unidade: 'hectare',
+        area_construida_m2: 0,
+        area_terreno_m2: 23320000,
+        owner_name: 'Proprietário Teste',
+        owner_phone: '61999990000',
+        broker_name: 'Corretora Teste',
+        broker_phone: '61988881111',
+        amenities: ALL_AMENITIES_16,
+        legacyAmenityFlags: {
+          has_wifi: true,
+          piscina: 1,
+          hasChurrasqueira: 1,
+        },
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(findListItemByLabel(dialog, 'Referência pública')).toHaveTextContent('PUB-HA-001');
+    expect(findListItemByLabel(dialog, 'Área construída')).toHaveTextContent('0 m²');
+    expect(findListItemByLabel(dialog, 'Área do terreno')).toHaveTextContent('2332 ha');
+    expect(findListItemByLabel(dialog, 'Proprietário')).toHaveTextContent('Proprietário Teste');
+    expect(findListItemByLabel(dialog, 'Telefone do proprietário')).toHaveTextContent('(61) 99999-0000');
+    expect(findListItemByLabel(dialog, 'Anunciante')).toHaveTextContent('Corretora Teste');
+    expect(findListItemByLabel(dialog, 'Telefone do anunciante')).toHaveTextContent('(61) 98888-1111');
+    for (const amenity of ALL_AMENITIES_16) {
+      expect(findAmenityInActiveSection(dialog, amenity)).toBeInTheDocument();
+    }
+
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    await setAmenityChecked(dialog, 'Wi-Fi', false);
+    await setAmenityChecked(dialog, 'Sistema de segurança/câmera', true);
+    const smokeSaveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
+    await fireEvent.click(smokeSaveButtons[0]);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+    const [, smokePayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    expect(smokePayload.amenities).toEqual(expect.arrayContaining(ALL_AMENITIES_16.filter((amenity) => amenity !== 'Wi-Fi')));
+    expect(smokePayload.amenities).not.toContain('Wi-Fi');
+    expect(smokePayload.amenities).toHaveLength(ALL_AMENITIES_16.length - 1);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    await fireEvent.click(getRevisarButtons()[0]);
+    const reopenedDialog = await screen.findByRole('dialog');
+    expect(findAmenityInActiveSection(reopenedDialog, 'Mobiliada')).toBeInTheDocument();
+    expect(within(getAmenitySection(reopenedDialog, false)).getByText('Wi-Fi')).toBeInTheDocument();
   });
 
   it('fecha modal somente após PUT 2xx e atualiza a lista pelo refetch', async () => {
@@ -559,8 +637,8 @@ describe('PropertyManagement', () => {
     const reopenedDialog = await screen.findByRole('dialog');
     expect(await within(reopenedDialog).findByText(/Dashboard \/ Imóveis \/ Referência PUB-PEND-01/)).toBeInTheDocument();
     expect(findListItemByLabel(reopenedDialog, 'Área construída')).toHaveTextContent('3210 ha');
-    expect(findAmenityPill(reopenedDialog, 'Mobiliada')).toHaveTextContent('Sim');
-    expect(findAmenityPill(reopenedDialog, 'Academia')).toHaveTextContent('Sim');
+    expect(findAmenityInActiveSection(reopenedDialog, 'Mobiliada')).toBeInTheDocument();
+    expect(findAmenityInActiveSection(reopenedDialog, 'Academia')).toBeInTheDocument();
     expect(
       within(reopenedDialog)
         .getAllByRole('listitem')
@@ -607,7 +685,7 @@ describe('PropertyManagement', () => {
     await fireEvent.click(getRevisarButtons()[0]);
     const reopenedDialog = await screen.findByRole('dialog');
     for (const amenity of ALL_AMENITIES_16) {
-      expect(findAmenityPill(reopenedDialog, amenity)).toHaveTextContent('Sim');
+      expect(findAmenityInActiveSection(reopenedDialog, amenity)).toBeInTheDocument();
     }
   });
 
@@ -648,9 +726,13 @@ describe('PropertyManagement', () => {
 
     await fireEvent.click(getRevisarButtons()[0]);
     const reopenedDialog = await screen.findByRole('dialog');
-    for (const amenity of ALL_AMENITIES_16) {
-      expect(findAmenityPill(reopenedDialog, amenity)).toHaveTextContent('Não');
-    }
+    expect(getAmenitySection(reopenedDialog, true)).toHaveTextContent('Nenhuma');
+    expect(
+      within(getAmenitySection(reopenedDialog, false)).getByText('Wi-Fi')
+    ).toBeInTheDocument();
+    expect(
+      within(getAmenitySection(reopenedDialog, false)).getByText('Sauna')
+    ).toBeInTheDocument();
   });
 
   it('exibe 200 ha e 10 alqueire sem converter visualmente para m²', async () => {

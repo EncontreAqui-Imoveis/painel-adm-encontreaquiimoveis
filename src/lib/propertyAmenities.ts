@@ -73,6 +73,65 @@ const AMENITY_ID_TO_CANONICAL: Record<string, PropertyAmenity> = {
   '12': 'Sauna',
 };
 
+const LEGACY_AMENITY_FLAG_TO_CANONICAL: Record<string, PropertyAmenity> = {
+  haswifi: 'Wi-Fi',
+  has_wifi: 'Wi-Fi',
+  temwifi: 'Wi-Fi',
+  wifi: 'Wi-Fi',
+  piscina: 'Piscina',
+  tempiscina: 'Piscina',
+  haspiscina: 'Piscina',
+  energiasolar: 'Energia solar',
+  temenergiasolar: 'Energia solar',
+  energiassolar: 'Energia solar',
+  automacao: 'Automação',
+  automação: 'Automação',
+  temautomacao: 'Automação',
+  temautomacaoesolar: 'Automação',
+  arcondicionado: 'Ar condicionado',
+  arecondicionado: 'Ar condicionado',
+  ar_condicionado: 'Ar condicionado',
+  temarcondicionado: 'Ar condicionado',
+  pocouartesiano: 'Poço artesiano',
+  pocofonte: 'Poço artesiano',
+  pocoartesiano: 'Poço artesiano',
+  poche: 'Poço artesiano',
+  mobiliada: 'Mobiliada',
+  ehmobiliada: 'Mobiliada',
+  temmobiliada: 'Mobiliada',
+  temmobiliado: 'Mobiliada',
+  mobilia: 'Mobiliada',
+  elevador: 'Elevador',
+  temelevador: 'Elevador',
+  haselevador: 'Elevador',
+  academia: 'Academia',
+  temaacademia: 'Academia',
+  hasacademia: 'Academia',
+  churrasqueira: 'Churrasqueira',
+  temchurrasqueira: 'Churrasqueira',
+  haschurrasqueira: 'Churrasqueira',
+  salãodefestas: 'Salão de festas',
+  salaofestas: 'Salão de festas',
+  salao: 'Salão de festas',
+  temsalaofestas: 'Salão de festas',
+  quadra: 'Quadra',
+  temquadra: 'Quadra',
+  hasquadra: 'Quadra',
+  condominio_fechado: 'Condomínio fechado',
+  condominiofechado: 'Condomínio fechado',
+  aceitaapets: 'Aceita pets',
+  aceptapets: 'Aceita pets',
+  aceitaanimais: 'Aceita pets',
+  sistemadeseguranca: 'Sistema de segurança/câmera',
+  sistemaseguranca: 'Sistema de segurança/câmera',
+  seguranca: 'Sistema de segurança/câmera',
+  temsistemadeseguranca: 'Sistema de segurança/câmera',
+  temseguranca: 'Sistema de segurança/câmera',
+  sauna: 'Sauna',
+  hassauna: 'Sauna',
+  temsauna: 'Sauna',
+};
+
 function normalizeAmenityInputValue(value: string): string {
   return value
     .normalize('NFD')
@@ -103,6 +162,48 @@ export function normalizePropertyAmenity(value: string): PropertyAmenity | null 
   return canonicalValue ?? null;
 }
 
+function toNumberishBoolean(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true' || normalized === 'sim' || normalized === 'yes';
+  }
+  return false;
+}
+
+function getLegacyAmenitiesFromRecord(source: Record<string, unknown>): PropertyAmenity[] {
+  const detected = new Set<PropertyAmenity>();
+  const toLookupKey = (value: string): string =>
+    normalizeAmenityInputValue(value).replace(/[^a-z0-9]/g, '');
+
+  for (const [rawKey, rawValue] of Object.entries(source)) {
+    if (!toNumberishBoolean(rawValue)) continue;
+    const lookupKey = toLookupKey(rawKey);
+    const mapped = LEGACY_AMENITY_FLAG_TO_CANONICAL[rawKey] || LEGACY_AMENITY_FLAG_TO_CANONICAL[lookupKey];
+    if (mapped) {
+      detected.add(mapped);
+    }
+  }
+
+  return Array.from(detected);
+}
+
+function getLegacyAmenitiesFromObjectValues(source: Record<string, unknown>): PropertyAmenity[] {
+  const detected = new Set<PropertyAmenity>();
+  const rawValues = source['amenities'];
+  if (rawValues == null) {
+    return [];
+  }
+
+  const normalizedValues = normalizeAmenityList(rawValues);
+  for (const value of normalizedValues) {
+    detected.add(value);
+  }
+  return Array.from(detected);
+}
+
 function parseAmenityRawText(value: string): string[] {
   const trimmed = value.trim();
   if (!trimmed) return [];
@@ -129,13 +230,19 @@ function parseAmenityRawText(value: string): string[] {
   return [trimmed];
 }
 
-export function normalizeAmenityList(raw: unknown): string[] {
+export function normalizeAmenityList(raw: unknown): PropertyAmenity[] {
   if (raw == null) return [];
 
   const values: string[] = Array.isArray(raw)
     ? raw.map((entry) => String(entry))
     : typeof raw === 'object'
-      ? [String(raw)]
+      ? (() => {
+          const source = raw as Record<string, unknown>;
+          return [
+            ...getLegacyAmenitiesFromObjectValues(source),
+            ...getLegacyAmenitiesFromRecord(source),
+          ];
+        })()
       : parseAmenityRawText(String(raw));
 
   const normalized = new Set<PropertyAmenity>();
