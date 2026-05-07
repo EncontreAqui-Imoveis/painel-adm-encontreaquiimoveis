@@ -1433,7 +1433,7 @@
             </select>
           </div>
           <span class="text-xs font-normal text-gray-500 dark:text-gray-400"
-            >Valor armazenado em m² após conversão.</span
+            >Informe o valor conforme a unidade selecionada.</span
           >
         </div>
         <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">

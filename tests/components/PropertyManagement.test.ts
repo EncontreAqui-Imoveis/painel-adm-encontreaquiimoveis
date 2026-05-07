@@ -676,6 +676,107 @@ describe('PropertyManagement', () => {
     expect(findListItemByLabel(dialog, 'Área do terreno')).toHaveTextContent('10 alqueire');
   });
 
+  it('reabre imóvel com 2332 ha no terreno e mantém o valor no input/seletor', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'approved',
+        request_type: null,
+        area_terreno_valor: 2332,
+        area_terreno_unidade: 'hectare',
+        area_terreno_m2: 23320000,
+        area_terreno: 23320000,
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(findListItemByLabel(dialog, 'Área do terreno')).toHaveTextContent('2332 ha');
+
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    const terrainInput = dialog.querySelector('input[name="area_terreno_valor"]');
+    const terrainUnit = dialog.querySelector('select[name="area_terreno_unidade"]');
+    expect(terrainInput).toBeTruthy();
+    expect((terrainInput as HTMLInputElement).value).toBe('2332');
+    expect(terrainUnit).toBeTruthy();
+    expect((terrainUnit as HTMLSelectElement).value).toBe('hectare');
+  });
+
+  it('salva sem alterar campos de área e preserva 2332 ha no payload', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'approved',
+        request_type: null,
+        area_terreno_valor: 2332,
+        area_terreno_unidade: 'hectare',
+        area_terreno_m2: 23320000,
+        area_terreno: 23320000,
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    const saveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
+    await fireEvent.click(saveButtons[0]);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+    const [, payload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    expect(payload).toMatchObject({
+      area_terreno_valor: 2332,
+      area_terreno_unidade: 'hectare',
+    });
+  });
+
+  it('altera unidade do terreno para alqueire e envia 10 no payload', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'approved',
+        request_type: null,
+        area_terreno_valor: 1,
+        area_terreno_unidade: 'm2',
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    const terrainInput = dialog.querySelector('input[name="area_terreno_valor"]');
+    const terrainUnit = dialog.querySelector('select[name="area_terreno_unidade"]');
+    expect(terrainInput).toBeTruthy();
+    expect(terrainUnit).toBeTruthy();
+    await fireEvent.input(terrainInput as HTMLInputElement, { target: { value: '10' } });
+    await fireEvent.change(terrainUnit as HTMLSelectElement, { target: { value: 'alqueire' } });
+
+    const saveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
+    await fireEvent.click(saveButtons[0]);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+    const [, payload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    expect(payload).toMatchObject({
+      area_terreno_valor: 10,
+      area_terreno_unidade: 'alqueire',
+    });
+  });
+
   it('permite valor zero em campos numéricos e envia payload sem status inválido', async () => {
     mockPropertyManagementRequests({
       initialProperty: {

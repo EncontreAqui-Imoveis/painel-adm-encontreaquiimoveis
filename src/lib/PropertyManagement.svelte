@@ -978,8 +978,8 @@
     const areaConstruidaUnidade = normalizeAreaUnit(data.area_construida_unidade) ?? 'm2';
     const areaTerrenoUnidade =
       normalizeAreaUnit(data.area_terreno_unidade) ?? 'm2';
-    const areaConstruidaValor = data.area_construida_valor ?? data.area_construida;
-    const areaTerrenoValor = data.area_terreno_valor ?? data.area_terreno;
+    const areaConstruidaValor = data.area_construida_valor;
+    const areaTerrenoValor = data.area_terreno_valor;
 
     const parseNullableNumber = (value: unknown): number | null => {
       if (value == null || value === '') return null;
@@ -1222,9 +1222,12 @@
     try {
       const details = await api.get<PropertyDetails>(`/admin/properties/${property.id}`);
       const mergedPublicCode = normalizePublicCode((details as PropertyDetails)?.public_code ?? property.public_code);
+      const safeDetails = Object.fromEntries(
+        Object.entries((details as unknown as Record<string, unknown>) ?? {}).filter(([, value]) => value !== undefined)
+      ) as Partial<PropertyDetails>;
       const merged = {
         ...property,
-        ...details,
+        ...safeDetails,
         public_code: mergedPublicCode,
       } as PropertyDetails;
       const { supportsSale, supportsRent } = getPurposeFlags(merged.purpose ?? null);
@@ -3709,8 +3712,8 @@
               <li><strong>Banheiros:</strong> {selectedProperty.bathrooms ?? '-'}</li>
               <li><strong>Garagens:</strong> {selectedProperty.garage_spots ?? '-'}</li>
               <li><strong>Referência pública:</strong> {selectedProperty.public_code ?? '-'}</li>
-              <li><strong>Área construída:</strong> {formatAreaWithUnit(selectedProperty.area_construida_valor ?? selectedProperty.area_construida, selectedProperty.area_construida_unidade)}</li>
-              <li><strong>Área do terreno:</strong> {formatAreaWithUnit(selectedProperty.area_terreno_valor ?? selectedProperty.area_terreno, selectedProperty.area_terreno_unidade)}</li>
+              <li><strong>Área construída:</strong> {formatAreaWithUnit(selectedProperty.area_construida_valor, selectedProperty.area_construida_unidade)}</li>
+              <li><strong>Área do terreno:</strong> {formatAreaWithUnit(selectedProperty.area_terreno_valor, selectedProperty.area_terreno_unidade)}</li>
               <li><strong>Proprietário:</strong> {selectedProperty.owner_name ?? '-'}</li>
               <li><strong>Telefone do proprietário:</strong> {formatPhoneDisplayBr(selectedProperty.owner_phone)}</li>
               <li><strong>Anunciante:</strong> {selectedProperty.broker_name ?? '-'}</li>

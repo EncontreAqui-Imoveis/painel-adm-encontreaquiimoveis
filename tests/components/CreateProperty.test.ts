@@ -287,6 +287,34 @@ describe('CreateProperty', () => {
     });
   });
 
+  it('envia área do terreno com unidade personalizada (2332 ha) no payload sem converter', async () => {
+    render(CreateProperty);
+
+    await fillRequiredFields();
+    const areaTerrenoInput = getInputById('create-property-area-terreno');
+    const areaTerrenoUnidade = getInputById('create-property-area-terreno-unidade');
+    await fireEvent.input(areaTerrenoInput, { target: { value: '2332' } });
+    await fireEvent.change(areaTerrenoUnidade, { target: { value: 'hectare' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Mobiliada' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Academia' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar imóvel' }));
+
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledWith(
+        '/admin/properties',
+        expect.objectContaining({
+          area_construida_valor: 145.5,
+          area_construida_unidade: 'm2',
+          area_terreno: 2332,
+          area_terreno_valor: 2332,
+          area_terreno_unidade: 'hectare',
+          amenities: expect.arrayContaining(['Mobiliada', 'Academia']),
+        }),
+        expect.anything()
+      );
+    });
+  });
+
   it('envia todas as comodidades disponíveis no payload', async () => {
     render(CreateProperty);
 
