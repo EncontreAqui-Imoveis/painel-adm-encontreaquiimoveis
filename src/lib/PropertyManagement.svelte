@@ -145,24 +145,11 @@
     commission_rate?: number | null;
     commission_value?: number | null;
     video_url?: string | null;
-    has_wifi?: boolean | null;
-    tem_piscina?: boolean | null;
-    tem_energia_solar?: boolean | null;
-    tem_automacao?: boolean | null;
-    tem_ar_condicionado?: boolean | null;
-    eh_mobiliada?: boolean | null;
     amenities?: string[] | null;
     images?: Array<NormalizedImage | PropertyImageType | string> | string | null;
   };
 
   const propertyAmenityOptions = PROPERTY_AMENITY_OPTIONS;
-  const boolAmenityLabels = [
-    { label: 'Wi-Fi', key: 'has_wifi' as const },
-    { label: 'Piscina', key: 'tem_piscina' as const },
-    { label: 'Energia solar', key: 'tem_energia_solar' as const },
-    { label: 'Automação', key: 'tem_automacao' as const },
-    { label: 'Ar condicionado', key: 'tem_ar_condicionado' as const },
-  ] as const;
 
   type SortConfig = {
     key: string;
@@ -823,12 +810,6 @@
     amenity: (typeof propertyAmenityOptions)[number]
   ): boolean {
     if (!property) return false;
-    if (
-      amenity === 'Mobiliada' &&
-      Boolean((property as Partial<PropertyDetails>).eh_mobiliada)
-    ) {
-      return true;
-    }
     return hasAmenity(property.amenities, amenity);
   }
 
@@ -838,9 +819,6 @@
     checked: boolean
   ): void {
     details.amenities = toggleAmenity(details.amenities, amenity, checked);
-    if (amenity === 'Mobiliada') {
-      details.eh_mobiliada = checked;
-    }
   }
 
   function normalizeImages(
@@ -995,15 +973,6 @@
     requestFetch(true);
   }
 
-  const booleanKeys = [
-    'has_wifi',
-    'tem_piscina',
-    'tem_energia_solar',
-    'tem_automacao',
-    'tem_ar_condicionado',
-    'eh_mobiliada'
-  ] as const;
-
   function sanitizeEditable(data: Partial<PropertyDetails>): PropertyDetails {
     const coerced: Record<string, unknown> = { ...data };
     const areaConstruidaUnidade = normalizeAreaUnit(data.area_construida_unidade) ?? 'm2';
@@ -1027,17 +996,8 @@
     coerced.area_terreno_valor = parsedAreaTerrenoValor;
     coerced.area_construida = parseNullableNumber(data.area_construida_m2 ?? areaConstruidaValor);
     coerced.area_terreno = parseNullableNumber(data.area_terreno_m2 ?? areaTerrenoValor);
-    for (const key of booleanKeys) {
-      coerced[key] = Boolean((data as any)?.[key]);
-    }
     const amenitiesFromPayload = normalizeAmenityList(data.amenities);
-    const hasMobiliada = Boolean((data as Partial<PropertyDetails>).eh_mobiliada);
-    const mergedMobiliada = hasMobiliada || amenitiesFromPayload.includes('Mobiliada');
-    const mergedAmenities = mergedMobiliada && !amenitiesFromPayload.includes('Mobiliada')
-      ? [...amenitiesFromPayload, 'Mobiliada']
-      : amenitiesFromPayload;
-    coerced.amenities = mergedAmenities;
-    coerced.eh_mobiliada = mergedMobiliada;
+    coerced.amenities = amenitiesFromPayload;
     return coerced as unknown as PropertyDetails;
   }
 
@@ -1692,9 +1652,6 @@
         if (key === 'description' && (value === null || value === undefined)) {
           return '';
         }
-        if (booleanKeys.includes(key as any)) {
-          return Boolean(value) ? 1 : 0;
-        }
         if (numericKeys.has(key)) {
           const num = Number(value);
           return Number.isFinite(num) ? num : null;
@@ -1741,12 +1698,6 @@
         area_terreno_valor: editableProperty.area_terreno_valor,
         area_terreno_unidade:
           editableProperty.area_terreno_unidade ?? 'm2',
-        has_wifi: editableProperty.has_wifi,
-        tem_piscina: editableProperty.tem_piscina,
-        tem_energia_solar: editableProperty.tem_energia_solar,
-        tem_automacao: editableProperty.tem_automacao,
-        tem_ar_condicionado: editableProperty.tem_ar_condicionado,
-        eh_mobiliada: editableProperty.eh_mobiliada,
         amenities: normalizeAmenityList(editableProperty.amenities),
         video_url: editableProperty.video_url,
         type: editableProperty.type,
@@ -3776,20 +3727,6 @@
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Comodidades</h3>
           <div class="mt-2 flex flex-wrap gap-2 text-sm">
             {#if isEditMode && editableProperty}
-              {#each boolAmenityLabels as amenity}
-                <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
-                  <input
-                    type="checkbox"
-                    name={amenity.key}
-                    checked={Boolean(editableProperty[amenity.key])}
-                    on:change={(event) => {
-                      const checked = (event.target as HTMLInputElement).checked;
-                      (editableProperty as Record<string, any>)[amenity.key] = checked;
-                    }}
-                  />
-                  {amenity.label}
-                </label>
-              {/each}
               {#each propertyAmenityOptions as amenity}
                 <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
                   <input
@@ -3807,11 +3744,6 @@
                 </label>
               {/each}
             {:else}
-              {#each boolAmenityLabels as amenity}
-                <span class={`rounded-full px-3 py-1 ${Boolean(selectedProperty[amenity.key]) ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>
-                  {amenity.label}: {Boolean(selectedProperty[amenity.key]) ? 'Sim' : 'Não'}
-                </span>
-              {/each}
               {#each propertyAmenityOptions as amenity}
                 {@const isChecked = isAmenityChecked(selectedProperty, amenity)}
                 <span class={`rounded-full px-3 py-1 ${isChecked ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}>

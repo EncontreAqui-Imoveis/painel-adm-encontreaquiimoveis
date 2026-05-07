@@ -161,12 +161,6 @@
   let uploadProgress = 0;
   let uploadStatus = '';
   let submitFeedback: { type: 'success' | 'error'; message: string } | null = null;
-  let hasWifi = false;
-  let temPiscina = false;
-  let temEnergiaSolar = false;
-  let temAutomacao = false;
-  let temArCondicionado = false;
-  let ehMobiliada = false;
   let selectedAmenities: string[] = [];
 
   const cityCache: Record<string, string[]> = {};
@@ -807,10 +801,7 @@
       (parsedPromotionPercentageSale ?? 0) > 0 ||
       (parsedPromotionPercentageRent ?? 0) > 0;
 
-    const normalizedAmenities = normalizeAmenityList([
-      ...selectedAmenities,
-      ...(ehMobiliada ? ['Mobiliada'] : []),
-    ]);
+    const normalizedAmenities = normalizeAmenityList(selectedAmenities);
 
     const parsedBedrooms = resolvedBedrooms ? Number(resolvedBedrooms) : null;
     const parsedBathrooms = resolvedBathrooms ? Number(resolvedBathrooms) : null;
@@ -938,12 +929,6 @@
         area_terreno_valor: parsedAreaTerreno,
         area_terreno_unidade: areaTerrenoUnidade,
         garage_spots: parsedGarage,
-        has_wifi: hasWifi ? 1 : 0,
-        tem_piscina: temPiscina ? 1 : 0,
-        tem_energia_solar: temEnergiaSolar ? 1 : 0,
-        tem_automacao: temAutomacao ? 1 : 0,
-        tem_ar_condicionado: temArCondicionado ? 1 : 0,
-        eh_mobiliada: ehMobiliada ? 1 : 0,
         amenities: normalizedAmenities,
         image_urls: uploadedImageUrls,
         video_url: uploadedVideoUrl,
@@ -1015,12 +1000,6 @@
       selectedImages = [];
       revokeImagePreviews();
       video = null;
-      hasWifi = false;
-      temPiscina = false;
-      temEnergiaSolar = false;
-      temAutomacao = false;
-      temArCondicionado = false;
-      ehMobiliada = false;
       selectedAmenities = [];
       if (imagesInput) imagesInput.value = '';
       clearVideoSelection();
@@ -1677,26 +1656,6 @@
       <div class="rounded-md border border-gray-200 p-4 dark:border-gray-700">
         <p class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">Comodidades</p>
         <div class="grid gap-3 text-sm text-gray-700 dark:text-gray-300 sm:grid-cols-2 lg:grid-cols-3">
-          <label class="inline-flex items-center gap-2">
-            <input id="create-property-has-wifi" name="has_wifi" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" bind:checked={hasWifi} />
-            Wi-Fi
-          </label>
-          <label class="inline-flex items-center gap-2">
-            <input id="create-property-tem-piscina" name="tem_piscina" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" bind:checked={temPiscina} />
-            Piscina
-          </label>
-          <label class="inline-flex items-center gap-2">
-            <input id="create-property-tem-energia-solar" name="tem_energia_solar" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" bind:checked={temEnergiaSolar} />
-            Energia solar
-          </label>
-          <label class="inline-flex items-center gap-2">
-            <input id="create-property-tem-automacao" name="tem_automacao" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" bind:checked={temAutomacao} />
-            Automação
-          </label>
-          <label class="inline-flex items-center gap-2">
-            <input id="create-property-tem-ar-condicionado" name="tem_ar_condicionado" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" bind:checked={temArCondicionado} />
-            Ar condicionado
-          </label>
           {#each PROPERTY_AMENITY_OPTIONS as amenity}
             <label class="inline-flex items-center gap-2">
               <input
@@ -1707,9 +1666,6 @@
                 on:change={(event) => {
                   const nextChecked = (event.target as HTMLInputElement).checked;
                   selectedAmenities = toggleAmenity(selectedAmenities, amenity, nextChecked);
-                  if (amenity === 'Mobiliada') {
-                    ehMobiliada = nextChecked;
-                  }
                 }}
               />
               {amenity}

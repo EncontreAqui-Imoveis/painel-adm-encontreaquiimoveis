@@ -73,12 +73,6 @@ type PropertyMockState = {
   area_construida_m2: number | null;
   area_terreno_m2: number | null;
   amenities: string[];
-  has_wifi: boolean | null;
-  tem_piscina: boolean | null;
-  tem_energia_solar: boolean | null;
-  tem_automacao: boolean | null;
-  tem_ar_condicionado: boolean | null;
-  eh_mobiliada: boolean | null;
   price: number;
   images: null;
 };
@@ -127,16 +121,29 @@ const basePropertyState: PropertyMockState = {
   area_terreno_unidade: 'm2',
   area_construida_m2: 120,
   area_terreno_m2: 300,
-  amenities: ['Poço Artesiano'],
-  has_wifi: false,
-  tem_piscina: false,
-  tem_energia_solar: false,
-  tem_automacao: false,
-  tem_ar_condicionado: false,
-  eh_mobiliada: false,
+  amenities: ['Poço artesiano'],
   price: 450000,
   images: null,
 };
+
+const ALL_AMENITIES_16 = [
+  'Wi-Fi',
+  'Piscina',
+  'Energia solar',
+  'Automação',
+  'Ar condicionado',
+  'Poço artesiano',
+  'Mobiliada',
+  'Elevador',
+  'Academia',
+  'Churrasqueira',
+  'Salão de festas',
+  'Quadra',
+  'Condomínio fechado',
+  'Aceita pets',
+  'Sistema de segurança/câmera',
+  'Sauna',
+];
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -200,12 +207,6 @@ function buildPropertySummary(property: PropertyMockState): Record<string, unkno
     area_construida: property.area_construida_m2,
     area_terreno: property.area_terreno_m2,
     amenities: property.amenities,
-    has_wifi: property.has_wifi,
-    tem_piscina: property.tem_piscina,
-    tem_energia_solar: property.tem_energia_solar,
-    tem_automacao: property.tem_automacao,
-    tem_ar_condicionado: property.tem_ar_condicionado,
-    eh_mobiliada: property.eh_mobiliada,
     price: property.price,
     images: property.images,
   };
@@ -567,13 +568,13 @@ describe('PropertyManagement', () => {
     ).toBe(true);
   });
 
-  it('persiste múltiplas amenities e mantém todas reabertas', async () => {
+  it('persiste todas as 16 amenities e mantém reabertura consistente', async () => {
     mockPropertyManagementRequests({
       initialProperty: {
         ...basePropertyState,
         status: 'approved',
         request_type: null,
-        amenities: ['Poço Artesiano', 'Condomínio Fechado'],
+        amenities: ['Wi-Fi', 'Piscina', 'Mobiliada'],
       },
     });
 
@@ -585,11 +586,9 @@ describe('PropertyManagement', () => {
 
     const dialog = await screen.findByRole('dialog');
     await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
-    await setAmenityChecked(dialog, 'Poço Artesiano', false);
-    await setAmenityChecked(dialog, 'Condomínio Fechado', false);
-    await setAmenityChecked(dialog, 'Mobiliada', true);
-    await setAmenityChecked(dialog, 'Academia', true);
-    await setAmenityChecked(dialog, 'Sauna', true);
+    for (const amenity of ALL_AMENITIES_16) {
+      await setAmenityChecked(dialog, amenity, true);
+    }
 
     const saveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
     await fireEvent.click(saveButtons[0]);
@@ -598,10 +597,8 @@ describe('PropertyManagement', () => {
       expect(apiPutMock).toHaveBeenCalledTimes(1);
     });
     const [, amenitiesPayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
-    expect(amenitiesPayload.amenities).toEqual(expect.arrayContaining(['Mobiliada', 'Academia', 'Sauna']));
-    expect(amenitiesPayload.amenities).not.toContain('Poço Artesiano');
-    expect(amenitiesPayload.amenities).not.toContain('Condomínio Fechado');
-    expect(amenitiesPayload.amenities).toHaveLength(3);
+    expect(amenitiesPayload.amenities).toEqual(expect.arrayContaining(ALL_AMENITIES_16));
+    expect(amenitiesPayload.amenities).toHaveLength(ALL_AMENITIES_16.length);
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -609,11 +606,9 @@ describe('PropertyManagement', () => {
 
     await fireEvent.click(getRevisarButtons()[0]);
     const reopenedDialog = await screen.findByRole('dialog');
-    expect(findAmenityPill(reopenedDialog, 'Poço Artesiano')).toHaveTextContent('Não');
-    expect(findAmenityPill(reopenedDialog, 'Mobiliada')).toHaveTextContent('Sim');
-    expect(findAmenityPill(reopenedDialog, 'Academia')).toHaveTextContent('Sim');
-    expect(findAmenityPill(reopenedDialog, 'Sauna')).toHaveTextContent('Sim');
-    expect(findAmenityPill(reopenedDialog, 'Condomínio Fechado')).toHaveTextContent('Não');
+    for (const amenity of ALL_AMENITIES_16) {
+      expect(findAmenityPill(reopenedDialog, amenity)).toHaveTextContent('Sim');
+    }
   });
 
   it('remove todas as amenities e mantém retorno vazio', async () => {
@@ -622,7 +617,7 @@ describe('PropertyManagement', () => {
         ...basePropertyState,
         status: 'approved',
         request_type: null,
-        amenities: ['Poço Artesiano', 'Mobiliada'],
+        amenities: ['Poço artesiano', 'Mobiliada'],
       },
     });
 
@@ -634,8 +629,9 @@ describe('PropertyManagement', () => {
 
     const dialog = await screen.findByRole('dialog');
     await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
-    await setAmenityChecked(dialog, 'Poço Artesiano', false);
-    await setAmenityChecked(dialog, 'Mobiliada', false);
+    for (const amenity of ALL_AMENITIES_16) {
+      await setAmenityChecked(dialog, amenity, false);
+    }
 
     const saveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
     await fireEvent.click(saveButtons[0]);
@@ -652,8 +648,9 @@ describe('PropertyManagement', () => {
 
     await fireEvent.click(getRevisarButtons()[0]);
     const reopenedDialog = await screen.findByRole('dialog');
-    expect(findAmenityPill(reopenedDialog, 'Poço Artesiano')).toHaveTextContent('Não');
-    expect(findAmenityPill(reopenedDialog, 'Mobiliada')).toHaveTextContent('Não');
+    for (const amenity of ALL_AMENITIES_16) {
+      expect(findAmenityPill(reopenedDialog, amenity)).toHaveTextContent('Não');
+    }
   });
 
   it('exibe 200 ha e 10 alqueire sem converter visualmente para m²', async () => {

@@ -92,12 +92,7 @@
     areaConstruida: 'Área construída',
     areaTerreno: 'Área do terreno',
     garageSpots: 'Garagens',
-    hasWifi: 'Wi-Fi',
-    temPiscina: 'Piscina',
-    temEnergiaSolar: 'Energia solar',
-    temAutomacao: 'Automação',
-    temArCondicionado: 'Ar-condicionado',
-    ehMobiliada: 'Mobiliada',
+    amenities: 'Comodidades',
     valorCondominio: 'Condomínio',
     priceSale: 'Preço de venda',
     priceRent: 'Preço de aluguel',
@@ -124,12 +119,6 @@
   ]);
 
   const booleanFields = new Set([
-    'hasWifi',
-    'temPiscina',
-    'temEnergiaSolar',
-    'temAutomacao',
-    'temArCondicionado',
-    'ehMobiliada',
     'isPromoted',
   ]);
 

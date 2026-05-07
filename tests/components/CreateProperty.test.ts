@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { normalizeAmenityList } from '../../src/lib/propertyAmenities';
 
 const {
   apiGetMock,
@@ -45,20 +46,29 @@ vi.mock('svelte-sonner', () => ({
 import CreateProperty from '../../src/lib/components/CreateProperty.svelte';
 
 const ALL_COMMODITIES: string[] = [
-  'Poço Artesiano',
+  'Wi-Fi',
+  'Piscina',
+  'Energia solar',
+  'Automação',
+  'Ar condicionado',
+  'Poço artesiano',
   'Mobiliada',
   'Elevador',
   'Academia',
   'Churrasqueira',
   'Salão de festas',
   'Quadra',
-  'Condomínio Fechado',
+  'Condomínio fechado',
   'Aceita pets',
   'Sistema de segurança/câmera',
   'Sauna',
 ];
 
 describe('CreateProperty', () => {
+  it('não converte Planejados legado para Mobiliada', () => {
+    expect(normalizeAmenityList(['Planejados'])).toEqual([]);
+  });
+
   async function selectAllAmenities(): Promise<void> {
     for (const amenity of ALL_COMMODITIES) {
       await fireEvent.click(screen.getByRole('checkbox', { name: amenity }));
