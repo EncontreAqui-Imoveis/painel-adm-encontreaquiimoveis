@@ -104,6 +104,8 @@ describe('VerificationTable', () => {
     });
 
     expect(screen.getByText('Broker Com Doc')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Status' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Documentos' })).not.toBeInTheDocument();
     expect(screen.getByText('Documentos pendentes (1)')).toBeInTheDocument();
     expect(screen.getByText('Broker Sem Doc')).toBeInTheDocument();
   });

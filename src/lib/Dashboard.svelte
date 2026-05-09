@@ -17,6 +17,11 @@
     import { fade, slide } from "svelte/transition";
     import { toast } from "svelte-sonner";
     import { Trash2 } from "lucide-svelte";
+    import {
+        getNotificationMetadataValue,
+        isUrgentAnnouncement,
+        parseNotificationMetadata,
+    } from "./utils/announcementFilters";
     import type {
         Property,
         Broker,
@@ -684,40 +689,16 @@
         });
     }
 
-    function getNotificationMetadata(
-        item: Notification,
-    ): Record<string, unknown> | null {
-        const raw = item.metadata_json;
-        if (!raw) return null;
-        if (typeof raw === "string") {
-            try {
-                const parsed = JSON.parse(raw);
-                return parsed && typeof parsed === "object"
-                    ? (parsed as Record<string, unknown>)
-                    : null;
-            } catch {
-                return null;
-            }
-        }
-        return typeof raw === "object" ? (raw as Record<string, unknown>) : null;
-    }
-
-    function getMetadataString(
-        metadata: Record<string, unknown> | null,
-        key: string,
-    ): string | null {
-        const value = metadata?.[key];
-        if (typeof value !== "string") return null;
-        const trimmed = value.trim();
-        return trimmed.length > 0 ? trimmed : null;
-    }
-
     function getAnnouncementClientPhone(item: Notification): string | null {
-        return getMetadataString(getNotificationMetadata(item), "clientPhone");
+        return getNotificationMetadataValue(parseNotificationMetadata(item), "clientPhone");
     }
 
     function getAnnouncementWhatsappUrl(item: Notification): string | null {
-        return getMetadataString(getNotificationMetadata(item), "whatsappUrl");
+        return getNotificationMetadataValue(parseNotificationMetadata(item), "whatsappUrl");
+    }
+
+    function getAnnouncementsForDisplay(list: Notification[]): Notification[] {
+        return list.filter(isUrgentAnnouncement);
     }
 
     function parseAnnouncementCreatedAtMs(createdAt: string): number {
@@ -814,16 +795,18 @@
     async function fetchAnnouncementsCount() {
         try {
             const response = await fetchPlatformResponse(
-                "/admin/notifications?type=announcement&limit=1&page=1",
+                "/admin/notifications?type=announcement&limit=100&page=1",
             );
             if (!response || !response.ok) {
                 announcementsTotal = 0;
                 return;
             }
             const payload = await response.json();
-            announcementsTotal = readListTotal(payload);
+            const readPayload = readListData<Notification>(payload);
+            const filteredPayload = getAnnouncementsForDisplay(readPayload);
+            announcementsTotal = filteredPayload.length;
             const mostRecentFromCount =
-                getMostRecentAnnouncementMarker(readListData<Notification>(payload));
+                getMostRecentAnnouncementMarker(filteredPayload);
             latestAnnouncementMarker = mostRecentFromCount;
         } catch (error) {
             console.error("Erro ao buscar total de avisos:", error);
@@ -850,10 +833,10 @@
                 throw new Error("Falha ao carregar avisos.");
             }
             const payload = await response.json();
-            announcements = readListData<Notification>(payload);
-            const totalFromPayload = readListTotal(payload);
-            announcementsTotal =
-                totalFromPayload > 0 ? totalFromPayload : announcements.length;
+            const readPayload = readListData<Notification>(payload);
+            const filteredPayload = getAnnouncementsForDisplay(readPayload);
+            announcements = filteredPayload;
+            announcementsTotal = filteredPayload.length;
             if (
                 announcementsCurrentPage > 1 &&
                 announcements.length === 0 &&
@@ -2502,7 +2485,7 @@
                                                             <span
                                                                 class="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
                                                             >
-                                                                Aviso
+                                                                Aviso importante
                                                             </span>
                                                             <span
                                                                 class="text-xs text-gray-400 dark:text-gray-500"

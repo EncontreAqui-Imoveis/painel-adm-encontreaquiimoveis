@@ -75,7 +75,7 @@ type PropertyMockState = {
   amenities: string[];
   legacyAmenityFlags?: Record<string, unknown>;
   price: number;
-  images: null;
+  images: Array<Record<string, unknown>> | null;
 };
 
 type SavePayload = Record<string, unknown>;
@@ -961,5 +961,54 @@ describe('PropertyManagement', () => {
     const publicCodeInput = dialog.querySelector('input[name="code"]');
     expect(publicCodeInput).toBeTruthy();
     expect((publicCodeInput as HTMLInputElement).value).toBe('Sem referência pública');
+  });
+
+  it('navega entre imagens da pré-visualização sem fechar ao clicar nas setas', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        images: [
+          { id: 1, url: 'https://example.com/casa-1.jpg' },
+          { id: 2, url: 'https://example.com/casa-2.jpg' },
+        ],
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+
+    const coverButtons = screen.getAllByRole('button', {
+      name: 'Abrir capa do imóvel Casa Horizonte em tela cheia',
+    });
+    const coverButton = coverButtons.find((button) => button.tagName === 'BUTTON');
+    expect(coverButton).toBeTruthy();
+    await fireEvent.click(coverButton as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Foto 1 de 2' })).toHaveAttribute(
+        'aria-current',
+        'true',
+      );
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Próxima imagem' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Foto 2 de 2' })).toHaveAttribute(
+        'aria-current',
+        'true',
+      );
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Imagem anterior' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Foto 1 de 2' })).toHaveAttribute(
+        'aria-current',
+        'true',
+      );
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
   });
 });

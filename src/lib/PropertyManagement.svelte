@@ -2434,21 +2434,6 @@ function parseNullableNumber(value: unknown): number | null {
         >
           Aluguel
         </button>
-        <div class="mx-2 h-6 w-px bg-gray-200 dark:bg-gray-700"></div>
-        <button
-          type="button"
-          on:click={() => dispatch('viewChange', 'sold_properties')}
-          class="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-        >
-          Vendidos
-        </button>
-        <button
-          type="button"
-          on:click={() => dispatch('viewChange', 'sold_properties')}
-          class="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-        >
-          Alugados
-        </button>
       </div>
       <Input
         className="w-full md:w-80"
@@ -4026,7 +4011,7 @@ function parseNullableNumber(value: unknown): number | null {
 
   {#if isImagePreviewOpen}
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center"
+      class="fixed inset-0 z-50 flex items-center justify-center pointer-events-auto"
       role="button"
       tabindex="0"
       aria-label="Fechar visualização da imagem"
@@ -4048,7 +4033,7 @@ function parseNullableNumber(value: unknown): number | null {
         <button
           type="button"
           class="absolute left-2 top-[40%] z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white shadow transition hover:bg-black/50"
-          on:click={goPrevImage}
+          on:click|stopPropagation={goPrevImage}
           disabled={!hasPrevImage()}
           aria-label="Imagem anterior"
         >
@@ -4059,7 +4044,7 @@ function parseNullableNumber(value: unknown): number | null {
         <button
           type="button"
           class="absolute right-2 top-[40%] z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white shadow transition hover:bg-black/50"
-          on:click={goNextImage}
+          on:click|stopPropagation={goNextImage}
           disabled={!hasNextImage()}
           aria-label="Próxima imagem"
         >
