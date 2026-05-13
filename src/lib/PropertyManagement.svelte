@@ -22,7 +22,13 @@
   import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';
   import { clearSessionToken, hasSessionToken } from './sessionState';
   import type { PropertyStatus, PropertyImage as PropertyImageType } from './types';
-  import { PROPERTY_AMENITY_OPTIONS, hasAmenity, normalizeAmenityList, toggleAmenity } from '$lib/propertyAmenities';
+  import {
+    PROPERTY_AMENITY_OPTIONS,
+    hasAmenity,
+    normalizeAmenityList,
+    toggleAmenity,
+    type PropertyAmenity,
+  } from '$lib/propertyAmenities';
   const dispatch = createEventDispatcher();
 function parseNullableNumber(value: unknown): number | null {
   if (value == null || value === '') return null;
@@ -198,6 +204,18 @@ function parseNullableNumber(value: unknown): number | null {
   let fetchKey = 0;
   let hasMounted = false;
   let sortConfig: SortConfig = { key: 'p.created_at', order: 'desc' };
+  let selectedAmenityFilters: PropertyAmenity[] = [];
+  let areaFilterMetric: 'none' | 'area_construida_valor' | 'area_terreno_valor' = 'none';
+  let areaFilterMin = '';
+  let areaFilterMax = '';
+  let areaFilterUnit: AreaUnit = 'm2';
+  let areaSortMetric: 'none' | 'area_construida_valor' | 'area_terreno_valor' = 'none';
+  let areaSortDirection: 'asc' | 'desc' = 'desc';
+  let isClientSideFiltering = false;
+  let listForDisplay: PropertySummary[] = [];
+  let displayedProperties: PropertySummary[] = [];
+  let totalItemsForDisplay = 0;
+  let totalPagesForDisplay = 1;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let isModalOpen = false;
   let selectedProperty: PropertyDetails | null = null;
@@ -297,6 +315,37 @@ function parseNullableNumber(value: unknown): number | null {
       img.src = image.url;
     });
   }
+
+  $: hasAreaRangeFilterValues = areaFilterMin.trim() !== '' || areaFilterMax.trim() !== '';
+  $: isClientSideFiltering =
+    selectedAmenityFilters.length > 0 ||
+    areaFilterMetric !== 'none' ||
+    areaSortMetric !== 'none' ||
+    areaFilterMin.trim() !== '' ||
+    areaFilterMax.trim() !== '';
+  $: localFilterSignature = [
+    selectedAmenityFilters.join('|'),
+    areaFilterMetric,
+    areaFilterMin,
+    areaFilterMax,
+    areaFilterUnit,
+    areaSortMetric,
+    areaSortDirection,
+  ].join('::');
+  $: listForDisplay = localFilterSignature && (isClientSideFiltering || hasAreaRangeFilterValues)
+    ? [...properties]
+      .filter((property) => propertyMatchesAmenityFilter(property))
+      .filter((property) => propertyMatchesAreaFilter(property))
+      .sort(compareByAreaSort)
+    : properties;
+  $: totalItemsForDisplay = isClientSideFiltering ? listForDisplay.length : totalItems;
+  $: totalPagesForDisplay = Math.max(1, Math.ceil(totalItemsForDisplay / itemsPerPage));
+  $: if (currentPage > totalPagesForDisplay) {
+    currentPage = totalPagesForDisplay;
+  }
+  $: displayedProperties = isClientSideFiltering
+    ? listForDisplay.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : properties;
 
   function openImagePreview(url: string, index = 0, sourceImages: NormalizedImage[] | null = null) {
     if (brokenPreviewImages.has(url)) {
@@ -415,8 +464,10 @@ function parseNullableNumber(value: unknown): number | null {
   });
 
   $: if (hasMounted) {
-    currentPage;
-    itemsPerPage;
+    if (!isClientSideFiltering) {
+      currentPage;
+      itemsPerPage;
+    }
     fetchKey;
     fetchProperties();
   }
@@ -815,6 +866,115 @@ function parseNullableNumber(value: unknown): number | null {
   ): boolean {
     if (!property) return false;
     return hasAmenity(property.amenities, amenity);
+  }
+
+  function isFilterAmenityChecked(amenity: PropertyAmenity): boolean {
+    return selectedAmenityFilters.includes(amenity);
+  }
+
+  function updateAmenityFilter(amenity: PropertyAmenity, checked: boolean): void {
+    const nextAmenityFilters = checked
+      ? Array.from(new Set([...selectedAmenityFilters, amenity]))
+      : selectedAmenityFilters.filter((item) => item !== amenity);
+    selectedAmenityFilters = nextAmenityFilters;
+    currentPage = 1;
+  }
+
+  function resetLocalPage(): void {
+    currentPage = 1;
+  }
+
+  function clearLocalFilters() {
+    selectedAmenityFilters = [];
+    areaFilterMetric = 'none';
+    areaFilterMin = '';
+    areaFilterMax = '';
+    areaSortMetric = 'none';
+    areaSortDirection = 'desc';
+    currentPage = 1;
+  }
+
+  function isAreaUnitConvertibleUnit(unit: AreaUnit): boolean {
+    return unit === 'm2' || unit === 'hectare' || unit === 'alqueire';
+  }
+
+  function convertAreaToSquareMeters(value: number, unit: AreaUnit): number | null {
+    if (!Number.isFinite(value)) return null;
+    if (unit === 'm2') return value;
+    if (unit === 'hectare') return value * 10000;
+    if (unit === 'alqueire') return value * 24200;
+    return null;
+  }
+
+  function parseAreaFilterInput(raw: string): number | null {
+    const parsed = parseNullableNumber(raw);
+    if (parsed === null || Number.isNaN(parsed)) {
+      return null;
+    }
+    return parsed;
+  }
+
+  function getAreaComparableValue(
+    property: PropertySummary,
+    metric: 'area_construida_valor' | 'area_terreno_valor'
+  ): number | null {
+    const m2Value =
+      metric === 'area_construida_valor' ? property.area_construida_m2 : property.area_terreno_m2;
+    if (m2Value != null && Number.isFinite(m2Value)) {
+      return m2Value;
+    }
+
+    const areaValue =
+      metric === 'area_construida_valor' ? property.area_construida_valor : property.area_terreno_valor;
+    if (areaValue == null) return null;
+    const areaUnit =
+      metric === 'area_construida_valor'
+        ? normalizeAreaUnit(property.area_construida_unidade) ?? 'm2'
+        : normalizeAreaUnit(property.area_terreno_unidade) ?? 'm2';
+    return convertAreaToSquareMeters(areaValue, areaUnit);
+  }
+
+  function propertyMatchesAmenityFilter(property: PropertySummary): boolean {
+    if (selectedAmenityFilters.length === 0) return true;
+    return selectedAmenityFilters.every((amenity) => hasAmenity(property.amenities, amenity));
+  }
+
+  function propertyMatchesAreaFilter(property: PropertySummary): boolean {
+    if (areaFilterMetric === 'none') return true;
+    const minM2Raw = parseAreaFilterInput(areaFilterMin);
+    const maxM2Raw = parseAreaFilterInput(areaFilterMax);
+    const hasMin = minM2Raw !== null;
+    const hasMax = maxM2Raw !== null;
+    if (!hasMin && !hasMax) return true;
+
+    const minM2 = hasMin ? convertAreaToSquareMeters(minM2Raw, areaFilterUnit) : null;
+    const maxM2 = hasMax ? convertAreaToSquareMeters(maxM2Raw, areaFilterUnit) : null;
+
+    if ((minM2 != null || maxM2 != null) && !isAreaUnitConvertibleUnit(areaFilterUnit)) {
+      return false;
+    }
+
+    const areaM2 = getAreaComparableValue(property, areaFilterMetric);
+    if (areaM2 == null) return false;
+    if (minM2 != null && areaM2 < minM2) return false;
+    if (maxM2 != null && areaM2 > maxM2) return false;
+    return true;
+  }
+
+  function compareByAreaSort(
+    first: PropertySummary,
+    second: PropertySummary
+  ): number {
+    if (areaSortMetric === 'none') return 0;
+    const areaA = getAreaComparableValue(first, areaSortMetric);
+    const areaB = getAreaComparableValue(second, areaSortMetric);
+
+    if (areaA == null && areaB == null) return 0;
+    if (areaA == null) return areaSortDirection === 'asc' ? 1 : -1;
+    if (areaB == null) return areaSortDirection === 'asc' ? -1 : 1;
+
+    const delta = areaA - areaB;
+    return areaSortDirection === 'asc' ? delta : -delta;
   }
 
   function updateAmenitySelection(
@@ -1440,7 +1600,10 @@ function parseNullableNumber(value: unknown): number | null {
   }
 
   function handleExport() {
-    exportToCsv(properties, `imoveis_${new Date().toISOString().split('T')[0]}.csv`);
+    exportToCsv(
+      isClientSideFiltering ? listForDisplay : properties,
+      `imoveis_${new Date().toISOString().split('T')[0]}.csv`
+    );
   }
 
   function buildPromotionMessage(options: {
@@ -2363,7 +2526,10 @@ function parseNullableNumber(value: unknown): number | null {
         <select
           id="property-items-per-page-review"
           bind:value={itemsPerPage}
-          on:change={() => requestFetch(true)}
+          on:change={() => {
+            currentPage = 1;
+            if (!isClientSideFiltering) requestFetch(true);
+          }}
           class="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
         >
           <option value={10}>10</option>
@@ -2450,7 +2616,10 @@ function parseNullableNumber(value: unknown): number | null {
       <select
         id="property-items-per-page"
         bind:value={itemsPerPage}
-        on:change={() => requestFetch(true)}
+        on:change={() => {
+          currentPage = 1;
+          if (!isClientSideFiltering) requestFetch(true);
+        }}
         class="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
       >
         <option value={10}>10</option>
@@ -2476,6 +2645,114 @@ function parseNullableNumber(value: unknown): number | null {
       </div>
     </div>
   {/if}
+
+  <div class="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+    <div class="flex flex-wrap items-start gap-3">
+      <div class="grid gap-2">
+        <label for="area-filter-metric" class="text-sm font-medium text-gray-700 dark:text-gray-300">Área para filtro</label>
+        <select
+          id="area-filter-metric"
+          bind:value={areaFilterMetric}
+          on:change={resetLocalPage}
+          class="w-64 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        >
+          <option value="none">Sem filtro de área</option>
+          <option value="area_construida_valor">Área construída</option>
+          <option value="area_terreno_valor">Área do terreno</option>
+        </select>
+      </div>
+      <div class="grid gap-2">
+        <label for="area-filter-min" class="text-sm font-medium text-gray-700 dark:text-gray-300">Área mínima</label>
+        <input
+          id="area-filter-min"
+          class="w-36 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          bind:value={areaFilterMin}
+          inputmode="decimal"
+          placeholder="ex: 500"
+          on:input={resetLocalPage}
+        />
+      </div>
+      <div class="grid gap-2">
+        <label for="area-filter-max" class="text-sm font-medium text-gray-700 dark:text-gray-300">Área máxima</label>
+        <input
+          id="area-filter-max"
+          class="w-36 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          bind:value={areaFilterMax}
+          inputmode="decimal"
+          placeholder="ex: 2000"
+          on:input={resetLocalPage}
+        />
+      </div>
+      <div class="grid gap-2">
+        <label for="area-filter-unit" class="text-sm font-medium text-gray-700 dark:text-gray-300">Unidade</label>
+        <select
+          id="area-filter-unit"
+          bind:value={areaFilterUnit}
+          on:change={resetLocalPage}
+          class="w-40 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        >
+          {#each areaUnitOptions as option}
+            <option value={option.value}>{option.label}</option>
+          {/each}
+        </select>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-start gap-3">
+      <div class="grid gap-2">
+        <label for="area-sort-metric" class="text-sm font-medium text-gray-700 dark:text-gray-300">Ordenar área por</label>
+        <select
+          id="area-sort-metric"
+          bind:value={areaSortMetric}
+          on:change={resetLocalPage}
+          class="w-56 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        >
+          <option value="none">Sem ordenação por área</option>
+          <option value="area_construida_valor">Área construída</option>
+          <option value="area_terreno_valor">Área do terreno</option>
+        </select>
+      </div>
+      <div class="grid gap-2">
+        <label for="area-sort-direction" class="text-sm font-medium text-gray-700 dark:text-gray-300">Ordem</label>
+        <select
+          id="area-sort-direction"
+          bind:value={areaSortDirection}
+          on:change={resetLocalPage}
+          class="w-36 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        >
+          <option value="desc">Maior para menor</option>
+          <option value="asc">Menor para maior</option>
+        </select>
+      </div>
+      <button
+        type="button"
+        class="mt-6 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        on:click={clearLocalFilters}
+      >
+        Limpar filtros locais
+      </button>
+    </div>
+
+    <div>
+      <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Comodidades</p>
+      <div class="mt-2 grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+        {#each propertyAmenityOptions as amenity (amenity)}
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              aria-label={amenity}
+              checked={isFilterAmenityChecked(amenity)}
+              on:change={(event) => {
+                const target = event.currentTarget as HTMLInputElement;
+                updateAmenityFilter(amenity, target.checked);
+              }}
+            />
+            {amenity}
+          </label>
+        {/each}
+      </div>
+    </div>
+  </div>
   {#if isLoading}
     <div class="flex h-48 items-center justify-center rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
       <div class="flex items-center gap-3 text-gray-600 dark:text-gray-300">
@@ -2487,7 +2764,7 @@ function parseNullableNumber(value: unknown): number | null {
     <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
       {error}
     </div>
-  {:else if properties.length === 0}
+  {:else if displayedProperties.length === 0}
     <div class="rounded-md border border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-900">
       <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">
         {#if isReviewOnly}
@@ -2506,7 +2783,7 @@ function parseNullableNumber(value: unknown): number | null {
     </div>
   {:else}
     <div class="space-y-3 md:hidden">
-      {#each properties as property}
+      {#each displayedProperties as property}
         <div
           class={`w-full rounded-lg border p-4 text-left shadow-sm transition ${
             isReviewOnly
@@ -2649,7 +2926,7 @@ function parseNullableNumber(value: unknown): number | null {
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
-          {#each properties as property}
+          {#each displayedProperties as property}
             <tr
               class="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/60"
               on:click={(event) => reviewProperty(property, event)}
@@ -2739,7 +3016,12 @@ function parseNullableNumber(value: unknown): number | null {
       </table>
     </div>
     <div class="mt-4">
-      <Pagination bind:currentPage {totalPages} {totalItems} {itemsPerPage} />
+      <Pagination
+        bind:currentPage
+        totalPages={totalPagesForDisplay}
+        totalItems={totalItemsForDisplay}
+        {itemsPerPage}
+      />
     </div>
   {/if}
 </div>

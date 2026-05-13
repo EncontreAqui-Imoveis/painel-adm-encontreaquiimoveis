@@ -146,6 +146,13 @@ const ALL_AMENITIES_16 = [
   'Sauna',
 ];
 
+function makePropertyState(overrides: Partial<PropertyMockState> = {}): PropertyMockState {
+  return {
+    ...basePropertyState,
+    ...overrides,
+  };
+}
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -257,20 +264,36 @@ function applyServerPatch(property: PropertyMockState, payload: SavePayload): vo
 
 function mockPropertyManagementRequests({
   initialProperty,
+  initialProperties,
 }: {
-  initialProperty: PropertyMockState;
+  initialProperty?: PropertyMockState;
+  initialProperties?: PropertyMockState[];
 }) {
-  let property = clone(initialProperty);
+  const properties = (initialProperties && initialProperties.length > 0
+    ? initialProperties
+    : initialProperty
+      ? [initialProperty]
+      : [])
+    .map((property) => clone(property));
+
+  const resolvePropertyById = (endpoint: string): PropertyMockState => {
+    const match = endpoint.match(/\/admin\/properties\/(\d+)$/);
+    if (!match) return properties[0];
+    const expectedId = Number(match[1]);
+    const selected = properties.find((property) => property.id === expectedId);
+    return selected ?? properties[0];
+  };
 
   apiGetMock.mockImplementation(async (endpoint: string) => {
     if (endpoint.includes('/admin/properties-with-brokers')) {
       return {
-        data: [buildPropertySummary(property)],
-        total: 1,
+        data: properties.map(buildPropertySummary),
+        total: properties.length,
       };
     }
 
     if (endpoint.startsWith('/admin/properties/')) {
+      const property = resolvePropertyById(endpoint);
       return buildPropertySummary(property);
     }
 
@@ -281,7 +304,8 @@ function mockPropertyManagementRequests({
     throw new Error(`Endpoint não esperado no teste: ${endpoint}`);
   });
 
-  apiPutMock.mockImplementation(async (_endpoint: string, payload: SavePayload) => {
+  apiPutMock.mockImplementation(async (endpoint: string, payload: SavePayload) => {
+    const property = resolvePropertyById(endpoint);
     applyServerPatch(property, payload);
     return {};
   });
@@ -297,6 +321,28 @@ function getPropertiesListCallCount(): number {
 
 function getRevisarButtons() {
   return screen.getAllByRole('button', { name: 'Revisar' });
+}
+
+function getTablePropertyRows(): HTMLTableRowElement[] {
+  return screen.getAllByRole('row').slice(1) as HTMLTableRowElement[];
+}
+
+function getTablePropertyTitles(): string[] {
+  return getTablePropertyRows()
+    .map((row) => {
+      const titleWrapper = row.querySelector('td .min-w-0') as HTMLElement | null;
+      if (!titleWrapper?.textContent) {
+        return '';
+      }
+
+      return titleWrapper.textContent
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\s*ID:\s*\d+\s*$/, '')
+        .replace(/^Sem imagem\s+/, '')
+        .trim();
+    })
+    .filter(Boolean);
 }
 
 function findListItemByLabel(container: HTMLElement, label: string): HTMLElement | null {
@@ -429,6 +475,489 @@ describe('PropertyManagement', () => {
     expect(findListItemByLabel(reopenedDialog, 'Área construída')).toHaveTextContent('2332 ha');
     expect(findAmenityInActiveSection(reopenedDialog, 'Mobiliada')).toBeInTheDocument();
     expect(findAmenityInActiveSection(reopenedDialog, 'Academia')).toBeInTheDocument();
+  });
+
+  it('filtra lista por comodidades selecionadas', async () => {
+    const properties = [
+      makePropertyState({
+        id: 601,
+        title: 'Casa com Wi-Fi',
+        amenities: ['Wi-Fi'],
+      }),
+      makePropertyState({
+        id: 602,
+        title: 'Casa sem Wi-Fi',
+        amenities: ['Piscina'],
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(4));
+    const wifiFilter = screen.getByRole('checkbox', { name: 'Wi-Fi' });
+    await fireEvent.click(wifiFilter);
+
+    await waitFor(() => {
+      expect(getRevisarButtons().length).toBe(2);
+      expect(getTablePropertyTitles()).toEqual(['Casa com Wi-Fi']);
+    });
+  });
+
+  it('filtra lista por duas comodidades simultaneamente', async () => {
+    const properties = [
+      makePropertyState({
+        id: 603,
+        title: 'Casa com Wi-Fi e Piscina',
+        amenities: ['Wi-Fi', 'Piscina'],
+      }),
+      makePropertyState({
+        id: 604,
+        title: 'Casa apenas Wi-Fi',
+        amenities: ['Wi-Fi'],
+      }),
+      makePropertyState({
+        id: 605,
+        title: 'Casa apenas Piscina',
+        amenities: ['Piscina'],
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(6));
+    const wifiFilter = screen.getByRole('checkbox', { name: 'Wi-Fi' });
+    const poolFilter = screen.getByRole('checkbox', { name: 'Piscina' });
+    await fireEvent.click(wifiFilter);
+    await fireEvent.click(poolFilter);
+
+    await waitFor(() => {
+      expect(getRevisarButtons().length).toBe(2);
+      expect(getTablePropertyTitles()).toEqual(['Casa com Wi-Fi e Piscina']);
+    });
+  });
+
+  it('filtra comodidades mesmo com valor legado/normalização', async () => {
+    const properties = [
+      makePropertyState({
+        id: 701,
+        title: 'Casa com wifi legado',
+        amenities: ['wifi'],
+      }),
+      makePropertyState({
+        id: 702,
+        title: 'Casa sem wifi',
+        amenities: ['2'],
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(4));
+    const wifiFilter = screen.getByRole('checkbox', { name: 'Wi-Fi' });
+    await fireEvent.click(wifiFilter);
+
+    await waitFor(() => {
+      expect(getRevisarButtons().length).toBe(2);
+      expect(getTablePropertyTitles()).toEqual(['Casa com wifi legado']);
+    });
+  });
+
+  it('ordena por área usando m² normalizado e preserva a unidade exibida', async () => {
+    const properties = [
+      makePropertyState({
+        id: 701,
+        title: 'Terreno m2',
+        area_terreno_valor: 5000,
+        area_terreno_m2: 5000,
+        area_terreno_unidade: 'm2',
+      }),
+      makePropertyState({
+        id: 702,
+        title: 'Terreno ha inconsistente',
+        area_terreno_valor: 1,
+        area_terreno_m2: 500,
+        area_terreno_unidade: 'hectare',
+      }),
+      makePropertyState({
+        id: 703,
+        title: 'Terreno alqueire',
+        area_terreno_valor: 1,
+        area_terreno_m2: 24200,
+        area_terreno_unidade: 'alqueire',
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(6));
+
+    const areaSortMetric = screen.getByLabelText('Ordenar área por');
+    await fireEvent.change(areaSortMetric, { target: { value: 'area_terreno_valor' } });
+    const areaSortDirection = screen.getByLabelText('Ordem');
+    await fireEvent.change(areaSortDirection, { target: { value: 'desc' } });
+
+    await waitFor(() => {
+      expect(getTablePropertyTitles()).toEqual([
+        'Terreno alqueire',
+        'Terreno m2',
+        'Terreno ha inconsistente',
+      ]);
+    });
+  });
+
+  it('filtra faixa de área no filtro de hectare com conversão de unidade', async () => {
+    const properties = [
+      makePropertyState({
+        id: 901,
+        title: 'Terreno hectare',
+        area_terreno_valor: 2,
+        area_terreno_m2: null,
+        area_terreno_unidade: 'hectare',
+      }),
+      makePropertyState({
+        id: 902,
+        title: 'Terreno alqueire grande',
+        area_terreno_valor: 1,
+        area_terreno_m2: null,
+        area_terreno_unidade: 'alqueire',
+      }),
+      makePropertyState({
+        id: 903,
+        title: 'Terreno m2',
+        area_terreno_valor: 15000,
+        area_terreno_m2: null,
+        area_terreno_unidade: 'm2',
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(6));
+    const filterMetric = screen.getByLabelText('Área para filtro');
+    await fireEvent.change(filterMetric, { target: { value: 'area_terreno_valor' } });
+    const filterUnit = screen.getByLabelText('Unidade') as HTMLSelectElement;
+    await fireEvent.change(filterUnit, { target: { value: 'hectare' } });
+    const minInput = screen.getByLabelText('Área mínima') as HTMLInputElement;
+    const maxInput = screen.getByLabelText('Área máxima') as HTMLInputElement;
+
+    await fireEvent.input(minInput, { target: { value: '1' } });
+    await fireEvent.input(maxInput, { target: { value: '2' } });
+
+    await waitFor(() => {
+      expect(getTablePropertyTitles()).toEqual(['Terreno hectare', 'Terreno m2']);
+    });
+  });
+
+  it('filtra faixa de área no filtro de alqueire com conversão de unidade', async () => {
+    const properties = [
+      makePropertyState({
+        id: 904,
+        title: 'Terreno hectare',
+        area_terreno_valor: 1,
+        area_terreno_m2: null,
+        area_terreno_unidade: 'hectare',
+      }),
+      makePropertyState({
+        id: 905,
+        title: 'Terreno alqueire',
+        area_terreno_valor: 2,
+        area_terreno_m2: null,
+        area_terreno_unidade: 'alqueire',
+      }),
+      makePropertyState({
+        id: 906,
+        title: 'Terreno m2',
+        area_terreno_valor: 1000,
+        area_terreno_m2: null,
+        area_terreno_unidade: 'm2',
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(6));
+    const filterMetric = screen.getByLabelText('Área para filtro');
+    await fireEvent.change(filterMetric, { target: { value: 'area_terreno_valor' } });
+    const filterUnit = screen.getByLabelText('Unidade') as HTMLSelectElement;
+    await fireEvent.change(filterUnit, { target: { value: 'alqueire' } });
+    const minInput = screen.getByLabelText('Área mínima') as HTMLInputElement;
+    const maxInput = screen.getByLabelText('Área máxima') as HTMLInputElement;
+
+    await fireEvent.input(minInput, { target: { value: '1' } });
+    await fireEvent.input(maxInput, { target: { value: '2.5' } });
+
+    await waitFor(() => {
+      expect(getTablePropertyTitles()).toEqual(['Terreno alqueire']);
+    });
+  });
+
+  it('ordena área priorizando area_terreno_m2 sobre conversão da unidade', async () => {
+    const properties = [
+      makePropertyState({
+        id: 804,
+        title: 'Terreno alqueire inconsistente',
+        area_terreno_valor: 1,
+        area_terreno_unidade: 'alqueire',
+        area_terreno_m2: 8000,
+      }),
+      makePropertyState({
+        id: 805,
+        title: 'Terreno ha robusto',
+        area_terreno_valor: 2,
+        area_terreno_unidade: 'hectare',
+        area_terreno_m2: 10000,
+      }),
+      makePropertyState({
+        id: 806,
+        title: 'Terreno m2',
+        area_terreno_valor: 1500,
+        area_terreno_unidade: 'm2',
+        area_terreno_m2: 1500,
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(6));
+    const areaSortMetric = screen.getByLabelText('Ordenar área por');
+    await fireEvent.change(areaSortMetric, { target: { value: 'area_terreno_valor' } });
+    const areaSortDirection = screen.getByLabelText('Ordem');
+    await fireEvent.change(areaSortDirection, { target: { value: 'desc' } });
+
+    await waitFor(() => {
+      expect(getTablePropertyTitles()).toEqual([
+        'Terreno ha robusto',
+        'Terreno alqueire inconsistente',
+        'Terreno m2',
+      ]);
+    });
+
+    await fireEvent.click(getRevisarButtons()[0]);
+    const dialog = await screen.findByRole('dialog');
+    expect(findListItemByLabel(dialog, 'Área do terreno')).toHaveTextContent('2 ha');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Sair' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('filtra área usando faixa em m² e ignora propriedades fora do intervalo', async () => {
+    const properties = [
+      makePropertyState({
+        id: 801,
+        title: 'Terreno m2 menor',
+        area_terreno_valor: 5000,
+        area_terreno_m2: 5000,
+        area_terreno_unidade: 'm2',
+      }),
+      makePropertyState({
+        id: 802,
+        title: 'Terreno ha inconsistente',
+        area_terreno_valor: 1,
+        area_terreno_m2: 500,
+        area_terreno_unidade: 'hectare',
+      }),
+      makePropertyState({
+        id: 803,
+        title: 'Terreno alqueire alto',
+        area_terreno_valor: 2,
+        area_terreno_m2: 48400,
+        area_terreno_unidade: 'alqueire',
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(6));
+
+    const filterMetric = screen.getByLabelText('Área para filtro');
+    await fireEvent.change(filterMetric, { target: { value: 'area_terreno_valor' } });
+    const filterUnit = screen.getByLabelText('Unidade') as HTMLSelectElement;
+    await fireEvent.change(filterUnit, { target: { value: 'm2' } });
+    const minInput = screen.getByLabelText('Área mínima') as HTMLInputElement;
+    const maxInput = screen.getByLabelText('Área máxima') as HTMLInputElement;
+    expect((filterMetric as HTMLSelectElement).value).toBe('area_terreno_valor');
+    expect(filterUnit.value).toBe('m2');
+    await fireEvent.input(minInput, { target: { value: '900' } });
+    await fireEvent.input(maxInput, { target: { value: '10000' } });
+    expect(minInput).toHaveValue('900');
+    expect(maxInput).toHaveValue('10000');
+
+    await waitFor(() => {
+      expect(getTablePropertyTitles()).toEqual(['Terreno m2 menor']);
+    });
+  });
+
+  it('filtra faixa de área por _m2 quando a unidade informada diverge', async () => {
+    const properties = [
+      makePropertyState({
+        id: 807,
+        title: 'Terreno divergente em hectare',
+        area_terreno_valor: 2,
+        area_terreno_unidade: 'hectare',
+        area_terreno_m2: 7000,
+      }),
+      makePropertyState({
+        id: 808,
+        title: 'Terreno coerente em hectare',
+        area_terreno_valor: 1,
+        area_terreno_unidade: 'hectare',
+        area_terreno_m2: 13000,
+      }),
+      makePropertyState({
+        id: 809,
+        title: 'Terreno alqueire',
+        area_terreno_valor: 1,
+        area_terreno_unidade: 'alqueire',
+        area_terreno_m2: 30000,
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(6));
+    const filterMetric = screen.getByLabelText('Área para filtro');
+    await fireEvent.change(filterMetric, { target: { value: 'area_terreno_valor' } });
+    const filterUnit = screen.getByLabelText('Unidade') as HTMLSelectElement;
+    await fireEvent.change(filterUnit, { target: { value: 'm2' } });
+    const minInput = screen.getByLabelText('Área mínima') as HTMLInputElement;
+    const maxInput = screen.getByLabelText('Área máxima') as HTMLInputElement;
+    expect((filterMetric as HTMLSelectElement).value).toBe('area_terreno_valor');
+    expect(filterUnit.value).toBe('m2');
+    await fireEvent.input(minInput, { target: { value: '6000' } });
+    await fireEvent.input(maxInput, { target: { value: '8000' } });
+
+    await waitFor(() => {
+      expect(getTablePropertyTitles()).toEqual(['Terreno divergente em hectare']);
+    });
+  });
+
+  it('mantém busca e filtros existentes com filtro de comodidade local', async () => {
+    const properties = [
+      makePropertyState({
+        id: 1001,
+        title: 'Casa com Wi-Fi',
+        amenities: ['Wi-Fi'],
+      }),
+      makePropertyState({
+        id: 1002,
+        title: 'Casa sem Wi-Fi',
+        amenities: ['Piscina'],
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(4));
+    await fireEvent.click(screen.getByRole('button', { name: 'Venda' }));
+
+    await waitFor(() => {
+      expect(getPropertiesListCallCount()).toBe(2);
+      const secondCall = apiGetMock.mock.calls[1]?.[0] as string;
+      expect(secondCall).toContain('status=approved');
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar por título, cidade, ID...');
+    await fireEvent.input(searchInput, { target: { value: 'Casa' } });
+
+    await waitFor(() => {
+      const searchCall = apiGetMock.mock.calls
+        .map((call) => call[0] as string)
+        .find((url) => url.includes('/admin/properties-with-brokers') && url.includes('search=Casa'));
+      expect(searchCall).toBeTruthy();
+      expect(searchCall).toContain('status=approved');
+    });
+
+    const wifiFilter = screen.getByRole('checkbox', { name: 'Wi-Fi' });
+    await fireEvent.click(wifiFilter);
+    await waitFor(() => {
+      expect(getTablePropertyTitles()).toEqual(['Casa com Wi-Fi']);
+    });
+  });
+
+  it('limpa filtros locais e retorna lista completa', async () => {
+    const properties = [
+      makePropertyState({
+        id: 1101,
+        title: 'Casa com Wi-Fi',
+        amenities: ['Wi-Fi'],
+      }),
+      makePropertyState({
+        id: 1102,
+        title: 'Casa sem Wi-Fi',
+        amenities: ['Piscina'],
+      }),
+      makePropertyState({
+        id: 1103,
+        title: 'Casa com ambas',
+        amenities: ['Wi-Fi', 'Piscina'],
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(6));
+    const wifiFilter = screen.getByRole('checkbox', { name: 'Wi-Fi' });
+    await fireEvent.click(wifiFilter);
+
+    await waitFor(() => {
+      expect(getRevisarButtons().length).toBe(4);
+      expect(getTablePropertyTitles()).toEqual(['Casa com Wi-Fi', 'Casa com ambas']);
+    });
+
+    const clearButton = screen.getByRole('button', { name: 'Limpar filtros locais' });
+    await fireEvent.click(clearButton);
+
+    await waitFor(() => {
+      expect(getRevisarButtons().length).toBe(6);
+      expect(getTablePropertyTitles()).toEqual([
+        'Casa com Wi-Fi',
+        'Casa sem Wi-Fi',
+        'Casa com ambas',
+      ]);
+    });
   });
 
   it('renderiza smoke legado/canônico e salva remoção e adição de amenities', async () => {

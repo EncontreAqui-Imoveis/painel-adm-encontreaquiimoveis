@@ -18,6 +18,28 @@ const IMPORTANT_KEYWORDS: RegExp[] = [
   /\bagend/i,
 ];
 
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+function parseNotificationCreatedAtMs(item: Notification): number | null {
+  const createdAt = typeof item?.created_at === 'string'
+    ? item.created_at.trim()
+    : '';
+  if (!createdAt) {
+    return null;
+  }
+  const parsed = Date.parse(createdAt);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isWithinLast24h(createdAtMs: number | null): boolean {
+  if (!Number.isFinite(createdAtMs ?? NaN)) {
+    return false;
+  }
+  const nowMs = Date.now();
+  const ageMs = nowMs - createdAtMs!;
+  return ageMs >= 0 && ageMs <= TWENTY_FOUR_HOURS_MS;
+}
+
 export function parseNotificationMetadata(
   item: Notification,
 ): Record<string, unknown> | null {
@@ -67,6 +89,11 @@ export function isUrgentAnnouncement(item: Notification): boolean {
   const clientPhone = getNotificationMetadataValue(metadata, 'clientPhone');
   const clientPhoneRaw = getNotificationMetadataValue(metadata, 'clientPhoneRaw');
   const clientEmail = getNotificationMetadataValue(metadata, 'clientEmail');
+  const createdAtMs = parseNotificationCreatedAtMs(item);
+
+  if (!isWithinLast24h(createdAtMs)) {
+    return false;
+  }
 
   if (isPropertyCreatedNotification(message)) {
     return false;
