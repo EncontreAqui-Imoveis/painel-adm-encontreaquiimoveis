@@ -435,7 +435,7 @@
         verification: {
             endpoint: "/admin/brokers/pending",
             title: "Solicitações de Corretores",
-            headers: ["ID", "Nome", "CRECI", "Documentos", "Ações"],
+            headers: ["ID", "Nome", "CRECI", "Ações"],
             filterOptions: [],
         },
     };

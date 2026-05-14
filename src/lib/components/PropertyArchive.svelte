@@ -353,40 +353,10 @@
 <div class="space-y-4">
   <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div class="space-y-3">
-      <h2 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Imóveis Vendidos/Alugados</h2>
+      <h2 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Imóveis Arquivados</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400">
-        Histórico de imóveis finalizados. Imóveis vendidos ou alugados podem voltar para disponível, com confirmação.
+        Histórico de imóveis finalizados. Você pode rever e devolver imóveis para disponível quando necessário.
       </p>
-      <div class="flex flex-wrap gap-2">
-        <button
-          type="button"
-          class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-            archiveKind === 'sold'
-              ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-              : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
-          }`}
-          on:click={() => {
-            archiveKind = 'sold';
-            requestFetch(true);
-          }}
-        >
-          Vendidos
-        </button>
-        <button
-          type="button"
-          class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-            archiveKind === 'rented'
-              ? 'bg-amber-700 text-white dark:bg-amber-600'
-              : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
-          }`}
-          on:click={() => {
-            archiveKind = 'rented';
-            requestFetch(true);
-          }}
-        >
-          Alugados
-        </button>
-      </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
       <input

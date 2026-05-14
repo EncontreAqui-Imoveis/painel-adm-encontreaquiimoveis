@@ -477,6 +477,23 @@ describe('PropertyManagement', () => {
     expect(findAmenityInActiveSection(reopenedDialog, 'Academia')).toBeInTheDocument();
   });
 
+  it('não mostra a coluna "Status" na lista principal de imóveis', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'approved',
+        request_type: null,
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: 'Imóvel' })).toBeInTheDocument();
+      expect(screen.queryByRole('columnheader', { name: 'Status' })).not.toBeInTheDocument();
+    });
+  });
+
   it('filtra lista por comodidades selecionadas', async () => {
     const properties = [
       makePropertyState({
@@ -1216,6 +1233,62 @@ describe('PropertyManagement', () => {
     for (const amenity of ALL_AMENITIES_16) {
       expect(findAmenityInActiveSection(reopenedDialog, amenity)).toBeInTheDocument();
     }
+  });
+
+  it('normaliza amenities legadas na solicitação e mantém estado após salvar', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        status: 'pending_approval',
+        request_type: 'edit',
+        amenities: [],
+        legacyAmenityFlags: {
+          has_wifi: 1,
+          hasPiscina: 'sim',
+        },
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    const firstRevisar = getRevisarButtons()[0];
+    await fireEvent.click(firstRevisar);
+
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+
+    expect((within(dialog).getByRole('checkbox', { name: 'Wi-Fi' }) as HTMLInputElement).checked).toBe(true);
+    expect((within(dialog).getByRole('checkbox', { name: 'Piscina' }) as HTMLInputElement).checked).toBe(true);
+
+    await setAmenityChecked(dialog, 'Wi-Fi', false);
+    await setAmenityChecked(dialog, 'Academia', true);
+
+    const saveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
+    await fireEvent.click(saveButtons[0]);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+
+    const [, requestPayload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    expect(requestPayload).not.toHaveProperty('status');
+    expect(requestPayload.amenities).toEqual(
+      expect.arrayContaining(['Piscina', 'Academia']),
+    );
+    expect(requestPayload.amenities).toHaveLength(2);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    await fireEvent.click(getRevisarButtons()[0]);
+    const reopenedDialog = await screen.findByRole('dialog');
+    expect(findAmenityInActiveSection(reopenedDialog, 'Piscina')).toBeInTheDocument();
+    expect(findAmenityInActiveSection(reopenedDialog, 'Academia')).toBeInTheDocument();
+    expect(
+      within(getAmenitySection(reopenedDialog, false)).getByText('Wi-Fi'),
+    ).toBeInTheDocument();
   });
 
   it('remove todas as amenities e mantém retorno vazio', async () => {

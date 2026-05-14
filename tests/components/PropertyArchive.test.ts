@@ -97,6 +97,14 @@ describe('PropertyArchive', () => {
     });
   });
 
+  it('remove os filtros Vendidos e Alugados do cabeçalho', async () => {
+    render(PropertyArchive);
+
+    expect(await screen.findByText('Casa Vendida')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Vendidos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Alugados' })).not.toBeInTheDocument();
+  });
+
   it('exibe ações visíveis e permite revisar imóvel finalizado', async () => {
     render(PropertyArchive);
 

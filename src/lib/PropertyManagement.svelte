@@ -2909,12 +2909,6 @@ function parseNullableNumber(value: unknown): number | null {
                 <span>{getSortIndicator('p.price')}</span>
               </button>
             </th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              <button type="button" class="flex items-center gap-1" on:click={() => handleSort('p.status')}>
-                Status
-                <span>{getSortIndicator('p.status')}</span>
-              </button>
-            </th>
             {#if isReviewOnly}
               <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 Solicitação
@@ -2974,11 +2968,6 @@ function parseNullableNumber(value: unknown): number | null {
                     <span>{line.label}: {formatCurrency(line.value)}</span>
                   {/each}
                 </div>
-              </td>
-              <td class="px-6 py-4">
-                <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClasses(property.status)}`}>
-                  {humanizeStatus(property.status, property.purpose)}
-                </span>
               </td>
               {#if isReviewOnly}
                 {@const requestType = inferRequestType(property)}
