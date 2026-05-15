@@ -454,7 +454,9 @@ describe('PropertyManagement', () => {
     });
     expect(putPayload).toMatchObject({ status: 'approved' });
     expect(putPayload).toHaveProperty('area_construida_valor', 2332);
+    expect(putPayload).toHaveProperty('area_construida', 2332);
     expect(putPayload).toHaveProperty('area_terreno_valor', 1500);
+    expect(putPayload).toHaveProperty('area_terreno', 1500);
     expect(putPayload).toHaveProperty('area_construida_unidade', 'hectare');
     expect(putPayload).toHaveProperty('area_terreno_unidade', 'm2');
     expect(putPayload.amenities).toEqual(expect.arrayContaining(['Mobiliada', 'Academia']));

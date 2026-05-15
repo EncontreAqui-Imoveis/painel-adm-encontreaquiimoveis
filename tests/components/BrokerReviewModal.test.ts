@@ -91,6 +91,29 @@ describe('BrokerReviewModal', () => {
     });
   });
 
+  it('permite salvar corretor com Sem CEP e Sem número', async () => {
+    render(BrokerReviewModal, { open: true, broker, showApprove: true });
+
+    await screen.findByText('Revisar Corretor');
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+
+    await fireEvent.click(screen.getByLabelText('Sem CEP'));
+    await fireEvent.click(screen.getByLabelText('Sem número'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledWith(
+        '/admin/brokers/10',
+        expect.objectContaining({
+          sem_cep: 1,
+          sem_numero: 1,
+          cep: null,
+          number: null,
+        }),
+      );
+    });
+  });
+
   it('mantem o modal visível e exibe erro se salvar corretor falhar', async () => {
     apiPutMock.mockRejectedValueOnce(new Error('Falha de atualização'));
 

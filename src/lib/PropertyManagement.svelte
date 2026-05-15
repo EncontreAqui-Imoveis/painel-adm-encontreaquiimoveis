@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { toast } from 'svelte-sonner';
   import { Loader2 } from 'lucide-svelte';
   import * as Dialog from '$lib/components/ui/dialog';
@@ -29,7 +29,6 @@
     toggleAmenity,
     type PropertyAmenity,
   } from '$lib/propertyAmenities';
-  const dispatch = createEventDispatcher();
 function parseNullableNumber(value: unknown): number | null {
   if (value == null || value === '') return null;
   const normalized = String(value)
@@ -1859,8 +1858,10 @@ function parseNullableNumber(value: unknown): number | null {
         bedrooms: editableProperty.bedrooms,
         bathrooms: editableProperty.bathrooms,
         garage_spots: editableProperty.garage_spots,
+        area_construida: editableProperty.area_construida_valor,
         area_construida_valor: editableProperty.area_construida_valor,
         area_construida_unidade: editableProperty.area_construida_unidade ?? 'm2',
+        area_terreno: editableProperty.area_terreno_valor,
         area_terreno_valor: editableProperty.area_terreno_valor,
         area_terreno_unidade:
           editableProperty.area_terreno_unidade ?? 'm2',
@@ -1925,9 +1926,6 @@ function parseNullableNumber(value: unknown): number | null {
       toast.success('Imóvel atualizado com sucesso.');
       isEditMode = false;
       closeModal();
-      if (requestedStatus && ['sold', 'rented'].includes(requestedStatus)) {
-        dispatch('viewChange', 'sold_properties');
-      }
     } catch (err: any) {
       console.error('Erro ao salvar imóvel:', err);
       const status = err?.response?.status;
@@ -2360,7 +2358,6 @@ function parseNullableNumber(value: unknown): number | null {
       resetSoldDialogState();
       closeModal();
       await fetchProperties();
-      dispatch('viewChange', 'sold_properties');
     } catch (err: any) {
       console.error('Erro ao salvar venda:', err);
       toast.error(
@@ -4303,7 +4300,7 @@ function parseNullableNumber(value: unknown): number | null {
       {#if previewTotal > 1}
         <button
           type="button"
-          class="absolute left-2 top-[40%] z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white shadow transition hover:bg-black/50"
+          class="absolute left-0 top-0 z-10 flex h-full w-14 items-center justify-center bg-gradient-to-r from-black/35 to-transparent text-white transition hover:from-black/50"
           on:click|stopPropagation={goPrevImage}
           disabled={!hasPrevImage()}
           aria-label="Imagem anterior"
@@ -4314,7 +4311,7 @@ function parseNullableNumber(value: unknown): number | null {
         </button>
         <button
           type="button"
-          class="absolute right-2 top-[40%] z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/35 text-white shadow transition hover:bg-black/50"
+          class="absolute right-0 top-0 z-10 flex h-full w-14 items-center justify-center bg-gradient-to-l from-black/35 to-transparent text-white transition hover:from-black/50"
           on:click|stopPropagation={goNextImage}
           disabled={!hasNextImage()}
           aria-label="Próxima imagem"

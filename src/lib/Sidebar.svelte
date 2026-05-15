@@ -8,7 +8,6 @@
     FileText,
     FolderKanban,
     Handshake,
-    House,
     HousePlus,
     LayoutDashboard,
     ScrollText,
@@ -67,11 +66,6 @@
       view: 'properties',
       label: 'Disponíveis',
       icon: Building2
-    },
-    {
-      view: 'sold_properties',
-      label: 'Vendidos / Alugados',
-      icon: House
     },
     {
       view: 'property_highlights',

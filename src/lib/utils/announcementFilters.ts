@@ -5,6 +5,12 @@ const PROPERTY_CREATED_PATTERNS: RegExp[] = [
   /imovel\s*criad[oa]s?\b/i,
   /imóvel\s+adicionado\s+por\b/i,
   /imovel\s+adicionado\s+por\b/i,
+  /imóvel\s+cadastrad[oa]s?\b/i,
+  /imovel\s+cadastrad[oa]s?\b/i,
+  /novo\s+imóve[l|is]\b/i,
+  /novo\s+imovel\b/i,
+  /imóve[l|is]\s+publicad[oa]s?\b/i,
+  /imovel\s+publicad[oa]s?\b/i,
 ];
 
 const IMPORTANT_KEYWORDS: RegExp[] = [

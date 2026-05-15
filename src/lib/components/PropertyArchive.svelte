@@ -46,8 +46,10 @@
     bathrooms?: number | null;
     garage_spots?: number | null;
     area_construida?: number | null;
+    area_construida_valor?: number | null;
     area_construida_unidade?: string | null;
     area_terreno?: number | null;
+    area_terreno_valor?: number | null;
     area_terreno_unidade?: string | null;
     images?: unknown;
     image_url?: string | null;
@@ -141,6 +143,17 @@
   function formatArea(value?: number | null, unit?: string | null): string {
     if (value == null || Number.isNaN(value)) return '-';
     return `${value} ${areaUnitLabel(unit)}`;
+  }
+
+  function formatAreaFromDetail(
+    originalValue?: number | null,
+    fallbackM2?: number | null,
+    unit?: string | null
+  ): string {
+    if (originalValue != null && !Number.isNaN(originalValue)) {
+      return formatArea(originalValue, unit);
+    }
+    return formatArea(fallbackM2, unit);
   }
 
   function normalizeImageUrl(value: unknown): string | null {
@@ -659,10 +672,10 @@
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Áreas</p>
               <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                Construída: {formatArea(reviewDetails.area_construida, reviewDetails.area_construida_unidade)}
+                Construída: {formatAreaFromDetail(reviewDetails.area_construida_valor, reviewDetails.area_construida, reviewDetails.area_construida_unidade)}
               </p>
               <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                Terreno: {formatArea(reviewDetails.area_terreno, reviewDetails.area_terreno_unidade)}
+                Terreno: {formatAreaFromDetail(reviewDetails.area_terreno_valor, reviewDetails.area_terreno, reviewDetails.area_terreno_unidade)}
               </p>
             </div>
           </div>
