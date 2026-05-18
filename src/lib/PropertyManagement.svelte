@@ -12,7 +12,6 @@
     clampAreaInput,
     clampCountInput,
     extractApiErrorMessage,
-    formatPromotionPercentageDisplay,
     formatPromotionPercentageInput,
     parsePromotionPercentage,
   } from '$lib/components/create-property-helpers';
@@ -1286,11 +1285,11 @@ function parseNullableNumber(value: unknown): number | null {
 
     editPriceSaleDisplay = resolvedSale != null ? formatCurrency(Number(resolvedSale)) : '';
     editPriceRentDisplay = resolvedRent != null ? formatCurrency(Number(resolvedRent)) : '';
-    editPromotionSalePercentageDisplay = formatPromotionPercentageDisplay(
-      resolvedSalePromotionPercentage
+    editPromotionSalePercentageDisplay = formatPromotionPercentageInput(
+      String(resolvedSalePromotionPercentage ?? '').replace('.', ',')
     );
-    editPromotionRentPercentageDisplay = formatPromotionPercentageDisplay(
-      resolvedRentPromotionPercentage
+    editPromotionRentPercentageDisplay = formatPromotionPercentageInput(
+      String(resolvedRentPromotionPercentage ?? '').replace('.', ',')
     );
     editPromotionPriceSaleDisplay = salePromoPrice != null ? formatCurrency(salePromoPrice) : '';
     editPromotionPriceRentDisplay = rentPromoPrice != null ? formatCurrency(rentPromoPrice) : '';
@@ -2079,10 +2078,20 @@ function parseNullableNumber(value: unknown): number | null {
       if (editableProperty) {
         editableProperty = { ...editableProperty, images: nextImages };
       }
+      if (isImagePreviewOpen) {
+        previewImagesSnapshot = nextImages;
+        previewImageIndex = Math.min(previewImageIndex, Math.max(nextImages.length - 1, 0));
+        previewImageUrl = nextImages[previewImageIndex]?.url ?? null;
+      }
       await api.delete(`/admin/properties/${selectedProperty.id}/images/${imageId}`);
       toast.success('Imagem removida com sucesso.');
     } catch (err: any) {
       patchSelectedPropertyMedia({ images: previousImages });
+      if (isImagePreviewOpen) {
+        previewImagesSnapshot = previousImages;
+        previewImageIndex = Math.min(previewImageIndex, Math.max(previousImages.length - 1, 0));
+        previewImageUrl = previousImages[previewImageIndex]?.url ?? null;
+      }
       console.error('Erro ao remover imagem:', err);
       const status = err?.response?.status;
       if (status === 401) {
@@ -2104,7 +2113,7 @@ function parseNullableNumber(value: unknown): number | null {
     previewImageDeleteBusy = true;
     try {
       await handleImageDelete(img.id);
-      const remaining = previewImages;
+      const remaining = previewImagesSnapshot.length ? previewImagesSnapshot : selectedPropertyImages();
       if (remaining.length === 0) {
         closeImagePreview();
         return;
@@ -3164,7 +3173,7 @@ function parseNullableNumber(value: unknown): number | null {
                       type="text"
                       inputmode="decimal"
                       bind:value={editPromotionSalePercentageDisplay}
-                      placeholder="Ex: 08,5%"
+                      placeholder="Ex: 08,5"
                       on:input={(event) => {
                         const target = event.target as HTMLInputElement;
                         editPromotionSalePercentageDisplay = formatPercentageInput(target.value);
@@ -3183,7 +3192,7 @@ function parseNullableNumber(value: unknown): number | null {
                       type="text"
                       inputmode="decimal"
                       bind:value={editPromotionRentPercentageDisplay}
-                      placeholder="Ex: 12,0%"
+                      placeholder="Ex: 12,0"
                       on:input={(event) => {
                         const target = event.target as HTMLInputElement;
                         editPromotionRentPercentageDisplay = formatPercentageInput(target.value);
@@ -3204,7 +3213,7 @@ function parseNullableNumber(value: unknown): number | null {
                     type="text"
                     inputmode="decimal"
                     bind:value={editPromotionRentPercentageDisplay}
-                    placeholder="Ex: 12,0%"
+                    placeholder="Ex: 12,0"
                     on:input={(event) => {
                       const target = event.target as HTMLInputElement;
                       editPromotionRentPercentageDisplay = formatPercentageInput(target.value);
@@ -3224,7 +3233,7 @@ function parseNullableNumber(value: unknown): number | null {
                     type="text"
                     inputmode="decimal"
                     bind:value={editPromotionSalePercentageDisplay}
-                    placeholder="Ex: 08,5%"
+                    placeholder="Ex: 08,5"
                     on:input={(event) => {
                       const target = event.target as HTMLInputElement;
                       editPromotionSalePercentageDisplay = formatPercentageInput(target.value);

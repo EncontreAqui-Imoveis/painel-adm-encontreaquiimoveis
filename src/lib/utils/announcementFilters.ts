@@ -89,6 +89,10 @@ function isPropertyCreatedNotification(message: string): boolean {
 }
 
 export function isUrgentAnnouncement(item: Notification): boolean {
+  if (item.related_entity_type === 'property') {
+    return false;
+  }
+
   const message = typeof item.message === 'string' ? item.message : '';
   const metadata = parseNotificationMetadata(item);
   const clientName = getNotificationMetadataValue(metadata, 'clientName');

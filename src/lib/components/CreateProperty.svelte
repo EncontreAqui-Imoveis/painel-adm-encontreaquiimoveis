@@ -1282,7 +1282,7 @@
               class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               bind:value={promotionSalePercentage}
               inputmode="decimal"
-              placeholder="Ex: 08,5%"
+              placeholder="Ex: 08,5"
               on:input={(event) => {
                 const target = event.target as HTMLInputElement;
                 promotionSalePercentage = formatPromotionPercentageInput(target.value);
@@ -1302,7 +1302,7 @@
               class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               bind:value={promotionRentPercentage}
               inputmode="decimal"
-              placeholder="Ex: 12,0%"
+              placeholder="Ex: 12,0"
               on:input={(event) => {
                 const target = event.target as HTMLInputElement;
                 promotionRentPercentage = formatPromotionPercentageInput(target.value);

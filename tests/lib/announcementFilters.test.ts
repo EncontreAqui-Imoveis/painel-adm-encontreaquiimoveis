@@ -55,6 +55,20 @@ describe('announcementFilters', () => {
     ).toBe(false);
   });
 
+  it('não classifica notificação de propriedade como aviso urgente', () => {
+    expect(
+      isUrgentAnnouncement({
+        ...baseNotification,
+        related_entity_type: 'property',
+        message: 'Novo imóvel cadastrado no sistema',
+        metadata_json: {
+          clientName: 'Maria Souza',
+          clientPhone: '(61) 99999-0000',
+        },
+      }),
+    ).toBe(false);
+  });
+
   it('não classifica mensagem sem informações de contato ou palavra-chave', () => {
     expect(
       isUrgentAnnouncement({
@@ -74,6 +88,33 @@ describe('announcementFilters', () => {
         message: 'Contato do cliente via whatsapp',
         created_at: '2025-12-31T11:59:59.000Z',
         metadata_json: { clientPhoneRaw: '62999990000' },
+      }),
+    ).toBe(false);
+  });
+
+  it('não classifica aviso com 24h + 1ms como urgente', () => {
+    expect(
+      isUrgentAnnouncement({
+        ...baseNotification,
+        id: 7,
+        message: 'Contato do cliente via WhatsApp',
+        created_at: '2025-12-31T11:59:59.999Z',
+        metadata_json: { clientPhone: '(61) 99999-0000' },
+      }),
+    ).toBe(false);
+  });
+
+  it('não classifica property mesmo com contato e keyword', () => {
+    expect(
+      isUrgentAnnouncement({
+        ...baseNotification,
+        related_entity_type: 'property',
+        message: 'Contato do cliente via WhatsApp para imóvel criado',
+        metadata_json: {
+          clientName: 'Cliente Teste',
+          clientPhone: '(61) 99999-0000',
+          clientEmail: 'cliente@example.com',
+        },
       }),
     ).toBe(false);
   });
