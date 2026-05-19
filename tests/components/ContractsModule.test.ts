@@ -134,6 +134,24 @@ describe('ContractsModule', () => {
 
     expect(await screen.findByText('Dados Captador')).toBeInTheDocument();
     expect(screen.getByText('2 responsáveis designados')).toBeInTheDocument();
+    expect(screen.getByText('Leitura por papel')).toBeInTheDocument();
+    expect(
+      screen.getAllByText((_, element) =>
+        element?.textContent?.includes('Captador: documentos do lado vendedor/captador.')
+      ).length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText((_, element) =>
+        element?.textContent?.includes('Comprador: documentos do lado comprador.')
+      ).length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText((_, element) =>
+        element?.textContent?.includes(
+          'Responsável designado: pode complementar ambos os lados nesta etapa.'
+        )
+      ).length
+    ).toBeGreaterThan(0);
 
     const downloadButtons = screen.getAllByRole('button', { name: 'Baixar' });
     expect(downloadButtons.length).toBeGreaterThan(0);

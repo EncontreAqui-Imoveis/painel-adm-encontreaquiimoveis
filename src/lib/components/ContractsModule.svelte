@@ -2075,6 +2075,16 @@
               Responsáveis designados podem enviar documentos de captador e comprador nesta etapa.
             </div>
           {/if}
+          <div class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
+            <p class="font-medium text-gray-900 dark:text-gray-100">Leitura por papel</p>
+            <ul class="mt-2 space-y-1 text-sm">
+              <li><span class="font-medium">Captador:</span> documentos do lado vendedor/captador.</li>
+              <li><span class="font-medium">Comprador:</span> documentos do lado comprador.</li>
+              {#if readResponsibleUserIds(selected).length > 0}
+                <li><span class="font-medium">Responsável designado:</span> pode complementar ambos os lados nesta etapa.</li>
+              {/if}
+            </ul>
+          </div>
           <div class="grid gap-4 md:grid-cols-2">
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <div class="flex items-center justify-between gap-2">
