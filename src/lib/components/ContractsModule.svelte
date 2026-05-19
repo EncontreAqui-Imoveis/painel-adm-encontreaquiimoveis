@@ -1,13 +1,31 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { Loader2 } from 'lucide-svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import {
+    ChevronLeft,
+    ChevronRight,
+    Download,
+    Eye,
+    FileText,
+    Loader2,
+    Maximize2,
+    RefreshCcw,
+    Trash2,
+    X,
+    ZoomIn,
+    ZoomOut,
+  } from 'lucide-svelte';
   import { toast } from 'svelte-sonner';
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import type { InputProps } from '$lib/components/ui/input/input-props';
   import type { Component } from 'svelte';
-  import { formatCurrencyInput, parseCurrency } from '$lib/components/create-property-helpers';
+  import {
+    formatCurrencyInput,
+    formatPhoneBr,
+    onlyDigits,
+    parseCurrency,
+  } from '$lib/components/create-property-helpers';
   import Pagination from '$lib/Pagination.svelte';
 
   /** TS do IDE: tipo inferido do `Input` costuma omitir `id`/handlers; aqui usamos o contrato explícito. */
@@ -118,6 +136,10 @@
     cliente_cpf: 'CPF do Cliente',
   };
 
+  const outroMatrixSlotTypes = Array.from({ length: 15 }, (_, index) =>
+    `cliente_outro_${String(index + 1).padStart(2, '0')}`
+  );
+
   const signedReviewDocTypes = new Set([
     'contrato_assinado',
     'comprovante_pagamento',
@@ -129,6 +151,7 @@
     'comprovante_pagamento',
     'boleto_vistoria',
     'outro',
+    ...outroMatrixSlotTypes,
   ]);
   const saleRequiredDocTypes = [
     'doc_identidade',
@@ -158,6 +181,16 @@
   ];
   const buyerRentalRequiredInfoFields: RequiredFieldDescriptor[] = [
     { keys: ['garantia_locacao', 'garantiaLocacao'], label: 'Garantia de Locação' },
+  ];
+  const maritalStatusOptions = [
+    '',
+    'Solteiro(a)',
+    'Casado(a)',
+    'Divorciado(a)',
+    'Viúvo(a)',
+    'Separado(a)',
+    'União estável',
+    'Não informado',
   ];
   const matrixDocumentSortOrder = [
     'doc_identidade',
@@ -203,6 +236,19 @@
     | null = null;
   let matrixUploadingKey: string | null = null;
   let matrixDeletingDocumentId: number | null = null;
+  let documentPreviewOpen = false;
+  let documentPreviewLoading = false;
+  let documentPreviewError = '';
+  let documentPreviewTitle = '';
+  let documentPreviewFileName = '';
+  let documentPreviewSourceUrl = '';
+  let documentPreviewObjectUrl: string | null = null;
+  let documentPreviewOwnsObjectUrl = false;
+  let documentPreviewKind: 'image' | 'pdf' = 'image';
+  let documentPreviewZoom = 1;
+  let documentPreviewContract: ContractItem | null = null;
+  let documentPreviewDoc: ContractDocument | null = null;
+  let documentPreviewIsFullscreen = false;
   let finalizingContract = false;
   let reopeningContract = false;
   let deletingContract = false;
@@ -281,8 +327,155 @@
       'fullName',
       'clientName',
       'client_name',
-    ]);
+    ]); 
     return fromInfo || '-';
+  }
+
+  function getContractPartySummary(contract: ContractItem): string {
+    return `Captador: ${contract.capturingBrokerName ?? '-'} · Comprador: ${getBuyerDisplayName(contract)}`;
+  }
+
+  function formatPhoneMaskBr(value: string): string {
+    const digits = onlyDigits(value).slice(0, 11);
+    if (!digits) return '';
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 7) {
+      return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    }
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+
+  function normalizePhoneForPayload(value: string): string | null {
+    const digits = onlyDigits(value).slice(0, 11);
+    return digits.length ? digits : null;
+  }
+
+  function formatDocumentPreviewName(doc: ContractDocument | null): string {
+    if (!doc) return 'Documento';
+    return String(doc.originalFileName ?? '').trim() || documentLabel(doc.documentType ?? doc.type ?? null);
+  }
+
+  function closeDocumentPreview() {
+    if (documentPreviewOwnsObjectUrl && documentPreviewObjectUrl) {
+      URL.revokeObjectURL(documentPreviewObjectUrl);
+    }
+    documentPreviewOpen = false;
+    documentPreviewLoading = false;
+    documentPreviewError = '';
+    documentPreviewTitle = '';
+    documentPreviewFileName = '';
+    documentPreviewSourceUrl = '';
+    documentPreviewObjectUrl = null;
+    documentPreviewOwnsObjectUrl = false;
+    documentPreviewKind = 'image';
+    documentPreviewZoom = 1;
+    documentPreviewContract = null;
+    documentPreviewDoc = null;
+    documentPreviewIsFullscreen = false;
+  }
+
+  function prepareDocumentPreview(
+    title: string,
+    sourceUrl: string,
+    kind: 'image' | 'pdf',
+    options: {
+      fileName?: string;
+      ownsObjectUrl?: boolean;
+      contract?: ContractItem | null;
+      doc?: ContractDocument | null;
+    } = {}
+  ) {
+    documentPreviewTitle = title;
+    documentPreviewSourceUrl = sourceUrl;
+    documentPreviewKind = kind;
+    documentPreviewFileName = options.fileName ?? title;
+    documentPreviewObjectUrl = sourceUrl;
+    documentPreviewOwnsObjectUrl = options.ownsObjectUrl ?? false;
+    documentPreviewContract = options.contract ?? null;
+    documentPreviewDoc = options.doc ?? null;
+    documentPreviewZoom = 1;
+    documentPreviewIsFullscreen = false;
+    documentPreviewOpen = true;
+  }
+
+  async function openPropertyImagePreview(url: string, title: string) {
+    if (!url) return;
+    closeDocumentPreview();
+    prepareDocumentPreview(title, url, 'image');
+  }
+
+  async function openDocumentPreview(doc: ContractDocument, contract: ContractItem) {
+    if (!doc.downloadUrl) {
+      toast.error('Documento sem URL de visualização.');
+      return;
+    }
+
+    closeDocumentPreview();
+    documentPreviewLoading = true;
+    documentPreviewError = '';
+    prepareDocumentPreview(formatDocumentPreviewName(doc), doc.downloadUrl, 'pdf', {
+      contract,
+      doc,
+    });
+
+    try {
+      const response = await apiClient.get(doc.downloadUrl, {
+        responseType: 'blob',
+      });
+      const blob =
+        response.data instanceof Blob
+          ? response.data
+          : new Blob([response.data], { type: 'application/octet-stream' });
+      const contentType = String(
+        response.headers?.['content-type'] ?? response.headers?.['Content-Type'] ?? blob.type ?? ''
+      ).toLowerCase();
+      const objectUrl = URL.createObjectURL(blob);
+      documentPreviewObjectUrl = objectUrl;
+      documentPreviewOwnsObjectUrl = true;
+      documentPreviewKind = contentType.includes('image/') ? 'image' : 'pdf';
+      documentPreviewSourceUrl = objectUrl;
+      documentPreviewFileName = formatDocumentPreviewName(doc);
+    } catch (error) {
+      console.error('Erro ao carregar visualização do documento:', error);
+      documentPreviewError = 'Não foi possível carregar a visualização do documento.';
+    } finally {
+      documentPreviewLoading = false;
+    }
+  }
+
+  function downloadPreviewDocument() {
+    const downloadSource = documentPreviewObjectUrl || documentPreviewSourceUrl;
+    if (!downloadSource) return;
+    const anchor = document.createElement('a');
+    anchor.href = downloadSource;
+    anchor.download = documentPreviewFileName || 'documento';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  function replacePreviewDocument() {
+    if (!documentPreviewDoc || !documentPreviewContract) return;
+    const documentType = String(documentPreviewDoc.documentType ?? documentPreviewDoc.type ?? '').trim();
+    const side = documentPreviewDoc.side ?? null;
+    if (!documentType || !side) {
+      toast.error('Este documento não pode ser substituído por este fluxo.');
+      return;
+    }
+    const contract = documentPreviewContract;
+    closeDocumentPreview();
+    triggerMatrixUpload(documentType, side);
+    selected = contract;
+  }
+
+  async function deletePreviewDocument() {
+    if (!documentPreviewDoc || !documentPreviewContract) return;
+    const contract = documentPreviewContract;
+    const doc = documentPreviewDoc;
+    closeDocumentPreview();
+    await deleteMatrixDocument(doc);
+    selected = contract;
   }
 
   function getPropertyImageUrl(contract: ContractItem): string {
@@ -306,7 +499,11 @@
 
   function documentLabel(type?: string | null): string {
     if (!type) return 'Documento';
-    return documentTypeLabels[type] ?? type;
+    const normalized = String(type).trim().toLowerCase();
+    if (normalized.startsWith('cliente_outro_')) {
+      return 'Outro';
+    }
+    return documentTypeLabels[normalized] ?? type;
   }
 
   function normalizeDocumentStatus(doc?: ContractDocument | null): string {
@@ -908,32 +1105,36 @@
     const raw = contract.documentProgress;
     if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
       const source = raw as Record<string, unknown>;
-      const sideNode = source[side];
-      if (sideNode && typeof sideNode === 'object') {
-        const categories = (sideNode as Record<string, unknown>).categories;
-        if (Array.isArray(categories)) {
-          const normalizedType = normalizeMatrixDocumentType(documentType);
-          const typeToCategory = (type: string, matrixSide: MatrixSide): string => {
-            if (type === 'comprovante_endereco') return 'comprovante_endereco';
-            if (type === 'certidao_casamento_nascimento') return 'estado_civil';
-            if (type === 'comprovante_renda') return 'comprovante_renda';
-            if (type === 'certidao_inteiro_teor' || type === 'certidao_onus_acoes') return 'docs_imovel';
-            if (type === 'outro') {
-              return matrixSide === 'buyer' ? 'conjuge_documentos' : 'dados_bancarios';
+          const sideNode = source[side];
+          if (sideNode && typeof sideNode === 'object') {
+            const categories = (sideNode as Record<string, unknown>).categories;
+            if (Array.isArray(categories)) {
+              const normalizedType = normalizeMatrixDocumentType(documentType);
+              const typeToCategory = (type: string, matrixSide: MatrixSide): string[] => {
+                if (type === 'comprovante_endereco') return ['comprovante_endereco'];
+                if (type === 'certidao_casamento_nascimento') return ['estado_civil'];
+                if (type === 'comprovante_renda') return ['comprovante_renda'];
+                if (type === 'certidao_inteiro_teor' || type === 'certidao_onus_acoes') return ['docs_imovel'];
+                if (type === 'outro') {
+                  return ['outro', matrixSide === 'buyer' ? 'conjuge_documentos' : 'dados_bancarios'];
+                }
+                if (type.startsWith('cliente_outro_')) {
+                  return ['outro'];
+                }
+                return ['identidade'];
+              };
+              const targetCategories = typeToCategory(normalizedType, side);
+              const categoryRow = categories.find((item) => {
+                if (!item || typeof item !== 'object') return false;
+                const row = item as Record<string, unknown>;
+                const category = String(row.category ?? '').trim().toLowerCase();
+                return targetCategories.includes(category);
+              }) as Record<string, unknown> | undefined;
+              if (categoryRow) {
+                return String(categoryRow.status ?? '').trim().toUpperCase();
+              }
             }
-            return 'identidade';
-          };
-          const targetCategory = typeToCategory(normalizedType, side);
-          const categoryRow = categories.find((item) => {
-            if (!item || typeof item !== 'object') return false;
-            const row = item as Record<string, unknown>;
-            return String(row.category ?? '').trim().toLowerCase() === targetCategory;
-          }) as Record<string, unknown> | undefined;
-          if (categoryRow) {
-            return String(categoryRow.status ?? '').trim().toUpperCase();
           }
-        }
-      }
       return '';
     }
     if (!Array.isArray(raw)) return '';
@@ -1103,7 +1304,7 @@
     return getNonProposalDocuments(contract)
       .map((doc) => {
       const status = String(doc.status ?? '').trim().toUpperCase();
-      if (String(doc.documentType ?? '').trim().toLowerCase() === 'outro') {
+      if (isOutroMatrixDocumentType(doc.documentType)) {
         return null;
       }
       if (!status) {
@@ -1188,7 +1389,11 @@
   ): ContractDocument[] {
     const normalizedType = documentType.trim().toLowerCase();
     const docs = getNonProposalDocuments(contract).filter(
-      (doc) => String(doc.documentType ?? '').trim().toLowerCase() === normalizedType
+      (doc) =>
+        documentTypeMatchesMatrixCell(
+          String(doc.documentType ?? '').trim().toLowerCase(),
+          normalizedType
+        )
     );
     if (docs.length === 0) {
       return [];
@@ -1215,7 +1420,7 @@
     side: 'seller' | 'buyer'
   ): boolean {
     const docs = getDocumentsForMatrixCell(contract, documentType, side);
-    if (documentType.trim().toLowerCase() !== 'outro') {
+    if (!isOutroMatrixDocumentType(documentType)) {
       return true;
     }
     return docs.length < 15;
@@ -1227,11 +1432,57 @@
     side: 'seller' | 'buyer'
   ): string {
     const docs = getDocumentsForMatrixCell(contract, documentType, side);
-    const normalizedType = documentType.trim().toLowerCase();
-    if (normalizedType === 'outro') {
+    if (isOutroMatrixDocumentType(documentType)) {
       return docs.length > 0 ? 'Adicionar outro' : 'Enviar';
     }
     return docs.length > 0 ? 'Substituir' : 'Enviar';
+  }
+
+  function resolveMatrixUploadCategory(documentType: string, side: 'seller' | 'buyer'): string {
+    const normalizedType = documentType.trim().toLowerCase();
+    if (normalizedType === 'doc_identidade') return 'identidade';
+    if (normalizedType === 'comprovante_endereco') return 'comprovante_endereco';
+    if (normalizedType === 'certidao_casamento_nascimento') return 'estado_civil';
+    if (normalizedType === 'comprovante_renda') return 'comprovante_renda';
+    if (normalizedType === 'certidao_inteiro_teor' || normalizedType === 'certidao_onus_acoes') {
+      return 'docs_imovel';
+    }
+    if (normalizedType === 'dados_bancarios') return 'dados_bancarios';
+    if (normalizedType === 'outro' || normalizedType.startsWith('cliente_outro_')) return 'outro';
+    return normalizedType;
+  }
+
+  function isOutroMatrixDocumentType(value: unknown): boolean {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    return normalized === 'outro' || normalized.startsWith('cliente_outro_');
+  }
+
+  function documentTypeMatchesMatrixCell(documentType: string, matrixType: string): boolean {
+    if (matrixType === 'outro') {
+      return isOutroMatrixDocumentType(documentType);
+    }
+    return documentType === matrixType;
+  }
+
+  function resolveOutroMatrixDocumentType(contract: ContractItem, side: 'seller' | 'buyer'): string | null {
+    const docs = getDocumentsForMatrixCell(contract, 'outro', side);
+    if (docs.length >= outroMatrixSlotTypes.length) {
+      return null;
+    }
+
+    const usedTypes = new Set(
+      docs
+        .map((doc) => String(doc.documentType ?? '').trim().toLowerCase())
+        .filter((value) => value.startsWith('cliente_outro_'))
+    );
+
+    for (const slotType of outroMatrixSlotTypes) {
+      if (!usedTypes.has(slotType)) {
+        return slotType;
+      }
+    }
+
+    return null;
   }
 
   async function fetchContracts() {
@@ -1328,14 +1579,14 @@
       estadoCivil: getRecordValueRaw(selected.sellerInfo, ['estado_civil', 'estadoCivil']),
       profissao: getRecordValueRaw(selected.sellerInfo, ['profissao']),
       email: getRecordValueRaw(selected.sellerInfo, ['email']),
-      telefone: getRecordValueRaw(selected.sellerInfo, ['telefone', 'phone']),
+      telefone: formatPhoneMaskBr(getRecordValueRaw(selected.sellerInfo, ['telefone', 'phone'])),
       dadosBancarios: getRecordValueRaw(selected.sellerInfo, ['dados_bancarios', 'dadosBancarios']),
     };
     buyerInfoForm = {
       estadoCivil: getRecordValueRaw(selected.buyerInfo, ['estado_civil', 'estadoCivil']),
       profissao: getRecordValueRaw(selected.buyerInfo, ['profissao']),
       email: getRecordValueRaw(selected.buyerInfo, ['email']),
-      telefone: getRecordValueRaw(selected.buyerInfo, ['telefone', 'phone']),
+      telefone: formatPhoneMaskBr(getRecordValueRaw(selected.buyerInfo, ['telefone', 'phone'])),
       garantiaLocacao: getRecordValueRaw(selected.buyerInfo, ['garantia_locacao', 'garantiaLocacao']),
     };
   }
@@ -1356,7 +1607,7 @@
       estado_civil: trimInfoValue(sellerInfoForm.estadoCivil),
       profissao: trimInfoValue(sellerInfoForm.profissao),
       email: trimInfoValue(sellerInfoForm.email),
-      telefone: trimInfoValue(sellerInfoForm.telefone),
+      telefone: normalizePhoneForPayload(sellerInfoForm.telefone),
       dados_bancarios: trimInfoValue(sellerInfoForm.dadosBancarios),
     };
   }
@@ -1372,7 +1623,7 @@
       estado_civil: trimInfoValue(buyerInfoForm.estadoCivil),
       profissao: trimInfoValue(buyerInfoForm.profissao),
       email: trimInfoValue(buyerInfoForm.email),
-      telefone: trimInfoValue(buyerInfoForm.telefone),
+      telefone: normalizePhoneForPayload(buyerInfoForm.telefone),
       garantia_locacao: trimInfoValue(buyerInfoForm.garantiaLocacao),
     };
   }
@@ -1519,8 +1770,21 @@
     const uploadKey = `${matrixUploadContext.side}:${matrixUploadContext.documentType}`;
     matrixUploadingKey = uploadKey;
     try {
+      const normalizedType = matrixUploadContext.documentType.trim().toLowerCase();
+      const storageDocumentType =
+        normalizedType === 'outro'
+          ? resolveOutroMatrixDocumentType(selected, matrixUploadContext.side)
+          : matrixUploadContext.documentType;
+      if (!storageDocumentType) {
+        toast.error('Limite de documentos outros atingido para este lado.');
+        return;
+      }
       const form = new FormData();
-      form.append('documentType', matrixUploadContext.documentType);
+      form.append('documentType', storageDocumentType);
+      form.append(
+        'documentCategory',
+        resolveMatrixUploadCategory(storageDocumentType, matrixUploadContext.side)
+      );
       form.append('side', matrixUploadContext.side);
       form.append('file', file);
       await apiClient.post(`/contracts/${selected.id}/documents`, form, {
@@ -1866,6 +2130,12 @@
     refresh(true);
   });
 
+  onDestroy(() => {
+    if (documentPreviewOwnsObjectUrl && documentPreviewObjectUrl) {
+      URL.revokeObjectURL(documentPreviewObjectUrl);
+    }
+  });
+
   $: if (hasMounted) {
     activeTab;
     currentPage;
@@ -1947,12 +2217,19 @@
           <div class="flex items-start justify-between gap-3">
             <div class="flex min-w-0 items-start gap-3">
               {#if getPropertyImageUrl(item)}
-                <img
-                  src={getPropertyImageUrl(item)}
-                  alt={getPropertyImageAlt(item)}
-                  class="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700"
-                  loading="lazy"
-                />
+                <button
+                  type="button"
+                  class="shrink-0 overflow-hidden rounded-lg ring-1 ring-gray-200 transition hover:scale-[1.01] hover:ring-emerald-400 dark:ring-gray-700"
+                  on:click={() => openPropertyImagePreview(getPropertyImageUrl(item), getPropertyImageAlt(item))}
+                  title="Abrir imagem"
+                >
+                  <img
+                    src={getPropertyImageUrl(item)}
+                    alt={getPropertyImageAlt(item)}
+                    class="h-14 w-14 object-cover"
+                    loading="lazy"
+                  />
+                </button>
               {/if}
               <div class="min-w-0">
                 <p class="text-base font-semibold text-gray-900 dark:text-gray-100">
@@ -2044,12 +2321,19 @@
               <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                 <div class="flex items-start gap-3">
                   {#if getPropertyImageUrl(item)}
-                    <img
-                      src={getPropertyImageUrl(item)}
-                      alt={getPropertyImageAlt(item)}
-                      class="h-12 w-12 shrink-0 rounded-md object-cover ring-1 ring-gray-200 dark:ring-gray-700"
-                      loading="lazy"
-                    />
+                    <button
+                      type="button"
+                      class="shrink-0 overflow-hidden rounded-md ring-1 ring-gray-200 transition hover:scale-[1.01] hover:ring-emerald-400 dark:ring-gray-700"
+                      on:click={() => openPropertyImagePreview(getPropertyImageUrl(item), getPropertyImageAlt(item))}
+                      title="Abrir imagem"
+                    >
+                      <img
+                        src={getPropertyImageUrl(item)}
+                        alt={getPropertyImageAlt(item)}
+                        class="h-12 w-12 object-cover"
+                        loading="lazy"
+                      />
+                    </button>
                   {/if}
                   <div class="min-w-0">
                     <div class="font-semibold">
@@ -2189,6 +2473,9 @@
 
       {#if modalMode === 'review_docs'}
         <div class="space-y-4">
+          <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
+            {getContractPartySummary(selected)}
+          </div>
           <div class="grid gap-4 md:grid-cols-2">
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <div class="flex items-center justify-between gap-2">
@@ -2213,7 +2500,16 @@
                   <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-estado-civil"
                     >Estado civil</label
                   >
-                  <LabeledTextInput id="seller-estado-civil" bind:value={sellerInfoForm.estadoCivil} disabled={savingPartyData} />
+                  <select
+                    id="seller-estado-civil"
+                    bind:value={sellerInfoForm.estadoCivil}
+                    disabled={savingPartyData}
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
+                  >
+                    {#each maritalStatusOptions as option}
+                      <option value={option}>{option || 'Selecione'}</option>
+                    {/each}
+                  </select>
                 </div>
                 <div>
                   <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-profissao"
@@ -2236,13 +2532,30 @@
                   <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-telefone"
                     >Telefone</label
                   >
-                  <LabeledTextInput id="seller-telefone" bind:value={sellerInfoForm.telefone} disabled={savingPartyData} />
+                  <input
+                    id="seller-telefone"
+                    value={sellerInfoForm.telefone}
+                    disabled={savingPartyData}
+                    inputmode="numeric"
+                    placeholder="(00) 00000-0000"
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
+                    on:input={(event) => {
+                      const target = event.currentTarget as HTMLInputElement;
+                      sellerInfoForm = { ...sellerInfoForm, telefone: formatPhoneMaskBr(target.value) };
+                    }}
+                  />
                 </div>
                 <div>
                   <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-banco"
                     >Dados bancários</label
                   >
-                  <LabeledTextInput id="seller-banco" bind:value={sellerInfoForm.dadosBancarios} disabled={savingPartyData} />
+                  <textarea
+                    id="seller-banco"
+                    bind:value={sellerInfoForm.dadosBancarios}
+                    disabled={savingPartyData}
+                    rows="3"
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
+                  ></textarea>
                 </div>
               </div>
             </div>
@@ -2269,7 +2582,16 @@
                   <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-estado-civil"
                     >Estado civil</label
                   >
-                  <LabeledTextInput id="buyer-estado-civil" bind:value={buyerInfoForm.estadoCivil} disabled={savingPartyData} />
+                  <select
+                    id="buyer-estado-civil"
+                    bind:value={buyerInfoForm.estadoCivil}
+                    disabled={savingPartyData}
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
+                  >
+                    {#each maritalStatusOptions as option}
+                      <option value={option}>{option || 'Selecione'}</option>
+                    {/each}
+                  </select>
                 </div>
                 <div>
                   <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-profissao"
@@ -2287,7 +2609,18 @@
                   <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-telefone"
                     >Telefone</label
                   >
-                  <LabeledTextInput id="buyer-telefone" bind:value={buyerInfoForm.telefone} disabled={savingPartyData} />
+                  <input
+                    id="buyer-telefone"
+                    value={buyerInfoForm.telefone}
+                    disabled={savingPartyData}
+                    inputmode="numeric"
+                    placeholder="(00) 00000-0000"
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
+                    on:input={(event) => {
+                      const target = event.currentTarget as HTMLInputElement;
+                      buyerInfoForm = { ...buyerInfoForm, telefone: formatPhoneMaskBr(target.value) };
+                    }}
+                  />
                 </div>
                 <div>
                   <label
@@ -2370,9 +2703,13 @@
                               {#each sellerDocs as sellerDoc (sellerDoc.id)}
                                 <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
                                   <div class="flex flex-wrap items-center gap-2">
-                                    <p class="font-medium text-gray-900 dark:text-gray-100">
+                                    <button
+                                      type="button"
+                                      class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
+                                      on:click={() => selected && openDocumentPreview(sellerDoc, selected)}
+                                    >
                                       {documentFileName(sellerDoc)}
-                                    </p>
+                                    </button>
                                     {#if hasDocumentReviewStatus(sellerDoc)}
                                       <span
                                         class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
@@ -2458,9 +2795,13 @@
                               {#each buyerDocs as buyerDoc (buyerDoc.id)}
                                 <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
                                   <div class="flex flex-wrap items-center gap-2">
-                                    <p class="font-medium text-gray-900 dark:text-gray-100">
+                                    <button
+                                      type="button"
+                                      class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
+                                      on:click={() => selected && openDocumentPreview(buyerDoc, selected)}
+                                    >
                                       {documentFileName(buyerDoc)}
-                                    </p>
+                                    </button>
                                     {#if hasDocumentReviewStatus(buyerDoc)}
                                       <span
                                         class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
@@ -2664,9 +3005,18 @@
               </p>
               <div class="mt-2 flex flex-col gap-3 rounded bg-gray-50 px-3 py-3 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
                 <div class="min-w-0">
-                  <p class="font-medium text-gray-900 dark:text-gray-100">
+                  <button
+                    type="button"
+                    class="mt-1 block text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
+                    on:click={() => {
+                      const draftDoc = getCurrentDraftDocument(selected);
+                      if (selected && draftDoc) {
+                        void openDocumentPreview(draftDoc, selected);
+                      }
+                    }}
+                  >
                     {documentFileName(getCurrentDraftDocument(selected))}
-                  </p>
+                  </button>
                   <p class="text-xs text-gray-500 dark:text-gray-400">
                     Enviado em {formatDate(getCurrentDraftDocument(selected)?.createdAt)}
                   </p>
@@ -2705,9 +3055,13 @@
                   <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
                     <div class="min-w-0">
                       <div class="flex flex-wrap items-center gap-2">
-                        <p class="font-medium text-gray-900 dark:text-gray-100">
+                        <button
+                          type="button"
+                          class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
+                          on:click={() => selected && openDocumentPreview(doc, selected)}
+                        >
                           {documentLabel(doc.documentType)}
-                        </p>
+                        </button>
                         {#if documentSideLabel(doc)}
                           <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                             {documentSideLabel(doc)}
@@ -2723,9 +3077,13 @@
                           </span>
                         {/if}
                       </div>
-                      <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                      <button
+                        type="button"
+                        class="mt-1 block truncate text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
+                        on:click={() => selected && openDocumentPreview(doc, selected)}
+                      >
                         {documentFileName(doc)}
-                      </p>
+                      </button>
                       <p class="text-xs text-gray-500 dark:text-gray-400">
                         Enviado em {formatDate(doc.createdAt)}
                       </p>
@@ -2817,7 +3175,13 @@
                 {#each getDocumentsForFinalize(selected) as doc (doc.id)}
                   <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
                     <div>
-                      <p class="font-medium text-gray-900 dark:text-gray-100">{documentLabel(doc.documentType)}</p>
+                      <button
+                        type="button"
+                        class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
+                        on:click={() => selected && openDocumentPreview(doc, selected)}
+                      >
+                        {documentLabel(doc.documentType)}
+                      </button>
                       <p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(doc.createdAt)}</p>
                     </div>
                     <Button
@@ -2869,9 +3233,13 @@
                           </span>
                         {/if}
                       </div>
-                      <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                      <button
+                        type="button"
+                        class="mt-1 block truncate text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
+                        on:click={() => selected && openDocumentPreview(doc, selected)}
+                      >
                         {documentFileName(doc)}
-                      </p>
+                      </button>
                       <p class="text-xs text-gray-500 dark:text-gray-400">
                         Enviado em {formatDate(doc.createdAt)}
                       </p>
@@ -3132,9 +3500,13 @@
                           </span>
                         {/if}
                       </div>
-                      <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                      <button
+                        type="button"
+                        class="mt-1 block truncate text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
+                        on:click={() => selected && openDocumentPreview(doc, selected)}
+                      >
                         {documentFileName(doc)}
-                      </p>
+                      </button>
                       <p class="text-xs text-gray-500 dark:text-gray-400">
                         Enviado em {formatDate(doc.createdAt)}
                       </p>
@@ -3257,6 +3629,130 @@
           </div>
         </div>
       {/if}
+    </div>
+  </div>
+{/if}
+
+{#if documentPreviewOpen}
+  <div
+    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-3"
+    role="presentation"
+    on:click={(event) => {
+      if (event.target === event.currentTarget) {
+        closeDocumentPreview();
+      }
+    }}
+    on:keydown={() => {}}
+  >
+    <div
+      class={`flex w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-gray-950 ${
+        documentPreviewIsFullscreen
+          ? 'h-[calc(100vh-1rem)] max-w-none rounded-none'
+          : 'max-h-[92vh] max-w-6xl rounded-2xl'
+      }`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="document-preview-title"
+    >
+      <div class="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+        <div class="min-w-0">
+          <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            {documentPreviewDoc ? 'Documento do contrato' : 'Imagem do imóvel'}
+          </p>
+          <h3 id="document-preview-title" class="truncate text-base font-semibold text-gray-900 dark:text-gray-100">
+            {documentPreviewTitle || 'Visualização'}
+          </h3>
+          {#if documentPreviewFileName}
+            <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+              {documentPreviewFileName}
+            </p>
+          {/if}
+        </div>
+        <div class="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            on:click={() => (documentPreviewIsFullscreen = !documentPreviewIsFullscreen)}
+            title="Alternar tela cheia"
+          >
+            <Maximize2 class="h-4 w-4" />
+          </Button>
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            on:click={() => closeDocumentPreview()}
+            aria-label="Fechar visualização"
+          >
+            <X class="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div class="flex min-h-0 flex-1 flex-col gap-3 p-4">
+        {#if documentPreviewLoading}
+          <div class="flex min-h-[280px] flex-1 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40">
+            <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+              <Loader2 class="h-4 w-4 animate-spin" />
+              Carregando visualização...
+            </div>
+          </div>
+        {:else if documentPreviewError}
+          <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+            {documentPreviewError}
+          </div>
+        {:else}
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = Math.max(0.5, Number((documentPreviewZoom - 0.25).toFixed(2))))}>
+                <ZoomOut class="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = Math.min(3, Number((documentPreviewZoom + 0.25).toFixed(2))))}>
+                <ZoomIn class="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = 1)}>
+                100%
+              </Button>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" on:click={downloadPreviewDocument}>
+                <Download class="mr-2 h-4 w-4" />
+                Baixar
+              </Button>
+              {#if documentPreviewDoc}
+                <Button size="sm" variant="outline" on:click={replacePreviewDocument}>
+                  <RefreshCcw class="mr-2 h-4 w-4" />
+                  Substituir
+                </Button>
+                <Button size="sm" variant="destructive" on:click={deletePreviewDocument}>
+                  <Trash2 class="mr-2 h-4 w-4" />
+                  Excluir
+                </Button>
+              {/if}
+            </div>
+          </div>
+
+          <div class="min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 p-4 dark:border-gray-800 dark:bg-black">
+            <div
+              class="flex min-h-full w-full justify-center"
+              style={`transform: scale(${documentPreviewZoom}); transform-origin: top center;`}
+            >
+              {#if documentPreviewKind === 'image'}
+                <img
+                  src={documentPreviewSourceUrl}
+                  alt={documentPreviewFileName}
+                  class="max-h-[76vh] max-w-full rounded-lg object-contain shadow-2xl"
+                />
+              {:else}
+                <iframe
+                  src={documentPreviewSourceUrl}
+                  title={documentPreviewFileName}
+                  class="h-[76vh] w-[min(100vw-4rem,960px)] rounded-lg border border-gray-200 bg-white shadow-2xl dark:border-gray-800"
+                ></iframe>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 {/if}

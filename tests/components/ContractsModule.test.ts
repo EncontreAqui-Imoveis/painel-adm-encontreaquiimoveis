@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { within } from '@testing-library/dom';
 
 const {
   apiGetMock,
@@ -8,6 +9,7 @@ const {
   apiPatchMock,
   apiDeleteMock,
   apiClientGetMock,
+  apiClientPostMock,
   toastErrorMock,
   toastSuccessMock,
 } = vi.hoisted(() => ({
@@ -17,6 +19,7 @@ const {
   apiPatchMock: vi.fn(),
   apiDeleteMock: vi.fn(),
   apiClientGetMock: vi.fn(),
+  apiClientPostMock: vi.fn(),
   toastErrorMock: vi.fn(),
   toastSuccessMock: vi.fn(),
 }));
@@ -31,6 +34,7 @@ vi.mock('$lib/apiClient', () => ({
   },
   apiClient: {
     get: apiClientGetMock,
+    post: apiClientPostMock,
   },
 }));
 
@@ -119,6 +123,15 @@ describe('ContractsModule', () => {
       page: 1,
       limit: 20,
     });
+    apiClientGetMock.mockImplementation(async (endpoint: string) => {
+      if (String(endpoint).includes('/download')) {
+        return {
+          data: new Blob(['preview'], { type: 'application/pdf' }),
+          headers: { 'content-type': 'application/pdf' },
+        };
+      }
+      return { data: null, headers: {} };
+    });
 
     render(ContractsModule);
 
@@ -139,13 +152,188 @@ describe('ContractsModule', () => {
     expect(await screen.findByText('Dados Captador')).toBeInTheDocument();
     expect(screen.getByText('2 responsáveis designados')).toBeInTheDocument();
     expect(screen.getByDisplayValue('captador@test.com')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('62999998888')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('(62) 99999-8888')).toBeInTheDocument();
     expect(screen.getByDisplayValue('vendedor@test.com')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('62999997777')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('(62) 99999-7777')).toBeInTheDocument();
 
     const downloadButtons = screen.getAllByRole('button', { name: 'Baixar' });
     expect(downloadButtons.length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(5);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'identidade.pdf' }));
+    const previewDialog = await screen.findByRole('dialog', {
+      name: 'identidade.pdf',
+    });
+    expect(within(previewDialog).getByText('Documento do contrato')).toBeInTheDocument();
+    expect(within(previewDialog).getByRole('button', { name: 'Substituir' })).toBeInTheDocument();
+    expect(within(previewDialog).getByRole('button', { name: 'Excluir' })).toBeInTheDocument();
+  });
+
+  it('envia slot outro explícito na matriz para seller', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
+        return {
+          data: [
+            {
+              id: 'contract-outro-1',
+              status: 'AWAITING_DOCS',
+              negotiationId: 'neg-outro-1',
+              propertyId: 700,
+              propertyCode: 'RV-700',
+              propertyTitle: 'Casa Outro',
+              propertyPurpose: 'Venda',
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              sellerInfo: {},
+              buyerInfo: {},
+              documentRequirements: {
+                seller: [{ category: 'dados_bancarios', applicability: 'required' }],
+                buyer: [{ category: 'conjuge_documentos', applicability: 'not_applicable' }],
+              },
+              documents: [],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-01T10:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint.includes('/contracts/contract-outro-1')) {
+        return {
+          contract: {
+            id: 'contract-outro-1',
+            status: 'AWAITING_DOCS',
+            negotiationId: 'neg-outro-1',
+            propertyId: 700,
+            propertyCode: 'RV-700',
+            propertyTitle: 'Casa Outro',
+            propertyPurpose: 'Venda',
+            capturingBrokerName: 'Captador',
+            sellingBrokerName: 'Vendedor',
+            documents: [],
+          },
+          documents: [],
+        };
+      }
+
+      return { data: [], total: 0 };
+    });
+
+    apiClientPostMock.mockResolvedValue({ data: {} });
+
+    const { container } = render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Analisar Documentação' }));
+
+    const uploadButtons = screen.getAllByRole('button', { name: 'Enviar' });
+    expect(uploadButtons).toHaveLength(2);
+
+    const hiddenInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(hiddenInput).toBeTruthy();
+
+    await fireEvent.click(uploadButtons[0]);
+    await fireEvent.change(hiddenInput, {
+      target: {
+        files: [new File(['seller-doc'], 'seller.pdf', { type: 'application/pdf' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(1);
+    });
+
+    let formData = apiClientPostMock.mock.calls[0][1] as FormData;
+    expect(formData.get('documentType')).toBe('cliente_outro_01');
+    expect(formData.get('documentCategory')).toBe('outro');
+    expect(formData.get('side')).toBe('seller');
+
+    const remainingUploadButton = screen
+      .getAllByRole('button', { name: 'Enviar' })
+      .find((button) => !(button as HTMLButtonElement).disabled);
+    expect(remainingUploadButton).toBeTruthy();
+    await fireEvent.click(remainingUploadButton as HTMLButtonElement);
+    expect(remainingUploadButton).toBeTruthy();
+  });
+
+  it('envia slot outro explícito na matriz para buyer', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
+        return {
+          data: [
+            {
+              id: 'contract-outro-2',
+              status: 'AWAITING_DOCS',
+              negotiationId: 'neg-outro-2',
+              propertyId: 701,
+              propertyCode: 'RV-701',
+              propertyTitle: 'Casa Outro Buyer',
+              propertyPurpose: 'Venda',
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              sellerInfo: {},
+              buyerInfo: {},
+              documentRequirements: {
+                seller: [{ category: 'dados_bancarios', applicability: 'not_applicable' }],
+                buyer: [{ category: 'conjuge_documentos', applicability: 'required' }],
+              },
+              documents: [],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-01T10:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint.includes('/contracts/contract-outro-2')) {
+        return {
+          contract: {
+            id: 'contract-outro-2',
+            status: 'AWAITING_DOCS',
+            negotiationId: 'neg-outro-2',
+            propertyId: 701,
+            propertyCode: 'RV-701',
+            propertyTitle: 'Casa Outro Buyer',
+            propertyPurpose: 'Venda',
+            capturingBrokerName: 'Captador',
+            sellingBrokerName: 'Vendedor',
+            documents: [],
+          },
+          documents: [],
+        };
+      }
+
+      return { data: [], total: 0 };
+    });
+
+    apiClientPostMock.mockResolvedValue({ data: {} });
+
+    const { container } = render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Analisar Documentação' }));
+
+    const uploadButtons = screen.getAllByRole('button', { name: 'Enviar' });
+    expect(uploadButtons).toHaveLength(1);
+
+    const hiddenInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(hiddenInput).toBeTruthy();
+
+    await fireEvent.click(uploadButtons[0]);
+    await fireEvent.change(hiddenInput, {
+      target: {
+        files: [new File(['buyer-doc'], 'buyer.pdf', { type: 'application/pdf' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(1);
+    });
+
+    const formData = apiClientPostMock.mock.calls[0][1] as FormData;
+    expect(formData.get('documentType')).toBe('cliente_outro_01');
+    expect(formData.get('documentCategory')).toBe('outro');
+    expect(formData.get('side')).toBe('buyer');
   });
 
   it('bloqueia o Aprovar normal e mantém Aprovar c/ ressalvas ativo quando faltam dados obrigatórios', async () => {
