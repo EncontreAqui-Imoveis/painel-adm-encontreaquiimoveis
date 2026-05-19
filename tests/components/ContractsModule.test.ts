@@ -58,6 +58,7 @@ describe('ContractsModule', () => {
           propertyId: 900,
           propertyCode: 'RV-900',
           propertyTitle: 'Casa Contrato',
+          propertyImageUrl: 'https://cdn.example.com/property-900.jpg',
           propertyPurpose: 'Venda',
           capturingBrokerId: 30001,
           sellingBrokerId: 30002,
@@ -76,6 +77,7 @@ describe('ContractsModule', () => {
             email: 'vendedor@test.com',
             telefone: '62999997777',
           },
+          buyerClientName: 'Cliente Comprador',
           sellerApprovalStatus: 'APPROVED_WITH_RES',
           buyerApprovalStatus: 'PENDING',
           sellerApprovalReason: {
@@ -124,8 +126,10 @@ describe('ContractsModule', () => {
       await screen.findByText((content) => content.includes('RV-900'))
     ).toBeInTheDocument();
     expect(screen.getByText('Casa Contrato')).toBeInTheDocument();
+    expect(screen.getByAltText('Foto do imóvel Casa Contrato')).toBeInTheDocument();
     expect(screen.getAllByText('Captador').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
+    expect(screen.getByText('Cliente Comprador')).toBeInTheDocument();
 
     const openReviewButton = await screen.findByRole('button', {
       name: 'Analisar Documentação',
@@ -134,27 +138,14 @@ describe('ContractsModule', () => {
 
     expect(await screen.findByText('Dados Captador')).toBeInTheDocument();
     expect(screen.getByText('2 responsáveis designados')).toBeInTheDocument();
-    expect(screen.getByText('Leitura por papel')).toBeInTheDocument();
-    expect(
-      screen.getAllByText((_, element) =>
-        element?.textContent?.includes('Captador: documentos do lado vendedor/captador.')
-      ).length
-    ).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText((_, element) =>
-        element?.textContent?.includes('Comprador: documentos do lado comprador.')
-      ).length
-    ).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText((_, element) =>
-        element?.textContent?.includes(
-          'Responsável designado: pode complementar ambos os lados nesta etapa.'
-        )
-      ).length
-    ).toBeGreaterThan(0);
+    expect(screen.getByDisplayValue('captador@test.com')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('62999998888')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('vendedor@test.com')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('62999997777')).toBeInTheDocument();
 
     const downloadButtons = screen.getAllByRole('button', { name: 'Baixar' });
     expect(downloadButtons.length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(5);
   });
 
   it('bloqueia o Aprovar normal e mantém Aprovar c/ ressalvas ativo quando faltam dados obrigatórios', async () => {

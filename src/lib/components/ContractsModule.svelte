@@ -47,11 +47,13 @@
     propertyId: number;
     propertyCode?: string | null;
     propertyTitle?: string | null;
+    propertyImageUrl?: string | null;
     propertyPurpose?: string | null;
     capturingBrokerId?: number | null;
     sellingBrokerId?: number | null;
     capturingBrokerName?: string | null;
     sellingBrokerName?: string | null;
+    buyerClientName?: string | null;
     sellerInfo?: Record<string, unknown> | null;
     buyerInfo?: Record<string, unknown> | null;
     sellerApprovalStatus?: ContractApprovalStatus | null;
@@ -157,6 +159,22 @@
   const buyerRentalRequiredInfoFields: RequiredFieldDescriptor[] = [
     { keys: ['garantia_locacao', 'garantiaLocacao'], label: 'Garantia de Locação' },
   ];
+  const matrixDocumentSortOrder = [
+    'doc_identidade',
+    'comprovante_endereco',
+    'certidao_casamento_nascimento',
+    'certidao_inteiro_teor',
+    'certidao_onus_acoes',
+    'comprovante_renda',
+    'outro',
+  ];
+  const buyerMatrixDocumentTypes = new Set([
+    'doc_identidade',
+    'comprovante_endereco',
+    'certidao_casamento_nascimento',
+    'comprovante_renda',
+    'outro',
+  ]);
 
   let activeTab: ContractStatus = 'AWAITING_DOCS';
   let items: ContractItem[] = [];
@@ -252,6 +270,9 @@
   }
 
   function getBuyerDisplayName(contract: ContractItem): string {
+    if (contract.buyerClientName && String(contract.buyerClientName).trim().length > 0) {
+      return String(contract.buyerClientName).trim();
+    }
     const buyerInfo = contract.buyerInfo ?? null;
     const fromInfo = getRecordValueRaw(buyerInfo, [
       'nome',
@@ -262,6 +283,18 @@
       'client_name',
     ]);
     return fromInfo || '-';
+  }
+
+  function getPropertyImageUrl(contract: ContractItem): string {
+    return String(contract.propertyImageUrl ?? '').trim();
+  }
+
+  function getPropertyImageAlt(contract: ContractItem): string {
+    const title = String(contract.propertyTitle ?? '').trim();
+    if (title.length > 0) {
+      return `Foto do imóvel ${title}`;
+    }
+    return 'Foto do imóvel';
   }
 
   function formatDate(value?: string | null): string {
@@ -727,6 +760,15 @@
     return false;
   }
 
+  function matrixSortWeight(documentType: string): number {
+    const index = matrixDocumentSortOrder.indexOf(String(documentType ?? '').trim().toLowerCase());
+    return index >= 0 ? index : matrixDocumentSortOrder.length;
+  }
+
+  function shouldShowBuyerMatrixSide(documentType: string): boolean {
+    return buyerMatrixDocumentTypes.has(String(documentType ?? '').trim().toLowerCase());
+  }
+
   function requiresExactSaleSplit(contract: ContractItem | null): boolean {
     const purpose = String(contract?.propertyPurpose ?? '').trim().toLowerCase();
     const isRentalOnly = purpose.includes('alug') && !purpose.includes('venda');
@@ -827,18 +869,13 @@
     const requirements = readRawMatrixRequirements(contract);
     if (requirements.length === 0) {
       const fallbackTypes = getRequiredDocTypes(contract);
-      if (isDoubleEndedDeal(contract)) {
-        return fallbackTypes.map((documentType) => ({
+      return fallbackTypes
+        .map((documentType) => ({
           documentType,
           sellerRequired: true,
-          buyerRequired: false,
-        }));
-      }
-      return fallbackTypes.map((documentType) => ({
-        documentType,
-        sellerRequired: true,
-        buyerRequired: true,
-      }));
+          buyerRequired: shouldShowBuyerMatrixSide(documentType),
+        }))
+        .sort((left, right) => matrixSortWeight(left.documentType) - matrixSortWeight(right.documentType));
     }
 
     const rows = new Map<string, MatrixRow>();
@@ -853,7 +890,14 @@
       rows.set(requirement.documentType, current);
     }
 
-    return Array.from(rows.values());
+    return Array.from(rows.values())
+      .map((row) => ({
+        ...row,
+        buyerRequired: row.buyerRequired || shouldShowBuyerMatrixSide(row.documentType),
+      }))
+      .sort(
+      (left, right) => matrixSortWeight(left.documentType) - matrixSortWeight(right.documentType)
+      );
   }
 
   function readProgressStatus(
@@ -1135,6 +1179,59 @@
     }
 
     return null;
+  }
+
+  function getDocumentsForMatrixCell(
+    contract: ContractItem,
+    documentType: string,
+    side: 'seller' | 'buyer'
+  ): ContractDocument[] {
+    const normalizedType = documentType.trim().toLowerCase();
+    const docs = getNonProposalDocuments(contract).filter(
+      (doc) => String(doc.documentType ?? '').trim().toLowerCase() === normalizedType
+    );
+    if (docs.length === 0) {
+      return [];
+    }
+
+    const direct = docs.filter((doc) => getDocumentSide(doc) === side);
+    const neutral = docs.filter((doc) => getDocumentSide(doc) == null);
+
+    const ordered = [...direct, ...neutral];
+    if (ordered.length > 0) {
+      return Array.from(new Map(ordered.map((doc) => [doc.id, doc])).values());
+    }
+
+    if (isDoubleEndedDeal(contract)) {
+      return Array.from(new Map(docs.map((doc) => [doc.id, doc])).values());
+    }
+
+    return [];
+  }
+
+  function canAddAnotherMatrixDocument(
+    contract: ContractItem,
+    documentType: string,
+    side: 'seller' | 'buyer'
+  ): boolean {
+    const docs = getDocumentsForMatrixCell(contract, documentType, side);
+    if (documentType.trim().toLowerCase() !== 'outro') {
+      return true;
+    }
+    return docs.length < 15;
+  }
+
+  function matrixCellUploadLabel(
+    contract: ContractItem,
+    documentType: string,
+    side: 'seller' | 'buyer'
+  ): string {
+    const docs = getDocumentsForMatrixCell(contract, documentType, side);
+    const normalizedType = documentType.trim().toLowerCase();
+    if (normalizedType === 'outro') {
+      return docs.length > 0 ? 'Adicionar outro' : 'Enviar';
+    }
+    return docs.length > 0 ? 'Substituir' : 'Enviar';
   }
 
   async function fetchContracts() {
@@ -1848,11 +1945,21 @@
       {#each items as item (item.id)}
         <article class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
           <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <p class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                ID {item.propertyId}{#if item.propertyCode}{' · '}{item.propertyCode}{/if}
-              </p>
-              <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">{item.propertyTitle ?? '-'}</p>
+            <div class="flex min-w-0 items-start gap-3">
+              {#if getPropertyImageUrl(item)}
+                <img
+                  src={getPropertyImageUrl(item)}
+                  alt={getPropertyImageAlt(item)}
+                  class="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700"
+                  loading="lazy"
+                />
+              {/if}
+              <div class="min-w-0">
+                <p class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                  ID {item.propertyId}{#if item.propertyCode}{' · '}{item.propertyCode}{/if}
+                </p>
+                <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">{item.propertyTitle ?? '-'}</p>
+              </div>
             </div>
             <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
               {statusLabel(item.status)}
@@ -1935,11 +2042,23 @@
           {#each items as item (item.id)}
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
               <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                <div class="font-semibold">
-                  ID {item.propertyId}{#if item.propertyCode}{' · '}{item.propertyCode}{/if}
-                </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">
-                  {item.propertyTitle ?? '-'}
+                <div class="flex items-start gap-3">
+                  {#if getPropertyImageUrl(item)}
+                    <img
+                      src={getPropertyImageUrl(item)}
+                      alt={getPropertyImageAlt(item)}
+                      class="h-12 w-12 shrink-0 rounded-md object-cover ring-1 ring-gray-200 dark:ring-gray-700"
+                      loading="lazy"
+                    />
+                  {/if}
+                  <div class="min-w-0">
+                    <div class="font-semibold">
+                      ID {item.propertyId}{#if item.propertyCode}{' · '}{item.propertyCode}{/if}
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                      {item.propertyTitle ?? '-'}
+                    </div>
+                  </div>
                 </div>
                 {#if getApprovalRemarkSummaries(item).length > 0}
                   <div class="mt-2 flex flex-wrap gap-2">
@@ -2070,21 +2189,6 @@
 
       {#if modalMode === 'review_docs'}
         <div class="space-y-4">
-          {#if readResponsibleUserIds(selected).length > 0}
-            <div class="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200">
-              Responsáveis designados podem enviar documentos de captador e comprador nesta etapa.
-            </div>
-          {/if}
-          <div class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
-            <p class="font-medium text-gray-900 dark:text-gray-100">Leitura por papel</p>
-            <ul class="mt-2 space-y-1 text-sm">
-              <li><span class="font-medium">Captador:</span> documentos do lado vendedor/captador.</li>
-              <li><span class="font-medium">Comprador:</span> documentos do lado comprador.</li>
-              {#if readResponsibleUserIds(selected).length > 0}
-                <li><span class="font-medium">Responsável designado:</span> pode complementar ambos os lados nesta etapa.</li>
-              {/if}
-            </ul>
-          </div>
           <div class="grid gap-4 md:grid-cols-2">
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <div class="flex items-center justify-between gap-2">
@@ -2225,191 +2329,201 @@
                     <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
                       Documento
                     </th>
-                    {#if isDoubleEndedDeal(selected)}
-                      <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
-                        Captador
-                      </th>
-                    {:else}
-                      <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
-                        Captador
-                      </th>
-                      <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
-                        Comprador
-                      </th>
-                    {/if}
+                    <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
+                      Captador
+                    </th>
+                    <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
+                      Comprador
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {#if isDoubleEndedDeal(selected)}
-                    {#each getMatrixRows(selected) as row}
-                      {#if row.sellerRequired}
-                        {@const documentType = row.documentType}
-                        {@const brokerDoc = getDocumentForMatrixCell(selected, documentType, 'seller')}
-                      <tr class="border-b border-gray-100 dark:border-gray-800">
-                        <td class="px-3 py-3 text-gray-700 dark:text-gray-200">
-                          {documentLabel(documentType)}
-                        </td>
-                        <td class="px-3 py-3">
-                          {#if brokerDoc}
-                            <div class="flex flex-wrap items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                on:click={() => selected && viewDocument(brokerDoc, selected)}
-                                disabled={downloadingDocumentId === brokerDoc.id}
-                              >
-                                {#if downloadingDocumentId === brokerDoc.id}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Baixar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                on:click={() => triggerMatrixUpload(documentType, 'seller')}
-                                disabled={matrixUploadingKey === `seller:${documentType}`}
-                              >
-                                {#if matrixUploadingKey === `seller:${documentType}`}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Substituir
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                on:click={() => deleteMatrixDocument(brokerDoc)}
-                                disabled={matrixDeletingDocumentId === brokerDoc.id}
-                              >
-                                {#if matrixDeletingDocumentId === brokerDoc.id}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Excluir
-                              </Button>
-                              {#if hasDocumentReviewStatus(brokerDoc)}
-                                <span
-                                  class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
-                                    brokerDoc
-                                  )}`}
-                                >
-                                  {documentStatusLabel(brokerDoc)}
+                  {#each getMatrixRows(selected) as row}
+                    {@const documentType = row.documentType}
+                    {@const sellerDocs = getDocumentsForMatrixCell(selected, documentType, 'seller')}
+                    {@const buyerDocs = getDocumentsForMatrixCell(selected, documentType, 'buyer')}
+                    <tr class="border-b border-gray-100 dark:border-gray-800">
+                      <td class="px-3 py-3 text-gray-700 dark:text-gray-200">
+                        {documentLabel(documentType)}
+                      </td>
+                      <td class="px-3 py-3">
+                        {#if row.sellerRequired}
+                          <div class="space-y-2">
+                            {#if sellerDocs.length === 0}
+                              <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                  Pendente
                                 </span>
-                              {/if}
-                            </div>
-                          {:else}
-                            <div class="flex flex-wrap items-center gap-2">
-                              <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                Pendente
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                on:click={() => triggerMatrixUpload(documentType, 'seller')}
-                                disabled={matrixUploadingKey === `seller:${documentType}`}
-                              >
-                                {#if matrixUploadingKey === `seller:${documentType}`}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Enviar
-                              </Button>
-                            </div>
-                          {/if}
-                        </td>
-                      </tr>
-                      {/if}
-                    {/each}
-                  {:else}
-                    {#each getMatrixRows(selected) as row}
-                      {@const documentType = row.documentType}
-                      {@const sellerDoc = getDocumentForMatrixCell(selected, documentType, 'seller')}
-                      {@const buyerDoc = getDocumentForMatrixCell(selected, documentType, 'buyer')}
-                      {@const buyerStatus = matrixCellStatus(selected, documentType, 'buyer')}
-                      <tr class="border-b border-gray-100 dark:border-gray-800">
-                        <td class="px-3 py-3 text-gray-700 dark:text-gray-200">
-                          {documentLabel(documentType)}
-                        </td>
-                        <td class="px-3 py-3">
-                          {#if row.sellerRequired && sellerDoc}
-                            <div class="flex flex-wrap items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                on:click={() => selected && viewDocument(sellerDoc, selected)}
-                                disabled={downloadingDocumentId === sellerDoc.id}
-                              >
-                                {#if downloadingDocumentId === sellerDoc.id}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Baixar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                on:click={() => triggerMatrixUpload(documentType, 'seller')}
-                                disabled={matrixUploadingKey === `seller:${documentType}`}
-                              >
-                                {#if matrixUploadingKey === `seller:${documentType}`}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Substituir
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                on:click={() => deleteMatrixDocument(sellerDoc)}
-                                disabled={matrixDeletingDocumentId === sellerDoc.id}
-                              >
-                                {#if matrixDeletingDocumentId === sellerDoc.id}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Excluir
-                              </Button>
-                              {#if hasDocumentReviewStatus(sellerDoc)}
-                                <span
-                                  class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
-                                    sellerDoc
-                                  )}`}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  on:click={() => triggerMatrixUpload(documentType, 'seller')}
+                                  disabled={matrixUploadingKey === `seller:${documentType}`}
                                 >
-                                  {documentStatusLabel(sellerDoc)}
-                                </span>
+                                  {#if matrixUploadingKey === `seller:${documentType}`}
+                                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                  {/if}
+                                  Enviar
+                                </Button>
+                              </div>
+                            {:else}
+                              {#each sellerDocs as sellerDoc (sellerDoc.id)}
+                                <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+                                  <div class="flex flex-wrap items-center gap-2">
+                                    <p class="font-medium text-gray-900 dark:text-gray-100">
+                                      {documentFileName(sellerDoc)}
+                                    </p>
+                                    {#if hasDocumentReviewStatus(sellerDoc)}
+                                      <span
+                                        class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
+                                          sellerDoc
+                                        )}`}
+                                      >
+                                        {documentStatusLabel(sellerDoc)}
+                                      </span>
+                                    {/if}
+                                  </div>
+                                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      on:click={() => selected && viewDocument(sellerDoc, selected)}
+                                      disabled={downloadingDocumentId === sellerDoc.id}
+                                    >
+                                      {#if downloadingDocumentId === sellerDoc.id}
+                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                      {/if}
+                                      Baixar
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      on:click={() => triggerMatrixUpload(documentType, 'seller')}
+                                      disabled={
+                                        matrixUploadingKey === `seller:${documentType}` ||
+                                        !canAddAnotherMatrixDocument(selected, documentType, 'seller')
+                                      }
+                                    >
+                                      {#if matrixUploadingKey === `seller:${documentType}`}
+                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                      {/if}
+                                      {matrixCellUploadLabel(selected, documentType, 'seller')}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      on:click={() => deleteMatrixDocument(sellerDoc)}
+                                      disabled={matrixDeletingDocumentId === sellerDoc.id}
+                                    >
+                                      {#if matrixDeletingDocumentId === sellerDoc.id}
+                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                      {/if}
+                                      Excluir
+                                    </Button>
+                                  </div>
+                                </div>
+                              {/each}
+                              {#if documentType.trim().toLowerCase() === 'outro' && !canAddAnotherMatrixDocument(selected, documentType, 'seller')}
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                  Limite de 15 documentos atingido.
+                                </p>
                               {/if}
-                            </div>
-                          {:else if row.sellerRequired}
-                            <div class="flex flex-wrap items-center gap-2">
-                              <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                Pendente
-                              </span>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                on:click={() => triggerMatrixUpload(documentType, 'seller')}
-                                disabled={matrixUploadingKey === `seller:${documentType}`}
-                              >
-                                {#if matrixUploadingKey === `seller:${documentType}`}
-                                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                {/if}
-                                Enviar
-                              </Button>
-                            </div>
-                          {:else}
-                            <span class="text-xs text-gray-500 dark:text-gray-400">N/A</span>
-                          {/if}
-                        </td>
-                        <td class="px-3 py-3">
-                          {#if row.buyerRequired}
-                            <span
-                              class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${matrixCellStatusClass(
-                                buyerStatus
-                              )}`}
-                            >
-                              {matrixCellStatusLabel(buyerStatus)}
-                            </span>
-                          {:else}
-                            <span class="text-xs text-gray-500 dark:text-gray-400">N/A</span>
-                          {/if}
-                        </td>
-                      </tr>
-                    {/each}
-                  {/if}
+                            {/if}
+                          </div>
+                        {:else}
+                          <span class="text-xs text-gray-500 dark:text-gray-400">N/A</span>
+                        {/if}
+                      </td>
+                      <td class="px-3 py-3">
+                        {#if row.buyerRequired}
+                          <div class="space-y-2">
+                            {#if buyerDocs.length === 0}
+                              <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                  Pendente
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  on:click={() => triggerMatrixUpload(documentType, 'buyer')}
+                                  disabled={matrixUploadingKey === `buyer:${documentType}`}
+                                >
+                                  {#if matrixUploadingKey === `buyer:${documentType}`}
+                                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                  {/if}
+                                  Enviar
+                                </Button>
+                              </div>
+                            {:else}
+                              {#each buyerDocs as buyerDoc (buyerDoc.id)}
+                                <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+                                  <div class="flex flex-wrap items-center gap-2">
+                                    <p class="font-medium text-gray-900 dark:text-gray-100">
+                                      {documentFileName(buyerDoc)}
+                                    </p>
+                                    {#if hasDocumentReviewStatus(buyerDoc)}
+                                      <span
+                                        class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
+                                          buyerDoc
+                                        )}`}
+                                      >
+                                        {documentStatusLabel(buyerDoc)}
+                                      </span>
+                                    {/if}
+                                  </div>
+                                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      on:click={() => selected && viewDocument(buyerDoc, selected)}
+                                      disabled={downloadingDocumentId === buyerDoc.id}
+                                    >
+                                      {#if downloadingDocumentId === buyerDoc.id}
+                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                      {/if}
+                                      Baixar
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      on:click={() => triggerMatrixUpload(documentType, 'buyer')}
+                                      disabled={
+                                        matrixUploadingKey === `buyer:${documentType}` ||
+                                        !canAddAnotherMatrixDocument(selected, documentType, 'buyer')
+                                      }
+                                    >
+                                      {#if matrixUploadingKey === `buyer:${documentType}`}
+                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                      {/if}
+                                      {matrixCellUploadLabel(selected, documentType, 'buyer')}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      on:click={() => deleteMatrixDocument(buyerDoc)}
+                                      disabled={matrixDeletingDocumentId === buyerDoc.id}
+                                    >
+                                      {#if matrixDeletingDocumentId === buyerDoc.id}
+                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                      {/if}
+                                      Excluir
+                                    </Button>
+                                  </div>
+                                </div>
+                              {/each}
+                              {#if documentType.trim().toLowerCase() === 'outro' && !canAddAnotherMatrixDocument(selected, documentType, 'buyer')}
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                  Limite de 15 documentos atingido.
+                                </p>
+                              {/if}
+                            {/if}
+                          </div>
+                        {:else}
+                          <span class="text-xs text-gray-500 dark:text-gray-400">N/A</span>
+                        {/if}
+                      </td>
+                    </tr>
+                  {/each}
                 </tbody>
               </table>
             </div>
