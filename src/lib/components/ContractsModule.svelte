@@ -60,6 +60,7 @@
     buyerApprovalReason?: Record<string, unknown> | null;
     commissionData?: Record<string, unknown> | null;
     workflowMetadata?: Record<string, unknown> | null;
+    responsibleUserIds?: number[] | null;
     documents?: ContractDocument[];
     documentRequirements?: unknown;
     documentProgress?: unknown;
@@ -411,6 +412,23 @@
     }
     const value = metadata[key];
     return value == null ? '' : String(value).trim();
+  }
+
+  function readResponsibleUserIds(contract: ContractItem | null | undefined): number[] {
+    if (!contract || !Array.isArray(contract.responsibleUserIds)) {
+      return [];
+    }
+    return contract.responsibleUserIds
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0);
+  }
+
+  function formatResponsibleUserSummary(contract: ContractItem | null | undefined): string {
+    const ids = readResponsibleUserIds(contract);
+    if (ids.length === 0) {
+      return '';
+    }
+    return `${ids.length} ${ids.length === 1 ? 'responsável designado' : 'responsáveis designados'}`;
   }
 
   function hasInPersonSignatureChoice(contract: ContractItem | null): boolean {
@@ -2009,6 +2027,11 @@
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Etapa: {statusLabel(selected.status)}
           </p>
+          {#if formatResponsibleUserSummary(selected)}
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {formatResponsibleUserSummary(selected)}
+            </p>
+          {/if}
         </div>
         <button
           type="button"

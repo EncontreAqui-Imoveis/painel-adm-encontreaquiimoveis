@@ -86,6 +86,7 @@ describe('ContractsModule', () => {
           workflowMetadata: {
             signatureMethod: 'online',
           },
+          responsibleUserIds: [30003, 30005],
           agencyName: 'Encontre Aqui',
           agencyAddress: 'Rua Central, 100',
           documents: [
@@ -132,6 +133,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(openReviewButton);
 
     expect(await screen.findByText('Dados Captador')).toBeInTheDocument();
+    expect(screen.getByText('2 responsáveis designados')).toBeInTheDocument();
 
     const downloadButtons = screen.getAllByRole('button', { name: 'Baixar' });
     expect(downloadButtons.length).toBeGreaterThan(0);
