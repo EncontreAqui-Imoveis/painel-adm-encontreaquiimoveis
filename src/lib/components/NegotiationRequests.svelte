@@ -1140,11 +1140,15 @@
                   </div>
                   <div>
                     <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Validade</p>
-                    <p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(item.validityDate)}</p>
+                    <p class="text-sm text-gray-700 dark:text-gray-300">
+                      {item.validityDate ? formatDate(item.validityDate) : 'Sem data'}
+                    </p>
                   </div>
                   <div>
                     <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Data</p>
-                    <p class="text-sm text-gray-700 dark:text-gray-300">{formatDate(item.updatedAt)}</p>
+                    <p class="text-sm text-gray-700 dark:text-gray-300">
+                      {item.updatedAt ? formatDate(item.updatedAt) : 'Sem data'}
+                    </p>
                   </div>
                 </div>
                 <div class="flex items-start">

@@ -553,7 +553,9 @@
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Última atualização</p>
               <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                {formatDate(reviewDetails.updated_at ?? reviewDetails.created_at)}
+                {reviewDetails.updated_at || reviewDetails.created_at
+                  ? formatDate(reviewDetails.updated_at ?? reviewDetails.created_at)
+                  : 'Sem data'}
               </p>
             </div>
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
