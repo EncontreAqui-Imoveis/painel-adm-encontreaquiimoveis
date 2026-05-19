@@ -2070,6 +2070,11 @@
 
       {#if modalMode === 'review_docs'}
         <div class="space-y-4">
+          {#if readResponsibleUserIds(selected).length > 0}
+            <div class="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200">
+              Responsáveis designados podem enviar documentos de captador e comprador nesta etapa.
+            </div>
+          {/if}
           <div class="grid gap-4 md:grid-cols-2">
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <div class="flex items-center justify-between gap-2">
