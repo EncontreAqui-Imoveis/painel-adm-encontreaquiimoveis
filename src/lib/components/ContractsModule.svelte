@@ -73,12 +73,18 @@
     capturingBrokerName?: string | null;
     sellingBrokerName?: string | null;
     buyerClientName?: string | null;
+    buyer_client_name?: string | null;
     sellerInfo?: Record<string, unknown> | null;
     buyerInfo?: Record<string, unknown> | null;
     sellerApprovalStatus?: ContractApprovalStatus | null;
     buyerApprovalStatus?: ContractApprovalStatus | null;
     sellerApprovalReason?: Record<string, unknown> | null;
     buyerApprovalReason?: Record<string, unknown> | null;
+    approvalProgress?: {
+      status?: string | null;
+      label?: string | null;
+      nextStep?: string | null;
+    } | null;
     commissionData?: Record<string, unknown> | null;
     workflowMetadata?: Record<string, unknown> | null;
     responsibleUserIds?: number[] | null;
@@ -331,8 +337,10 @@
   }
 
   function getBuyerDisplayName(contract: ContractItem): string {
-    if (contract.buyerClientName && String(contract.buyerClientName).trim().length > 0) {
-      return String(contract.buyerClientName).trim();
+    const directName =
+      contract.buyerClientName ?? contract.buyer_client_name ?? null;
+    if (directName && String(directName).trim().length > 0) {
+      return String(directName).trim();
     }
     const buyerInfo = contract.buyerInfo ?? null;
     const fromInfo = getRecordValueRaw(buyerInfo, [
@@ -475,7 +483,7 @@
     documentPreviewContract = options.contract ?? null;
     documentPreviewDoc = options.doc ?? null;
     documentPreviewZoom = 1;
-    documentPreviewIsFullscreen = false;
+    documentPreviewIsFullscreen = kind === 'pdf';
     documentPreviewOpen = true;
   }
 
@@ -737,6 +745,92 @@
       default:
         return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
     }
+  }
+
+  function approvalAllowsProgress(status?: ContractApprovalStatus | null): boolean {
+    const normalized = String(status ?? '').trim().toUpperCase();
+    return normalized === 'APPROVED' || normalized === 'APPROVED_WITH_RES';
+  }
+
+  function getApprovalProgressLabel(contract: ContractItem | null | undefined): string {
+    if (!contract) return 'Pendente';
+    const backendLabel = contract.approvalProgress?.label?.trim();
+    if (backendLabel) return backendLabel;
+
+    const sellerStatus = String(contract.sellerApprovalStatus ?? '').trim().toUpperCase();
+    const buyerStatus = String(contract.buyerApprovalStatus ?? '').trim().toUpperCase();
+    const sellerProgress = approvalAllowsProgress(contract.sellerApprovalStatus);
+    const buyerProgress = approvalAllowsProgress(contract.buyerApprovalStatus);
+
+    if (sellerStatus === 'REJECTED' || buyerStatus === 'REJECTED') {
+      return 'Rejeitado';
+    }
+
+    if (sellerProgress && buyerProgress) {
+      return sellerStatus === 'APPROVED_WITH_RES' || buyerStatus === 'APPROVED_WITH_RES'
+        ? 'Aprovado com ressalvas'
+        : 'Aprovado';
+    }
+
+    if (sellerProgress || buyerProgress) {
+      return 'Em análise';
+    }
+
+    return 'Pendente';
+  }
+
+  function getApprovalProgressToneClass(contract: ContractItem | null | undefined): string {
+    const backendStatus = String(contract?.approvalProgress?.status ?? '').trim().toUpperCase();
+    const sellerStatus = String(contract?.sellerApprovalStatus ?? '').trim().toUpperCase();
+    const buyerStatus = String(contract?.buyerApprovalStatus ?? '').trim().toUpperCase();
+    const status = backendStatus || sellerStatus || buyerStatus;
+
+    if (status === 'REJECTED') {
+      return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
+    }
+    if (status === 'APPROVED_WITH_RES') {
+      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+    }
+    if (status === 'APPROVED') {
+      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300';
+    }
+    if (status === 'IN_PROGRESS') {
+      return 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300';
+    }
+    return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+  }
+
+  function getApprovalNextStepLabel(contract: ContractItem | null | undefined): string {
+    if (!contract) return 'Aguardando avaliação dos dois lados';
+    const backendNextStep = contract.approvalProgress?.nextStep?.trim();
+    if (backendNextStep) return backendNextStep;
+
+    const sellerStatus = String(contract.sellerApprovalStatus ?? '').trim().toUpperCase();
+    const buyerStatus = String(contract.buyerApprovalStatus ?? '').trim().toUpperCase();
+    const sellerProgress = approvalAllowsProgress(contract.sellerApprovalStatus);
+    const buyerProgress = approvalAllowsProgress(contract.buyerApprovalStatus);
+
+    if (sellerStatus === 'REJECTED' || buyerStatus === 'REJECTED') {
+      return 'Aguardando correção do lado rejeitado';
+    }
+
+    if (sellerProgress && buyerProgress) {
+      return 'Pronto para a minuta';
+    }
+
+    if (sellerProgress && !buyerProgress) {
+      return 'Aguardando aprovação do comprador';
+    }
+
+    if (!sellerProgress && buyerProgress) {
+      return 'Aguardando aprovação do captador';
+    }
+
+    return 'Aguardando avaliação dos dois lados';
+  }
+
+  function shouldHydrateContractDetails(contract: ContractItem): boolean {
+    return contract.status === 'AWAITING_DOCS' && getBuyerDisplayName(contract) === '-';
   }
 
   function readWorkflowText(
@@ -1184,14 +1278,17 @@
 
     const rows = new Map<string, MatrixRow>();
     for (const requirement of requirements) {
-      const current = rows.get(requirement.documentType) ?? {
-        documentType: requirement.documentType,
+      const normalizedDocumentType = isOutroMatrixDocumentType(requirement.documentType)
+        ? 'outro'
+        : requirement.documentType;
+      const current = rows.get(normalizedDocumentType) ?? {
+        documentType: normalizedDocumentType,
         sellerRequired: false,
         buyerRequired: false,
       };
       if (requirement.side === 'seller') current.sellerRequired = true;
       if (requirement.side === 'buyer') current.buyerRequired = true;
-      rows.set(requirement.documentType, current);
+      rows.set(normalizedDocumentType, current);
     }
 
     return Array.from(rows.values())
@@ -1807,6 +1904,11 @@
     savingPartyData = false;
     hydrateFinalizeForm(item);
     hydratePartyInfoFormsFromSelected();
+    if (shouldHydrateContractDetails(item)) {
+      void reloadSelectedContract(item.id).catch((error) => {
+        console.error('Falha ao carregar detalhes completos do contrato:', error);
+      });
+    }
   }
 
   function closeModal(force = false) {
@@ -2556,6 +2658,12 @@
                     <div class="text-xs text-gray-500 dark:text-gray-400">
                       {item.propertyTitle ?? '-'}
                     </div>
+                    <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium">
+                      <span class="text-gray-500 dark:text-gray-400">Situação final:</span>
+                      <span class={`rounded-full px-2 py-1 ${getApprovalProgressToneClass(item)}`}>
+                        {getApprovalProgressLabel(item)}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 {#if getApprovalRemarkSummaries(item).length > 0}
@@ -2608,7 +2716,7 @@
 
 {#if showModal && selected}
   <div
-    class="fixed inset-0 z-50 flex items-end justify-center overflow-hidden overscroll-none bg-black/50 p-0 sm:items-start sm:p-4"
+    class="fixed inset-0 z-50 flex items-start justify-center overflow-hidden overscroll-none bg-black/50 p-0 sm:items-start sm:p-4"
     role="presentation"
     on:click={(event) => {
       if (event.target === event.currentTarget) {
@@ -2618,7 +2726,7 @@
     on:keydown={() => {}}
   >
     <div
-      class="flex w-full max-w-3xl max-h-[92vh] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl dark:bg-gray-900 sm:my-8 sm:max-h-[80vh] sm:rounded-lg"
+      class="flex w-full max-w-3xl max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl dark:bg-gray-900 sm:my-8 sm:max-h-[80vh] sm:rounded-lg"
       role="dialog"
       aria-modal="true"
       aria-labelledby="contract-modal-title"
@@ -2644,6 +2752,15 @@
           </p>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Etapa: {statusLabel(selected.status)}
+          </p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <span class="mr-1">Situação final:</span>
+            <span class={`inline-flex rounded-full px-2 py-1 ${getApprovalProgressToneClass(selected)}`}>
+              {getApprovalProgressLabel(selected)}
+            </span>
+          </p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Próximo passo: {getApprovalNextStepLabel(selected)}
           </p>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {getContractPartySummary(selected)}
@@ -3227,6 +3344,8 @@
             class="hidden"
             type="file"
             accept=".pdf,application/pdf"
+            aria-hidden="true"
+            tabindex="-1"
             bind:this={matrixUploadInputEl}
             on:change={handleMatrixFileSelection}
           />

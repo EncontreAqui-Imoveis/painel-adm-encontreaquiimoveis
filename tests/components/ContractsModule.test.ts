@@ -112,6 +112,7 @@ describe('ContractsModule', () => {
             email: 'vendedor@test.com',
             telefone: '62999997777',
           },
+          buyer_client_name: 'Cliente Comprador',
           buyerClientName: 'Cliente Comprador',
           sellerApprovalStatus: 'APPROVED_WITH_RES',
           buyerApprovalStatus: 'PENDING',
@@ -170,6 +171,8 @@ describe('ContractsModule', () => {
       await screen.findByText((content) => content.includes('RV-900'))
     ).toBeInTheDocument();
     expect(screen.getByText('Casa Contrato')).toBeInTheDocument();
+    expect(screen.getByText('Situação final:')).toBeInTheDocument();
+    expect(screen.getByText('Em análise')).toBeInTheDocument();
     expect(screen.getByAltText('Foto do imóvel Casa Contrato')).toBeInTheDocument();
     expect(screen.getAllByText('Captador').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
@@ -206,20 +209,141 @@ describe('ContractsModule', () => {
     });
 
     await fireEvent.click(screen.getByRole('button', { name: 'danfe (peças).pdf' }));
-    const previewDialog = await screen.findByRole('dialog', {
-      name: 'danfe (peças).pdf',
-    });
-    expect(within(previewDialog).getByText('Documento do contrato')).toBeInTheDocument();
+    const fullscreenButton = await screen.findByTitle('Sair da tela cheia');
+    const previewDialog = fullscreenButton.closest('[role="dialog"]');
+    expect(previewDialog).toBeTruthy();
     expect(
       await within(previewDialog).findByRole('button', { name: 'Substituir documento' })
     ).toBeInTheDocument();
     expect(await within(previewDialog).findByRole('button', { name: 'Excluir documento' })).toBeInTheDocument();
+    expect(await within(previewDialog).findByRole('button', { name: 'Sair da tela cheia' })).toBeInTheDocument();
+    expect(within(previewDialog).queryByRole('button', { name: 'Alternar tela cheia' })).not.toBeInTheDocument();
     expect(await within(previewDialog).findByTestId('document-preview-pdf-visible-text')).toHaveTextContent(
       'Contrato de Compra'
     );
     expect(await within(previewDialog).findByTestId('document-preview-pdf-text')).toHaveTextContent(
       'Contrato de Compra'
     );
+  });
+
+  it('hidrata os detalhes completos ao abrir o modal quando a listagem vier incompleta', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
+        return {
+          data: [
+            {
+              id: 'contract-hydrate-1',
+              status: 'AWAITING_DOCS',
+              negotiationId: 'neg-hydrate-1',
+              propertyId: 901,
+              propertyCode: 'RV-901',
+              propertyTitle: 'Casa Hidratação',
+              propertyImageUrl: 'https://cdn.example.com/property-901.jpg',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              sellerInfo: {
+                estado_civil: 'Casado',
+                profissao: 'Corretor',
+                email: 'captador@test.com',
+                telefone: '62999998888',
+                dados_bancarios: 'Banco XPTO',
+              },
+              buyerInfo: {
+                estado_civil: 'Solteiro',
+                profissao: 'Analista',
+                email: 'comprador@test.com',
+                telefone: '62999997777',
+              },
+              sellerApprovalStatus: 'APPROVED',
+              buyerApprovalStatus: 'PENDING',
+              sellerApprovalReason: null,
+              buyerApprovalReason: null,
+              commissionData: {},
+              workflowMetadata: {},
+              responsibleUserIds: [],
+              agencyName: 'Encontre Aqui',
+              agencyAddress: 'Rua Central, 100',
+              documents: [],
+              createdAt: '2026-03-02T09:00:00.000Z',
+              updatedAt: '2026-03-02T09:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint === '/contracts/contract-hydrate-1') {
+        return {
+          contract: {
+            id: 'contract-hydrate-1',
+            status: 'AWAITING_DOCS',
+            negotiationId: 'neg-hydrate-1',
+            propertyId: 901,
+            propertyCode: 'RV-901',
+            propertyTitle: 'Casa Hidratação',
+            propertyImageUrl: 'https://cdn.example.com/property-901.jpg',
+            propertyPurpose: 'Venda',
+            capturingBrokerId: 30001,
+            sellingBrokerId: 30002,
+            capturingBrokerName: 'Captador',
+            sellingBrokerName: 'Vendedor',
+            sellerInfo: {
+              estado_civil: 'Casado',
+              profissao: 'Corretor',
+              email: 'captador@test.com',
+              telefone: '62999998888',
+              dados_bancarios: 'Banco XPTO',
+            },
+            buyerInfo: {
+              estado_civil: 'Solteiro',
+              profissao: 'Analista',
+              email: 'comprador@test.com',
+              telefone: '62999997777',
+            },
+            buyer_client_name: 'Cliente Comprador',
+            buyerClientName: 'Cliente Comprador',
+            sellerApprovalStatus: 'APPROVED',
+            buyerApprovalStatus: 'PENDING',
+            sellerApprovalReason: null,
+            buyerApprovalReason: null,
+            commissionData: {},
+            workflowMetadata: {},
+            responsibleUserIds: [],
+            agencyName: 'Encontre Aqui',
+            agencyAddress: 'Rua Central, 100',
+            documents: [],
+            createdAt: '2026-03-02T09:00:00.000Z',
+            updatedAt: '2026-03-02T09:00:00.000Z',
+          },
+          documents: [],
+        };
+      }
+
+      return { data: [], total: 0 };
+    });
+    apiClientGetMock.mockResolvedValue({
+      data: new Blob(['preview'], { type: 'application/pdf' }),
+      headers: { 'content-type': 'application/pdf' },
+    });
+
+    render(ContractsModule);
+
+    const openReviewButton = await screen.findByRole('button', {
+      name: 'Analisar Documentação',
+    });
+    await fireEvent.click(openReviewButton);
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Análise de Documentação',
+    });
+    await waitFor(() => {
+      expect(dialog.textContent).toContain('Cliente Comprador');
+      expect(dialog.textContent).toContain('Situação final: Em análise');
+      expect(dialog.textContent).toContain('Próximo passo: Aguardando aprovação do comprador');
+    });
   });
 
   it('envia slot outro explícito na matriz para seller', async () => {
