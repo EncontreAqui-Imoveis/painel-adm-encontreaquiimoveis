@@ -231,6 +231,7 @@
   let totalPages = 1;
   let downloadingDocumentId: number | null = null;
   let selectedDraftFile: File | null = null;
+  let draftUploadInputEl: HTMLInputElement | null = null;
   let uploadingDraft = false;
   let evaluatingSide: 'seller' | 'buyer' | null = null;
   let uploadingSignedDoc = false;
@@ -792,11 +793,13 @@
   }
 
   function canApproveSide(status?: ContractApprovalStatus | null): boolean {
-    return getSideApprovalUiState(status) === 'pending';
+    const uiState = getSideApprovalUiState(status);
+    return uiState === 'pending' || uiState === 'rejected';
   }
 
   function canRejectSide(status?: ContractApprovalStatus | null): boolean {
-    return getSideApprovalUiState(status) !== 'rejected';
+    const uiState = getSideApprovalUiState(status);
+    return uiState === 'pending' || uiState === 'approved';
   }
 
   function canRestartSide(status?: ContractApprovalStatus | null): boolean {
@@ -2057,6 +2060,13 @@
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0] ?? null;
     selectedDraftFile = file;
+  }
+
+  function triggerDraftPicker() {
+    if (draftUploadInputEl) {
+      draftUploadInputEl.value = '';
+      draftUploadInputEl.click();
+    }
   }
 
   function handleSignedFileChange(event: Event) {
@@ -3340,7 +3350,7 @@
                   Avaliação Captador
                 </p>
                 <div class="flex flex-wrap gap-2">
-                  {#if canApproveSide(selected.sellerApprovalStatus)}
+                  {#if getSideApprovalUiState(selected.sellerApprovalStatus) === 'pending'}
                     <Button
                       size="sm"
                       className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
@@ -3366,7 +3376,7 @@
                     >
                       Rejeitar
                     </Button>
-                  {:else if canRejectSide(selected.sellerApprovalStatus)}
+                  {:else if getSideApprovalUiState(selected.sellerApprovalStatus) === 'approved'}
                     <Button
                       size="sm"
                       variant="destructive"
@@ -3386,6 +3396,23 @@
                   {:else}
                     <Button
                       size="sm"
+                      className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
+                      on:click={() => evaluateContractSide('seller', 'APPROVED')}
+                      disabled={sellerApprovalDisabled}
+                      title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
+                    >
+                      Aprovar<span class="sr-only"> captador</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                      on:click={() => evaluateContractSide('seller', 'APPROVED_WITH_RES')}
+                    >
+                      Aprovar c/ ressalvas<span class="sr-only"> captador</span>
+                    </Button>
+                    <Button
+                      size="sm"
                       variant="outline"
                       className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
                       on:click={() => evaluateContractSide('seller', 'PENDING')}
@@ -3401,7 +3428,7 @@
                   Avaliação Comprador
                 </p>
                 <div class="flex flex-wrap gap-2">
-                  {#if canApproveSide(selected.buyerApprovalStatus)}
+                  {#if getSideApprovalUiState(selected.buyerApprovalStatus) === 'pending'}
                     <Button
                       size="sm"
                       className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
@@ -3427,7 +3454,7 @@
                     >
                       Rejeitar
                     </Button>
-                  {:else if canRejectSide(selected.buyerApprovalStatus)}
+                  {:else if getSideApprovalUiState(selected.buyerApprovalStatus) === 'approved'}
                     <Button
                       size="sm"
                       variant="destructive"
@@ -3445,6 +3472,23 @@
                       Reiniciar
                     </Button>
                   {:else}
+                    <Button
+                      size="sm"
+                      className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
+                      on:click={() => evaluateContractSide('buyer', 'APPROVED')}
+                      disabled={evaluatingSide === 'buyer' || !isReadyToApprove}
+                      title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
+                    >
+                      Aprovar<span class="sr-only"> comprador</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                      on:click={() => evaluateContractSide('buyer', 'APPROVED_WITH_RES')}
+                    >
+                      Aprovar c/ ressalvas<span class="sr-only"> comprador</span>
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -3610,29 +3654,49 @@
             {/if}
           </div>
 
-          <div class="rounded-md border border-dashed border-gray-300 p-4 dark:border-gray-700">
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200" for="draft-pdf">
-              {draftUploadInputLabel(selected)}
-            </label>
-            <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">
-              {#if hasCurrentDraftDocument(selected)}
-                Selecione um novo PDF apenas se quiser substituir a minuta atual.
+          <div class="rounded-2xl border border-dashed border-gray-300 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-950/20">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  PDF da minuta
+                </p>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                  {#if hasCurrentDraftDocument(selected)}
+                    Substitua apenas se a versão atual precisar ser trocada antes das assinaturas.
+                  {:else}
+                    Selecione o PDF que será usado como minuta oficial deste contrato.
+                  {/if}
+                </p>
+              </div>
+              <span class={`rounded-full px-3 py-1 text-xs font-semibold ${hasCurrentDraftDocument(selected) ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}`}>
+                {hasCurrentDraftDocument(selected) ? 'Minuta anexada' : 'Minuta pendente'}
+              </span>
+            </div>
+
+            <div class="mt-4 flex flex-wrap items-center gap-3">
+              <input
+                id="draft-pdf"
+                type="file"
+                accept="application/pdf,.pdf"
+                bind:this={draftUploadInputEl}
+                on:change={handleDraftFileChange}
+                class="sr-only"
+                aria-hidden="true"
+                tabindex="-1"
+              />
+              <Button variant="outline" on:click={triggerDraftPicker}>
+                {hasCurrentDraftDocument(selected) ? 'Trocar PDF' : 'Escolher PDF'}
+              </Button>
+              {#if selectedDraftFile}
+                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {selectedDraftFile.name}
+                </span>
               {:else}
-                Selecione o PDF que será usado como minuta oficial deste contrato.
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  Nenhum arquivo selecionado.
+                </span>
               {/if}
-            </p>
-            <input
-              id="draft-pdf"
-              type="file"
-              accept="application/pdf,.pdf"
-              on:change={handleDraftFileChange}
-              class="block w-full text-sm text-gray-700 dark:text-gray-200"
-            />
-            {#if selectedDraftFile}
-              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Selecionado: {selectedDraftFile.name}
-              </p>
-            {/if}
+            </div>
           </div>
 
           <div class="flex justify-end gap-2">

@@ -880,7 +880,10 @@ describe('ContractsModule', () => {
     expect(
       screen.getByText('Para avançar para a etapa de assinaturas, anexe o PDF da minuta.')
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('PDF da minuta')).toBeInTheDocument();
+    expect(screen.getByText('PDF da minuta')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Escolher PDF' })
+    ).toBeInTheDocument();
   });
 
   it('mostra a minuta atual e muda o CTA para atualizar quando já existe PDF', async () => {
@@ -929,8 +932,8 @@ describe('ContractsModule', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Minuta atual')).toBeInTheDocument();
     expect(screen.getAllByText('minuta_atual.pdf').length).toBeGreaterThan(0);
-    expect(screen.getByLabelText('Novo PDF da minuta (opcional)')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Atualizar minuta' })).toBeInTheDocument();
+    expect(screen.getByText('PDF da minuta')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Trocar PDF' })).toBeInTheDocument();
   });
 
   it('permite voltar de IN_DRAFT para a etapa anterior pelo modal', async () => {
