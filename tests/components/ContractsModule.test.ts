@@ -171,7 +171,6 @@ describe('ContractsModule', () => {
       await screen.findByText((content) => content.includes('RV-900'))
     ).toBeInTheDocument();
     expect(screen.getByText('Casa Contrato')).toBeInTheDocument();
-    expect(screen.getByText('Situação final:')).toBeInTheDocument();
     expect(screen.getByText('Em análise')).toBeInTheDocument();
     expect(screen.getByAltText('Foto do imóvel Casa Contrato')).toBeInTheDocument();
     expect(screen.getAllByText('Captador').length).toBeGreaterThan(0);
@@ -341,8 +340,6 @@ describe('ContractsModule', () => {
     });
     await waitFor(() => {
       expect(dialog.textContent).toContain('Cliente Comprador');
-      expect(dialog.textContent).toContain('Situação final: Em análise');
-      expect(dialog.textContent).toContain('Próximo passo: Aguardando aprovação do comprador');
     });
   });
 
@@ -686,7 +683,7 @@ describe('ContractsModule', () => {
     }
   });
 
-  it('exibe o Admin Override e o contexto de assinatura presencial em AWAITING_SIGNATURES', async () => {
+  it('exibe o formulário de comissões acima dos documentos e remove o admin override em AWAITING_SIGNATURES', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_SIGNATURES')) {
         return {
@@ -742,25 +739,12 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(finalizeButton);
 
-    expect(
-      await screen.findByText('Admin Override: Contrato Físico/Comprovantes')
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'O corretor informou que a assinatura será entregue presencialmente.'
-      )
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Endereço de referência: Imobiliária Centro - Rua das Flores, 123, Centro'
-      )
-    ).toBeInTheDocument();
-
-    const adminOverrideButton = screen.getByRole('button', {
-      name: 'Anexar Documento Físico Assinado (Admin Override)',
-    });
-    expect(adminOverrideButton).toBeDisabled();
-    expect(screen.getByRole('option', { name: 'Outro' })).toBeInTheDocument();
+    expect(screen.queryByText('Admin Override: Contrato Físico/Comprovantes')).not.toBeInTheDocument();
+    expect(screen.getByText('Formulário de Comissões')).toBeInTheDocument();
+    expect(screen.getByText('Documentos para conferência')).toBeInTheDocument();
+    expect(screen.getByText('Formulário de Comissões').compareDocumentPosition(
+      screen.getByText('Documentos para conferência')
+    ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('lista todos os documentos existentes no modal de minuta em IN_DRAFT', async () => {
@@ -837,9 +821,71 @@ describe('ContractsModule', () => {
     expect(screen.getByText('endereco_vendedor.pdf')).toBeInTheDocument();
     expect(screen.getAllByText('Captador').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
-    expect(
-      screen.getAllByRole('button', { name: 'Baixar/Visualizar' }).length
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Visualizar' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Baixar' }).length).toBeGreaterThan(0);
+  });
+
+  it('permite prosseguir com a mesma minuta sem reenviar arquivo quando já existe PDF', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=IN_DRAFT')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-draft-keep-1',
+              status: 'IN_DRAFT',
+              negotiationId: 'neg-test-draft-keep-1',
+              propertyId: 602,
+              propertyCode: 'RV-602',
+              propertyTitle: 'Casa Minuta Existente',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6201,
+                  documentType: 'contrato_minuta',
+                  originalFileName: 'minuta_atual.pdf',
+                  downloadUrl: '/negotiations/neg-test-draft-keep-1/documents/6201/download',
+                  metadata: { contractId: 'contract-test-draft-keep-1' },
+                  createdAt: '2026-03-01T09:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-01T12:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return { data: [], total: 0 };
+    });
+    apiClientPostMock.mockResolvedValue({ data: {} });
+
+    render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Em Confecção' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
+
+    expect(screen.getByRole('button', { name: 'Prosseguir com a mesma minuta' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Prosseguir com a mesma minuta' }));
+
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledWith(
+        '/admin/contracts/contract-test-draft-keep-1/draft',
+        expect.any(FormData),
+        expect.objectContaining({
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+      );
+    });
+
+    const form = apiClientPostMock.mock.calls[0][1] as FormData;
+    expect(form.get('file')).toBeNull();
+    expect(form.get('reuseCurrentDraft')).toBe('true');
   });
 
   it('deixa claro que a minuta é obrigatória quando ainda não existe PDF anexado', async () => {
@@ -874,10 +920,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Em Confecção' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
 
-    expect(screen.getByText('PDF da minuta')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Escolher PDF' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'PDF da minuta' })).toBeInTheDocument();
     expect(screen.getByText('Nenhum arquivo selecionado.')).toBeInTheDocument();
   });
 
@@ -926,9 +969,30 @@ describe('ContractsModule', () => {
       await screen.findByText('Minuta atual')
     ).toBeInTheDocument();
     expect(screen.getAllByText('minuta_atual.pdf').length).toBeGreaterThan(0);
-    expect(screen.getByText('PDF da minuta')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Trocar PDF' })).toBeInTheDocument();
-    expect(screen.getByText('Substitua apenas se a versão atual precisar ser trocada antes das assinaturas.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Trocar minuta' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prosseguir com a mesma minuta' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Substituir minuta' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Se quiser trocar a minuta atual, selecione um novo PDF abaixo.')
+    ).toBeInTheDocument();
+
+    const draftFileInput = document.querySelector('#draft-pdf') as HTMLInputElement | null;
+    expect(draftFileInput).not.toBeNull();
+    if (!draftFileInput) {
+      throw new Error('draft-pdf input not found');
+    }
+
+    const replacementFile = new File(['%PDF-1.4 replacement%'], 'nova_minuta.pdf', {
+      type: 'application/pdf',
+    });
+    await fireEvent.change(draftFileInput, {
+      target: { files: [replacementFile] },
+    });
+
+    expect(screen.getByRole('button', { name: 'Trocar minuta' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Substituir minuta' })).toBeInTheDocument();
   });
 
   it('permite voltar de IN_DRAFT para a etapa anterior pelo modal', async () => {

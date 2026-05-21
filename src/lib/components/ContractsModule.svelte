@@ -924,12 +924,6 @@
     return readWorkflowText(contract, 'agencySignedContractReceivedAt').length > 0;
   }
 
-  function adminOverrideButtonLabel(): string {
-    return signedDocType === 'contrato_assinado'
-      ? 'Anexar Documento Físico Assinado (Admin Override)'
-      : 'Anexar Documento (Admin Override)';
-  }
-
   function resolveAgencyAddress(contract: ContractItem | null): string {
     const agencyName = String(contract?.agencyName ?? '').trim();
     const agencyAddress = String(contract?.agencyAddress ?? '').trim();
@@ -1497,13 +1491,11 @@
   }
 
   function draftUploadInputLabel(contract: ContractItem | null): string {
-    return hasCurrentDraftDocument(contract)
-      ? 'Novo PDF da minuta (opcional)'
-      : 'PDF da minuta';
+    return hasCurrentDraftDocument(contract) ? 'Trocar minuta' : 'PDF da minuta';
   }
 
   function draftSubmitLabel(contract: ContractItem | null): string {
-    return hasCurrentDraftDocument(contract) ? 'Atualizar minuta' : 'Anexar Minuta';
+    return hasCurrentDraftDocument(contract) ? 'Substituir minuta' : 'Anexar Minuta';
   }
 
   function listMissingRecordFields(
@@ -2279,21 +2271,39 @@
     }
   }
 
-  async function submitDraft() {
+  async function submitDraft(options: { reuseCurrentDraft?: boolean } = {}) {
     if (!selected) return;
-    if (!selectedDraftFile) {
+    const reuseCurrentDraft = options.reuseCurrentDraft === true;
+
+    if (!reuseCurrentDraft && !selectedDraftFile) {
       toast.error('Selecione um PDF da minuta para continuar.');
+      return;
+    }
+
+    if (reuseCurrentDraft && !hasCurrentDraftDocument(selected)) {
+      toast.error('Não há minuta atual para prosseguir.');
       return;
     }
 
     uploadingDraft = true;
     try {
       const form = new FormData();
-      form.append('file', selectedDraftFile);
+      if (selectedDraftFile) {
+        form.append('file', selectedDraftFile);
+      }
+      if (reuseCurrentDraft) {
+        form.append('reuseCurrentDraft', 'true');
+      }
       await apiClient.post(`/admin/contracts/${selected.id}/draft`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      toast.success('Minuta anexada e contrato avançado para assinaturas.');
+      toast.success(
+        reuseCurrentDraft
+          ? 'Minuta atual mantida e contrato avançado para assinaturas.'
+          : hasCurrentDraftDocument(selected)
+            ? 'Minuta substituída e contrato avançado para assinaturas.'
+            : 'Minuta anexada e contrato avançado para assinaturas.'
+      );
       closeModal(true);
       refresh();
     } catch (error) {
@@ -2838,15 +2848,6 @@
           </p>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Etapa: {statusLabel(selected.status)}
-          </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            <span class="mr-1">Situação final:</span>
-            <span class={`inline-flex rounded-full px-2 py-1 ${getApprovalProgressToneClass(selected)}`}>
-              {getApprovalProgressLabel(selected)}
-            </span>
-          </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Próximo passo: {getApprovalNextStepLabel(selected)}
           </p>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {getContractPartySummary(selected)}
@@ -3541,22 +3542,36 @@
                     Enviado em {formatDate(getCurrentDraftDocument(selected)?.createdAt)}
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  on:click={() => {
-                    const draftDoc = getCurrentDraftDocument(selected);
-                    if (selected && draftDoc) {
-                      viewDocument(draftDoc, selected);
-                    }
-                  }}
-                  disabled={downloadingDocumentId === getCurrentDraftDocument(selected)?.id}
-                >
-                  {#if downloadingDocumentId === getCurrentDraftDocument(selected)?.id}
-                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                  {/if}
-                  Baixar/Visualizar
-                </Button>
+                <div class="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    on:click={() => {
+                      const draftDoc = getCurrentDraftDocument(selected);
+                      if (selected && draftDoc) {
+                        selected && openDocumentPreview(draftDoc, selected);
+                      }
+                    }}
+                  >
+                    Visualizar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    on:click={() => {
+                      const draftDoc = getCurrentDraftDocument(selected);
+                      if (selected && draftDoc) {
+                        viewDocument(draftDoc, selected);
+                      }
+                    }}
+                    disabled={downloadingDocumentId === getCurrentDraftDocument(selected)?.id}
+                  >
+                    {#if downloadingDocumentId === getCurrentDraftDocument(selected)?.id}
+                      <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                    {/if}
+                    Baixar
+                  </Button>
+                </div>
               </div>
             </div>
           {/if}
@@ -3569,7 +3584,7 @@
                 </p>
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
                   {#if hasCurrentDraftDocument(selected)}
-                    Substitua apenas se a versão atual precisar ser trocada antes das assinaturas.
+                    Se quiser trocar a minuta atual, selecione um novo PDF abaixo.
                   {:else}
                     Selecione o PDF que será usado como minuta oficial deste contrato.
                   {/if}
@@ -3592,15 +3607,29 @@
                 tabindex="-1"
               />
               <Button variant="outline" on:click={triggerDraftPicker}>
-                {hasCurrentDraftDocument(selected) ? 'Trocar PDF' : 'Escolher PDF'}
+                {draftUploadInputLabel(selected)}
               </Button>
+              {#if hasCurrentDraftDocument(selected) && !selectedDraftFile}
+                <Button
+                  variant="outline"
+                  on:click={() => submitDraft({ reuseCurrentDraft: true })}
+                  disabled={uploadingDraft || movingToPreviousStage}
+                >
+                  {#if uploadingDraft}
+                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                  {/if}
+                  Prosseguir com a mesma minuta
+                </Button>
+              {/if}
               {#if selectedDraftFile}
                 <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                   {selectedDraftFile.name}
                 </span>
               {:else}
                 <span class="text-xs text-gray-500 dark:text-gray-400">
-                  Nenhum arquivo selecionado.
+                  {hasCurrentDraftDocument(selected)
+                    ? 'Selecione um arquivo apenas se quiser substituir a minuta atual.'
+                    : 'Nenhum arquivo selecionado.'}
                 </span>
               {/if}
             </div>
@@ -3656,13 +3685,20 @@
                     <Button
                       size="sm"
                       variant="outline"
+                      on:click={() => selected && openDocumentPreview(doc, selected)}
+                    >
+                      Visualizar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
                       on:click={() => selected && viewDocument(doc, selected)}
                       disabled={downloadingDocumentId === doc.id}
                     >
                       {#if downloadingDocumentId === doc.id}
                         <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                       {/if}
-                      Baixar/Visualizar
+                      Baixar
                     </Button>
                   </div>
                 {/each}
@@ -3688,182 +3724,35 @@
             >
               Fechar
             </Button>
-            <Button
-              className="bg-green-600 text-white hover:bg-green-700"
-              on:click={submitDraft}
-              disabled={uploadingDraft || movingToPreviousStage || !selectedDraftFile}
-            >
-              {#if uploadingDraft}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {#if hasCurrentDraftDocument(selected)}
+              {#if selectedDraftFile}
+                <Button
+                  className="bg-green-600 text-white hover:bg-green-700"
+                  on:click={() => submitDraft()}
+                  disabled={uploadingDraft || movingToPreviousStage}
+                >
+                  {#if uploadingDraft}
+                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                  {/if}
+                  {draftSubmitLabel(selected)}
+                </Button>
               {/if}
-              {draftSubmitLabel(selected)}
-            </Button>
+            {:else}
+              <Button
+                className="bg-green-600 text-white hover:bg-green-700"
+                on:click={() => submitDraft()}
+                disabled={uploadingDraft || movingToPreviousStage || !selectedDraftFile}
+              >
+                {#if uploadingDraft}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                {draftSubmitLabel(selected)}
+              </Button>
+            {/if}
           </div>
         </div>
         {:else if modalMode === 'finalize'}
         <div class="space-y-4">
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-              Documentos para conferência
-            </p>
-            {#if getDocumentsForFinalize(selected).length === 0}
-              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Nenhum contrato assinado/comprovante anexado.
-              </p>
-            {:else}
-              <div class="mt-2 space-y-2">
-                {#each getDocumentsForFinalize(selected) as doc (doc.id)}
-                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
-                    <div>
-                      <button
-                        type="button"
-                        class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
-                        on:click={() => selected && openDocumentPreview(doc, selected)}
-                      >
-                        {documentLabel(doc.documentType)}
-                      </button>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(doc.createdAt)}</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      on:click={() => selected && viewDocument(doc, selected)}
-                      disabled={downloadingDocumentId === doc.id}
-                    >
-                      {#if downloadingDocumentId === doc.id}
-                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                      {/if}
-                      Baixar/Visualizar
-                    </Button>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-              Todos os documentos do contrato
-            </p>
-            {#if getAllContractDocuments(selected).length === 0}
-              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Nenhum documento do contrato anexado até o momento.
-              </p>
-            {:else}
-              <div class="mt-2 space-y-2">
-                {#each getAllContractDocuments(selected) as doc (doc.id)}
-                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <p class="font-medium text-gray-900 dark:text-gray-100">
-                          {documentLabel(doc.documentType)}
-                        </p>
-                        {#if documentSideLabel(doc)}
-                          <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                            {documentSideLabel(doc)}
-                          </span>
-                        {/if}
-                        {#if hasDocumentReviewStatus(doc)}
-                          <span
-                            class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
-                              doc
-                            )}`}
-                          >
-                            {documentStatusLabel(doc)}
-                          </span>
-                        {/if}
-                      </div>
-                      <button
-                        type="button"
-                        class="mt-1 block truncate text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
-                        on:click={() => selected && openDocumentPreview(doc, selected)}
-                      >
-                        {documentFileName(doc)}
-                      </button>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">
-                        Enviado em {formatDate(doc.createdAt)}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      on:click={() => selected && viewDocument(doc, selected)}
-                      disabled={downloadingDocumentId === doc.id}
-                    >
-                      {#if downloadingDocumentId === doc.id}
-                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                      {/if}
-                      Baixar/Visualizar
-                    </Button>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            {#if hasInPersonSignatureChoice(selected) || hasAgencySignedReceipt(selected)}
-              <div class="mb-3 rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900/60 dark:bg-blue-950/30">
-                <p class="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  {#if hasAgencySignedReceipt(selected)}
-                    A imobiliária já registrou o recebimento do contrato físico assinado.
-                  {:else}
-                    O corretor informou que a assinatura será entregue presencialmente.
-                  {/if}
-                </p>
-                <p class="mt-2 text-sm text-blue-700 dark:text-blue-200">
-                  Endereço de referência: {resolveAgencyAddress(selected)}
-                </p>
-              </div>
-            {/if}
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-              Admin Override: Contrato Físico/Comprovantes
-            </p>
-            <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-              Use esta área para anexar documentos físicos assinados diretamente pelo painel administrativo, mesmo quando o corretor optar por entrega presencial.
-            </p>
-            <div class="mt-3 grid gap-3 md:grid-cols-2">
-              <label class="text-sm text-gray-700 dark:text-gray-200">
-                Tipo do Documento
-                <select
-                  bind:value={signedDocType}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-                >
-                  <option value="contrato_assinado">Contrato Assinado</option>
-                  <option value="comprovante_pagamento">Comprovante de Pagamento</option>
-                  <option value="boleto_vistoria">Boleto/Vistoria</option>
-                  <option value="outro">Outro</option>
-                </select>
-              </label>
-              <label class="text-sm text-gray-700 dark:text-gray-200">
-                Arquivo
-                <input
-                  type="file"
-                  accept="application/pdf,image/png,image/jpeg,image/webp"
-                  on:change={handleSignedFileChange}
-                  class="mt-1 block w-full text-sm text-gray-700 dark:text-gray-200"
-                />
-              </label>
-            </div>
-            {#if selectedSignedFile}
-              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Selecionado: {selectedSignedFile.name}
-              </p>
-            {/if}
-            <div class="mt-3 flex justify-end">
-              <Button
-                className="bg-blue-600 text-white hover:bg-blue-700"
-                on:click={uploadSignedDocsByAdmin}
-                disabled={uploadingSignedDoc || !selectedSignedFile}
-              >
-                {#if uploadingSignedDoc}
-                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                {/if}
-                {adminOverrideButtonLabel()}
-              </Button>
-            </div>
-          </div>
-
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
               Formulário de Comissões
@@ -3951,6 +3840,119 @@
                 />
               </label>
             </div>
+          </div>
+
+          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+              Documentos para conferência
+            </p>
+            {#if getDocumentsForFinalize(selected).length === 0}
+              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Nenhum contrato assinado/comprovante anexado.
+              </p>
+            {:else}
+              <div class="mt-2 space-y-2">
+                {#each getDocumentsForFinalize(selected) as doc (doc.id)}
+                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
+                    <div>
+                      <button
+                        type="button"
+                        class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
+                        on:click={() => selected && openDocumentPreview(doc, selected)}
+                      >
+                        {documentLabel(doc.documentType)}
+                      </button>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(doc.createdAt)}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      on:click={() => selected && openDocumentPreview(doc, selected)}
+                    >
+                      Visualizar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      on:click={() => selected && viewDocument(doc, selected)}
+                      disabled={downloadingDocumentId === doc.id}
+                    >
+                      {#if downloadingDocumentId === doc.id}
+                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                      {/if}
+                      Baixar
+                    </Button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+              Todos os documentos do contrato
+            </p>
+            {#if getAllContractDocuments(selected).length === 0}
+              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Nenhum documento do contrato anexado até o momento.
+              </p>
+            {:else}
+              <div class="mt-2 space-y-2">
+                {#each getAllContractDocuments(selected) as doc (doc.id)}
+                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="font-medium text-gray-900 dark:text-gray-100">
+                          {documentLabel(doc.documentType)}
+                        </p>
+                        {#if documentSideLabel(doc)}
+                          <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                            {documentSideLabel(doc)}
+                          </span>
+                        {/if}
+                        {#if hasDocumentReviewStatus(doc)}
+                          <span
+                            class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
+                              doc
+                            )}`}
+                          >
+                            {documentStatusLabel(doc)}
+                          </span>
+                        {/if}
+                      </div>
+                      <button
+                        type="button"
+                        class="mt-1 block truncate text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
+                        on:click={() => selected && openDocumentPreview(doc, selected)}
+                      >
+                        {documentFileName(doc)}
+                      </button>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Enviado em {formatDate(doc.createdAt)}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      on:click={() => selected && openDocumentPreview(doc, selected)}
+                    >
+                      Visualizar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      on:click={() => selected && viewDocument(doc, selected)}
+                      disabled={downloadingDocumentId === doc.id}
+                    >
+                      {#if downloadingDocumentId === doc.id}
+                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                      {/if}
+                      Baixar
+                    </Button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
 
           <div class="flex justify-end gap-2">
