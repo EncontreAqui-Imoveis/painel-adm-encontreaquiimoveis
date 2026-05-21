@@ -874,16 +874,11 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Em Confecção' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
 
-    expect(
-      await screen.findByText('Ainda não existe minuta anexada para este contrato.')
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Para avançar para a etapa de assinaturas, anexe o PDF da minuta.')
-    ).toBeInTheDocument();
     expect(screen.getByText('PDF da minuta')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Escolher PDF' })
     ).toBeInTheDocument();
+    expect(screen.getByText('Nenhum arquivo selecionado.')).toBeInTheDocument();
   });
 
   it('mostra a minuta atual e muda o CTA para atualizar quando já existe PDF', async () => {
@@ -928,12 +923,12 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
 
     expect(
-      await screen.findByText('Já existe uma minuta anexada para este contrato.')
+      await screen.findByText('Minuta atual')
     ).toBeInTheDocument();
-    expect(screen.getByText('Minuta atual')).toBeInTheDocument();
     expect(screen.getAllByText('minuta_atual.pdf').length).toBeGreaterThan(0);
     expect(screen.getByText('PDF da minuta')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Trocar PDF' })).toBeInTheDocument();
+    expect(screen.getByText('Substitua apenas se a versão atual precisar ser trocada antes das assinaturas.')).toBeInTheDocument();
   });
 
   it('permite voltar de IN_DRAFT para a etapa anterior pelo modal', async () => {

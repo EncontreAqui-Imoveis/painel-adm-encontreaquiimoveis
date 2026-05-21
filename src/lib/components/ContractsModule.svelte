@@ -3518,35 +3518,6 @@
         </div>
         {:else if modalMode === 'upload_draft'}
         <div class="space-y-4">
-          <div
-            class={`rounded-md border p-4 ${
-              hasCurrentDraftDocument(selected)
-                ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/20'
-                : 'border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/20'
-            }`}
-            role="status"
-            aria-live="polite"
-          >
-            <p class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">
-              Situação da minuta
-            </p>
-            {#if hasCurrentDraftDocument(selected)}
-              <p class="mt-2 text-sm font-medium text-emerald-800 dark:text-emerald-200">
-                Já existe uma minuta anexada para este contrato.
-              </p>
-              <p class="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
-                Envie um novo PDF apenas se quiser substituir a versão atual antes de seguir para assinaturas.
-              </p>
-            {:else}
-              <p class="mt-2 text-sm font-medium text-amber-800 dark:text-amber-200">
-                Ainda não existe minuta anexada para este contrato.
-              </p>
-              <p class="mt-1 text-sm text-amber-700 dark:text-amber-300">
-                Para avançar para a etapa de assinaturas, anexe o PDF da minuta.
-              </p>
-            {/if}
-          </div>
-
           {#if getCurrentDraftDocument(selected)}
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
@@ -3589,6 +3560,51 @@
               </div>
             </div>
           {/if}
+
+          <div class="rounded-2xl border border-dashed border-gray-300 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-950/20">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  PDF da minuta
+                </p>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                  {#if hasCurrentDraftDocument(selected)}
+                    Substitua apenas se a versão atual precisar ser trocada antes das assinaturas.
+                  {:else}
+                    Selecione o PDF que será usado como minuta oficial deste contrato.
+                  {/if}
+                </p>
+              </div>
+              <span class={`rounded-full px-3 py-1 text-xs font-semibold ${hasCurrentDraftDocument(selected) ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}`}>
+                {hasCurrentDraftDocument(selected) ? 'Minuta anexada' : 'Minuta pendente'}
+              </span>
+            </div>
+
+            <div class="mt-4 flex flex-wrap items-center gap-3">
+              <input
+                id="draft-pdf"
+                type="file"
+                accept="application/pdf,.pdf"
+                bind:this={draftUploadInputEl}
+                on:change={handleDraftFileChange}
+                class="sr-only"
+                aria-hidden="true"
+                tabindex="-1"
+              />
+              <Button variant="outline" on:click={triggerDraftPicker}>
+                {hasCurrentDraftDocument(selected) ? 'Trocar PDF' : 'Escolher PDF'}
+              </Button>
+              {#if selectedDraftFile}
+                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {selectedDraftFile.name}
+                </span>
+              {:else}
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  Nenhum arquivo selecionado.
+                </span>
+              {/if}
+            </div>
+          </div>
 
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
@@ -3652,51 +3668,6 @@
                 {/each}
               </div>
             {/if}
-          </div>
-
-          <div class="rounded-2xl border border-dashed border-gray-300 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-950/20">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="min-w-0">
-                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  PDF da minuta
-                </p>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                  {#if hasCurrentDraftDocument(selected)}
-                    Substitua apenas se a versão atual precisar ser trocada antes das assinaturas.
-                  {:else}
-                    Selecione o PDF que será usado como minuta oficial deste contrato.
-                  {/if}
-                </p>
-              </div>
-              <span class={`rounded-full px-3 py-1 text-xs font-semibold ${hasCurrentDraftDocument(selected) ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}`}>
-                {hasCurrentDraftDocument(selected) ? 'Minuta anexada' : 'Minuta pendente'}
-              </span>
-            </div>
-
-            <div class="mt-4 flex flex-wrap items-center gap-3">
-              <input
-                id="draft-pdf"
-                type="file"
-                accept="application/pdf,.pdf"
-                bind:this={draftUploadInputEl}
-                on:change={handleDraftFileChange}
-                class="sr-only"
-                aria-hidden="true"
-                tabindex="-1"
-              />
-              <Button variant="outline" on:click={triggerDraftPicker}>
-                {hasCurrentDraftDocument(selected) ? 'Trocar PDF' : 'Escolher PDF'}
-              </Button>
-              {#if selectedDraftFile}
-                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                  {selectedDraftFile.name}
-                </span>
-              {:else}
-                <span class="text-xs text-gray-500 dark:text-gray-400">
-                  Nenhum arquivo selecionado.
-                </span>
-              {/if}
-            </div>
           </div>
 
           <div class="flex justify-end gap-2">
