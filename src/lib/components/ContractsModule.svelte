@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
+  import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
   import {
     ChevronLeft,
     ChevronRight,
@@ -27,6 +29,10 @@
     parseCurrency,
   } from '$lib/components/create-property-helpers';
   import Pagination from '$lib/Pagination.svelte';
+
+  if (typeof window !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+  }
 
   /** TS do IDE: tipo inferido do `Input` costuma omitir `id`/handlers; aqui usamos o contrato explícito. */
   const LabeledTextInput = Input as unknown as Component<InputProps, {}, 'value'>;
@@ -110,6 +116,12 @@
   type ContractDetailResponse = {
     contract?: ContractItem;
     documents?: ContractDocument[];
+  };
+
+  type DocumentPreviewPdfPage = {
+    pageNumber: number;
+    dataUrl: string;
+    text: string;
   };
 
   const tabs: { key: ContractStatus; label: string }[] = [
@@ -249,6 +261,9 @@
   let documentPreviewContract: ContractItem | null = null;
   let documentPreviewDoc: ContractDocument | null = null;
   let documentPreviewIsFullscreen = false;
+  let documentPreviewPdfPages: DocumentPreviewPdfPage[] = [];
+  let documentPreviewPdfText = '';
+  let documentPreviewRenderToken = 0;
   let finalizingContract = false;
   let reopeningContract = false;
   let deletingContract = false;
@@ -350,9 +365,25 @@
     return digits.length ? digits : null;
   }
 
+  function normalizePossiblyMojibakeText(value: string): string {
+    const trimmed = String(value ?? '').trim();
+    if (!trimmed) return '';
+    if (!/[ÃÂ�]/.test(trimmed)) return trimmed;
+
+    try {
+      const bytes = Uint8Array.from(trimmed, (char) => char.charCodeAt(0));
+      const decoded = new TextDecoder('utf-8').decode(bytes).trim();
+      if (!decoded || decoded.includes('�')) return trimmed;
+      return decoded;
+    } catch {
+      return trimmed;
+    }
+  }
+
   function formatDocumentPreviewName(doc: ContractDocument | null): string {
     if (!doc) return 'Documento';
-    return String(doc.originalFileName ?? '').trim() || documentLabel(doc.documentType ?? doc.type ?? null);
+    const original = normalizePossiblyMojibakeText(String(doc.originalFileName ?? ''));
+    return original || documentLabel(doc.documentType ?? doc.type ?? null);
   }
 
   function closeDocumentPreview() {
@@ -372,6 +403,9 @@
     documentPreviewContract = null;
     documentPreviewDoc = null;
     documentPreviewIsFullscreen = false;
+    documentPreviewPdfPages = [];
+    documentPreviewPdfText = '';
+    documentPreviewRenderToken += 1;
   }
 
   function prepareDocumentPreview(
@@ -413,6 +447,7 @@
     closeDocumentPreview();
     documentPreviewLoading = true;
     documentPreviewError = '';
+    const renderToken = ++documentPreviewRenderToken;
     prepareDocumentPreview(formatDocumentPreviewName(doc), doc.downloadUrl, 'pdf', {
       contract,
       doc,
@@ -430,16 +465,68 @@
         response.headers?.['content-type'] ?? response.headers?.['Content-Type'] ?? blob.type ?? ''
       ).toLowerCase();
       const objectUrl = URL.createObjectURL(blob);
+      const resolvedName = formatDocumentPreviewName(doc);
+      const isPdfFile = contentType.includes('pdf') || resolvedName.toLowerCase().endsWith('.pdf');
       documentPreviewObjectUrl = objectUrl;
       documentPreviewOwnsObjectUrl = true;
-      documentPreviewKind = contentType.includes('image/') ? 'image' : 'pdf';
+      documentPreviewKind = contentType.includes('image/') && !isPdfFile ? 'image' : 'pdf';
       documentPreviewSourceUrl = objectUrl;
-      documentPreviewFileName = formatDocumentPreviewName(doc);
+      documentPreviewFileName = resolvedName;
+
+      if (documentPreviewKind === 'pdf') {
+        documentPreviewPdfPages = [];
+        documentPreviewPdfText = '';
+        const pdfBytes = await blob.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes) });
+        const pdf = await loadingTask.promise;
+        try {
+          const pages: DocumentPreviewPdfPage[] = [];
+          for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+            if (renderToken !== documentPreviewRenderToken) return;
+            const page = await pdf.getPage(pageNumber);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            if (!context) {
+              throw new Error('Não foi possível preparar o canvas do PDF.');
+            }
+
+            canvas.width = Math.ceil(viewport.width);
+            canvas.height = Math.ceil(viewport.height);
+            await page.render({ canvasContext: context, canvas, viewport }).promise;
+
+            const textContent = await page.getTextContent();
+            const text = (textContent.items as Array<{ str?: string | null }>)
+              .map((item) => String(item.str ?? ''))
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+            if (!documentPreviewPdfText && text) {
+              documentPreviewPdfText = text;
+            }
+            pages.push({
+              pageNumber,
+              dataUrl: canvas.toDataURL('image/png'),
+              text,
+            });
+          }
+          if (renderToken === documentPreviewRenderToken) {
+            documentPreviewPdfPages = pages;
+          }
+        } finally {
+          await pdf.destroy().catch(() => {});
+        }
+      } else {
+        documentPreviewPdfPages = [];
+        documentPreviewPdfText = '';
+      }
     } catch (error) {
       console.error('Erro ao carregar visualização do documento:', error);
       documentPreviewError = 'Não foi possível carregar a visualização do documento.';
     } finally {
-      documentPreviewLoading = false;
+      if (renderToken === documentPreviewRenderToken) {
+        documentPreviewLoading = false;
+      }
     }
   }
 
@@ -448,7 +535,7 @@
     if (!downloadSource) return;
     const anchor = document.createElement('a');
     anchor.href = downloadSource;
-    anchor.download = documentPreviewFileName || 'documento';
+    anchor.download = normalizePossiblyMojibakeText(documentPreviewFileName || 'documento');
     anchor.style.display = 'none';
     document.body.appendChild(anchor);
     anchor.click();
@@ -569,7 +656,7 @@
   }
 
   function documentFileName(doc?: ContractDocument | null): string {
-    const original = String(doc?.originalFileName ?? '').trim();
+    const original = normalizePossiblyMojibakeText(String(doc?.originalFileName ?? ''));
     if (original.length > 0) {
       return original;
     }
@@ -1482,6 +1569,25 @@
     return null;
   }
 
+  function resolveOutroMatrixDocumentTypes(
+    contract: ContractItem,
+    side: 'seller' | 'buyer',
+    count: number
+  ): string[] {
+    const docs = getDocumentsForMatrixCell(contract, 'outro', side);
+    if (docs.length >= outroMatrixSlotTypes.length) {
+      return [];
+    }
+
+    const usedTypes = new Set(
+      docs
+        .map((doc) => String(doc.documentType ?? '').trim().toLowerCase())
+        .filter((value) => value.startsWith('cliente_outro_'))
+    );
+    const availableSlots = outroMatrixSlotTypes.filter((slotType) => !usedTypes.has(slotType));
+    return availableSlots.slice(0, Math.max(0, count));
+  }
+
   async function fetchContracts() {
     isLoading = true;
     try {
@@ -1806,30 +1912,54 @@
     const uploadKey = `${matrixUploadContext.side}:${matrixUploadContext.documentType}`;
     matrixUploadingKey = uploadKey;
     try {
+      const currentUploadContext = matrixUploadContext;
+      if (!currentUploadContext) {
+        return;
+      }
       const batchUpload =
-        isOutroMatrixDocumentType(matrixUploadContext.documentType) &&
-        !matrixUploadContext.existingDocumentType &&
+        isOutroMatrixDocumentType(currentUploadContext.documentType) &&
+        !currentUploadContext.existingDocumentType &&
         files.length > 1;
 
       if (batchUpload) {
-        let uploadedCount = 0;
-        for (const file of files) {
-          try {
-            const ok = await uploadMatrixDocumentFile(file, matrixUploadContext);
-            if (ok) uploadedCount += 1;
-            await reloadSelectedContract(selected.id);
-          } catch (error) {
-            console.error('Erro ao enviar documento na matriz:', error);
-            toast.error(resolveApiErrorMessage(error, 'Não foi possível enviar o documento.'));
-          }
+        const nextOutroTypes = resolveOutroMatrixDocumentTypes(
+          selected,
+          currentUploadContext.side,
+          files.length
+        );
+        if (nextOutroTypes.length === 0) {
+          toast.error('Limite de documentos outros atingido para este lado.');
+          return;
         }
+
+        const filesToUpload = files.slice(0, nextOutroTypes.length);
+        if (filesToUpload.length < files.length) {
+          toast.error(
+            `Limite de documentos outros atingido para este lado. Serão enviados apenas ${filesToUpload.length}.`
+          );
+        }
+        const results = await Promise.allSettled(
+          filesToUpload.map((file, index) =>
+            uploadMatrixDocumentFile(file, {
+              documentType: currentUploadContext.documentType,
+              side: currentUploadContext.side,
+              existingDocumentType: nextOutroTypes[index],
+            })
+          )
+        );
+
+        const uploadedCount = results.filter((result) => result.status === 'fulfilled' && result.value).length;
+        const failedCount = results.length - uploadedCount;
         if (uploadedCount > 0) {
           toast.success(
             `${uploadedCount} documento${uploadedCount > 1 ? 's' : ''} enviado${uploadedCount > 1 ? 's' : ''} com sucesso.`
           );
-          await reloadSelectedContract(selected.id);
-          await fetchContracts();
         }
+        if (failedCount > 0) {
+          toast.error('Alguns documentos não puderam ser enviados.');
+        }
+        await reloadSelectedContract(selected.id);
+        await fetchContracts();
       } else {
         await uploadMatrixDocumentFile(files[0], matrixUploadContext);
         toast.success('Documento enviado com sucesso.');
@@ -2140,9 +2270,9 @@
         ? decodeURIComponent(utfMatch[1])
         : basicMatch?.[1];
       const fallbackName =
-        doc.originalFileName ??
+        normalizePossiblyMojibakeText(doc.originalFileName ?? '') ||
         `${String(doc.documentType ?? 'documento').trim() || 'documento'}.pdf`;
-      const downloadName = (resolvedFromHeader || fallbackName).trim();
+      const downloadName = normalizePossiblyMojibakeText(resolvedFromHeader || fallbackName);
 
       const blob =
         response.data instanceof Blob
@@ -2813,7 +2943,7 @@
                                 </div>
                               {/each}
                               {#if documentType.trim().toLowerCase() === 'outro'}
-                                <div class="pt-1">
+                                <div class="mt-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700">
                                   {#if canAddAnotherMatrixDocument(selected, documentType, 'seller')}
                                     <Button
                                       size="sm"
@@ -2927,7 +3057,7 @@
                                 </div>
                               {/each}
                               {#if documentType.trim().toLowerCase() === 'outro'}
-                                <div class="pt-1">
+                                <div class="mt-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700">
                                   {#if canAddAnotherMatrixDocument(selected, documentType, 'buyer')}
                                     <Button
                                       size="sm"
@@ -3725,7 +3855,7 @@
 
 {#if documentPreviewOpen}
   <div
-    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-3"
+    class="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-black/75 p-3 overscroll-contain"
     role="presentation"
     on:click={(event) => {
       if (event.target === event.currentTarget) {
@@ -3778,7 +3908,7 @@
         </div>
       </div>
 
-      <div class={`flex min-h-0 flex-1 flex-col gap-3 ${documentPreviewIsFullscreen ? 'p-3' : 'p-4'}`}>
+      <div class={`flex min-h-0 flex-1 flex-col gap-3 overflow-hidden ${documentPreviewIsFullscreen ? 'p-3' : 'p-4'}`}>
         {#if documentPreviewLoading}
           <div class="flex min-h-[280px] flex-1 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40">
             <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
@@ -3837,7 +3967,7 @@
           </div>
 
           <div
-            class={`min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 ${
+            class={`min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 overscroll-contain ${
               documentPreviewIsFullscreen ? 'p-2' : 'p-4'
             } dark:border-gray-800 dark:bg-black`}
           >
@@ -3854,13 +3984,26 @@
                   }`}
                 />
               {:else}
-                <iframe
-                  src={documentPreviewSourceUrl}
-                  title={documentPreviewFileName}
-                  class={`rounded-lg border border-gray-200 bg-white shadow-2xl dark:border-gray-800 ${
-                    documentPreviewIsFullscreen ? 'h-[92vh] w-full' : 'h-[76vh] w-[min(100vw-4rem,960px)]'
-                  }`}
-                ></iframe>
+                <div class="flex w-full max-w-[960px] flex-col items-center gap-4">
+                  {#if documentPreviewPdfText}
+                    <p class="sr-only" data-testid="document-preview-pdf-text">{documentPreviewPdfText}</p>
+                  {/if}
+                  {#if documentPreviewPdfPages.length === 0}
+                    <div class="flex min-h-[280px] w-full items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300">
+                      Renderizando páginas do PDF...
+                    </div>
+                  {:else}
+                    {#each documentPreviewPdfPages as page (page.pageNumber)}
+                      <div class="w-full rounded-lg bg-white p-2 shadow-2xl dark:bg-gray-950">
+                        <img
+                          src={page.dataUrl}
+                          alt={`${documentPreviewFileName} - página ${page.pageNumber}`}
+                          class="h-auto w-full rounded-md object-contain"
+                        />
+                      </div>
+                    {/each}
+                  {/if}
+                </div>
               {/if}
             </div>
           </div>

@@ -10,6 +10,7 @@ const {
   apiDeleteMock,
   apiClientGetMock,
   apiClientPostMock,
+  pdfGetDocumentMock,
   toastErrorMock,
   toastSuccessMock,
 } = vi.hoisted(() => ({
@@ -20,6 +21,7 @@ const {
   apiDeleteMock: vi.fn(),
   apiClientGetMock: vi.fn(),
   apiClientPostMock: vi.fn(),
+  pdfGetDocumentMock: vi.fn(),
   toastErrorMock: vi.fn(),
   toastSuccessMock: vi.fn(),
 }));
@@ -45,11 +47,26 @@ vi.mock('svelte-sonner', () => ({
   },
 }));
 
+vi.mock('pdfjs-dist/build/pdf.mjs', () => ({
+  GlobalWorkerOptions: {
+    workerSrc: '',
+  },
+  getDocument: pdfGetDocumentMock,
+}));
+
 import ContractsModule from '../../src/lib/components/ContractsModule.svelte';
 
 describe('ContractsModule', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: vi.fn(() => ({})),
+    });
+    Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
+      configurable: true,
+      value: vi.fn(() => 'data:image/png;base64,ZmFrZQ=='),
+    });
   });
 
   it('consome o payload realista do backend em /admin/contracts sem adaptadores extras', async () => {
@@ -101,7 +118,7 @@ describe('ContractsModule', () => {
               type: 'other',
               documentType: 'doc_identidade',
               side: 'seller',
-              originalFileName: 'identidade.pdf',
+              originalFileName: 'danfe (peÃ§as).pdf',
               downloadUrl: '/negotiations/neg-admin-1/documents/501/download',
               createdAt: '2026-03-02T09:02:00.000Z',
             },
@@ -143,12 +160,12 @@ describe('ContractsModule', () => {
     expect(screen.getAllByText('Captador').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
     expect(screen.getByText('Cliente Comprador')).toBeInTheDocument();
-
     const openReviewButton = await screen.findByRole('button', {
       name: 'Analisar Documentação',
     });
     await fireEvent.click(openReviewButton);
 
+    expect(screen.getByRole('button', { name: 'danfe (peças).pdf' })).toBeInTheDocument();
     expect(await screen.findByText('Dados Captador')).toBeInTheDocument();
     expect(screen.getByText('2 responsáveis designados')).toBeInTheDocument();
     expect(screen.getByDisplayValue('captador@test.com')).toBeInTheDocument();
@@ -160,15 +177,32 @@ describe('ContractsModule', () => {
     expect(downloadButtons.length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(5);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'identidade.pdf' }));
+    pdfGetDocumentMock.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: async () => ({
+          getViewport: ({ scale }: { scale: number }) => ({ width: 612 * scale, height: 792 * scale }),
+          render: () => ({ promise: Promise.resolve() }),
+          getTextContent: async () => ({
+            items: [{ str: 'Contrato' }, { str: 'de' }, { str: 'Compra' }],
+          }),
+        }),
+        destroy: async () => {},
+      }),
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'danfe (peças).pdf' }));
     const previewDialog = await screen.findByRole('dialog', {
-      name: 'identidade.pdf',
+      name: 'danfe (peças).pdf',
     });
     expect(within(previewDialog).getByText('Documento do contrato')).toBeInTheDocument();
     expect(
-      within(previewDialog).getByRole('button', { name: 'Substituir documento' })
+      await within(previewDialog).findByRole('button', { name: 'Substituir documento' })
     ).toBeInTheDocument();
-    expect(within(previewDialog).getByRole('button', { name: 'Excluir documento' })).toBeInTheDocument();
+    expect(await within(previewDialog).findByRole('button', { name: 'Excluir documento' })).toBeInTheDocument();
+    expect(await within(previewDialog).findByTestId('document-preview-pdf-text')).toHaveTextContent(
+      'Contrato de Compra'
+    );
   });
 
   it('envia slot outro explícito na matriz para seller', async () => {
