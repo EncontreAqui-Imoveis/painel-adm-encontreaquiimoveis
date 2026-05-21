@@ -165,11 +165,14 @@ describe('ContractsModule', () => {
       name: 'identidade.pdf',
     });
     expect(within(previewDialog).getByText('Documento do contrato')).toBeInTheDocument();
-    expect(within(previewDialog).getByRole('button', { name: 'Substituir' })).toBeInTheDocument();
-    expect(within(previewDialog).getByRole('button', { name: 'Excluir' })).toBeInTheDocument();
+    expect(
+      within(previewDialog).getByRole('button', { name: 'Substituir documento' })
+    ).toBeInTheDocument();
+    expect(within(previewDialog).getByRole('button', { name: 'Excluir documento' })).toBeInTheDocument();
   });
 
   it('envia slot outro explícito na matriz para seller', async () => {
+    const sellerOutroDocs: Array<Record<string, unknown>> = [];
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
         return {
@@ -190,7 +193,7 @@ describe('ContractsModule', () => {
                 seller: [{ category: 'dados_bancarios', applicability: 'required' }],
                 buyer: [{ category: 'conjuge_documentos', applicability: 'not_applicable' }],
               },
-              documents: [],
+              documents: sellerOutroDocs,
               createdAt: '2026-03-01T10:00:00.000Z',
               updatedAt: '2026-03-01T10:00:00.000Z',
             },
@@ -211,16 +214,24 @@ describe('ContractsModule', () => {
             propertyPurpose: 'Venda',
             capturingBrokerName: 'Captador',
             sellingBrokerName: 'Vendedor',
-            documents: [],
+            documents: sellerOutroDocs,
           },
-          documents: [],
+          documents: sellerOutroDocs,
         };
       }
 
       return { data: [], total: 0 };
     });
 
-    apiClientPostMock.mockResolvedValue({ data: {} });
+    apiClientPostMock.mockImplementation(async (_endpoint: string, body: FormData) => {
+      sellerOutroDocs.push({
+        id: `seller-outro-${sellerOutroDocs.length + 1}`,
+        documentType: body.get('documentType'),
+        documentCategory: body.get('documentCategory'),
+        side: body.get('side'),
+      });
+      return { data: {} };
+    });
 
     const { container } = render(ContractsModule);
 
@@ -235,28 +246,32 @@ describe('ContractsModule', () => {
     await fireEvent.click(uploadButtons[0]);
     await fireEvent.change(hiddenInput, {
       target: {
-        files: [new File(['seller-doc'], 'seller.pdf', { type: 'application/pdf' })],
+        files: [
+          new File(['seller-doc-1'], 'seller-1.pdf', { type: 'application/pdf' }),
+          new File(['seller-doc-2'], 'seller-2.pdf', { type: 'application/pdf' }),
+        ],
       },
     });
 
     await waitFor(() => {
-      expect(apiClientPostMock).toHaveBeenCalledTimes(1);
+      expect(apiClientPostMock).toHaveBeenCalledTimes(2);
     });
 
     let formData = apiClientPostMock.mock.calls[0][1] as FormData;
     expect(formData.get('documentType')).toBe('cliente_outro_01');
     expect(formData.get('documentCategory')).toBe('outro');
     expect(formData.get('side')).toBe('seller');
+    formData = apiClientPostMock.mock.calls[1][1] as FormData;
+    expect(formData.get('documentType')).toBe('cliente_outro_02');
+    expect(formData.get('documentCategory')).toBe('outro');
+    expect(formData.get('side')).toBe('seller');
 
-    const remainingUploadButton = screen
-      .getAllByRole('button', { name: 'Enviar' })
-      .find((button) => !(button as HTMLButtonElement).disabled);
-    expect(remainingUploadButton).toBeTruthy();
-    await fireEvent.click(remainingUploadButton as HTMLButtonElement);
-    expect(remainingUploadButton).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Substituir' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Adicionar outro' })).toBeInTheDocument();
   });
 
   it('envia slot outro explícito na matriz para buyer', async () => {
+    const buyerOutroDocs: Array<Record<string, unknown>> = [];
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
         return {
@@ -277,7 +292,7 @@ describe('ContractsModule', () => {
                 seller: [{ category: 'dados_bancarios', applicability: 'not_applicable' }],
                 buyer: [{ category: 'conjuge_documentos', applicability: 'required' }],
               },
-              documents: [],
+              documents: buyerOutroDocs,
               createdAt: '2026-03-01T10:00:00.000Z',
               updatedAt: '2026-03-01T10:00:00.000Z',
             },
@@ -298,16 +313,24 @@ describe('ContractsModule', () => {
             propertyPurpose: 'Venda',
             capturingBrokerName: 'Captador',
             sellingBrokerName: 'Vendedor',
-            documents: [],
+            documents: buyerOutroDocs,
           },
-          documents: [],
+          documents: buyerOutroDocs,
         };
       }
 
       return { data: [], total: 0 };
     });
 
-    apiClientPostMock.mockResolvedValue({ data: {} });
+    apiClientPostMock.mockImplementation(async (_endpoint: string, body: FormData) => {
+      buyerOutroDocs.push({
+        id: `buyer-outro-${buyerOutroDocs.length + 1}`,
+        documentType: body.get('documentType'),
+        documentCategory: body.get('documentCategory'),
+        side: body.get('side'),
+      });
+      return { data: {} };
+    });
 
     const { container } = render(ContractsModule);
 
@@ -334,6 +357,7 @@ describe('ContractsModule', () => {
     expect(formData.get('documentType')).toBe('cliente_outro_01');
     expect(formData.get('documentCategory')).toBe('outro');
     expect(formData.get('side')).toBe('buyer');
+    expect(screen.getByRole('button', { name: 'Adicionar outro' })).toBeInTheDocument();
   });
 
   it('bloqueia o Aprovar normal e mantém Aprovar c/ ressalvas ativo quando faltam dados obrigatórios', async () => {

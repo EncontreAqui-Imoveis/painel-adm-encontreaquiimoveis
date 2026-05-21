@@ -232,7 +232,7 @@
   let selectedSignedDocSide: 'seller' | 'buyer' = 'seller';
   let matrixUploadInputEl: HTMLInputElement | null = null;
   let matrixUploadContext:
-    | { documentType: string; side: 'seller' | 'buyer' }
+    | { documentType: string; side: 'seller' | 'buyer'; existingDocumentType?: string | null }
     | null = null;
   let matrixUploadingKey: string | null = null;
   let matrixDeletingDocumentId: number | null = null;
@@ -1432,9 +1432,6 @@
     side: 'seller' | 'buyer'
   ): string {
     const docs = getDocumentsForMatrixCell(contract, documentType, side);
-    if (isOutroMatrixDocumentType(documentType)) {
-      return docs.length > 0 ? 'Adicionar outro' : 'Enviar';
-    }
     return docs.length > 0 ? 'Substituir' : 'Enviar';
   }
 
@@ -1754,15 +1751,54 @@
     selectedSignedFile = target.files?.[0] ?? null;
   }
 
-  function triggerMatrixUpload(documentType: string, side: 'seller' | 'buyer') {
-    matrixUploadContext = { documentType, side };
-    matrixUploadInputEl?.click();
+  function triggerMatrixUpload(
+    documentType: string,
+    side: 'seller' | 'buyer',
+    existingDocumentType: string | null = null
+  ) {
+    matrixUploadContext = { documentType, side, existingDocumentType };
+    if (matrixUploadInputEl) {
+      matrixUploadInputEl.multiple =
+        isOutroMatrixDocumentType(documentType) && !existingDocumentType;
+      matrixUploadInputEl.value = '';
+      matrixUploadInputEl.click();
+    }
+  }
+
+  async function uploadMatrixDocumentFile(
+    file: File,
+    context: { documentType: string; side: 'seller' | 'buyer'; existingDocumentType?: string | null }
+  ): Promise<boolean> {
+    if (!selected || !file) {
+      return false;
+    }
+
+    const normalizedType = String(context.documentType ?? '').trim().toLowerCase();
+    const storageDocumentType =
+      context.existingDocumentType?.trim() ||
+      (normalizedType === 'outro'
+        ? resolveOutroMatrixDocumentType(selected, context.side)
+        : context.documentType);
+    if (!storageDocumentType) {
+      toast.error('Limite de documentos outros atingido para este lado.');
+      return false;
+    }
+
+    const form = new FormData();
+    form.append('documentType', storageDocumentType);
+    form.append('documentCategory', resolveMatrixUploadCategory(storageDocumentType, context.side));
+    form.append('side', context.side);
+    form.append('file', file);
+    await apiClient.post(`/contracts/${selected.id}/documents`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return true;
   }
 
   async function handleMatrixFileSelection(event: Event) {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0] ?? null;
-    if (!selected || !file || !matrixUploadContext) {
+    const files = Array.from(input.files ?? []);
+    if (!selected || files.length === 0 || !matrixUploadContext) {
       if (input) input.value = '';
       return;
     }
@@ -1770,29 +1806,36 @@
     const uploadKey = `${matrixUploadContext.side}:${matrixUploadContext.documentType}`;
     matrixUploadingKey = uploadKey;
     try {
-      const normalizedType = matrixUploadContext.documentType.trim().toLowerCase();
-      const storageDocumentType =
-        normalizedType === 'outro'
-          ? resolveOutroMatrixDocumentType(selected, matrixUploadContext.side)
-          : matrixUploadContext.documentType;
-      if (!storageDocumentType) {
-        toast.error('Limite de documentos outros atingido para este lado.');
-        return;
+      const batchUpload =
+        isOutroMatrixDocumentType(matrixUploadContext.documentType) &&
+        !matrixUploadContext.existingDocumentType &&
+        files.length > 1;
+
+      if (batchUpload) {
+        let uploadedCount = 0;
+        for (const file of files) {
+          try {
+            const ok = await uploadMatrixDocumentFile(file, matrixUploadContext);
+            if (ok) uploadedCount += 1;
+            await reloadSelectedContract(selected.id);
+          } catch (error) {
+            console.error('Erro ao enviar documento na matriz:', error);
+            toast.error(resolveApiErrorMessage(error, 'Não foi possível enviar o documento.'));
+          }
+        }
+        if (uploadedCount > 0) {
+          toast.success(
+            `${uploadedCount} documento${uploadedCount > 1 ? 's' : ''} enviado${uploadedCount > 1 ? 's' : ''} com sucesso.`
+          );
+          await reloadSelectedContract(selected.id);
+          await fetchContracts();
+        }
+      } else {
+        await uploadMatrixDocumentFile(files[0], matrixUploadContext);
+        toast.success('Documento enviado com sucesso.');
+        await reloadSelectedContract(selected.id);
+        await fetchContracts();
       }
-      const form = new FormData();
-      form.append('documentType', storageDocumentType);
-      form.append(
-        'documentCategory',
-        resolveMatrixUploadCategory(storageDocumentType, matrixUploadContext.side)
-      );
-      form.append('side', matrixUploadContext.side);
-      form.append('file', file);
-      await apiClient.post(`/contracts/${selected.id}/documents`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      toast.success('Documento enviado com sucesso.');
-      await reloadSelectedContract(selected.id);
-      await fetchContracts();
     } catch (error) {
       console.error('Erro ao enviar documento na matriz:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível enviar o documento.'));
@@ -2430,6 +2473,9 @@
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Etapa: {statusLabel(selected.status)}
           </p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {getContractPartySummary(selected)}
+          </p>
           {#if formatResponsibleUserSummary(selected)}
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {formatResponsibleUserSummary(selected)}
@@ -2735,7 +2781,13 @@
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      on:click={() => triggerMatrixUpload(documentType, 'seller')}
+                                      on:click={() =>
+                                        triggerMatrixUpload(
+                                          documentType,
+                                          'seller',
+                                          String(sellerDoc.documentType ?? '').trim().toLowerCase()
+                                        )
+                                      }
                                       disabled={
                                         matrixUploadingKey === `seller:${documentType}` ||
                                         !canAddAnotherMatrixDocument(selected, documentType, 'seller')
@@ -2760,10 +2812,26 @@
                                   </div>
                                 </div>
                               {/each}
-                              {#if documentType.trim().toLowerCase() === 'outro' && !canAddAnotherMatrixDocument(selected, documentType, 'seller')}
-                                <p class="text-xs text-gray-500 dark:text-gray-400">
-                                  Limite de 15 documentos atingido.
-                                </p>
+                              {#if documentType.trim().toLowerCase() === 'outro'}
+                                <div class="pt-1">
+                                  {#if canAddAnotherMatrixDocument(selected, documentType, 'seller')}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      on:click={() => triggerMatrixUpload(documentType, 'seller')}
+                                      disabled={matrixUploadingKey === `seller:${documentType}`}
+                                    >
+                                      {#if matrixUploadingKey === `seller:${documentType}`}
+                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                      {/if}
+                                      Adicionar outro
+                                    </Button>
+                                  {:else}
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                                      Limite de 15 documentos atingido.
+                                    </p>
+                                  {/if}
+                                </div>
                               {/if}
                             {/if}
                           </div>
@@ -2827,7 +2895,13 @@
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      on:click={() => triggerMatrixUpload(documentType, 'buyer')}
+                                      on:click={() =>
+                                        triggerMatrixUpload(
+                                          documentType,
+                                          'buyer',
+                                          String(buyerDoc.documentType ?? '').trim().toLowerCase()
+                                        )
+                                      }
                                       disabled={
                                         matrixUploadingKey === `buyer:${documentType}` ||
                                         !canAddAnotherMatrixDocument(selected, documentType, 'buyer')
@@ -2852,10 +2926,26 @@
                                   </div>
                                 </div>
                               {/each}
-                              {#if documentType.trim().toLowerCase() === 'outro' && !canAddAnotherMatrixDocument(selected, documentType, 'buyer')}
-                                <p class="text-xs text-gray-500 dark:text-gray-400">
-                                  Limite de 15 documentos atingido.
-                                </p>
+                              {#if documentType.trim().toLowerCase() === 'outro'}
+                                <div class="pt-1">
+                                  {#if canAddAnotherMatrixDocument(selected, documentType, 'buyer')}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      on:click={() => triggerMatrixUpload(documentType, 'buyer')}
+                                      disabled={matrixUploadingKey === `buyer:${documentType}`}
+                                    >
+                                      {#if matrixUploadingKey === `buyer:${documentType}`}
+                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                                      {/if}
+                                      Adicionar outro
+                                    </Button>
+                                  {:else}
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                                      Limite de 15 documentos atingido.
+                                    </p>
+                                  {/if}
+                                </div>
                               {/if}
                             {/if}
                           </div>
@@ -3688,7 +3778,7 @@
         </div>
       </div>
 
-      <div class="flex min-h-0 flex-1 flex-col gap-3 p-4">
+      <div class={`flex min-h-0 flex-1 flex-col gap-3 ${documentPreviewIsFullscreen ? 'p-3' : 'p-4'}`}>
         {#if documentPreviewLoading}
           <div class="flex min-h-[280px] flex-1 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40">
             <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
@@ -3714,24 +3804,43 @@
               </Button>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" on:click={downloadPreviewDocument}>
-                <Download class="mr-2 h-4 w-4" />
-                Baixar
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 w-9 rounded-full p-0"
+                on:click={downloadPreviewDocument}
+                title="Baixar documento"
+              >
+                <Download class="h-4 w-4" />
               </Button>
               {#if documentPreviewDoc}
-                <Button size="sm" variant="outline" on:click={replacePreviewDocument}>
-                  <RefreshCcw class="mr-2 h-4 w-4" />
-                  Substituir
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 w-9 rounded-full p-0"
+                  on:click={replacePreviewDocument}
+                  title="Substituir documento"
+                >
+                  <RefreshCcw class="h-4 w-4" />
                 </Button>
-                <Button size="sm" variant="destructive" on:click={deletePreviewDocument}>
-                  <Trash2 class="mr-2 h-4 w-4" />
-                  Excluir
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-9 w-9 rounded-full p-0"
+                  on:click={deletePreviewDocument}
+                  title="Excluir documento"
+                >
+                  <Trash2 class="h-4 w-4" />
                 </Button>
               {/if}
             </div>
           </div>
 
-          <div class="min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 p-4 dark:border-gray-800 dark:bg-black">
+          <div
+            class={`min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 ${
+              documentPreviewIsFullscreen ? 'p-2' : 'p-4'
+            } dark:border-gray-800 dark:bg-black`}
+          >
             <div
               class="flex min-h-full w-full justify-center"
               style={`transform: scale(${documentPreviewZoom}); transform-origin: top center;`}
@@ -3740,13 +3849,17 @@
                 <img
                   src={documentPreviewSourceUrl}
                   alt={documentPreviewFileName}
-                  class="max-h-[76vh] max-w-full rounded-lg object-contain shadow-2xl"
+                  class={`max-w-full rounded-lg object-contain shadow-2xl ${
+                    documentPreviewIsFullscreen ? 'max-h-[92vh]' : 'max-h-[76vh]'
+                  }`}
                 />
               {:else}
                 <iframe
                   src={documentPreviewSourceUrl}
                   title={documentPreviewFileName}
-                  class="h-[76vh] w-[min(100vw-4rem,960px)] rounded-lg border border-gray-200 bg-white shadow-2xl dark:border-gray-800"
+                  class={`rounded-lg border border-gray-200 bg-white shadow-2xl dark:border-gray-800 ${
+                    documentPreviewIsFullscreen ? 'h-[92vh] w-full' : 'h-[76vh] w-[min(100vw-4rem,960px)]'
+                  }`}
                 ></iframe>
               {/if}
             </div>
