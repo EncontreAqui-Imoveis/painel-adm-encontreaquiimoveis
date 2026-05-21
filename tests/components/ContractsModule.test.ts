@@ -26,6 +26,20 @@ const {
   toastSuccessMock: vi.fn(),
 }));
 
+const canvasContextMock = {
+  fillStyle: '',
+  font: '',
+  textBaseline: 'top',
+  save: vi.fn(),
+  restore: vi.fn(),
+  fillRect: vi.fn(),
+  fillText: vi.fn(),
+  measureText: vi.fn((text: string) => ({ width: String(text ?? '').length * 10 })),
+  getImageData: vi.fn(() => ({
+    data: new Uint8ClampedArray(96 * 96 * 4).fill(255),
+  })),
+};
+
 vi.mock('$lib/apiClient', () => ({
   api: {
     get: apiGetMock,
@@ -61,7 +75,7 @@ describe('ContractsModule', () => {
     vi.clearAllMocks();
     Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
       configurable: true,
-      value: vi.fn(() => ({})),
+      value: vi.fn(() => canvasContextMock),
     });
     Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
       configurable: true,
@@ -200,6 +214,9 @@ describe('ContractsModule', () => {
       await within(previewDialog).findByRole('button', { name: 'Substituir documento' })
     ).toBeInTheDocument();
     expect(await within(previewDialog).findByRole('button', { name: 'Excluir documento' })).toBeInTheDocument();
+    expect(await within(previewDialog).findByTestId('document-preview-pdf-visible-text')).toHaveTextContent(
+      'Contrato de Compra'
+    );
     expect(await within(previewDialog).findByTestId('document-preview-pdf-text')).toHaveTextContent(
       'Contrato de Compra'
     );

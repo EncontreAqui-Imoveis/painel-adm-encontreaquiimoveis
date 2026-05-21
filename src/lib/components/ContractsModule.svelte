@@ -1,7 +1,5 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
-  import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
   import {
     ChevronLeft,
     ChevronRight,
@@ -29,10 +27,7 @@
     parseCurrency,
   } from '$lib/components/create-property-helpers';
   import Pagination from '$lib/Pagination.svelte';
-
-  if (typeof window !== 'undefined') {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-  }
+  import { renderPdfPreview } from '$lib/pdfPreviewRenderer';
 
   /** TS do IDE: tipo inferido do `Input` costuma omitir `id`/handlers; aqui usamos o contrato explícito. */
   const LabeledTextInput = Input as unknown as Component<InputProps, {}, 'value'>;
@@ -116,12 +111,6 @@
   type ContractDetailResponse = {
     contract?: ContractItem;
     documents?: ContractDocument[];
-  };
-
-  type DocumentPreviewPdfPage = {
-    pageNumber: number;
-    dataUrl: string;
-    text: string;
   };
 
   const tabs: { key: ContractStatus; label: string }[] = [
@@ -261,9 +250,20 @@
   let documentPreviewContract: ContractItem | null = null;
   let documentPreviewDoc: ContractDocument | null = null;
   let documentPreviewIsFullscreen = false;
+  type DocumentPreviewPdfPage = {
+    pageNumber: number;
+    dataUrl: string;
+    text: string;
+  };
   let documentPreviewPdfPages: DocumentPreviewPdfPage[] = [];
   let documentPreviewPdfText = '';
+  let documentPreviewPdfFallbackUsed = false;
   let documentPreviewRenderToken = 0;
+  let documentPreviewFullscreenTargetEl: HTMLDivElement | null = null;
+  let previousBodyOverflow = '';
+  let previousViewportOverscrollBehavior = '';
+  let viewportScrollLockCount = 0;
+  let previousModalBodyOverflow = '';
   let finalizingContract = false;
   let reopeningContract = false;
   let deletingContract = false;
@@ -386,9 +386,32 @@
     return original || documentLabel(doc.documentType ?? doc.type ?? null);
   }
 
+  function lockViewportGestureScroll() {
+    if (typeof document === 'undefined') return;
+    if (viewportScrollLockCount === 0) {
+      previousViewportOverscrollBehavior = document.documentElement.style.overscrollBehavior;
+      document.documentElement.style.overscrollBehavior = 'none';
+    }
+    viewportScrollLockCount += 1;
+  }
+
+  function unlockViewportGestureScroll() {
+    if (typeof document === 'undefined' || viewportScrollLockCount === 0) return;
+    viewportScrollLockCount -= 1;
+    if (viewportScrollLockCount === 0) {
+      document.documentElement.style.overscrollBehavior = previousViewportOverscrollBehavior;
+    }
+  }
+
   function closeDocumentPreview() {
     if (documentPreviewOwnsObjectUrl && documentPreviewObjectUrl) {
       URL.revokeObjectURL(documentPreviewObjectUrl);
+    }
+    if (typeof document !== 'undefined' && document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {});
+    }
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = previousBodyOverflow;
     }
     documentPreviewOpen = false;
     documentPreviewLoading = false;
@@ -405,7 +428,26 @@
     documentPreviewIsFullscreen = false;
     documentPreviewPdfPages = [];
     documentPreviewPdfText = '';
+    documentPreviewPdfFallbackUsed = false;
     documentPreviewRenderToken += 1;
+    unlockViewportGestureScroll();
+  }
+
+  async function toggleDocumentPreviewFullscreen() {
+    if (typeof document === 'undefined' || !documentPreviewFullscreenTargetEl) return;
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        documentPreviewIsFullscreen = false;
+      } else {
+        await documentPreviewFullscreenTargetEl.requestFullscreen();
+        documentPreviewIsFullscreen = true;
+      }
+    } catch (error) {
+      console.error('Falha ao alternar tela cheia:', error);
+      toast.error('Não foi possível entrar em tela cheia.');
+    }
   }
 
   function prepareDocumentPreview(
@@ -419,6 +461,11 @@
       doc?: ContractDocument | null;
     } = {}
   ) {
+    if (typeof document !== 'undefined' && !documentPreviewOpen) {
+      previousBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      lockViewportGestureScroll();
+    }
     documentPreviewTitle = title;
     documentPreviewSourceUrl = sourceUrl;
     documentPreviewKind = kind;
@@ -476,49 +523,22 @@
       if (documentPreviewKind === 'pdf') {
         documentPreviewPdfPages = [];
         documentPreviewPdfText = '';
-        const pdfBytes = await blob.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes) });
-        const pdf = await loadingTask.promise;
+        documentPreviewPdfFallbackUsed = false;
         try {
-          const pages: DocumentPreviewPdfPage[] = [];
-          for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-            if (renderToken !== documentPreviewRenderToken) return;
-            const page = await pdf.getPage(pageNumber);
-            const viewport = page.getViewport({ scale: 1.5 });
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            if (!context) {
-              throw new Error('Não foi possível preparar o canvas do PDF.');
-            }
-
-            canvas.width = Math.ceil(viewport.width);
-            canvas.height = Math.ceil(viewport.height);
-            await page.render({ canvasContext: context, canvas, viewport }).promise;
-
-            const textContent = await page.getTextContent();
-            const text = (textContent.items as Array<{ str?: string | null }>)
-              .map((item) => String(item.str ?? ''))
-              .join(' ')
-              .replace(/\s+/g, ' ')
-              .trim();
-            if (!documentPreviewPdfText && text) {
-              documentPreviewPdfText = text;
-            }
-            pages.push({
-              pageNumber,
-              dataUrl: canvas.toDataURL('image/png'),
-              text,
-            });
-          }
+          const rendered = await renderPdfPreview(blob);
           if (renderToken === documentPreviewRenderToken) {
-            documentPreviewPdfPages = pages;
+            documentPreviewPdfPages = rendered.pages;
+            documentPreviewPdfText = rendered.text;
+            documentPreviewPdfFallbackUsed = Boolean(rendered.usedFallback);
           }
-        } finally {
-          await pdf.destroy().catch(() => {});
+        } catch (pdfError) {
+          console.error('Erro ao renderizar PDF:', pdfError);
+          throw pdfError;
         }
       } else {
         documentPreviewPdfPages = [];
         documentPreviewPdfText = '';
+        documentPreviewPdfFallbackUsed = false;
       }
     } catch (error) {
       console.error('Erro ao carregar visualização do documento:', error);
@@ -1764,6 +1784,11 @@
   }
 
   function openModal(item: ContractItem) {
+    if (typeof document !== 'undefined' && !showModal) {
+      previousModalBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      lockViewportGestureScroll();
+    }
     selected = item;
     modalMode = resolveModalMode(item);
     showModal = true;
@@ -1803,6 +1828,10 @@
     selectedSignedFile = null;
     selectedSignedDocSide = 'seller';
     modalMode = 'review_docs';
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = previousModalBodyOverflow;
+    }
+    unlockViewportGestureScroll();
   }
 
   async function evaluateContractSide(
@@ -2301,11 +2330,23 @@
     syncIsMobileLayout();
     hasMounted = true;
     refresh(true);
+
+    const handleFullscreenChange = () => {
+      documentPreviewIsFullscreen = Boolean(document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
   });
 
   onDestroy(() => {
     if (documentPreviewOwnsObjectUrl && documentPreviewObjectUrl) {
       URL.revokeObjectURL(documentPreviewObjectUrl);
+    }
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = previousBodyOverflow;
     }
   });
 
@@ -2567,7 +2608,7 @@
 
 {#if showModal && selected}
   <div
-    class="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-0 sm:items-start sm:p-4"
+    class="fixed inset-0 z-50 flex items-end justify-center overflow-hidden overscroll-none bg-black/50 p-0 sm:items-start sm:p-4"
     role="presentation"
     on:click={(event) => {
       if (event.target === event.currentTarget) {
@@ -2577,13 +2618,14 @@
     on:keydown={() => {}}
   >
     <div
-      class="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl dark:bg-gray-900 sm:my-8 sm:max-h-[80vh] sm:rounded-lg"
+      class="flex w-full max-w-3xl max-h-[92vh] flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl dark:bg-gray-900 sm:my-8 sm:max-h-[80vh] sm:rounded-lg"
       role="dialog"
       aria-modal="true"
       aria-labelledby="contract-modal-title"
       aria-describedby="contract-modal-description"
     >
-      <div class="mb-4 flex items-start justify-between gap-3">
+      <div class="shrink-0 border-b border-gray-200 p-6 dark:border-gray-800">
+        <div class="flex items-start justify-between gap-3">
         <div>
           <h3 id="contract-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
             {modalMode === 'review_docs'
@@ -2612,18 +2654,20 @@
             </p>
           {/if}
         </div>
-        <button
-          type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-          on:click={() => closeModal()}
-          aria-label="Fechar modal"
-        >
-          ×
-        </button>
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            on:click={() => closeModal()}
+            aria-label="Fechar modal"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
-      {#if modalMode !== 'review_docs' && getApprovalRemarkSummaries(selected).length > 0}
-        <div class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+      <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6">
+        {#if modalMode !== 'review_docs' && getApprovalRemarkSummaries(selected).length > 0}
+          <div class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
           <p class="text-xs font-semibold uppercase text-amber-800 dark:text-amber-300">
             Aprovação com ressalvas
           </p>
@@ -2644,10 +2688,10 @@
               </div>
             {/each}
           </div>
-        </div>
-      {/if}
+          </div>
+        {/if}
 
-      {#if modalMode === 'review_docs'}
+        {#if modalMode === 'review_docs'}
         <div class="space-y-4">
           <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
             {getContractPartySummary(selected)}
@@ -3187,7 +3231,7 @@
             on:change={handleMatrixFileSelection}
           />
         </div>
-      {:else if modalMode === 'upload_draft'}
+        {:else if modalMode === 'upload_draft'}
         <div class="space-y-4">
           <div
             class={`rounded-md border p-4 ${
@@ -3380,7 +3424,7 @@
             </Button>
           </div>
         </div>
-      {:else if modalMode === 'finalize'}
+        {:else if modalMode === 'finalize'}
         <div class="space-y-4">
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
@@ -3663,7 +3707,7 @@
             </Button>
           </div>
         </div>
-      {:else if modalMode === 'edit_finalized'}
+        {:else if modalMode === 'edit_finalized'}
         <div class="space-y-4">
           <p class="text-sm text-gray-600 dark:text-gray-300">
             Gerencie os documentos e o ciclo final deste contrato.
@@ -3848,14 +3892,17 @@
             </Button>
           </div>
         </div>
-      {/if}
+        {/if}
+      </div>
     </div>
   </div>
 {/if}
 
 {#if documentPreviewOpen}
   <div
-    class="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-black/75 p-3 overscroll-contain"
+    class={`fixed inset-0 z-[60] flex items-center justify-center overflow-hidden overscroll-none bg-black/75 ${
+      documentPreviewIsFullscreen ? 'p-0' : 'p-3'
+    }`}
     role="presentation"
     on:click={(event) => {
       if (event.target === event.currentTarget) {
@@ -3865,50 +3912,53 @@
     on:keydown={() => {}}
   >
     <div
+      bind:this={documentPreviewFullscreenTargetEl}
       class={`flex w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-gray-950 ${
         documentPreviewIsFullscreen
-          ? 'h-[calc(100vh-1rem)] max-w-none rounded-none'
+          ? 'fixed inset-0 h-screen max-h-screen max-w-none rounded-none bg-black'
           : 'max-h-[92vh] max-w-6xl rounded-2xl'
       }`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="document-preview-title"
     >
-      <div class="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-800">
-        <div class="min-w-0">
-          <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            {documentPreviewDoc ? 'Documento do contrato' : 'Imagem do imóvel'}
-          </p>
-          <h3 id="document-preview-title" class="truncate text-base font-semibold text-gray-900 dark:text-gray-100">
-            {documentPreviewTitle || 'Visualização'}
-          </h3>
-          {#if documentPreviewFileName}
-            <p class="truncate text-xs text-gray-500 dark:text-gray-400">
-              {documentPreviewFileName}
+      {#if !documentPreviewIsFullscreen}
+        <div class="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+          <div class="min-w-0">
+            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              {documentPreviewDoc ? 'Documento do contrato' : 'Imagem do imóvel'}
             </p>
-          {/if}
+            <h3 id="document-preview-title" class="truncate text-base font-semibold text-gray-900 dark:text-gray-100">
+              {documentPreviewTitle || 'Visualização'}
+            </h3>
+            {#if documentPreviewFileName}
+              <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                {documentPreviewFileName}
+              </p>
+            {/if}
+          </div>
+          <div class="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              on:click={toggleDocumentPreviewFullscreen}
+              title="Alternar tela cheia"
+            >
+              <Maximize2 class="h-4 w-4" />
+            </Button>
+            <button
+              type="button"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+              on:click={() => closeDocumentPreview()}
+              aria-label="Fechar visualização"
+            >
+              <X class="h-4 w-4" />
+            </button>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            on:click={() => (documentPreviewIsFullscreen = !documentPreviewIsFullscreen)}
-            title="Alternar tela cheia"
-          >
-            <Maximize2 class="h-4 w-4" />
-          </Button>
-          <button
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-            on:click={() => closeDocumentPreview()}
-            aria-label="Fechar visualização"
-          >
-            <X class="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      {/if}
 
-      <div class={`flex min-h-0 flex-1 flex-col gap-3 overflow-hidden ${documentPreviewIsFullscreen ? 'p-3' : 'p-4'}`}>
+      <div class={`flex min-h-0 flex-1 flex-col gap-3 overflow-hidden ${documentPreviewIsFullscreen ? 'p-0' : 'p-4'}`}>
         {#if documentPreviewLoading}
           <div class="flex min-h-[280px] flex-1 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40">
             <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
@@ -3921,58 +3971,134 @@
             {documentPreviewError}
           </div>
         {:else}
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = Math.max(0.5, Number((documentPreviewZoom - 0.25).toFixed(2))))}>
-                <ZoomOut class="h-4 w-4" />
-              </Button>
-              <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = Math.min(3, Number((documentPreviewZoom + 0.25).toFixed(2))))}>
-                <ZoomIn class="h-4 w-4" />
-              </Button>
-              <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = 1)}>
-                100%
-              </Button>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 w-9 rounded-full p-0"
-                on:click={downloadPreviewDocument}
-                title="Baixar documento"
-              >
-                <Download class="h-4 w-4" />
-              </Button>
-              {#if documentPreviewDoc}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 w-9 rounded-full p-0"
-                  on:click={replacePreviewDocument}
-                  title="Substituir documento"
-                >
-                  <RefreshCcw class="h-4 w-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="h-9 w-9 rounded-full p-0"
-                  on:click={deletePreviewDocument}
-                  title="Excluir documento"
-                >
-                  <Trash2 class="h-4 w-4" />
-                </Button>
-              {/if}
-            </div>
-          </div>
-
           <div
-            class={`min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 overscroll-contain ${
-              documentPreviewIsFullscreen ? 'p-2' : 'p-4'
+            class={`relative min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 overscroll-y-contain ${
+              documentPreviewIsFullscreen ? 'rounded-none border-0 bg-black p-0' : 'p-4'
             } dark:border-gray-800 dark:bg-black`}
           >
+            {#if documentPreviewIsFullscreen}
+              <div class="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex items-end justify-between px-4">
+                <div class="pointer-events-auto flex items-center gap-2 rounded-full bg-black/70 px-3 py-2 text-white shadow-2xl backdrop-blur">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
+                    on:click={() => (documentPreviewZoom = Math.max(0.5, Number((documentPreviewZoom - 0.25).toFixed(2))))}
+                    title="Diminuir zoom"
+                  >
+                    <ZoomOut class="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
+                    on:click={() => (documentPreviewZoom = Math.min(3, Number((documentPreviewZoom + 0.25).toFixed(2))))}
+                    title="Aumentar zoom"
+                  >
+                    <ZoomIn class="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 rounded-full px-3 border-white/20 text-white hover:bg-white/10"
+                    on:click={() => (documentPreviewZoom = 1)}
+                  >
+                    100%
+                  </Button>
+                </div>
+                <div class="pointer-events-auto flex items-center gap-2 rounded-full bg-black/70 px-3 py-2 text-white shadow-2xl backdrop-blur">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
+                    on:click={downloadPreviewDocument}
+                    title="Baixar documento"
+                  >
+                    <Download class="h-4 w-4" />
+                  </Button>
+                  {#if documentPreviewDoc}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
+                      on:click={replacePreviewDocument}
+                      title="Substituir documento"
+                    >
+                      <RefreshCcw class="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-9 w-9 rounded-full p-0"
+                      on:click={deletePreviewDocument}
+                      title="Excluir documento"
+                    >
+                      <Trash2 class="h-4 w-4" />
+                    </Button>
+                  {/if}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
+                    on:click={toggleDocumentPreviewFullscreen}
+                    title="Sair da tela cheia"
+                  >
+                    <X class="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            {:else}
+              <div class="flex flex-wrap items-center justify-between gap-2 pb-3">
+                <div class="flex items-center gap-2">
+                  <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = Math.max(0.5, Number((documentPreviewZoom - 0.25).toFixed(2))))}>
+                    <ZoomOut class="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = Math.min(3, Number((documentPreviewZoom + 0.25).toFixed(2))))}>
+                    <ZoomIn class="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = 1)}>
+                    100%
+                  </Button>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 w-9 rounded-full p-0"
+                    on:click={downloadPreviewDocument}
+                    title="Baixar documento"
+                  >
+                    <Download class="h-4 w-4" />
+                  </Button>
+                  {#if documentPreviewDoc}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 w-9 rounded-full p-0"
+                      on:click={replacePreviewDocument}
+                      title="Substituir documento"
+                    >
+                      <RefreshCcw class="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-9 w-9 rounded-full p-0"
+                      on:click={deletePreviewDocument}
+                      title="Excluir documento"
+                    >
+                      <Trash2 class="h-4 w-4" />
+                    </Button>
+                  {/if}
+                  <Button size="sm" variant="outline" on:click={toggleDocumentPreviewFullscreen} title="Alternar tela cheia">
+                    <Maximize2 class="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            {/if}
+
             <div
-              class="flex min-h-full w-full justify-center"
+              class="relative flex min-h-full w-full justify-center overflow-hidden overscroll-y-contain"
               style={`transform: scale(${documentPreviewZoom}); transform-origin: top center;`}
             >
               {#if documentPreviewKind === 'image'}
@@ -3980,13 +4106,21 @@
                   src={documentPreviewSourceUrl}
                   alt={documentPreviewFileName}
                   class={`max-w-full rounded-lg object-contain shadow-2xl ${
-                    documentPreviewIsFullscreen ? 'max-h-[92vh]' : 'max-h-[76vh]'
+                    documentPreviewIsFullscreen ? 'max-h-[100vh]' : 'max-h-[76vh]'
                   }`}
                 />
               {:else}
                 <div class="flex w-full max-w-[960px] flex-col items-center gap-4">
                   {#if documentPreviewPdfText}
                     <p class="sr-only" data-testid="document-preview-pdf-text">{documentPreviewPdfText}</p>
+                  {/if}
+                  {#if documentPreviewPdfFallbackUsed && documentPreviewPdfText}
+                    <div
+                      class="pointer-events-none absolute left-4 top-4 z-20 max-w-[min(32rem,calc(100%-2rem))] rounded-md bg-black/70 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur"
+                      data-testid="document-preview-pdf-visible-text"
+                    >
+                      {documentPreviewPdfText.split(' ').filter(Boolean).slice(0, 12).join(' ')}
+                    </div>
                   {/if}
                   {#if documentPreviewPdfPages.length === 0}
                     <div class="flex min-h-[280px] w-full items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300">
