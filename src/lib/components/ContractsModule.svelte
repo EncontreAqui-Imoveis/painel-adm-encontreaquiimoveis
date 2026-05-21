@@ -239,6 +239,8 @@
   let signedDocType = 'contrato_assinado';
   let selectedSignedFile: File | null = null;
   let selectedSignedDocSide: 'seller' | 'buyer' = 'seller';
+  let signedUploadInputEl: HTMLInputElement | null = null;
+  let pendingReplacementDocumentId: number | null = null;
   let matrixUploadInputEl: HTMLInputElement | null = null;
   let matrixUploadContext:
     | { documentType: string; side: 'seller' | 'buyer'; existingDocumentType?: string | null }
@@ -613,6 +615,15 @@
     if (!documentPreviewDoc || !documentPreviewContract) return;
     const documentType = String(documentPreviewDoc.documentType ?? documentPreviewDoc.type ?? '').trim();
     const side = documentPreviewDoc.side ?? null;
+    const previewDoc = documentPreviewDoc;
+    const normalizedType = documentType.toLowerCase();
+    if (signedReviewDocTypes.has(normalizedType)) {
+      const contract = documentPreviewContract;
+      closeDocumentPreview();
+      prepareSignedDocumentReplacement(previewDoc);
+      selected = contract;
+      return;
+    }
     if (!documentType || !side) {
       toast.error('Este documento não pode ser substituído por este fluxo.');
       return;
@@ -627,6 +638,13 @@
     if (!documentPreviewDoc || !documentPreviewContract) return;
     const contract = documentPreviewContract;
     const doc = documentPreviewDoc;
+    const normalizedType = String(doc.documentType ?? doc.type ?? '').trim().toLowerCase();
+    if (signedReviewDocTypes.has(normalizedType)) {
+      closeDocumentPreview();
+      await deleteSignedOrFinalizedDocument(doc);
+      selected = contract;
+      return;
+    }
     closeDocumentPreview();
     await deleteMatrixDocument(doc);
     selected = contract;
@@ -677,8 +695,6 @@
   function hasDocumentReviewStatus(doc?: ContractDocument | null): boolean {
     const status = normalizeDocumentStatus(doc);
     return (
-      status === 'APPROVED' ||
-      status === 'APPROVED_WITH_RES' ||
       status === 'REJECTED' ||
       status === 'NOT_APPLICABLE' ||
       status === 'PENDING'
@@ -1011,6 +1027,19 @@
     return formatCurrencyInput(String(Math.round(parsed * 100)));
   }
 
+  function formatFinalizeMoneyInput(raw: string): string {
+    const digits = onlyDigits(raw).slice(0, 8);
+    if (!digits) return '';
+    const normalized = Number(digits) / 100;
+    if (!Number.isFinite(normalized)) return '';
+    return normalized.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
   function hydrateFinalizeForm(contract: ContractItem | null): void {
     const data = contract?.commissionData ?? null;
     finalizeFieldModes = {
@@ -1035,8 +1064,8 @@
   function sanitizePercentageInput(raw: string): string {
     const normalized = String(raw ?? '').replace(/[^\d.,]/g, '').replace(/\./g, ',');
     const [integerPart, ...rest] = normalized.split(',');
-    const integer = integerPart.replace(/^0+(?=\d)/, '');
-    const decimal = rest.join('').slice(0, 2);
+    const integer = integerPart.replace(/^0+(?=\d)/, '').slice(0, 3);
+    const decimal = rest.join('').replace(/\D/g, '').slice(0, 1);
     if (!integer && !decimal) {
       return '';
     }
@@ -1054,14 +1083,11 @@
     if (!normalized) return null;
     const parsed = Number(normalized);
     if (!Number.isFinite(parsed) || parsed < 0) return null;
-    return Number(Math.min(100, parsed).toFixed(2));
+    return Number(Math.min(100, parsed).toFixed(1));
   }
 
   function formatPercentageValue(value: number): string {
-    return value.toLocaleString('pt-BR', {
-      minimumFractionDigits: value % 1 === 0 ? 0 : 2,
-      maximumFractionDigits: 2,
-    });
+    return Number(value).toFixed(1).replace('.', ',');
   }
 
   function convertAmountFieldToPercentage(
@@ -1071,7 +1097,7 @@
     if (saleValue == null || saleValue <= 0) return '';
     const amount = parseMoney(rawAmount);
     if (amount == null) return '';
-    const percentage = Number(((amount / saleValue) * 100).toFixed(2));
+    const percentage = Number(((amount / saleValue) * 100).toFixed(1));
     return formatPercentageValue(percentage);
   }
 
@@ -1093,7 +1119,7 @@
     const target = event.currentTarget as HTMLInputElement;
     finalizeForm = {
       ...finalizeForm,
-      [field]: formatCurrencyInput(target.value),
+      [field]: formatFinalizeMoneyInput(target.value),
     };
   }
 
@@ -1194,6 +1220,13 @@
   function getDocumentsForFinalize(contract: ContractItem): ContractDocument[] {
     return getAllContractDocuments(contract).filter((doc) =>
       signedReviewDocTypes.has((doc.documentType ?? '').trim().toLowerCase())
+    );
+  }
+
+  function hasPaymentProofForFinalize(contract: ContractItem | null | undefined): boolean {
+    if (!contract) return false;
+    return getDocumentsForFinalize(contract).some(
+      (doc) => String(doc.documentType ?? '').trim().toLowerCase() === 'comprovante_pagamento'
     );
   }
 
@@ -2007,6 +2040,7 @@
     selectedDraftFile = null;
     selectedSignedFile = null;
     selectedSignedDocSide = 'seller';
+    pendingReplacementDocumentId = null;
     modalMode = 'review_docs';
     if (typeof document !== 'undefined') {
       document.body.style.overflow = previousModalBodyOverflow;
@@ -2242,6 +2276,70 @@
     }
   }
 
+  async function deleteContractDocumentById(doc: ContractDocument, successMessage: string) {
+    if (!selected || !doc?.id) return;
+    matrixDeletingDocumentId = doc.id;
+    try {
+      await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
+      toast.success(successMessage);
+      await reloadSelectedContract(selected.id);
+      await fetchContracts();
+    } catch (error) {
+      console.error('Erro ao excluir documento do contrato:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível excluir o documento.'));
+    } finally {
+      matrixDeletingDocumentId = null;
+    }
+  }
+
+  function prepareSignedDocumentReplacement(doc: ContractDocument) {
+    const documentType = String(doc.documentType ?? doc.type ?? '').trim().toLowerCase();
+    if (!documentType) {
+      toast.error('Este documento não pode ser substituído agora.');
+      return;
+    }
+
+    signedDocType = documentType;
+    if (finalizedDocumentRequiresSide(documentType)) {
+      selectedSignedDocSide = doc.side ?? selectedSignedDocSide;
+    }
+    pendingReplacementDocumentId = doc.id;
+    selectedSignedFile = null;
+    if (typeof document !== 'undefined') {
+      document.getElementById('finalized-document-upload')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }
+    signedUploadInputEl?.click();
+  }
+
+  function cancelSignedDocumentReplacement() {
+    pendingReplacementDocumentId = null;
+    selectedSignedFile = null;
+  }
+
+  async function deleteSignedOrFinalizedDocument(doc: ContractDocument) {
+    if (!selected || !doc?.id) return;
+    const confirmed = window.confirm(
+      `Tem certeza que deseja excluir o documento "${documentFileName(doc)}"?`
+    );
+    if (!confirmed) return;
+
+    deletingFinalizedDocumentId = doc.id;
+    try {
+      await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
+      toast.success('Documento removido com sucesso.');
+      await reloadSelectedContract(selected.id);
+      await fetchContracts();
+    } catch (error) {
+      console.error('Erro ao excluir documento do contrato:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível excluir o documento.'));
+    } finally {
+      deletingFinalizedDocumentId = null;
+    }
+  }
+
   async function uploadSignedDocsByAdmin() {
     if (!selected) return;
     if (!selectedSignedFile) {
@@ -2257,8 +2355,12 @@
       await apiClient.post(`/admin/contracts/${selected.id}/signed-docs`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      if (pendingReplacementDocumentId) {
+        await api.delete(`/contracts/${selected.id}/documents/${pendingReplacementDocumentId}`);
+      }
       toast.success('Documento físico anexado com sucesso.');
       closeModal(true);
+      pendingReplacementDocumentId = null;
       refresh();
     } catch (error) {
       console.error('Erro ao anexar documento físico:', error);
@@ -2295,14 +2397,19 @@
       await apiClient.post(`/admin/contracts/${selected.id}/finalized-docs`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      if (pendingReplacementDocumentId) {
+        await api.delete(`/contracts/${selected.id}/documents/${pendingReplacementDocumentId}`);
+      }
       toast.success('Documento anexado ao contrato finalizado.');
       selectedSignedFile = null;
+      pendingReplacementDocumentId = null;
       await reloadSelectedContract(selected.id);
       await fetchContracts();
     } catch (error) {
       console.error('Erro ao anexar documento ao contrato finalizado:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível anexar o documento.'));
     } finally {
+      pendingReplacementDocumentId = null;
       uploadingSignedDoc = false;
     }
   }
@@ -3106,7 +3213,7 @@
             </Button>
           </div>
 
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+          <div id="contract-doc-matrix" class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <p
               id="contract-doc-matrix-help"
               class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
@@ -3685,7 +3792,7 @@
             </div>
           </div>
 
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+          <div id="finalized-document-upload" class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
               Documentos do contrato
             </p>
@@ -3709,15 +3816,6 @@
                         {#if documentSideLabel(doc)}
                           <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                             {documentSideLabel(doc)}
-                          </span>
-                        {/if}
-                        {#if hasDocumentReviewStatus(doc)}
-                          <span
-                            class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
-                              doc
-                            )}`}
-                          >
-                            {documentStatusLabel(doc)}
                           </span>
                         {/if}
                       </div>
@@ -3823,12 +3921,12 @@
                   <label for="finalize-comissao-captador" class="font-medium">
                     Comissão Captador
                   </label>
-                  <div class="inline-flex rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
                     <button
                       type="button"
-                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('comissaoCaptador') === 'amount'
-                          ? 'bg-emerald-600 text-white'
+                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
                           : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
                       }`}
                       aria-label="Comissão Captador em valor real"
@@ -3839,9 +3937,9 @@
                     </button>
                     <button
                       type="button"
-                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('comissaoCaptador') === 'percentage'
-                          ? 'bg-emerald-600 text-white'
+                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
                           : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
                       }`}
                       aria-label="Comissão Captador em percentual"
@@ -3856,7 +3954,7 @@
                   id="finalize-comissao-captador"
                   type="text"
                   inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? 6 : 18}
+                  maxlength={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? 5 : 18}
                   value={finalizeForm.comissaoCaptador}
                   on:input={(event) =>
                     getFinalizeFieldMode('comissaoCaptador') === 'amount'
@@ -3870,12 +3968,12 @@
                   <label for="finalize-comissao-vendedor" class="font-medium">
                     Comissão complementar
                   </label>
-                  <div class="inline-flex rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
                     <button
                       type="button"
-                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('comissaoVendedor') === 'amount'
-                          ? 'bg-emerald-600 text-white'
+                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
                           : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
                       }`}
                       aria-label="Comissão complementar em valor real"
@@ -3886,9 +3984,9 @@
                     </button>
                     <button
                       type="button"
-                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('comissaoVendedor') === 'percentage'
-                          ? 'bg-emerald-600 text-white'
+                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
                           : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
                       }`}
                       aria-label="Comissão complementar em percentual"
@@ -3903,7 +4001,7 @@
                   id="finalize-comissao-vendedor"
                   type="text"
                   inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? 6 : 18}
+                  maxlength={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? 5 : 18}
                   value={finalizeForm.comissaoVendedor}
                   on:input={(event) =>
                     getFinalizeFieldMode('comissaoVendedor') === 'amount'
@@ -3917,12 +4015,12 @@
                   <label for="finalize-taxa-plataforma" class="font-medium">
                     Taxa Encontre Aqui
                   </label>
-                  <div class="inline-flex rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
                     <button
                       type="button"
-                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('taxaPlataforma') === 'amount'
-                          ? 'bg-emerald-600 text-white'
+                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
                           : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
                       }`}
                       aria-label="Taxa Encontre Aqui em valor real"
@@ -3933,9 +4031,9 @@
                     </button>
                     <button
                       type="button"
-                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('taxaPlataforma') === 'percentage'
-                          ? 'bg-emerald-600 text-white'
+                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
                           : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
                       }`}
                       aria-label="Taxa Encontre Aqui em percentual"
@@ -3950,7 +4048,7 @@
                   id="finalize-taxa-plataforma"
                   type="text"
                   inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? 6 : 18}
+                  maxlength={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? 5 : 18}
                   value={finalizeForm.taxaPlataforma}
                   on:input={(event) =>
                     getFinalizeFieldMode('taxaPlataforma') === 'amount'
@@ -3992,6 +4090,7 @@
               <label class="text-sm text-gray-700 dark:text-gray-200 md:col-span-1">
                 Arquivo
                 <input
+                  bind:this={signedUploadInputEl}
                   type="file"
                   accept="application/pdf,image/png,image/jpeg,image/webp"
                   on:change={handleSignedFileChange}
@@ -4017,6 +4116,18 @@
                   Selecionado: {selectedSignedFile.name}
                 </span>
               {/if}
+              {#if pendingReplacementDocumentId}
+                <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                  Substituição em andamento
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  on:click={cancelSignedDocumentReplacement}
+                >
+                  Cancelar substituição
+                </Button>
+              {/if}
               <div class="ml-auto flex flex-wrap gap-2">
                 <Button
                   size="sm"
@@ -4031,6 +4142,11 @@
                 </Button>
               </div>
             </div>
+            {#if !hasPaymentProofForFinalize(selected)}
+              <p class="mt-2 text-xs text-amber-500 dark:text-amber-300">
+                Para liberar o VGV, anexe ao menos um comprovante de pagamento. O contrato assinado não substitui esse documento.
+              </p>
+            {/if}
           </div>
 
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
@@ -4044,8 +4160,8 @@
             {:else}
               <div class="mt-2 space-y-2">
                 {#each getDocumentsForFinalize(selected) as doc (doc.id)}
-                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
-                    <div>
+                  <div class="flex flex-col gap-2 rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="min-w-0">
                       <button
                         type="button"
                         class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
@@ -4055,24 +4171,44 @@
                       </button>
                       <p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(doc.createdAt)}</p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      on:click={() => selected && openDocumentPreview(doc, selected)}
-                    >
-                      Visualizar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      on:click={() => selected && viewDocument(doc, selected)}
-                      disabled={downloadingDocumentId === doc.id}
-                    >
-                      {#if downloadingDocumentId === doc.id}
-                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                      {/if}
-                      Baixar
-                    </Button>
+                    <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        on:click={() => selected && openDocumentPreview(doc, selected)}
+                      >
+                        Visualizar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        on:click={() => selected && viewDocument(doc, selected)}
+                        disabled={downloadingDocumentId === doc.id}
+                      >
+                        {#if downloadingDocumentId === doc.id}
+                          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                        {/if}
+                        Baixar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        on:click={() => prepareSignedDocumentReplacement(doc)}
+                      >
+                        Substituir
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        on:click={() => deleteSignedOrFinalizedDocument(doc)}
+                        disabled={matrixDeletingDocumentId === doc.id || deletingFinalizedDocumentId === doc.id}
+                      >
+                        {#if matrixDeletingDocumentId === doc.id || deletingFinalizedDocumentId === doc.id}
+                          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                        {/if}
+                        Excluir
+                      </Button>
+                    </div>
                   </div>
                 {/each}
               </div>
@@ -4099,15 +4235,6 @@
                         {#if documentSideLabel(doc)}
                           <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                             {documentSideLabel(doc)}
-                          </span>
-                        {/if}
-                        {#if hasDocumentReviewStatus(doc)}
-                          <span
-                            class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
-                              doc
-                            )}`}
-                          >
-                            {documentStatusLabel(doc)}
                           </span>
                         {/if}
                       </div>
@@ -4244,7 +4371,14 @@
                         Enviado em {formatDate(doc.createdAt)}
                       </p>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        on:click={() => selected && openDocumentPreview(doc, selected)}
+                      >
+                        Visualizar
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -4255,6 +4389,13 @@
                           <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                         {/if}
                         Baixar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        on:click={() => prepareSignedDocumentReplacement(doc)}
+                      >
+                        Substituir
                       </Button>
                       <Button
                         size="sm"
@@ -4305,6 +4446,7 @@
               <label class="text-sm text-gray-700 dark:text-gray-200">
                 Arquivo
                 <input
+                  bind:this={signedUploadInputEl}
                   type="file"
                   accept="application/pdf,image/png,image/jpeg,image/webp"
                   on:change={handleSignedFileChange}
@@ -4316,6 +4458,14 @@
               <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
                 Selecionado: {selectedSignedFile.name}
               </p>
+            {/if}
+            {#if pendingReplacementDocumentId}
+              <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
+                <span>Substituição em andamento.</span>
+                <Button size="sm" variant="outline" on:click={cancelSignedDocumentReplacement}>
+                  Cancelar substituição
+                </Button>
+              </div>
             {/if}
             <div class="mt-3 flex justify-end">
               <Button

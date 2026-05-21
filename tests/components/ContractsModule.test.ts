@@ -1359,9 +1359,9 @@ describe('ContractsModule', () => {
     await fireEvent.input(vendedorInput, { target: { value: '250' } });
     await fireEvent.input(taxaInput, { target: { value: '25' } });
 
-    expect(captadorInput.value).toBe('50');
-    expect(vendedorInput.value).toBe('100');
-    expect(taxaInput.value).toBe('25');
+    expect(captadorInput.value).toBe('50,0');
+    expect(vendedorInput.value).toBe('100,0');
+    expect(taxaInput.value).toBe('25,0');
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',
@@ -2238,7 +2238,7 @@ describe('ContractsModule', () => {
     promptSpy.mockRestore();
   });
 
-  it('renderiza status documental NOT_APPLICABLE e APPROVED_WITH_RES no modal', async () => {
+  it('oculta badges de aprovado documental e mantém estados não aprovados no modal', async () => {
     apiGetMock.mockResolvedValue({
       data: [
         {
@@ -2276,5 +2276,6 @@ describe('ContractsModule', () => {
     await fireEvent.click(openReviewButton);
 
     expect(await screen.findByText('Não aplicável')).toBeInTheDocument();
+    expect(screen.queryByText('Aprovado com ressalvas')).not.toBeInTheDocument();
   });
 });
