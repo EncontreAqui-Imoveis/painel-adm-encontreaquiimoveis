@@ -32,7 +32,8 @@
   /** TS do IDE: tipo inferido do `Input` costuma omitir `id`/handlers; aqui usamos o contrato explícito. */
   const LabeledTextInput = Input as unknown as Component<InputProps, {}, 'value'>;
 
-  type FinalizeSplitMode = 'amount' | 'percentage';
+  type FinalizeFieldMode = 'amount' | 'percentage';
+  type FinalizeCommissionField = 'comissaoCaptador' | 'comissaoVendedor' | 'taxaPlataforma';
 
   type ContractStatus =
     | 'AWAITING_DOCS'
@@ -274,13 +275,18 @@
   let finalizingContract = false;
   let reopeningContract = false;
   let deletingContract = false;
+  let deletingDraftDocumentId: number | null = null;
   let deletingFinalizedDocumentId: number | null = null;
   let downloadingAllDocuments = false;
   let movingToPreviousStage = false;
   let approvalLockReasons: string[] = [];
   let isReadyToApprove = false;
   let sellerApprovalDisabled = false;
-  let finalizeSplitMode: FinalizeSplitMode = 'amount';
+  let finalizeFieldModes: Record<FinalizeCommissionField, FinalizeFieldMode> = {
+    comissaoCaptador: 'amount',
+    comissaoVendedor: 'amount',
+    taxaPlataforma: 'amount',
+  };
   let finalizeForm = {
     valorVenda: '',
     comissaoCaptador: '',
@@ -1007,7 +1013,11 @@
 
   function hydrateFinalizeForm(contract: ContractItem | null): void {
     const data = contract?.commissionData ?? null;
-    finalizeSplitMode = 'amount';
+    finalizeFieldModes = {
+      comissaoCaptador: 'amount',
+      comissaoVendedor: 'amount',
+      taxaPlataforma: 'amount',
+    };
     finalizeForm = {
       valorVenda: readCommissionValue(data, 'valorVenda'),
       comissaoCaptador: readCommissionValue(data, 'comissaoCaptador'),
@@ -1043,8 +1053,8 @@
     const normalized = String(value ?? '').replace('%', '').replace(',', '.').trim();
     if (!normalized) return null;
     const parsed = Number(normalized);
-    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return null;
-    return Number(parsed.toFixed(2));
+    if (!Number.isFinite(parsed) || parsed < 0) return null;
+    return Number(Math.min(100, parsed).toFixed(2));
   }
 
   function formatPercentageValue(value: number): string {
@@ -1098,68 +1108,73 @@
     };
   }
 
-  function switchFinalizeSplitMode(mode: FinalizeSplitMode): void {
-    if (mode === finalizeSplitMode) return;
+  function getFinalizeFieldMode(field: FinalizeCommissionField): FinalizeFieldMode {
+    return finalizeFieldModes[field] ?? 'amount';
+  }
 
-    const saleValue = parseMoney(finalizeForm.valorVenda);
-    if (mode === 'percentage') {
-      finalizeForm = {
-        ...finalizeForm,
-        comissaoCaptador: convertAmountFieldToPercentage(finalizeForm.comissaoCaptador, saleValue),
-        comissaoVendedor: convertAmountFieldToPercentage(finalizeForm.comissaoVendedor, saleValue),
-        taxaPlataforma: convertAmountFieldToPercentage(finalizeForm.taxaPlataforma, saleValue),
+  function setFinalizeFieldMode(field: FinalizeCommissionField, mode: FinalizeFieldMode): void {
+    if (getFinalizeFieldMode(field) === mode) return;
+
+    const currentValue = String(finalizeForm[field] ?? '').trim();
+    if (!currentValue) {
+      finalizeFieldModes = {
+        ...finalizeFieldModes,
+        [field]: mode,
       };
-    } else {
-      finalizeForm = {
-        ...finalizeForm,
-        comissaoCaptador: convertPercentageFieldToAmount(finalizeForm.comissaoCaptador, saleValue),
-        comissaoVendedor: convertPercentageFieldToAmount(finalizeForm.comissaoVendedor, saleValue),
-        taxaPlataforma: convertPercentageFieldToAmount(finalizeForm.taxaPlataforma, saleValue),
-      };
+      return;
     }
 
-    finalizeSplitMode = mode;
+    const saleValue = parseMoney(finalizeForm.valorVenda);
+    if (saleValue == null || saleValue <= 0) {
+      toast.error('Preencha o valor de venda/locação antes de converter a comissão.');
+      return;
+    }
+
+    const nextValue =
+      mode === 'percentage'
+        ? convertAmountFieldToPercentage(currentValue, saleValue)
+        : convertPercentageFieldToAmount(currentValue, saleValue);
+
+    finalizeForm = {
+      ...finalizeForm,
+      [field]: nextValue,
+    };
+    finalizeFieldModes = {
+      ...finalizeFieldModes,
+      [field]: mode,
+    };
+  }
+
+  function resolveCommissionFieldAmount(field: FinalizeCommissionField, saleValue: number): number | null {
+    const rawValue = finalizeForm[field];
+    if (getFinalizeFieldMode(field) === 'amount') {
+      return parseMoney(rawValue);
+    }
+    const percentage = parsePercentage(rawValue);
+    if (percentage == null) return null;
+    return Number(((saleValue * percentage) / 100).toFixed(2));
   }
 
   function resolveFinalizeCommissionAmounts() {
     const valorVenda = parseMoney(finalizeForm.valorVenda);
     if (valorVenda == null) return null;
 
-    if (finalizeSplitMode === 'amount') {
-      const comissaoCaptador = parseMoney(finalizeForm.comissaoCaptador);
-      const comissaoVendedor = parseMoney(finalizeForm.comissaoVendedor);
-      const taxaPlataforma = parseMoney(finalizeForm.taxaPlataforma);
-      if (
-        comissaoCaptador == null ||
-        comissaoVendedor == null ||
-        taxaPlataforma == null
-      ) {
-        return null;
-      }
-      return {
-        valorVenda,
-        comissaoCaptador,
-        comissaoVendedor,
-        taxaPlataforma,
-      };
-    }
-
-    const percentualCaptador = parsePercentage(finalizeForm.comissaoCaptador);
-    const percentualVendedor = parsePercentage(finalizeForm.comissaoVendedor);
-    const percentualPlataforma = parsePercentage(finalizeForm.taxaPlataforma);
+    const comissaoCaptador = resolveCommissionFieldAmount('comissaoCaptador', valorVenda);
+    const comissaoVendedor = resolveCommissionFieldAmount('comissaoVendedor', valorVenda);
+    const taxaPlataforma = resolveCommissionFieldAmount('taxaPlataforma', valorVenda);
     if (
-      percentualCaptador == null ||
-      percentualVendedor == null ||
-      percentualPlataforma == null
+      comissaoCaptador == null ||
+      comissaoVendedor == null ||
+      taxaPlataforma == null
     ) {
       return null;
     }
 
     return {
       valorVenda,
-      comissaoCaptador: Number(((valorVenda * percentualCaptador) / 100).toFixed(2)),
-      comissaoVendedor: Number(((valorVenda * percentualVendedor) / 100).toFixed(2)),
-      taxaPlataforma: Number(((valorVenda * percentualPlataforma) / 100).toFixed(2)),
+      comissaoCaptador,
+      comissaoVendedor,
+      taxaPlataforma,
     };
   }
 
@@ -2206,6 +2221,27 @@
     }
   }
 
+  async function deleteDraftDocument(doc: ContractDocument) {
+    if (!selected || !doc?.id) return;
+    const confirmed = window.confirm(
+      `Tem certeza que deseja excluir a minuta "${documentFileName(doc)}"?`
+    );
+    if (!confirmed) return;
+
+    deletingDraftDocumentId = doc.id;
+    try {
+      await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
+      toast.success('Minuta removida com sucesso.');
+      await reloadSelectedContract(selected.id);
+      await fetchContracts();
+    } catch (error) {
+      console.error('Erro ao excluir minuta:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível excluir a minuta.'));
+    } finally {
+      deletingDraftDocumentId = null;
+    }
+  }
+
   async function uploadSignedDocsByAdmin() {
     if (!selected) return;
     if (!selectedSignedFile) {
@@ -2332,9 +2368,7 @@
       !hasExactSaleSplit(resolvedCommissionAmounts)
     ) {
       toast.error(
-        finalizeSplitMode === 'percentage'
-          ? 'Na venda, a soma dos percentuais precisa fechar exatamente 100% do valor.'
-          : 'Na venda, a soma dos valores precisa fechar exatamente 100% do valor.'
+        'Na venda, a soma das comissões precisa fechar exatamente 100% do valor.'
       );
       return;
     }
@@ -3571,6 +3605,22 @@
                     {/if}
                     Baixar
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    on:click={() => {
+                      const draftDoc = getCurrentDraftDocument(selected);
+                      if (selected && draftDoc) {
+                        void deleteDraftDocument(draftDoc);
+                      }
+                    }}
+                    disabled={deletingDraftDocumentId === getCurrentDraftDocument(selected)?.id}
+                  >
+                    {#if deletingDraftDocumentId === getCurrentDraftDocument(selected)?.id}
+                      <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                    {/if}
+                    Excluir minuta
+                  </Button>
                 </div>
               </div>
             </div>
@@ -3757,38 +3807,6 @@
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
               Formulário de Comissões
             </p>
-            <div class="mt-3 flex flex-wrap items-center gap-2">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                Comissões em:
-              </span>
-              <button
-                type="button"
-                class={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
-                  finalizeSplitMode === 'amount'
-                    ? 'bg-emerald-600 text-white'
-                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
-                }`}
-                on:click={() => switchFinalizeSplitMode('amount')}
-              >
-                Valor real (R$)
-              </button>
-              <button
-                type="button"
-                class={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
-                  finalizeSplitMode === 'percentage'
-                    ? 'bg-emerald-600 text-white'
-                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
-                }`}
-                on:click={() => switchFinalizeSplitMode('percentage')}
-              >
-                Percentual (%)
-              </button>
-            </div>
-            {#if finalizeSplitMode === 'percentage'}
-              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Os percentuais abaixo serão calculados sobre o valor de venda/locação.
-              </p>
-            {/if}
             <div class="mt-3 grid gap-3 md:grid-cols-2">
               <label class="text-sm text-gray-700 dark:text-gray-200">
                 Valor de Venda/Locação (R$)
@@ -3797,48 +3815,221 @@
                   inputmode="decimal"
                   value={finalizeForm.valorVenda}
                   on:input={(event) => handleFinalizeMoneyInput('valorVenda', event)}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
                 />
               </label>
-              <label class="text-sm text-gray-700 dark:text-gray-200">
-                Comissão Captador {finalizeSplitMode === 'amount' ? '(R$)' : '(%)'}
+              <div class="text-sm text-gray-700 dark:text-gray-200">
+                <div class="flex items-center justify-between gap-3">
+                  <label for="finalize-comissao-captador" class="font-medium">
+                    Comissão Captador
+                  </label>
+                  <div class="inline-flex rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+                    <button
+                      type="button"
+                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        getFinalizeFieldMode('comissaoCaptador') === 'amount'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                      }`}
+                      aria-label="Comissão Captador em valor real"
+                      aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'amount'}
+                      on:click={() => setFinalizeFieldMode('comissaoCaptador', 'amount')}
+                    >
+                      R$
+                    </button>
+                    <button
+                      type="button"
+                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        getFinalizeFieldMode('comissaoCaptador') === 'percentage'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                      }`}
+                      aria-label="Comissão Captador em percentual"
+                      aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'percentage'}
+                      on:click={() => setFinalizeFieldMode('comissaoCaptador', 'percentage')}
+                    >
+                      %
+                    </button>
+                  </div>
+                </div>
                 <input
+                  id="finalize-comissao-captador"
                   type="text"
                   inputmode="decimal"
+                  maxlength={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? 6 : 18}
                   value={finalizeForm.comissaoCaptador}
                   on:input={(event) =>
-                    finalizeSplitMode === 'amount'
+                    getFinalizeFieldMode('comissaoCaptador') === 'amount'
                       ? handleFinalizeMoneyInput('comissaoCaptador', event)
                       : handleFinalizePercentageInput('comissaoCaptador', event)}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
                 />
-              </label>
-              <label class="text-sm text-gray-700 dark:text-gray-200">
-                Comissão complementar {finalizeSplitMode === 'amount' ? '(R$)' : '(%)'}
+              </div>
+              <div class="text-sm text-gray-700 dark:text-gray-200">
+                <div class="flex items-center justify-between gap-3">
+                  <label for="finalize-comissao-vendedor" class="font-medium">
+                    Comissão complementar
+                  </label>
+                  <div class="inline-flex rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+                    <button
+                      type="button"
+                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        getFinalizeFieldMode('comissaoVendedor') === 'amount'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                      }`}
+                      aria-label="Comissão complementar em valor real"
+                      aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'amount'}
+                      on:click={() => setFinalizeFieldMode('comissaoVendedor', 'amount')}
+                    >
+                      R$
+                    </button>
+                    <button
+                      type="button"
+                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        getFinalizeFieldMode('comissaoVendedor') === 'percentage'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                      }`}
+                      aria-label="Comissão complementar em percentual"
+                      aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'percentage'}
+                      on:click={() => setFinalizeFieldMode('comissaoVendedor', 'percentage')}
+                    >
+                      %
+                    </button>
+                  </div>
+                </div>
                 <input
+                  id="finalize-comissao-vendedor"
                   type="text"
                   inputmode="decimal"
+                  maxlength={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? 6 : 18}
                   value={finalizeForm.comissaoVendedor}
                   on:input={(event) =>
-                    finalizeSplitMode === 'amount'
+                    getFinalizeFieldMode('comissaoVendedor') === 'amount'
                       ? handleFinalizeMoneyInput('comissaoVendedor', event)
                       : handleFinalizePercentageInput('comissaoVendedor', event)}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
                 />
-              </label>
-              <label class="text-sm text-gray-700 dark:text-gray-200">
-                Taxa Encontre Aqui {finalizeSplitMode === 'amount' ? '(R$)' : '(%)'}
+              </div>
+              <div class="text-sm text-gray-700 dark:text-gray-200">
+                <div class="flex items-center justify-between gap-3">
+                  <label for="finalize-taxa-plataforma" class="font-medium">
+                    Taxa Encontre Aqui
+                  </label>
+                  <div class="inline-flex rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+                    <button
+                      type="button"
+                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        getFinalizeFieldMode('taxaPlataforma') === 'amount'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                      }`}
+                      aria-label="Taxa Encontre Aqui em valor real"
+                      aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'amount'}
+                      on:click={() => setFinalizeFieldMode('taxaPlataforma', 'amount')}
+                    >
+                      R$
+                    </button>
+                    <button
+                      type="button"
+                      class={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        getFinalizeFieldMode('taxaPlataforma') === 'percentage'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                      }`}
+                      aria-label="Taxa Encontre Aqui em percentual"
+                      aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'percentage'}
+                      on:click={() => setFinalizeFieldMode('taxaPlataforma', 'percentage')}
+                    >
+                      %
+                    </button>
+                  </div>
+                </div>
                 <input
+                  id="finalize-taxa-plataforma"
                   type="text"
                   inputmode="decimal"
+                  maxlength={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? 6 : 18}
                   value={finalizeForm.taxaPlataforma}
                   on:input={(event) =>
-                    finalizeSplitMode === 'amount'
+                    getFinalizeFieldMode('taxaPlataforma') === 'amount'
                       ? handleFinalizeMoneyInput('taxaPlataforma', event)
                       : handleFinalizePercentageInput('taxaPlataforma', event)}
+                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                  Contrato físico / comprovantes
+                </p>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                  Anexe o documento assinado ou comprovantes físicos sem sair desta etapa.
+                </p>
+              </div>
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                Upload administrativo em Aguardando Assinaturas
+              </span>
+            </div>
+            <div class="mt-3 grid gap-3 md:grid-cols-3">
+              <label class="text-sm text-gray-700 dark:text-gray-200 md:col-span-1">
+                Tipo do Documento
+                <select
+                  bind:value={signedDocType}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                >
+                  <option value="contrato_assinado">Contrato Assinado</option>
+                  <option value="comprovante_pagamento">Comprovante de Pagamento</option>
+                  <option value="boleto_vistoria">Boleto/Vistoria</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </label>
+              <label class="text-sm text-gray-700 dark:text-gray-200 md:col-span-1">
+                Arquivo
+                <input
+                  type="file"
+                  accept="application/pdf,image/png,image/jpeg,image/webp"
+                  on:change={handleSignedFileChange}
+                  class="mt-1 block w-full text-sm text-gray-700 dark:text-gray-200"
                 />
               </label>
+              {#if finalizedDocumentRequiresSide(signedDocType)}
+                <label class="text-sm text-gray-700 dark:text-gray-200 md:col-span-1">
+                  Lado
+                  <select
+                    bind:value={selectedSignedDocSide}
+                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                  >
+                    <option value="seller">Captador</option>
+                    <option value="buyer">Comprador</option>
+                  </select>
+                </label>
+              {/if}
+            </div>
+            <div class="mt-3 flex flex-wrap items-center gap-3">
+              {#if selectedSignedFile}
+                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  Selecionado: {selectedSignedFile.name}
+                </span>
+              {/if}
+              <div class="ml-auto flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  on:click={uploadSignedDocsByAdmin}
+                  disabled={uploadingSignedDoc || !selectedSignedFile}
+                >
+                  {#if uploadingSignedDoc}
+                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                  {/if}
+                  Anexar documento físico
+                </Button>
+              </div>
             </div>
           </div>
 

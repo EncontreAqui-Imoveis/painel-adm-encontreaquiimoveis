@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { within } from '@testing-library/dom';
+import { tick } from 'svelte';
 
 const {
   apiGetMock,
@@ -741,10 +742,12 @@ describe('ContractsModule', () => {
 
     expect(screen.queryByText('Admin Override: Contrato Físico/Comprovantes')).not.toBeInTheDocument();
     expect(screen.getByText('Formulário de Comissões')).toBeInTheDocument();
+    expect(screen.getByText('Contrato físico / comprovantes')).toBeInTheDocument();
     expect(screen.getByText('Documentos para conferência')).toBeInTheDocument();
     expect(screen.getByText('Formulário de Comissões').compareDocumentPosition(
       screen.getByText('Documentos para conferência')
     ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Anexar documento físico' })).toBeInTheDocument();
   });
 
   it('lista todos os documentos existentes no modal de minuta em IN_DRAFT', async () => {
@@ -971,6 +974,7 @@ describe('ContractsModule', () => {
     expect(screen.getAllByText('minuta_atual.pdf').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Trocar minuta' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Prosseguir com a mesma minuta' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Excluir minuta' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Substituir minuta' })
     ).not.toBeInTheDocument();
@@ -1250,9 +1254,9 @@ describe('ContractsModule', () => {
     await fireEvent.click(finalizeButton);
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
-    const captadorInput = screen.getByLabelText('Comissão Captador (R$)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão complementar (R$)') as HTMLInputElement;
-    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (R$)') as HTMLInputElement;
+    const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão complementar') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '123456' } });
     await fireEvent.input(captadorInput, { target: { value: '50000' } });
@@ -1333,14 +1337,23 @@ describe('ContractsModule', () => {
       name: 'Finalizar Venda/Locação',
     });
     await fireEvent.click(openFinalizeButton);
+    await tick();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Percentual (%)' }));
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Comissão Captador em percentual' })
+    );
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Comissão complementar em percentual' })
+    );
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Taxa Encontre Aqui em percentual' })
+    );
+    await tick();
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
-    const captadorInput = screen.getByLabelText('Comissão Captador (%)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão complementar (%)') as HTMLInputElement;
-    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (%)') as HTMLInputElement;
-
+    const captadorInput = (await screen.findByLabelText('Comissão Captador')) as HTMLInputElement;
+    const vendedorInput = (await screen.findByLabelText('Comissão complementar')) as HTMLInputElement;
+    const taxaInput = (await screen.findByLabelText('Taxa Encontre Aqui')) as HTMLInputElement;
     await fireEvent.input(valorInput, { target: { value: '100000' } });
     await fireEvent.input(captadorInput, { target: { value: '50' } });
     await fireEvent.input(vendedorInput, { target: { value: '250' } });
@@ -1357,7 +1370,7 @@ describe('ContractsModule', () => {
 
     expect(apiPostMock).not.toHaveBeenCalled();
     expect(toastErrorMock).toHaveBeenCalledWith(
-      'Na venda, a soma dos percentuais precisa fechar exatamente 100% do valor.'
+      'Na venda, a soma das comissões precisa fechar exatamente 100% do valor.'
     );
   });
 
@@ -1413,13 +1426,23 @@ describe('ContractsModule', () => {
       name: 'Finalizar Venda/Locação',
     });
     await fireEvent.click(openFinalizeButton);
+    await tick();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Percentual (%)' }));
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Comissão Captador em percentual' })
+    );
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Comissão complementar em percentual' })
+    );
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Taxa Encontre Aqui em percentual' })
+    );
+    await tick();
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
-    const captadorInput = screen.getByLabelText('Comissão Captador (%)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão complementar (%)') as HTMLInputElement;
-    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (%)') as HTMLInputElement;
+    const captadorInput = (await screen.findByLabelText('Comissão Captador')) as HTMLInputElement;
+    const vendedorInput = (await screen.findByLabelText('Comissão complementar')) as HTMLInputElement;
+    const taxaInput = (await screen.findByLabelText('Taxa Encontre Aqui')) as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '100000' } });
     await fireEvent.input(captadorInput, { target: { value: '50' } });
@@ -1433,6 +1456,92 @@ describe('ContractsModule', () => {
 
     await waitFor(() => {
       expect(apiPostMock).toHaveBeenCalledWith('/admin/contracts/contract-test-sign-4/finalize', {
+        commission_data: {
+          valorVenda: 1000,
+          comissaoCaptador: 500,
+          comissaoVendedor: 250,
+          taxaPlataforma: 250,
+        },
+      });
+    });
+  });
+
+  it('permite mistura de percentual e valor real por campo na finalização', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_SIGNATURES')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-sign-4b',
+              status: 'AWAITING_SIGNATURES',
+              negotiationId: 'neg-test-sign-4b',
+              propertyId: 605,
+              propertyCode: 'RV-605',
+              propertyTitle: 'Casa Mista',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6052,
+                  documentType: 'contrato_assinado',
+                  originalFileName: 'contrato_assinado.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-4b/documents/6052/download',
+                  createdAt: '2026-03-02T10:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-02T11:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+    apiPostMock.mockResolvedValue({});
+
+    render(ContractsModule);
+
+    const signaturesTab = await screen.findByRole('button', {
+      name: 'Aguardando Assinaturas',
+    });
+    await fireEvent.click(signaturesTab);
+
+    const openFinalizeButton = await screen.findByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    });
+    await fireEvent.click(openFinalizeButton);
+    await tick();
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Comissão Captador em percentual' })
+    );
+    await tick();
+
+    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const captadorInput = (await screen.findByLabelText('Comissão Captador')) as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão complementar') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
+
+    await fireEvent.input(valorInput, { target: { value: '100000' } });
+    await fireEvent.input(captadorInput, { target: { value: '50' } });
+    await fireEvent.input(vendedorInput, { target: { value: '25000' } });
+    await fireEvent.input(taxaInput, { target: { value: '25000' } });
+
+    const submitFinalizeButton = screen.getAllByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    })[1];
+    await fireEvent.click(submitFinalizeButton);
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith('/admin/contracts/contract-test-sign-4b/finalize', {
         commission_data: {
           valorVenda: 1000,
           comissaoCaptador: 500,
@@ -1505,9 +1614,9 @@ describe('ContractsModule', () => {
     await fireEvent.click(openFinalizeButton);
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
-    const captadorInput = screen.getByLabelText('Comissão Captador (R$)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão complementar (R$)') as HTMLInputElement;
-    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (R$)') as HTMLInputElement;
+    const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão complementar') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '100000' } });
     await fireEvent.input(captadorInput, { target: { value: '50000' } });
