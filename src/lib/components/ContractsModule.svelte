@@ -241,7 +241,7 @@
   let matrixUploadContext:
     | { documentType: string; side: 'seller' | 'buyer'; existingDocumentType?: string | null }
     | null = null;
-  let matrixUploadingKey: string | null = null;
+  let matrixUploadingCounts: Record<string, number> = {};
   let matrixDeletingDocumentId: number | null = null;
   let documentPreviewOpen = false;
   let documentPreviewLoading = false;
@@ -338,7 +338,13 @@
 
   function getBuyerDisplayName(contract: ContractItem): string {
     const directName =
-      contract.buyerClientName ?? contract.buyer_client_name ?? null;
+      contract.buyerClientName ??
+      contract.buyer_client_name ??
+      (contract as unknown as Record<string, unknown>).client_name ??
+      (contract as unknown as Record<string, unknown>).clientName ??
+      (contract as unknown as Record<string, unknown>).buyerName ??
+      (contract as unknown as Record<string, unknown>).buyer_name ??
+      null;
     if (directName && String(directName).trim().length > 0) {
       return String(directName).trim();
     }
@@ -348,10 +354,36 @@
       'name',
       'nome_completo',
       'fullName',
+      'full_name',
+      'buyerName',
+      'buyer_name',
       'clientName',
       'client_name',
-    ]); 
-    return fromInfo || '-';
+    ]);
+    if (fromInfo) {
+      return fromInfo;
+    }
+
+    if (buyerInfo && typeof buyerInfo === 'object') {
+      const nestedBuyer = (buyerInfo as Record<string, unknown>).buyer;
+      if (nestedBuyer && typeof nestedBuyer === 'object' && !Array.isArray(nestedBuyer)) {
+        const nestedBuyerName = getRecordValueRaw(nestedBuyer as Record<string, unknown>, [
+          'nome',
+          'name',
+          'nome_completo',
+          'fullName',
+          'full_name',
+          'buyerName',
+          'buyer_name',
+          'clientName',
+          'client_name',
+        ]);
+        if (nestedBuyerName) {
+          return nestedBuyerName;
+        }
+      }
+    }
+    return '-';
   }
 
   function getContractPartySummary(contract: ContractItem): string {
@@ -750,6 +782,25 @@
   function approvalAllowsProgress(status?: ContractApprovalStatus | null): boolean {
     const normalized = String(status ?? '').trim().toUpperCase();
     return normalized === 'APPROVED' || normalized === 'APPROVED_WITH_RES';
+  }
+
+  function getSideApprovalUiState(status?: ContractApprovalStatus | null): 'pending' | 'approved' | 'rejected' {
+    const normalized = String(status ?? '').trim().toUpperCase();
+    if (normalized === 'REJECTED') return 'rejected';
+    if (approvalAllowsProgress(status)) return 'approved';
+    return 'pending';
+  }
+
+  function canApproveSide(status?: ContractApprovalStatus | null): boolean {
+    return getSideApprovalUiState(status) === 'pending';
+  }
+
+  function canRejectSide(status?: ContractApprovalStatus | null): boolean {
+    return getSideApprovalUiState(status) !== 'rejected';
+  }
+
+  function canRestartSide(status?: ContractApprovalStatus | null): boolean {
+    return getSideApprovalUiState(status) !== 'pending';
   }
 
   function getApprovalProgressLabel(contract: ContractItem | null | undefined): string {
@@ -1705,6 +1756,23 @@
     return availableSlots.slice(0, Math.max(0, count));
   }
 
+  function isMatrixUploading(key: string): boolean {
+    return Number(matrixUploadingCounts[key] ?? 0) > 0;
+  }
+
+  function bumpMatrixUploading(key: string, delta: 1 | -1): void {
+    const nextCount = Math.max(0, Number(matrixUploadingCounts[key] ?? 0) + delta);
+    if (nextCount === 0) {
+      const { [key]: _, ...rest } = matrixUploadingCounts;
+      matrixUploadingCounts = rest;
+      return;
+    }
+    matrixUploadingCounts = {
+      ...matrixUploadingCounts,
+      [key]: nextCount,
+    };
+  }
+
   async function fetchContracts() {
     isLoading = true;
     try {
@@ -1961,13 +2029,21 @@
 
     evaluatingSide = side;
     try {
-      await api.put(`/admin/contracts/${selected.id}/evaluate-side`, {
-        side,
-        status,
-        reason: reason || undefined,
-      });
+      const response = await api.put<{ movedToDraft?: boolean }>(
+        `/admin/contracts/${selected.id}/evaluate-side`,
+        {
+          side,
+          status,
+          reason: reason || undefined,
+        }
+      );
       toast.success('Avaliação registrada com sucesso.');
-      closeModal(true);
+      if (response?.movedToDraft === true) {
+        closeModal(true);
+        refresh();
+        return;
+      }
+      await reloadSelectedContract(selected.id);
       refresh();
     } catch (error) {
       console.error('Erro ao avaliar documentação por lado:', error);
@@ -2041,7 +2117,7 @@
     }
 
     const uploadKey = `${matrixUploadContext.side}:${matrixUploadContext.documentType}`;
-    matrixUploadingKey = uploadKey;
+    bumpMatrixUploading(uploadKey, 1);
     try {
       const currentUploadContext = matrixUploadContext;
       if (!currentUploadContext) {
@@ -2101,7 +2177,7 @@
       console.error('Erro ao enviar documento na matriz:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível enviar o documento.'));
     } finally {
-      matrixUploadingKey = null;
+      bumpMatrixUploading(uploadKey, -1);
       matrixUploadContext = null;
       if (input) input.value = '';
     }
@@ -3028,9 +3104,8 @@
                                   size="sm"
                                   variant="outline"
                                   on:click={() => triggerMatrixUpload(documentType, 'seller')}
-                                  disabled={matrixUploadingKey === `seller:${documentType}`}
                                 >
-                                  {#if matrixUploadingKey === `seller:${documentType}`}
+                                  {#if isMatrixUploading(`seller:${documentType}`)}
                                     <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                                   {/if}
                                   Enviar
@@ -3077,14 +3152,11 @@
                                           documentType,
                                           'seller',
                                           String(sellerDoc.documentType ?? '').trim().toLowerCase()
-                                        )
+                                          )
                                       }
-                                      disabled={
-                                        matrixUploadingKey === `seller:${documentType}` ||
-                                        !canAddAnotherMatrixDocument(selected, documentType, 'seller')
-                                      }
+                                      disabled={!canAddAnotherMatrixDocument(selected, documentType, 'seller')}
                                     >
-                                      {#if matrixUploadingKey === `seller:${documentType}`}
+                                      {#if isMatrixUploading(`seller:${documentType}`)}
                                         <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                                       {/if}
                                       {matrixCellUploadLabel(selected, documentType, 'seller')}
@@ -3110,9 +3182,8 @@
                                       size="sm"
                                       variant="outline"
                                       on:click={() => triggerMatrixUpload(documentType, 'seller')}
-                                      disabled={matrixUploadingKey === `seller:${documentType}`}
                                     >
-                                      {#if matrixUploadingKey === `seller:${documentType}`}
+                                      {#if isMatrixUploading(`seller:${documentType}`)}
                                         <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                                       {/if}
                                       Adicionar outro
@@ -3142,9 +3213,8 @@
                                   size="sm"
                                   variant="outline"
                                   on:click={() => triggerMatrixUpload(documentType, 'buyer')}
-                                  disabled={matrixUploadingKey === `buyer:${documentType}`}
                                 >
-                                  {#if matrixUploadingKey === `buyer:${documentType}`}
+                                  {#if isMatrixUploading(`buyer:${documentType}`)}
                                     <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                                   {/if}
                                   Enviar
@@ -3191,14 +3261,11 @@
                                           documentType,
                                           'buyer',
                                           String(buyerDoc.documentType ?? '').trim().toLowerCase()
-                                        )
+                                          )
                                       }
-                                      disabled={
-                                        matrixUploadingKey === `buyer:${documentType}` ||
-                                        !canAddAnotherMatrixDocument(selected, documentType, 'buyer')
-                                      }
+                                      disabled={!canAddAnotherMatrixDocument(selected, documentType, 'buyer')}
                                     >
-                                      {#if matrixUploadingKey === `buyer:${documentType}`}
+                                      {#if isMatrixUploading(`buyer:${documentType}`)}
                                         <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                                       {/if}
                                       {matrixCellUploadLabel(selected, documentType, 'buyer')}
@@ -3224,9 +3291,8 @@
                                       size="sm"
                                       variant="outline"
                                       on:click={() => triggerMatrixUpload(documentType, 'buyer')}
-                                      disabled={matrixUploadingKey === `buyer:${documentType}`}
                                     >
-                                      {#if matrixUploadingKey === `buyer:${documentType}`}
+                                      {#if isMatrixUploading(`buyer:${documentType}`)}
                                         <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                                       {/if}
                                       Adicionar outro
@@ -3270,68 +3336,124 @@
               </div>
             {/if}
             <div>
-              <p class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                Avaliação Captador
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
-                  on:click={() => evaluateContractSide('seller', 'APPROVED')}
-                  disabled={sellerApprovalDisabled}
-                  title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
-                >
-                  Aprovar<span class="sr-only"> captador</span>
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-                  on:click={() => evaluateContractSide('seller', 'APPROVED_WITH_RES')}
-                >
-                  Aprovar c/ ressalvas<span class="sr-only"> captador</span>
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  on:click={() => evaluateContractSide('seller', 'REJECTED')}
-                  disabled={evaluatingSide === 'seller'}
-                >
-                  Rejeitar
-                </Button>
+                <p class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                  Avaliação Captador
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  {#if canApproveSide(selected.sellerApprovalStatus)}
+                    <Button
+                      size="sm"
+                      className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
+                      on:click={() => evaluateContractSide('seller', 'APPROVED')}
+                      disabled={sellerApprovalDisabled}
+                      title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
+                    >
+                      Aprovar<span class="sr-only"> captador</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                      on:click={() => evaluateContractSide('seller', 'APPROVED_WITH_RES')}
+                    >
+                      Aprovar c/ ressalvas<span class="sr-only"> captador</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      on:click={() => evaluateContractSide('seller', 'REJECTED')}
+                      disabled={evaluatingSide === 'seller'}
+                    >
+                      Rejeitar
+                    </Button>
+                  {:else if canRejectSide(selected.sellerApprovalStatus)}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      on:click={() => evaluateContractSide('seller', 'REJECTED')}
+                      disabled={evaluatingSide === 'seller'}
+                    >
+                      Rejeitar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
+                      on:click={() => evaluateContractSide('seller', 'PENDING')}
+                    >
+                      Reiniciar
+                    </Button>
+                  {:else}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
+                      on:click={() => evaluateContractSide('seller', 'PENDING')}
+                    >
+                      Reiniciar
+                    </Button>
+                  {/if}
+                </div>
               </div>
-            </div>
             {#if !isDoubleEndedDeal(selected)}
               <div>
                 <p class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
                   Avaliação Comprador
                 </p>
                 <div class="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
-                    on:click={() => evaluateContractSide('buyer', 'APPROVED')}
-                    disabled={evaluatingSide === 'buyer' || !isReadyToApprove}
-                    title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
-                  >
-                    Aprovar<span class="sr-only"> comprador</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-                    on:click={() => evaluateContractSide('buyer', 'APPROVED_WITH_RES')}
-                  >
-                    Aprovar c/ ressalvas<span class="sr-only"> comprador</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    on:click={() => evaluateContractSide('buyer', 'REJECTED')}
-                    disabled={evaluatingSide === 'buyer'}
-                  >
-                    Rejeitar
-                  </Button>
+                  {#if canApproveSide(selected.buyerApprovalStatus)}
+                    <Button
+                      size="sm"
+                      className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
+                      on:click={() => evaluateContractSide('buyer', 'APPROVED')}
+                      disabled={evaluatingSide === 'buyer' || !isReadyToApprove}
+                      title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
+                    >
+                      Aprovar<span class="sr-only"> comprador</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                      on:click={() => evaluateContractSide('buyer', 'APPROVED_WITH_RES')}
+                    >
+                      Aprovar c/ ressalvas<span class="sr-only"> comprador</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      on:click={() => evaluateContractSide('buyer', 'REJECTED')}
+                      disabled={evaluatingSide === 'buyer'}
+                    >
+                      Rejeitar
+                    </Button>
+                  {:else if canRejectSide(selected.buyerApprovalStatus)}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      on:click={() => evaluateContractSide('buyer', 'REJECTED')}
+                      disabled={evaluatingSide === 'buyer'}
+                    >
+                      Rejeitar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
+                      on:click={() => evaluateContractSide('buyer', 'PENDING')}
+                    >
+                      Reiniciar
+                    </Button>
+                  {:else}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
+                      on:click={() => evaluateContractSide('buyer', 'PENDING')}
+                    >
+                      Reiniciar
+                    </Button>
+                  {/if}
                 </div>
               </div>
             {/if}

@@ -257,6 +257,7 @@ describe('ContractsModule', () => {
                 email: 'comprador@test.com',
                 telefone: '62999997777',
               },
+              buyer_name: 'Cliente Comprador',
               sellerApprovalStatus: 'APPROVED',
               buyerApprovalStatus: 'PENDING',
               sellerApprovalReason: null,
@@ -303,8 +304,7 @@ describe('ContractsModule', () => {
               email: 'comprador@test.com',
               telefone: '62999997777',
             },
-            buyer_client_name: 'Cliente Comprador',
-            buyerClientName: 'Cliente Comprador',
+            buyer_name: 'Cliente Comprador',
             sellerApprovalStatus: 'APPROVED',
             buyerApprovalStatus: 'PENDING',
             sellerApprovalReason: null,
@@ -1884,6 +1884,137 @@ describe('ContractsModule', () => {
     expect(toastSuccessMock).toHaveBeenCalledWith(
       'Avaliação registrada com sucesso.'
     );
+  });
+
+  it('mantém o modal aberto e troca os botões quando apenas um lado é avaliado', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-side-1',
+              status: 'AWAITING_DOCS',
+              negotiationId: 'neg-test-side-1',
+              propertyId: 506,
+              propertyCode: 'RV-506',
+              propertyTitle: 'Casa Avaliação Parcial',
+              propertyImageUrl: 'https://cdn.example.com/property-506.jpg',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              sellerInfo: {
+                estado_civil: 'Casado',
+                profissao: 'Corretor',
+                email: 'captador@test.com',
+                telefone: '62999998888',
+                dados_bancarios: 'Banco XPTO',
+              },
+              buyerInfo: {
+                estado_civil: 'Solteiro',
+                profissao: 'Comprador',
+                email: 'comprador@test.com',
+                telefone: '62999997777',
+              },
+              buyer_client_name: 'Cliente Comprador',
+              sellerApprovalStatus: 'PENDING',
+              buyerApprovalStatus: 'PENDING',
+              documents: [
+                { id: 1, documentType: 'doc_identidade', side: 'seller', status: 'APPROVED' },
+                { id: 2, documentType: 'doc_identidade', side: 'buyer', status: 'APPROVED' },
+                { id: 3, documentType: 'comprovante_endereco', side: 'seller', status: 'APPROVED' },
+                { id: 4, documentType: 'comprovante_endereco', side: 'buyer', status: 'APPROVED' },
+                { id: 5, documentType: 'certidao_casamento_nascimento', side: 'seller', status: 'APPROVED' },
+                { id: 6, documentType: 'certidao_casamento_nascimento', side: 'buyer', status: 'APPROVED' },
+                { id: 7, documentType: 'certidao_inteiro_teor', side: 'seller', status: 'APPROVED' },
+                { id: 8, documentType: 'certidao_inteiro_teor', side: 'buyer', status: 'APPROVED' },
+                { id: 9, documentType: 'certidao_onus_acoes', side: 'seller', status: 'APPROVED' },
+                { id: 10, documentType: 'certidao_onus_acoes', side: 'buyer', status: 'APPROVED' },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-01T10:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint === '/contracts/contract-test-side-1') {
+        return {
+          contract: {
+            id: 'contract-test-side-1',
+            status: 'AWAITING_DOCS',
+            negotiationId: 'neg-test-side-1',
+            propertyId: 506,
+            propertyCode: 'RV-506',
+            propertyTitle: 'Casa Avaliação Parcial',
+            propertyImageUrl: 'https://cdn.example.com/property-506.jpg',
+            propertyPurpose: 'Venda',
+            capturingBrokerId: 30001,
+            sellingBrokerId: 30002,
+            capturingBrokerName: 'Captador',
+            sellingBrokerName: 'Vendedor',
+            sellerInfo: {
+              estado_civil: 'Casado',
+              profissao: 'Corretor',
+              email: 'captador@test.com',
+              telefone: '62999998888',
+              dados_bancarios: 'Banco XPTO',
+            },
+            buyerInfo: {
+              estado_civil: 'Solteiro',
+              profissao: 'Comprador',
+              email: 'comprador@test.com',
+              telefone: '62999997777',
+            },
+            buyerClientName: 'Cliente Comprador',
+            sellerApprovalStatus: 'APPROVED',
+            buyerApprovalStatus: 'PENDING',
+            approvalProgress: {
+              status: 'IN_PROGRESS',
+              label: 'Em análise',
+              nextStep: 'Aguardando aprovação do comprador',
+            },
+          },
+          documents: [],
+        };
+      }
+
+      return { data: [], total: 0 };
+    });
+    apiPutMock.mockResolvedValue({
+      data: {
+        movedToDraft: false,
+      },
+    });
+
+    render(ContractsModule);
+
+    const openReviewButton = await screen.findByRole('button', {
+      name: 'Analisar Documentação',
+    });
+    await fireEvent.click(openReviewButton);
+
+    const approveButton = screen.getByRole('button', { name: /Aprovar\s*captador/i });
+    await fireEvent.click(approveButton);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledWith(
+        '/admin/contracts/contract-test-side-1/evaluate-side',
+        {
+          side: 'seller',
+          status: 'APPROVED',
+          reason: undefined,
+        }
+      );
+    });
+
+    expect(screen.getByText('Dados Captador')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Rejeitar' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Reiniciar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Aprovar\s*captador/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Aprovar c\/ ressalvas\s*captador/i })).not.toBeInTheDocument();
   });
 
   it('bloqueia aprovação com ressalvas quando o motivo é curto demais', async () => {
