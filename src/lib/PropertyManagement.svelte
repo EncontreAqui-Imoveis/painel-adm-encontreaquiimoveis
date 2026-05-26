@@ -210,6 +210,7 @@ function parseNullableNumber(value: unknown): number | null {
   let areaSortMetric: 'none' | 'area_construida_valor' | 'area_terreno_valor' = 'none';
   let areaSortDirection: 'asc' | 'desc' = 'desc';
   let isClientSideFiltering = false;
+  let hasLoadedFullDatasetForLocalFilters = false;
   let listForDisplay: PropertySummary[] = [];
   let displayedProperties: PropertySummary[] = [];
   let totalItemsForDisplay = 0;
@@ -515,6 +516,7 @@ function parseNullableNumber(value: unknown): number | null {
       );
 
       const raw = (response?.data ?? response ?? []) as Array<Record<string, unknown>>;
+      hasLoadedFullDatasetForLocalFilters = shouldFetchFullDataset;
       totalItems = shouldFetchFullDataset
         ? raw.length
         : Number((response as { total?: number })?.total ?? raw.length);
@@ -646,6 +648,7 @@ function parseNullableNumber(value: unknown): number | null {
         error = err instanceof Error ? err.message : 'Erro inesperado ao carregar imóveis.';
       }
       properties = [];
+      hasLoadedFullDatasetForLocalFilters = false;
     } finally {
       isLoading = false;
     }
@@ -908,10 +911,18 @@ function parseNullableNumber(value: unknown): number | null {
       ? Array.from(new Set([...selectedAmenityFilters, amenity]))
       : selectedAmenityFilters.filter((item) => item !== amenity);
     selectedAmenityFilters = nextAmenityFilters;
+    if (!hasLoadedFullDatasetForLocalFilters) {
+      requestFetch(true);
+      return;
+    }
     currentPage = 1;
   }
 
   function resetLocalPage(): void {
+    if (!hasLoadedFullDatasetForLocalFilters) {
+      requestFetch(true);
+      return;
+    }
     currentPage = 1;
   }
 
