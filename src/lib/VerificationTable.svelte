@@ -5,14 +5,12 @@
     import type { Broker, BrokerDocuments } from './types';
 
     export let pendingBrokers: Broker[] = [];
-    export let pendingDocumentBrokers: Broker[] = [];
     const dispatch = createEventDispatcher();
     let isModalOpen = false;
     let selectedBroker: Broker | null = null;
     let isMobileLayout =
         typeof window !== 'undefined' ? window.innerWidth < 768 : false;
     let analysisBrokers: Broker[] = [];
-    let pendingDocumentBrokersForDisplay: Broker[] = [];
 
     // Função para obter texto do status
     function getStatusText(status: string) {
@@ -83,11 +81,7 @@
         );
     }
 
-    $: analysisBrokers = pendingBrokers.filter((broker) => hasRealDocuments(broker));
-    $: pendingDocumentBrokersForDisplay =
-        pendingDocumentBrokers.length > 0
-            ? pendingDocumentBrokers
-            : pendingBrokers.filter((broker) => !hasRealDocuments(broker));
+    $: analysisBrokers = pendingBrokers;
 
     function reviewBroker(broker: Broker) {
         selectedBroker = broker;
@@ -108,13 +102,9 @@
 
 {#if isMobileLayout}
 <div class="space-y-3">
-    {#if analysisBrokers.length === 0 && pendingDocumentBrokersForDisplay.length === 0}
+    {#if analysisBrokers.length === 0}
         <div class="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
             Nenhuma solicitação pendente.
-        </div>
-    {:else if analysisBrokers.length === 0}
-        <div class="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-            Nenhuma solicitação em análise com documentos enviados.
         </div>
     {:else}
         {#each analysisBrokers as broker}
@@ -132,6 +122,17 @@
                 <div class="mt-3 space-y-2 text-sm text-gray-500 italic">
                     Veja documentos no botão Revisar
                 </div>
+                <div class="mt-2">
+                    {#if hasRealDocuments(broker)}
+                        <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+                            Documentos enviados
+                        </span>
+                    {:else}
+                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                            Sem documentos enviados
+                        </span>
+                    {/if}
+                </div>
                 <div class="mt-4 flex justify-end">
                     <Button variant="outline" size="sm" on:click={() => reviewBroker(broker)}>
                         Revisar
@@ -139,25 +140,6 @@
                 </div>
             </article>
         {/each}
-    {/if}
-
-    {#if pendingDocumentBrokersForDisplay.length > 0}
-        <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-900/30 dark:text-amber-100">
-            <h3 class="mb-2 font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-200">
-                Documentos pendentes ({pendingDocumentBrokersForDisplay.length})
-            </h3>
-            <p class="text-xs text-amber-700 dark:text-amber-200">
-                Há corretores com solicitação pendente, porém ainda sem documentos reais enviados para revisão.
-            </p>
-            <ul class="mt-3 space-y-2">
-                {#each pendingDocumentBrokersForDisplay as broker}
-                    <li class="flex items-center justify-between gap-3 rounded-md bg-amber-100/80 px-3 py-2 dark:bg-amber-900/40">
-                        <span class="text-sm font-medium">{broker.name}</span>
-                        <span class="text-xs text-amber-700 dark:text-amber-200">{broker.email}</span>
-                    </li>
-                {/each}
-            </ul>
-        </div>
     {/if}
 </div>
 
@@ -192,6 +174,17 @@
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="text-sm font-medium text-gray-900 dark:text-white">{broker.name}</div>
                             <div class="text-sm text-gray-500 dark:text-gray-400">{broker.email}</div>
+                            <div class="mt-1">
+                                {#if hasRealDocuments(broker)}
+                                    <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+                                        Documentos enviados
+                                    </span>
+                                {:else}
+                                    <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                                        Sem documentos enviados
+                                    </span>
+                                {/if}
+                            </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                             {broker.creci}
@@ -208,25 +201,6 @@
             {/if}
         </tbody>
     </table>
-
-    {#if pendingDocumentBrokersForDisplay.length > 0}
-        <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-900/30 dark:text-amber-100">
-            <h3 class="mb-2 font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-200">
-                Documentos pendentes ({pendingDocumentBrokersForDisplay.length})
-            </h3>
-            <p class="text-xs text-amber-700 dark:text-amber-200">
-                Há corretores com solicitação pendente, porém ainda sem documentos reais enviados para revisão.
-            </p>
-            <ul class="mt-3 space-y-2">
-                {#each pendingDocumentBrokersForDisplay as broker}
-                    <li class="flex items-center justify-between gap-3 rounded-md bg-amber-100/80 px-3 py-2 dark:bg-amber-900/40">
-                        <span class="text-sm font-medium">{broker.name}</span>
-                        <span class="text-xs text-amber-700 dark:text-amber-200">{broker.email}</span>
-                    </li>
-                {/each}
-            </ul>
-        </div>
-    {/if}
 </div>
 {/if}
 

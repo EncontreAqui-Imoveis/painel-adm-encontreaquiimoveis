@@ -382,7 +382,7 @@
             title: "Destaques",
         },
         sold_properties: {
-            title: "Imóveis vendidos ou alugados",
+            title: "Vendidos / Alugados",
         },
         negotiation_requests: {
             title: "Solicitação de Propostas",
@@ -2219,7 +2219,6 @@
 
                     <VerificationTable
                         {pendingBrokers}
-                        {pendingDocumentBrokers}
                         on:refresh={fetchData}
                     />
                     <div class="p-4 border-t dark:border-gray-700">

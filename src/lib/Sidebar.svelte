@@ -1,9 +1,10 @@
 <script lang="ts">
   import {
-    BadgeDollarSign,
-    Bell,
-    Building2,
-    ChevronDown,
+  BadgeDollarSign,
+  Bell,
+    Archive,
+  Building2,
+  ChevronDown,
     ClipboardList,
     FileText,
     FolderKanban,
@@ -66,6 +67,11 @@
       view: 'properties',
       label: 'Disponíveis',
       icon: Building2
+    },
+    {
+      view: 'sold_properties',
+      label: 'Vendidos / Alugados',
+      icon: Archive
     },
     {
       view: 'property_highlights',
@@ -198,6 +204,7 @@
     const normalized = pathname.replace(/\/$/, '') || '/';
     const entries: { prefix: string; view: View }[] = [
       { prefix: '/admin/properties', view: 'properties' },
+      { prefix: '/admin/imoveis/vendidos-alugados', view: 'sold_properties' },
       { prefix: '/admin/negociacoes/solicitacoes', view: 'negotiation_requests' },
       { prefix: '/admin/negociacoes/andamento', view: 'negotiation_progress' },
       { prefix: '/admin/contratos', view: 'negotiation_contracts' },
@@ -216,6 +223,7 @@
 
     const pathMap: Partial<Record<View, string>> = {
       properties: '/admin/properties',
+      sold_properties: '/admin/imoveis/vendidos-alugados',
       negotiation_requests: '/admin/negociacoes/solicitacoes',
       negotiation_progress: '/admin/negociacoes/andamento',
       negotiation_contracts: '/admin/contratos',

@@ -286,9 +286,58 @@ function mockPropertyManagementRequests({
 
   apiGetMock.mockImplementation(async (endpoint: string) => {
     if (endpoint.includes('/admin/properties-with-brokers')) {
+      const query = (() => {
+        try {
+          return new URL(endpoint, 'http://localhost');
+        } catch {
+          return null;
+        }
+      })();
+
+      const normalizeFilter = (value: string | null): string => {
+        const normalized = value?.trim().toLowerCase() ?? '';
+        return normalized === 'all' || normalized === 'todos' ? '' : normalized;
+      };
+
+      const filterText = normalizeFilter(query?.searchParams.get('search'));
+      const filterCity = normalizeFilter(query?.searchParams.get('city'));
+      const filterStatus = normalizeFilter(query?.searchParams.get('status'));
+      const filterPurpose = normalizeFilter(query?.searchParams.get('purpose'));
+
+      const filteredProperties = properties.filter((property) => {
+        const searchable = [
+          property.title,
+          property.city,
+          property.state,
+          property.bairro,
+          String(property.id),
+          property.public_code ?? '',
+        ]
+          .join(' ')
+          .toLowerCase();
+
+        if (filterText && !searchable.includes(filterText)) {
+          return false;
+        }
+
+        if (filterCity && property.city.trim().toLowerCase() !== filterCity) {
+          return false;
+        }
+
+        if (filterStatus && property.status.trim().toLowerCase() !== filterStatus) {
+          return false;
+        }
+
+        if (filterPurpose && property.purpose.trim().toLowerCase() !== filterPurpose) {
+          return false;
+        }
+
+        return true;
+      });
+
       return {
-        data: properties.map(buildPropertySummary),
-        total: properties.length,
+        data: filteredProperties.map(buildPropertySummary),
+        total: filteredProperties.length,
       };
     }
 
@@ -932,6 +981,49 @@ describe('PropertyManagement', () => {
     });
   });
 
+  it('normaliza cidades recebidas como objetos e filtra imóveis por cidade', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: vi.fn(async () => ''),
+        json: vi.fn(async () => [
+          { nome: 'Anápolis', uf: 'GO' },
+          { nome: 'Goiânia', uf: 'GO' },
+        ]),
+      })
+    );
+
+    const properties = [
+      makePropertyState({
+        id: 1201,
+        title: 'Casa em Anápolis',
+        city: 'Anápolis',
+      }),
+      makePropertyState({
+        id: 1202,
+        title: 'Casa em Goiânia',
+        city: 'Goiânia',
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(4));
+
+    const citySelect = screen.getByRole('button', { name: 'Filtrar por cidade' });
+    await fireEvent.click(citySelect);
+    await fireEvent.click(await screen.findByText('Anápolis'));
+
+    await waitFor(() => {
+      expect(getTablePropertyTitles()).toEqual(['Casa em Anápolis']);
+    });
+  });
+
   it('limpa filtros locais e retorna lista completa', async () => {
     const properties = [
       makePropertyState({
@@ -1251,7 +1343,10 @@ describe('PropertyManagement', () => {
       },
     });
 
-    render(PropertyManagement);
+    render(PropertyManagement, {
+      initialStatus: 'pending_approval',
+      allowApproval: true,
+    });
 
     await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
     const firstRevisar = getRevisarButtons()[0];

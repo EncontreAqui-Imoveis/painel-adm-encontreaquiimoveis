@@ -120,4 +120,26 @@ describe('Sidebar', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onNavigate).not.toHaveBeenCalled();
   });
+
+  it('exibe a aba de vendidos/alugados dentro de Imóveis', async () => {
+    const onNavigate = vi.fn();
+
+    render(Sidebar, {
+      isOpen: true,
+      activeView: 'dashboard',
+      onNavigate,
+      pendingCounts: {
+        propertyRequests: 0,
+        brokerRequests: 0,
+      },
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Imóveis' }));
+
+    const soldMenuItem = await screen.findByRole('button', { name: 'Vendidos/Alugados' });
+    expect(soldMenuItem).toBeInTheDocument();
+
+    await fireEvent.click(soldMenuItem);
+    expect(onNavigate).toHaveBeenCalledWith('sold_properties', undefined);
+  });
 });

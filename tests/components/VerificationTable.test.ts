@@ -71,7 +71,7 @@ describe('VerificationTable', () => {
     expect(screen.getByRole('button', { name: 'Rejeitar' })).toBeInTheDocument();
   });
 
-  it('separates brokers with and without real documents', async () => {
+  it('mostra corretores pendentes mesmo sem documentos reais', async () => {
     render(VerificationTable, {
       pendingBrokers: [
         {
@@ -104,9 +104,8 @@ describe('VerificationTable', () => {
     });
 
     expect(screen.getByText('Broker Com Doc')).toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: 'Status' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: 'Documentos' })).not.toBeInTheDocument();
-    expect(screen.getByText('Documentos pendentes (1)')).toBeInTheDocument();
     expect(screen.getByText('Broker Sem Doc')).toBeInTheDocument();
+    expect(screen.getAllByText('Documentos enviados').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Sem documentos enviados').length).toBeGreaterThan(0);
   });
 });

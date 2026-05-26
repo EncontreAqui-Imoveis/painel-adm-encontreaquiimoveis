@@ -4,9 +4,15 @@
   import { toast } from 'svelte-sonner';
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
-  import { formatCurrencyInput, parseCurrency } from '$lib/components/create-property-helpers';
+  import {
+    formatCurrencyInput,
+    formatPromotionPercentageInput,
+    parseCurrency,
+    parsePromotionPercentage,
+  } from '$lib/components/create-property-helpers';
 
   type FinalizeSplitMode = 'amount' | 'percentage';
+  type CommissionFieldKey = 'comissaoCaptador' | 'comissaoVendedor' | 'taxaPlataforma';
 
   type CommissionsSummary = {
     totalVGV: number;
@@ -69,7 +75,11 @@
   let editModalOpen = false;
   let savingCommissionData = false;
   let deletingCommissionData = false;
-  let commissionSplitMode: FinalizeSplitMode = 'amount';
+  let commissionFieldModes: Record<CommissionFieldKey, FinalizeSplitMode> = {
+    comissaoCaptador: 'amount',
+    comissaoVendedor: 'amount',
+    taxaPlataforma: 'amount',
+  };
   let isMobileLayout = false;
   let commissionForm = {
     valorVenda: '',
@@ -103,6 +113,16 @@
     return Number(numeric.toFixed(2));
   }
 
+  const COMMISSION_CURRENCY_MAX = 999999.99;
+  const COMMISSION_PERCENT_MAX = 100;
+  const COMMISSION_AMOUNT_MAX_LENGTH = 13;
+  const COMMISSION_PERCENT_MAX_LENGTH = 6;
+  const commissionFields: Array<{ key: CommissionFieldKey; label: string }> = [
+    { key: 'comissaoCaptador', label: 'Comissão Captador' },
+    { key: 'comissaoVendedor', label: 'Comissão Complementar' },
+    { key: 'taxaPlataforma', label: 'Taxa Encontre Aqui' },
+  ];
+
   function formatCurrency(value: number): string {
     return brlFormatter.format(Number.isFinite(value) ? value : 0);
   }
@@ -115,7 +135,7 @@
   function readCommissionValue(value: unknown): string {
     const numeric = toNumber(value);
     if (numeric <= 0) return '';
-    return formatCurrencyInput(String(Math.round(numeric * 100)));
+    return formatCurrencyInput(String(Math.round(numeric * 100)), COMMISSION_CURRENCY_MAX);
   }
 
   function formatDate(value?: string | null): string {
@@ -207,43 +227,25 @@
     return !isRentalOnly;
   }
 
-  function parseMoney(value: string): number | null {
-    const parsed = parseCurrency(value);
+  function parseMoney(value: string, maxValue = COMMISSION_CURRENCY_MAX): number | null {
+    const parsed = parseCurrency(value, maxValue);
     if (parsed == null || !Number.isFinite(parsed)) return null;
     return Number(parsed.toFixed(2));
   }
 
-  function sanitizePercentageInput(raw: string): string {
-    const normalized = String(raw ?? '').replace(/[^\d.,]/g, '').replace(/\./g, ',');
-    const [integerPart, ...rest] = normalized.split(',');
-    const integer = integerPart.replace(/^0+(?=\d)/, '');
-    const decimal = rest.join('').slice(0, 2);
-    if (!integer && !decimal) {
-      return '';
-    }
-    const composed = decimal ? `${integer || '0'},${decimal}` : integer || '0';
-    const parsed = Number(composed.replace(',', '.'));
-    if (!Number.isFinite(parsed)) {
-      return '';
-    }
-    const bounded = Math.min(100, Math.max(0, parsed));
-    return bounded.toLocaleString('pt-BR', {
-      minimumFractionDigits: bounded % 1 === 0 ? 0 : 2,
-      maximumFractionDigits: 2,
-    });
+  function formatPercentageInput(raw: string, maxValue = COMMISSION_PERCENT_MAX): string {
+    return formatPromotionPercentageInput(raw, maxValue);
   }
 
-  function parsePercentage(value: string): number | null {
-    const normalized = String(value ?? '').replace('%', '').replace(',', '.').trim();
-    if (!normalized) return null;
-    const parsed = Number(normalized);
-    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return null;
+  function parsePercentage(value: string, maxValue = COMMISSION_PERCENT_MAX): number | null {
+    const parsed = parsePromotionPercentage(value, maxValue);
+    if (parsed == null || !Number.isFinite(parsed)) return null;
     return Number(parsed.toFixed(2));
   }
 
   function convertAmountFieldToPercentage(rawAmount: string, saleValue: number | null): string {
     if (saleValue == null || saleValue <= 0) return '';
-    const amount = parseMoney(rawAmount);
+    const amount = parseMoney(rawAmount, COMMISSION_CURRENCY_MAX);
     if (amount == null) return '';
     const percentage = Number(((amount / saleValue) * 100).toFixed(2));
     return percentage.toLocaleString('pt-BR', {
@@ -254,94 +256,69 @@
 
   function convertPercentageFieldToAmount(rawPercentage: string, saleValue: number | null): string {
     if (saleValue == null || saleValue <= 0) return '';
-    const percentage = parsePercentage(rawPercentage);
+    const percentage = parsePercentage(rawPercentage, COMMISSION_PERCENT_MAX);
     if (percentage == null) return '';
     const amount = Number(((saleValue * percentage) / 100).toFixed(2));
-    return formatCurrencyInput(String(Math.round(amount * 100)));
+    return formatCurrencyInput(String(Math.round(amount * 100)), COMMISSION_CURRENCY_MAX);
   }
 
-  function handleMoneyInput(
-    field: keyof typeof commissionForm,
-    event: Event
-  ) {
+  function handleMoneyInput(field: CommissionFieldKey | 'valorVenda', event: Event) {
     const target = event.currentTarget as HTMLInputElement;
     commissionForm = {
       ...commissionForm,
-      [field]: formatCurrencyInput(target.value),
+      [field]: formatCurrencyInput(target.value, COMMISSION_CURRENCY_MAX),
     };
   }
 
   function handlePercentageInput(
-    field: keyof typeof commissionForm,
+    field: CommissionFieldKey,
     event: Event
   ) {
     const target = event.currentTarget as HTMLInputElement;
     commissionForm = {
       ...commissionForm,
-      [field]: sanitizePercentageInput(target.value),
+      [field]: formatPercentageInput(target.value, COMMISSION_PERCENT_MAX),
     };
   }
 
-  function switchCommissionSplitMode(mode: FinalizeSplitMode) {
-    if (mode === commissionSplitMode) return;
+  function switchCommissionFieldMode(field: CommissionFieldKey, mode: FinalizeSplitMode) {
+    if (commissionFieldModes[field] === mode) return;
     const saleValue = parseMoney(commissionForm.valorVenda);
     if (mode === 'percentage') {
       commissionForm = {
         ...commissionForm,
-        comissaoCaptador: convertAmountFieldToPercentage(commissionForm.comissaoCaptador, saleValue),
-        comissaoVendedor: convertAmountFieldToPercentage(commissionForm.comissaoVendedor, saleValue),
-        taxaPlataforma: convertAmountFieldToPercentage(commissionForm.taxaPlataforma, saleValue),
+        [field]: convertAmountFieldToPercentage(commissionForm[field], saleValue),
       };
     } else {
       commissionForm = {
         ...commissionForm,
-        comissaoCaptador: convertPercentageFieldToAmount(commissionForm.comissaoCaptador, saleValue),
-        comissaoVendedor: convertPercentageFieldToAmount(commissionForm.comissaoVendedor, saleValue),
-        taxaPlataforma: convertPercentageFieldToAmount(commissionForm.taxaPlataforma, saleValue),
+        [field]: convertPercentageFieldToAmount(commissionForm[field], saleValue),
       };
     }
-    commissionSplitMode = mode;
+    commissionFieldModes = {
+      ...commissionFieldModes,
+      [field]: mode,
+    };
   }
 
   function resolveCommissionAmounts() {
     const valorVenda = parseMoney(commissionForm.valorVenda);
     if (valorVenda == null) return null;
-
-    if (commissionSplitMode === 'amount') {
-      const comissaoCaptador = parseMoney(commissionForm.comissaoCaptador);
-      const comissaoVendedor = parseMoney(commissionForm.comissaoVendedor);
-      const taxaPlataforma = parseMoney(commissionForm.taxaPlataforma);
-      if (
-        comissaoCaptador == null ||
-        comissaoVendedor == null ||
-        taxaPlataforma == null
-      ) {
-        return null;
+    const resolvedFields = commissionFields.map(({ key }) => {
+      if (commissionFieldModes[key] === 'amount') {
+        const value = parseMoney(commissionForm[key], COMMISSION_CURRENCY_MAX);
+        return value == null ? null : value;
       }
-      return {
-        valorVenda,
-        comissaoCaptador,
-        comissaoVendedor,
-        taxaPlataforma,
-      };
-    }
-
-    const percentualCaptador = parsePercentage(commissionForm.comissaoCaptador);
-    const percentualVendedor = parsePercentage(commissionForm.comissaoVendedor);
-    const percentualPlataforma = parsePercentage(commissionForm.taxaPlataforma);
-    if (
-      percentualCaptador == null ||
-      percentualVendedor == null ||
-      percentualPlataforma == null
-    ) {
-      return null;
-    }
-
+      const percentage = parsePercentage(commissionForm[key], COMMISSION_PERCENT_MAX);
+      return percentage == null ? null : Number(((valorVenda * percentage) / 100).toFixed(2));
+    });
+    if (resolvedFields.some((value) => value == null)) return null;
+    const [comissaoCaptador, comissaoVendedor, taxaPlataforma] = resolvedFields as number[];
     return {
       valorVenda,
-      comissaoCaptador: Number(((valorVenda * percentualCaptador) / 100).toFixed(2)),
-      comissaoVendedor: Number(((valorVenda * percentualVendedor) / 100).toFixed(2)),
-      taxaPlataforma: Number(((valorVenda * percentualPlataforma) / 100).toFixed(2)),
+      comissaoCaptador,
+      comissaoVendedor,
+      taxaPlataforma,
     };
   }
 
@@ -361,7 +338,11 @@
     editModalOpen = true;
     savingCommissionData = false;
     deletingCommissionData = false;
-    commissionSplitMode = 'amount';
+    commissionFieldModes = {
+      comissaoCaptador: 'amount',
+      comissaoVendedor: 'amount',
+      taxaPlataforma: 'amount',
+    };
     commissionForm = {
       valorVenda: readCommissionValue(item.commissionData?.valorVenda),
       comissaoCaptador: readCommissionValue(item.commissionData?.comissaoCaptador),
@@ -388,9 +369,7 @@
       !hasExactSaleSplit(resolved)
     ) {
       toast.error(
-        commissionSplitMode === 'percentage'
-          ? 'Na venda, a soma dos percentuais precisa fechar exatamente 100% do valor.'
-          : 'Na venda, a soma dos valores precisa fechar exatamente 100% do valor.'
+        'Na venda, a soma das comissões precisa fechar exatamente o valor do VGV.'
       );
       return;
     }
@@ -823,88 +802,86 @@
 
       <div class="space-y-4">
         <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
-              Comissões em:
-            </span>
-            <button
-              type="button"
-              class={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
-                commissionSplitMode === 'amount'
-                  ? 'bg-emerald-600 text-white'
-                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
-              }`}
-              on:click={() => switchCommissionSplitMode('amount')}
-            >
-              Valor real (R$)
-            </button>
-            <button
-              type="button"
-              class={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
-                commissionSplitMode === 'percentage'
-                  ? 'bg-emerald-600 text-white'
-                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
-              }`}
-              on:click={() => switchCommissionSplitMode('percentage')}
-            >
-              Percentual (%)
-            </button>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                Comissões por campo
+              </span>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Cada comissão pode ficar em reais ou percentual sem afetar as outras.
+              </p>
+            </div>
           </div>
-          {#if commissionSplitMode === 'percentage'}
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              Os percentuais abaixo serão calculados sobre o valor de venda/locação.
-            </p>
-          {/if}
+
           <div class="mt-3 grid gap-3 md:grid-cols-2">
-            <label class="text-sm text-gray-700 dark:text-gray-200">
+            <label class="text-sm text-gray-700 dark:text-gray-200 md:col-span-2">
               Valor de Venda/Locação (R$)
               <input
                 type="text"
                 inputmode="decimal"
                 value={commissionForm.valorVenda}
+                maxlength={COMMISSION_AMOUNT_MAX_LENGTH}
                 on:input={(event) => handleMoneyInput('valorVenda', event)}
                 class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
               />
             </label>
-            <label class="text-sm text-gray-700 dark:text-gray-200">
-              Comissão Captador {commissionSplitMode === 'amount' ? '(R$)' : '(%)'}
-              <input
-                type="text"
-                inputmode="decimal"
-                value={commissionForm.comissaoCaptador}
-                on:input={(event) =>
-                  commissionSplitMode === 'amount'
-                    ? handleMoneyInput('comissaoCaptador', event)
-                    : handlePercentageInput('comissaoCaptador', event)}
-                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-              />
-            </label>
-            <label class="text-sm text-gray-700 dark:text-gray-200">
-              Comissão Complementar {commissionSplitMode === 'amount' ? '(R$)' : '(%)'}
-              <input
-                type="text"
-                inputmode="decimal"
-                value={commissionForm.comissaoVendedor}
-                on:input={(event) =>
-                  commissionSplitMode === 'amount'
-                    ? handleMoneyInput('comissaoVendedor', event)
-                    : handlePercentageInput('comissaoVendedor', event)}
-                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-              />
-            </label>
-            <label class="text-sm text-gray-700 dark:text-gray-200">
-              Taxa Encontre Aqui {commissionSplitMode === 'amount' ? '(R$)' : '(%)'}
-              <input
-                type="text"
-                inputmode="decimal"
-                value={commissionForm.taxaPlataforma}
-                on:input={(event) =>
-                  commissionSplitMode === 'amount'
-                    ? handleMoneyInput('taxaPlataforma', event)
-                    : handlePercentageInput('taxaPlataforma', event)}
-                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-              />
-            </label>
+
+            {#each commissionFields as field}
+              <div class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">{field.label}</p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {commissionFieldModes[field.key] === 'amount'
+                        ? 'Valor real em reais.'
+                        : 'Percentual sobre o VGV.'}
+                    </p>
+                  </div>
+                  <div class="inline-flex rounded-full bg-slate-200 p-1 text-xs font-semibold dark:bg-slate-800">
+                    <button
+                      type="button"
+                      class={`min-w-12 rounded-full px-3 py-1.5 transition ${
+                        commissionFieldModes[field.key] === 'amount'
+                          ? 'bg-emerald-600 text-white shadow ring-2 ring-emerald-300'
+                          : 'bg-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white'
+                      }`}
+                      aria-label={`${field.label} em reais`}
+                      aria-pressed={commissionFieldModes[field.key] === 'amount'}
+                      on:click={() => switchCommissionFieldMode(field.key, 'amount')}
+                    >
+                      R$
+                    </button>
+                    <button
+                      type="button"
+                      class={`min-w-12 rounded-full px-3 py-1.5 transition ${
+                        commissionFieldModes[field.key] === 'percentage'
+                          ? 'bg-emerald-600 text-white shadow ring-2 ring-emerald-300'
+                          : 'bg-transparent text-slate-600 hover:bg-white/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white'
+                      }`}
+                      aria-label={`${field.label} em percentual`}
+                      aria-pressed={commissionFieldModes[field.key] === 'percentage'}
+                      on:click={() => switchCommissionFieldMode(field.key, 'percentage')}
+                    >
+                      %
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  inputmode="decimal"
+                  value={commissionForm[field.key]}
+                  aria-label={field.label}
+                  maxlength={commissionFieldModes[field.key] === 'amount'
+                    ? COMMISSION_AMOUNT_MAX_LENGTH
+                    : COMMISSION_PERCENT_MAX_LENGTH}
+                  on:input={(event) =>
+                    commissionFieldModes[field.key] === 'amount'
+                      ? handleMoneyInput(field.key, event)
+                      : handlePercentageInput(field.key, event)}
+                  class="mt-3 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-950"
+                />
+              </div>
+            {/each}
           </div>
         </div>
 

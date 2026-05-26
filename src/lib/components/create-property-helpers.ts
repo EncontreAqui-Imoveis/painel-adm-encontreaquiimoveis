@@ -58,6 +58,11 @@ export function clampCountInput(value: string): string {
 
 const MAX_PROPERTY_AREA = 9999999.99;
 const MAX_CURRENCY_VALUE = 9999999999.99;
+const MAX_PROMOTION_PERCENT = 99.99;
+
+function maxDigitsForDecimalValue(maxValue: number, fractionDigits = 2): number {
+  return Math.max(1, String(Math.floor(maxValue * 10 ** fractionDigits)).length);
+}
 
 export function sanitizeDecimalInput(value: string): string {
   const cleaned = value.replace(/[^\d.,]/g, '');
@@ -88,12 +93,12 @@ export function normalizeDecimal(value: string): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-export function formatCurrencyInput(raw: string): string {
-  const digits = onlyDigits(raw);
+export function formatCurrencyInput(raw: string, maxValue = MAX_CURRENCY_VALUE): string {
+  const digits = onlyDigits(raw).slice(0, maxDigitsForDecimalValue(maxValue));
   if (!digits) {
     return '';
   }
-  const numberValue = Math.min(Number(digits) / 100, MAX_CURRENCY_VALUE);
+  const numberValue = Math.min(Number(digits) / 100, maxValue);
   return numberValue.toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -101,16 +106,17 @@ export function formatCurrencyInput(raw: string): string {
   });
 }
 
-export function parseCurrency(value: string): number | null {
-  const digits = onlyDigits(value);
+export function parseCurrency(value: string, maxValue = MAX_CURRENCY_VALUE): number | null {
+  const digits = onlyDigits(value).slice(0, maxDigitsForDecimalValue(maxValue));
   if (!digits) return null;
-  const parsed = Math.min(Number(digits) / 100, MAX_CURRENCY_VALUE);
-  return Number.isNaN(parsed) ? null : parsed;
+  const parsed = Math.min(Number(digits) / 100, maxValue);
+  return Number.isNaN(parsed) ? null : Number(parsed.toFixed(2));
 }
 
-const MAX_PROMOTION_PERCENT = 99.99;
-
-function normalizePromotionPercentageRaw(value: string): number | null {
+function normalizePromotionPercentageRaw(
+  value: string,
+  maxValue = MAX_PROMOTION_PERCENT
+): number | null {
   const normalized = String(value ?? '')
     .replace('%', '')
     .replace(/\s+/g, '')
@@ -118,29 +124,34 @@ function normalizePromotionPercentageRaw(value: string): number | null {
     .trim();
   if (!normalized) return null;
   const parsed = Number(normalized);
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > MAX_PROMOTION_PERCENT) {
+  if (!Number.isFinite(parsed) || parsed < 0) {
     return null;
   }
-  return Number(parsed.toFixed(2));
+  return Number(Math.min(parsed, maxValue).toFixed(2));
 }
 
 /** Máscara 00,00 com teto 99,99% (4 dígitos = centésimos de ponto percentual). */
-export function formatPromotionPercentageInput(value: string): string {
+export function formatPromotionPercentageInput(value: string, maxValue = MAX_PROMOTION_PERCENT): string {
   const cleaned = String(value ?? '')
     .replace('%', '')
     .replace(/\s+/g, '')
     .trim();
   if (!cleaned) return '';
-  const normalized = cleaned.replace(/\./g, '').replace(',', '.');
+  const hasSeparator = /[.,]/.test(cleaned);
+  const integerDigits = onlyDigits(cleaned.split(/[.,]/)[0] ?? '');
+  const decimalDigits = onlyDigits(cleaned.split(/[.,]/).slice(1).join('')).slice(0, 2);
+  const normalized = hasSeparator
+    ? `${integerDigits || '0'}.${decimalDigits || '0'}`
+    : integerDigits;
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) return '';
-  const bounded = Math.min(MAX_PROMOTION_PERCENT, Math.max(0, parsed));
+  const bounded = Math.min(maxValue, Math.max(0, parsed));
   return bounded.toFixed(2).replace('.', ',');
 }
 
-export function parsePromotionPercentage(value: string): number | null {
-  const parsed = normalizePromotionPercentageRaw(value);
-  if (parsed == null || parsed <= 0 || parsed > MAX_PROMOTION_PERCENT) return null;
+export function parsePromotionPercentage(value: string, maxValue = MAX_PROMOTION_PERCENT): number | null {
+  const parsed = normalizePromotionPercentageRaw(value, maxValue);
+  if (parsed == null || parsed <= 0) return null;
   return parsed;
 }
 

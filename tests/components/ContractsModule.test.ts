@@ -2238,7 +2238,7 @@ describe('ContractsModule', () => {
     promptSpy.mockRestore();
   });
 
-  it('oculta badges de aprovado documental e mantém estados não aprovados no modal', async () => {
+  it('oculta badges documentais nessa etapa', async () => {
     apiGetMock.mockResolvedValue({
       data: [
         {
@@ -2275,7 +2275,7 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(openReviewButton);
 
-    expect(await screen.findByText('Não aplicável')).toBeInTheDocument();
+    expect(screen.queryByText('Não aplicável')).not.toBeInTheDocument();
     expect(screen.queryByText('Aprovado com ressalvas')).not.toBeInTheDocument();
   });
 });

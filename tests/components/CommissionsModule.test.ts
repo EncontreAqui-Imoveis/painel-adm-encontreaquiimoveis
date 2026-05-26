@@ -81,9 +81,9 @@ describe('CommissionsModule', () => {
     await fireEvent.click(screen.getAllByRole('button', { name: 'Editar' })[0]);
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
-    const captadorInput = screen.getByLabelText('Comissão Captador (R$)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão Complementar (R$)') as HTMLInputElement;
-    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (R$)') as HTMLInputElement;
+    const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão Complementar') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '100000' } });
     await fireEvent.input(captadorInput, { target: { value: '40000' } });
@@ -111,12 +111,27 @@ describe('CommissionsModule', () => {
 
     await screen.findAllByText(/Casa Centro/);
     await fireEvent.click(screen.getAllByRole('button', { name: 'Editar' })[0]);
-    await fireEvent.click(screen.getByRole('button', { name: 'Percentual (%)' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Comissão Captador em percentual' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Comissão Complementar em percentual' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Taxa Encontre Aqui em percentual' }));
+
+    expect(screen.getByRole('button', { name: 'Comissão Captador em percentual' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(screen.getByRole('button', { name: 'Comissão Complementar em reais' })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    expect(screen.getByRole('button', { name: 'Taxa Encontre Aqui em reais' })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
-    const captadorInput = screen.getByLabelText('Comissão Captador (%)') as HTMLInputElement;
-    const vendedorInput = screen.getByLabelText('Comissão Complementar (%)') as HTMLInputElement;
-    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui (%)') as HTMLInputElement;
+    const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
+    const vendedorInput = screen.getByLabelText('Comissão Complementar') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
 
     await fireEvent.input(valorInput, { target: { value: '100000' } });
     await fireEvent.input(captadorInput, { target: { value: '40' } });
@@ -135,6 +150,33 @@ describe('CommissionsModule', () => {
         },
       });
     });
+  });
+
+  it('clampa valores e mantém modos independentes por campo', async () => {
+    apiPutMock.mockResolvedValue({});
+
+    render(CommissionsModule);
+
+    await screen.findAllByText(/Casa Centro/);
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Editar' })[0]);
+
+    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const captadorModeButton = screen.getByRole('button', { name: 'Comissão Captador em percentual' });
+    const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
+    const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
+
+    await fireEvent.input(valorInput, { target: { value: '9999999999' } });
+    expect(valorInput.value.replace(/\u00a0/g, ' ')).toBe('R$ 999.999,99');
+    expect(valorInput.maxLength).toBe(13);
+
+    await fireEvent.click(captadorModeButton);
+    await fireEvent.input(captadorInput, { target: { value: '555555' } });
+    expect(captadorInput.value).toBe('100,00');
+    expect(captadorInput.maxLength).toBe(6);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Taxa Encontre Aqui em percentual' }));
+    await fireEvent.input(taxaInput, { target: { value: '100,5' } });
+    expect(taxaInput.value).toBe('100,00');
   });
 
   it('exclui VGV sem remover o contrato finalizado da origem', async () => {

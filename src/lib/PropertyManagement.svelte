@@ -482,6 +482,7 @@ function parseNullableNumber(value: unknown): number | null {
     }
 
     try {
+      const shouldFetchFullDataset = isClientSideFiltering;
       const params = new URLSearchParams();
       if (filters.status !== 'all') {
         params.append('status', filters.status);
@@ -497,8 +498,12 @@ function parseNullableNumber(value: unknown): number | null {
       }
       params.append('sortBy', sortConfig.key);
       params.append('sortOrder', sortConfig.order);
-      params.append('page', String(currentPage));
-      params.append('limit', String(itemsPerPage));
+      if (shouldFetchFullDataset) {
+        params.append('paginate', 'false');
+      } else {
+        params.append('page', String(currentPage));
+        params.append('limit', String(itemsPerPage));
+      }
       const trimmedSearch = filters.search.trim();
       if (trimmedSearch) {
         params.append('search', trimmedSearch);
@@ -510,7 +515,9 @@ function parseNullableNumber(value: unknown): number | null {
       );
 
       const raw = (response?.data ?? response ?? []) as Array<Record<string, unknown>>;
-      totalItems = Number((response as { total?: number })?.total ?? raw.length);
+      totalItems = shouldFetchFullDataset
+        ? raw.length
+        : Number((response as { total?: number })?.total ?? raw.length);
       totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
 
       properties = raw
@@ -662,7 +669,14 @@ function parseNullableNumber(value: unknown): number | null {
 
       const payload = await response.json();
       const list = Array.isArray(payload) ? payload : payload?.data;
-      cities = Array.isArray(list) ? list : [];
+      const normalizedCities = Array.isArray(list)
+        ? list
+            .map((city) => normalizeCityLabel(city))
+            .filter((city): city is string => Boolean(city))
+        : [];
+      cities = Array.from(new Set(normalizedCities)).sort((left, right) =>
+        left.localeCompare(right, 'pt-BR')
+      );
     } catch (err) {
       console.error('Erro ao buscar cidades:', err);
       toast.error('Erro ao buscar cidades.', {
@@ -675,6 +689,25 @@ function parseNullableNumber(value: unknown): number | null {
   function formatCurrency(value?: number | null): string {
     if (value == null || Number.isNaN(value)) return '-';
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  function normalizeCityLabel(city: unknown): string | null {
+    if (typeof city === 'string') {
+      const trimmed = city.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+    if (!city || typeof city !== 'object') {
+      return null;
+    }
+
+    const record = city as Record<string, unknown>;
+    const rawCity = record.nome ?? record.name ?? record.city ?? record.label ?? record.cidade;
+    if (typeof rawCity === 'string') {
+      const trimmed = rawCity.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+
+    return null;
   }
 
   function onlyDigits(value: string) {
@@ -3107,16 +3140,17 @@ function parseNullableNumber(value: unknown): number | null {
                       }
                     }}
                   />
-                  <input
-                    name="price_rent_display"
-                    class="w-full rounded-md border border-gray-300 px-3 py-2 text-xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
-                    type="text"
-                    inputmode="numeric"
-                    bind:value={editPriceRentDisplay}
-                    placeholder="Preço do aluguel"
-                    on:input={(event) => {
-                      const target = event.target as HTMLInputElement;
-                      editPriceRentDisplay = formatCurrencyInput(target.value);
+                <input
+                  name="price_rent_display"
+                  class="w-full rounded-md border border-gray-300 px-3 py-2 text-xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="13"
+                  bind:value={editPriceRentDisplay}
+                  placeholder="Preço do aluguel"
+                  on:input={(event) => {
+                    const target = event.target as HTMLInputElement;
+                    editPriceRentDisplay = formatCurrencyInput(target.value);
                       if (editableProperty) {
                         editableProperty.price_rent = parseCurrency(editPriceRentDisplay);
                         editableProperty.price = editableProperty.price_rent ?? editableProperty.price;
@@ -3149,6 +3183,7 @@ function parseNullableNumber(value: unknown): number | null {
                   class="w-full rounded-md border border-gray-300 px-3 py-2 text-2xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
                   type="text"
                   inputmode="numeric"
+                  maxlength="13"
                   bind:value={editPriceSaleDisplay}
                   placeholder="Preço de venda"
                   on:input={(event) => {
@@ -3172,6 +3207,7 @@ function parseNullableNumber(value: unknown): number | null {
                       class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-gray-700 dark:bg-gray-800 dark:text-amber-300"
                       type="text"
                       inputmode="decimal"
+                      maxlength="6"
                       bind:value={editPromotionSalePercentageDisplay}
                       placeholder="Ex: 08,5"
                       on:input={(event) => {
@@ -3191,6 +3227,7 @@ function parseNullableNumber(value: unknown): number | null {
                       class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-gray-700 dark:bg-gray-800 dark:text-amber-300"
                       type="text"
                       inputmode="decimal"
+                      maxlength="6"
                       bind:value={editPromotionRentPercentageDisplay}
                       placeholder="Ex: 12,0"
                       on:input={(event) => {
@@ -3212,6 +3249,7 @@ function parseNullableNumber(value: unknown): number | null {
                     class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-gray-700 dark:bg-gray-800 dark:text-amber-300"
                     type="text"
                     inputmode="decimal"
+                    maxlength="6"
                     bind:value={editPromotionRentPercentageDisplay}
                     placeholder="Ex: 12,0"
                     on:input={(event) => {
@@ -3232,6 +3270,7 @@ function parseNullableNumber(value: unknown): number | null {
                     class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-gray-700 dark:bg-gray-800 dark:text-amber-300"
                     type="text"
                     inputmode="decimal"
+                    maxlength="6"
                     bind:value={editPromotionSalePercentageDisplay}
                     placeholder="Ex: 08,5"
                     on:input={(event) => {

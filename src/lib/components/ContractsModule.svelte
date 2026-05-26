@@ -1249,6 +1249,13 @@
     return null;
   }
 
+  function documentSideOrder(doc: ContractDocument): number {
+    const side = getDocumentSide(doc);
+    if (side === 'buyer') return 0;
+    if (side === 'seller') return 1;
+    return 2;
+  }
+
   function isDoubleEndedDeal(_contract: ContractItem): boolean {
     // "corretor vendedor/selling broker" virou legado e não participa mais da UI.
     return false;
@@ -1516,6 +1523,11 @@
     return getNonProposalDocuments(contract)
       .filter((doc) => documentMatchesCurrentContract(contract, doc))
       .sort((left, right) => {
+      const leftSideOrder = documentSideOrder(left);
+      const rightSideOrder = documentSideOrder(right);
+      if (leftSideOrder !== rightSideOrder) {
+        return leftSideOrder - rightSideOrder;
+      }
       const leftDate = left.createdAt ? new Date(left.createdAt).getTime() : 0;
       const rightDate = right.createdAt ? new Date(right.createdAt).getTime() : 0;
       if (leftDate !== rightDate) {
@@ -3274,15 +3286,6 @@
                                     >
                                       {documentFileName(sellerDoc)}
                                     </button>
-                                    {#if hasDocumentReviewStatus(sellerDoc)}
-                                      <span
-                                        class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
-                                          sellerDoc
-                                        )}`}
-                                      >
-                                        {documentStatusLabel(sellerDoc)}
-                                      </span>
-                                    {/if}
                                   </div>
                                   <div class="mt-2 flex flex-wrap items-center gap-2">
                                     <Button
@@ -3383,15 +3386,6 @@
                                     >
                                       {documentFileName(buyerDoc)}
                                     </button>
-                                    {#if hasDocumentReviewStatus(buyerDoc)}
-                                      <span
-                                        class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
-                                          buyerDoc
-                                        )}`}
-                                      >
-                                        {documentStatusLabel(buyerDoc)}
-                                      </span>
-                                    {/if}
                                   </div>
                                   <div class="mt-2 flex flex-wrap items-center gap-2">
                                     <Button
@@ -3803,7 +3797,7 @@
             {:else}
               <div class="mt-2 space-y-2">
                 {#each getAllContractDocuments(selected) as doc (doc.id)}
-                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
+                  <div class="flex flex-col gap-2 rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
                     <div class="min-w-0">
                       <div class="flex flex-wrap items-center gap-2">
                         <button
@@ -3916,18 +3910,18 @@
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
                 />
               </label>
-              <div class="text-sm text-gray-700 dark:text-gray-200">
-                <div class="flex items-center justify-between gap-3">
-                  <label for="finalize-comissao-captador" class="font-medium">
-                    Comissão Captador
-                  </label>
-                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+                  <div class="text-sm text-gray-700 dark:text-gray-200">
+                    <div class="flex items-center justify-between gap-3">
+                      <label for="finalize-comissao-captador" class="font-medium">
+                        Comissão Captador
+                      </label>
+                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-slate-200 p-1 dark:border-gray-700 dark:bg-slate-800">
                     <button
                       type="button"
                       class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('comissaoCaptador') === 'amount'
-                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
+                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
                       aria-label="Comissão Captador em valor real"
                       aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'amount'}
@@ -3939,8 +3933,8 @@
                       type="button"
                       class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('comissaoCaptador') === 'percentage'
-                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
+                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
                       aria-label="Comissão Captador em percentual"
                       aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'percentage'}
@@ -3954,7 +3948,7 @@
                   id="finalize-comissao-captador"
                   type="text"
                   inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? 5 : 18}
+                  maxlength={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? 5 : 13}
                   value={finalizeForm.comissaoCaptador}
                   on:input={(event) =>
                     getFinalizeFieldMode('comissaoCaptador') === 'amount'
@@ -3968,13 +3962,13 @@
                   <label for="finalize-comissao-vendedor" class="font-medium">
                     Comissão complementar
                   </label>
-                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-slate-200 p-1 dark:border-gray-700 dark:bg-slate-800">
                     <button
                       type="button"
                       class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('comissaoVendedor') === 'amount'
-                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
+                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
                       aria-label="Comissão complementar em valor real"
                       aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'amount'}
@@ -3986,8 +3980,8 @@
                       type="button"
                       class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('comissaoVendedor') === 'percentage'
-                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
+                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
                       aria-label="Comissão complementar em percentual"
                       aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'percentage'}
@@ -4001,7 +3995,7 @@
                   id="finalize-comissao-vendedor"
                   type="text"
                   inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? 5 : 18}
+                  maxlength={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? 5 : 13}
                   value={finalizeForm.comissaoVendedor}
                   on:input={(event) =>
                     getFinalizeFieldMode('comissaoVendedor') === 'amount'
@@ -4015,13 +4009,13 @@
                   <label for="finalize-taxa-plataforma" class="font-medium">
                     Taxa Encontre Aqui
                   </label>
-                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
+                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-slate-200 p-1 dark:border-gray-700 dark:bg-slate-800">
                     <button
                       type="button"
                       class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('taxaPlataforma') === 'amount'
-                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
+                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
                       aria-label="Taxa Encontre Aqui em valor real"
                       aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'amount'}
@@ -4033,8 +4027,8 @@
                       type="button"
                       class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
                         getFinalizeFieldMode('taxaPlataforma') === 'percentage'
-                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'text-gray-600 hover:bg-white dark:text-gray-300 dark:hover:bg-gray-900'
+                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
+                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
                       aria-label="Taxa Encontre Aqui em percentual"
                       aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'percentage'}
@@ -4048,7 +4042,7 @@
                   id="finalize-taxa-plataforma"
                   type="text"
                   inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? 5 : 18}
+                  maxlength={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? 5 : 13}
                   value={finalizeForm.taxaPlataforma}
                   on:input={(event) =>
                     getFinalizeFieldMode('taxaPlataforma') === 'amount'
@@ -4226,7 +4220,7 @@
             {:else}
               <div class="mt-2 space-y-2">
                 {#each getAllContractDocuments(selected) as doc (doc.id)}
-                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
+                  <div class="flex flex-col gap-2 rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
                     <div class="min-w-0">
                       <div class="flex flex-wrap items-center gap-2">
                         <p class="font-medium text-gray-900 dark:text-gray-100">
@@ -4339,7 +4333,7 @@
             {:else}
               <div class="mt-2 space-y-2">
                 {#each getAllContractDocuments(selected) as doc (doc.id)}
-                  <div class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800">
+                  <div class="flex flex-col gap-2 rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
                     <div class="min-w-0">
                       <div class="flex flex-wrap items-center gap-2">
                         <p class="font-medium text-gray-900 dark:text-gray-100">
@@ -4348,15 +4342,6 @@
                         {#if documentSideLabel(doc)}
                           <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                             {documentSideLabel(doc)}
-                          </span>
-                        {/if}
-                        {#if hasDocumentReviewStatus(doc)}
-                          <span
-                            class={`rounded-full px-2 py-1 text-xs font-semibold ${documentStatusClass(
-                              doc
-                            )}`}
-                          >
-                            {documentStatusLabel(doc)}
                           </span>
                         {/if}
                       </div>
