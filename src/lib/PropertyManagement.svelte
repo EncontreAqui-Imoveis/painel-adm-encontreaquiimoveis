@@ -211,6 +211,7 @@ function parseNullableNumber(value: unknown): number | null {
   let areaSortDirection: 'asc' | 'desc' = 'desc';
   let isClientSideFiltering = false;
   let hasLoadedFullDatasetForLocalFilters = false;
+  let shouldUseFullDatasetForLocalFilters = false;
   let listForDisplay: PropertySummary[] = [];
   let displayedProperties: PropertySummary[] = [];
   let totalItemsForDisplay = 0;
@@ -322,6 +323,7 @@ function parseNullableNumber(value: unknown): number | null {
     areaSortMetric !== 'none' ||
     areaFilterMin.trim() !== '' ||
     areaFilterMax.trim() !== '';
+  $: shouldUseFullDatasetForLocalFilters = isClientSideFiltering || hasAreaRangeFilterValues;
   $: localFilterSignature = [
     selectedAmenityFilters.join('|'),
     areaFilterMetric,
@@ -331,7 +333,7 @@ function parseNullableNumber(value: unknown): number | null {
     areaSortMetric,
     areaSortDirection,
   ].join('::');
-  $: listForDisplay = localFilterSignature && (isClientSideFiltering || hasAreaRangeFilterValues)
+  $: listForDisplay = localFilterSignature && shouldUseFullDatasetForLocalFilters
     ? [...properties]
       .filter((property) => propertyMatchesAmenityFilter(property))
       .filter((property) => propertyMatchesAreaFilter(property))
@@ -483,7 +485,7 @@ function parseNullableNumber(value: unknown): number | null {
     }
 
     try {
-      const shouldFetchFullDataset = isClientSideFiltering;
+      const shouldFetchFullDataset = shouldUseFullDatasetForLocalFilters;
       const params = new URLSearchParams();
       if (filters.status !== 'all') {
         params.append('status', filters.status);
