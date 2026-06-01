@@ -22,32 +22,32 @@
     "glob": "^10.5.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
+    "@playwright/test": "^1.60.0",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.2.8",
     "@tsconfig/svelte": "^5.0.8",
-    "@types/node": "^25.4.0",
-    "@vitest/coverage-v8": "^4.0.18",
-    "autoprefixer": "^10.4.27",
-    "axe-core": "^4.11.1",
+    "@types/node": "^25.9.1",
+    "@vitest/coverage-v8": "^4.1.7",
+    "autoprefixer": "^10.5.0",
+    "axe-core": "^4.11.4",
     "cross-env": "^10.1.0",
     "jsdom": "^28.1.0",
-    "postcss": "^8.5.8",
-    "svelte": "^5.53.10",
-    "svelte-check": "^4.4.5",
+    "postcss": "^8.5.15",
+    "svelte": "^5.56.0",
+    "svelte-check": "^4.4.8",
     "tailwindcss": "^4.2.1",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.2.1",
-    "axios": "^1.13.6",
+    "@tailwindcss/vite": "^4.3.0",
+    "axios": "^1.16.1",
     "chart.js": "^4.5.1",
     "lucide-svelte": "^0.577.0",
     "pdfjs-dist": "^5.7.284",
     "svelte-routing": "^2.13.0",
-    "svelte-sonner": "^1.1.0"
+    "svelte-sonner": "^1.1.1"
   }
 }
