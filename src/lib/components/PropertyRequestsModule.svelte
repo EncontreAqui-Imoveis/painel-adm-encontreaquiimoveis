@@ -14,6 +14,8 @@
   let activeTab: RequestTab = 'creation';
   let creationCount = 0;
   let editCount = 0;
+  let refreshInFlight = false;
+  let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
   function formatBadgeCount(value: number): string {
     const normalized = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
@@ -28,6 +30,10 @@
   }
 
   async function refreshTabCounts() {
+    if (refreshInFlight) {
+      return;
+    }
+    refreshInFlight = true;
     try {
       const [creationResponse, editResponse] = await Promise.all([
         api.get<{ data?: Array<Record<string, unknown>>; total?: number }>(
@@ -40,19 +46,24 @@
       creationCount = resolveTotal(creationResponse);
       editCount = resolveTotal(editResponse);
     } catch {
-      creationCount = 0;
-      editCount = 0;
+      // Keep last known values; a rate-limit or transient error should not
+      // make the badges look like there are no pending items.
+    } finally {
+      refreshInFlight = false;
     }
   }
 
   onMount(() => {
     refreshTabCounts();
-    const interval = setInterval(() => {
-      refreshTabCounts();
-    }, 20_000);
+    refreshInterval = setInterval(() => {
+      void refreshTabCounts();
+    }, 60_000);
 
     return () => {
-      clearInterval(interval);
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+      }
     };
   });
 </script>

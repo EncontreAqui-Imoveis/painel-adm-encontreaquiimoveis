@@ -928,6 +928,37 @@ function parseNullableNumber(value: unknown): number | null {
     currentPage = 1;
   }
 
+  function ensureAreaFilterMetricSelected(): void {
+    if (areaFilterMetric === 'none') {
+      areaFilterMetric = 'area_construida_valor';
+    }
+  }
+
+  function ensureAreaSortMetricSelected(): void {
+    if (areaSortMetric === 'none') {
+      areaSortMetric = 'area_construida_valor';
+    }
+  }
+
+  function handleAreaRangeInput(): void {
+    if (areaFilterMin.trim() !== '' || areaFilterMax.trim() !== '') {
+      ensureAreaFilterMetricSelected();
+    }
+    resetLocalPage();
+  }
+
+  function handleAreaUnitChange(): void {
+    if (areaFilterMin.trim() !== '' || areaFilterMax.trim() !== '') {
+      ensureAreaFilterMetricSelected();
+    }
+    resetLocalPage();
+  }
+
+  function handleAreaSortDirectionChange(): void {
+    ensureAreaSortMetricSelected();
+    resetLocalPage();
+  }
+
   function clearLocalFilters() {
     selectedAmenityFilters = [];
     areaFilterMetric = 'none';
@@ -2721,7 +2752,7 @@ function parseNullableNumber(value: unknown): number | null {
           bind:value={areaFilterMin}
           inputmode="decimal"
           placeholder="ex: 500"
-          on:input={resetLocalPage}
+          on:input={handleAreaRangeInput}
         />
       </div>
       <div class="grid gap-2">
@@ -2732,7 +2763,7 @@ function parseNullableNumber(value: unknown): number | null {
           bind:value={areaFilterMax}
           inputmode="decimal"
           placeholder="ex: 2000"
-          on:input={resetLocalPage}
+          on:input={handleAreaRangeInput}
         />
       </div>
       <div class="grid gap-2">
@@ -2740,7 +2771,7 @@ function parseNullableNumber(value: unknown): number | null {
         <select
           id="area-filter-unit"
           bind:value={areaFilterUnit}
-          on:change={resetLocalPage}
+          on:change={handleAreaUnitChange}
           class="w-40 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         >
           {#each areaUnitOptions as option}
@@ -2769,7 +2800,7 @@ function parseNullableNumber(value: unknown): number | null {
         <select
           id="area-sort-direction"
           bind:value={areaSortDirection}
-          on:change={resetLocalPage}
+          on:change={handleAreaSortDirectionChange}
           class="w-36 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         >
           <option value="desc">Maior para menor</option>

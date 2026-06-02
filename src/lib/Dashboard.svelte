@@ -73,6 +73,8 @@
         brokerRequests: 0,
     };
     let pendingCountsInterval: ReturnType<typeof setInterval> | null = null;
+    let pendingCountsRequestInFlight = false;
+    let announcementsCountRequestInFlight = false;
 
     interface Stats {
         totalProperties: number;
@@ -793,12 +795,17 @@
             : 0;
 
     async function fetchAnnouncementsCount() {
+        if (announcementsCountRequestInFlight) {
+            return;
+        }
+        announcementsCountRequestInFlight = true;
+        const previousTotal = announcementsTotal;
+        const previousMarker = latestAnnouncementMarker;
         try {
             const response = await fetchPlatformResponse(
                 "/admin/notifications?type=announcement&limit=100&page=1",
             );
             if (!response || !response.ok) {
-                announcementsTotal = 0;
                 return;
             }
             const payload = await response.json();
@@ -810,8 +817,10 @@
             latestAnnouncementMarker = mostRecentFromCount;
         } catch (error) {
             console.error("Erro ao buscar total de avisos:", error);
-            announcementsTotal = 0;
-            latestAnnouncementMarker = null;
+            announcementsTotal = previousTotal;
+            latestAnnouncementMarker = previousMarker;
+        } finally {
+            announcementsCountRequestInFlight = false;
         }
     }
 
@@ -962,20 +971,24 @@
     }
 
     async function fetchPendingCounts() {
+        if (pendingCountsRequestInFlight) {
+            return;
+        }
         if (!hasSessionToken()) {
             pendingCounts = { propertyRequests: 0, brokerRequests: 0 };
             clearSessionToken();
             return;
         }
+        pendingCountsRequestInFlight = true;
 
-        async function fetchCount(endpoint: string): Promise<number> {
+        async function fetchCount(endpoint: string): Promise<number | null> {
             const response = await fetchPlatformResponse(endpoint);
             if (!response) {
                 clearSessionToken();
-                return 0;
+                return null;
             }
             if (!response.ok) {
-                return 0;
+                return null;
             }
             const payload = await response.json();
             return readListTotal(payload);
@@ -993,13 +1006,45 @@
                     "/admin/brokers?status=pending_verification&limit=1&page=1",
                 ),
             ]);
+            if (
+                creationRequests === null ||
+                editRequests === null ||
+                brokerRequests === null
+            ) {
+                return;
+            }
             pendingCounts = {
                 propertyRequests: creationRequests + editRequests,
                 brokerRequests,
             };
         } catch (error) {
             console.error("Erro ao buscar contagem de solicitacoes:", error);
+        } finally {
+            pendingCountsRequestInFlight = false;
         }
+    }
+
+    function shouldPollPendingCounts(view: View = activeView) {
+        return (
+            view === "dashboard" ||
+            view === "verification" ||
+            view === "property_requests"
+        );
+    }
+
+    function syncPendingCountsPolling() {
+        if (pendingCountsInterval) {
+            clearInterval(pendingCountsInterval);
+            pendingCountsInterval = null;
+        }
+
+        if (!shouldPollPendingCounts()) {
+            return;
+        }
+
+        pendingCountsInterval = setInterval(() => {
+            void fetchPendingCounts();
+        }, 60_000);
     }
 
     async function fetchChartData() {
@@ -1081,7 +1126,9 @@
         sortBy = "id";
         sortOrder = "desc";
         fetchData();
-        fetchPendingCounts();
+        if (shouldPollPendingCounts(newView)) {
+            fetchPendingCounts();
+        }
         if (newView === "notifications") {
             notificationsSubTab = nextNotificationsSubTab;
             await fetchAnnouncementsCount();
@@ -1092,6 +1139,7 @@
         if (newView === "dashboard") {
             fetchChartData();
         }
+        syncPendingCountsPolling();
     }
 
     async function handlePropertyCreated() {
@@ -1149,7 +1197,9 @@
                 return;
             }
             fetchData();
-            fetchPendingCounts();
+            if (shouldPollPendingCounts(activeView)) {
+                void fetchPendingCounts();
+            }
         } catch (error) {
             console.error(`Erro ao deletar item:`, error);
         } finally {
@@ -1196,7 +1246,9 @@
 
             showSaveMessage("Dados salvos com sucesso!", "success");
             await fetchData();
-            await fetchPendingCounts();
+            if (shouldPollPendingCounts(activeView)) {
+                await fetchPendingCounts();
+            }
         } catch (error: any) {
             console.error(`Erro ao salvar o ${type}:`, error);
             showSaveMessage(`Erro: ${error.message}`, "error");
@@ -1232,8 +1284,8 @@
             fetchChartData();
         }
         fetchAnnouncementsCount();
-        fetchPendingCounts();
-        pendingCountsInterval = setInterval(fetchPendingCounts, 15000);
+        await fetchPendingCounts();
+        syncPendingCountsPolling();
     });
 
     onDestroy(() => {
