@@ -81,6 +81,8 @@ type PropertyMockState = {
   amenities: string[];
   legacyAmenityFlags?: Record<string, unknown>;
   price: number;
+  price_sale?: number | null;
+  price_rent?: number | null;
   images: Array<Record<string, unknown>> | null;
 };
 
@@ -130,6 +132,8 @@ const basePropertyState: PropertyMockState = {
   area_terreno_m2: 300,
   amenities: ['Poço artesiano'],
   price: 450000,
+  price_sale: 450000,
+  price_rent: null,
   images: null,
 };
 
@@ -223,6 +227,8 @@ function buildPropertySummary(property: PropertyMockState): Record<string, unkno
     amenities: property.amenities,
     ...(property.legacyAmenityFlags ?? {}),
     price: property.price,
+    price_sale: property.price_sale ?? null,
+    price_rent: property.price_rent ?? null,
     images: property.images,
   };
 }
@@ -239,6 +245,17 @@ function applyServerPatch(property: PropertyMockState, payload: SavePayload): vo
   }
   if (typeof payload.public_code === 'string') {
     property.public_code = payload.public_code;
+  }
+  if ('price' in payload) {
+    property.price = payload.price == null ? property.price : Number(payload.price);
+  }
+  if ('price_sale' in payload) {
+    property.price_sale = payload.price_sale == null ? null : Number(payload.price_sale);
+    property.price = payload.price_sale == null ? property.price : Number(payload.price_sale);
+  }
+  if ('price_rent' in payload) {
+    property.price_rent = payload.price_rent == null ? null : Number(payload.price_rent);
+    property.price = payload.price_rent == null ? property.price : Number(payload.price_rent);
   }
   if ('bedrooms' in payload) {
     property.bedrooms = payload.bedrooms == null ? null : Number(payload.bedrooms);
@@ -1590,6 +1607,56 @@ describe('PropertyManagement', () => {
     });
   });
 
+  it('clampa os preços de venda e aluguel no modal de edição antes de salvar', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        purpose: 'Venda e Aluguel',
+        price: 450000,
+        price_sale: 450000,
+        price_rent: 2500,
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+
+    const saleInput = dialog.querySelector('input[name="price_sale_display"]');
+    const rentInput = dialog.querySelector('input[name="price_rent_display"]');
+    expect(saleInput).toBeTruthy();
+    expect(rentInput).toBeTruthy();
+
+    await fireEvent.input(saleInput as HTMLInputElement, {
+      target: { value: '9999999999999999' },
+    });
+    await fireEvent.input(rentInput as HTMLInputElement, {
+      target: { value: '999999999999' },
+    });
+
+    await waitFor(() => {
+      expect(saleInput).toHaveValue('R$\u00A0999.000.000.000,00');
+      expect(rentInput).toHaveValue('R$\u00A0999.000.000,00');
+    });
+
+    const saveButtons = within(dialog).getAllByRole('button', { name: 'Salvar' });
+    await fireEvent.click(saveButtons[0]);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledTimes(1);
+    });
+    const [, payload] = apiPutMock.mock.calls[0] as [string, SavePayload];
+    expect(payload).toMatchObject({
+      price_sale: 999000000000,
+      price_rent: 999000000,
+      price: 999000000000,
+    });
+  });
+
   it('permite valor zero em campos numéricos e envia payload sem status inválido', async () => {
     mockPropertyManagementRequests({
       initialProperty: {
@@ -1741,6 +1808,9 @@ describe('PropertyManagement', () => {
       );
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
+
+    await fireEvent.click(screen.getByTestId('image-preview-backdrop'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('atualiza a galeria do modal imediatamente ao adicionar e remover imagem em edição', async () => {

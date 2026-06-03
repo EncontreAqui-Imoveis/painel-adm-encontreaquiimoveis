@@ -361,4 +361,31 @@ describe('CreateProperty', () => {
     const [, payload] = apiClientPostMock.mock.calls[0] as [string, Record<string, unknown>, any];
     expect(payload.amenities).toHaveLength(ALL_COMMODITIES.length);
   });
+
+  it('clampa o preço de venda ao teto configurado antes de enviar', async () => {
+    render(CreateProperty);
+
+    await fillRequiredFields();
+    const salePriceInput = screen.getByLabelText('Preço de venda *');
+    await fireEvent.input(salePriceInput, {
+      target: { value: '9999999999999999' },
+    });
+
+    await waitFor(() => {
+      expect(salePriceInput).toHaveValue('R$\u00A0999.000.000.000,00');
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar imóvel' }));
+
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledWith(
+        '/admin/properties',
+        expect.objectContaining({
+          price: 999000000000,
+          price_sale: 999000000000,
+        }),
+        expect.anything()
+      );
+    });
+  });
 });

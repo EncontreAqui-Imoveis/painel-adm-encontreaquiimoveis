@@ -8,13 +8,23 @@
   import { Button } from '$lib/components/ui/button';
   import * as Select from '$lib/components/ui/select';
   import { Input } from '$lib/components/ui/input';
-  import {
-    clampAreaInput,
-    clampCountInput,
-    extractApiErrorMessage,
-    formatPromotionPercentageInput,
-    parsePromotionPercentage,
-  } from '$lib/components/create-property-helpers';
+import {
+  clampAreaInput,
+  clampCountInput,
+  extractApiErrorMessage,
+  formatPromotionPercentageInput,
+  parsePromotionPercentage,
+} from '$lib/components/create-property-helpers';
+import {
+  RENT_PROPERTY_PRICE_MAX,
+  RENT_PROPERTY_PRICE_INPUT_MAX_LENGTH,
+  SALE_PROPERTY_PRICE_MAX,
+  SALE_PROPERTY_PRICE_INPUT_MAX_LENGTH,
+  clampPropertyPriceValue,
+  formatPropertyPriceDisplay,
+  formatPropertyPriceInput,
+  parsePropertyPriceInput,
+} from '$lib/propertyPriceLimits';
   import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
   import Pagination from '$lib/Pagination.svelte';
   import PromotionNotificationModal from '$lib/components/PromotionNotificationModal.svelte';
@@ -264,6 +274,20 @@ function parseNullableNumber(value: unknown): number | null {
   let selectedPropertyBrokenGalleryCount = 0;
   let brokenPreviewImages = new Set<string>();
   let galleryScrollEl: HTMLDivElement | null = null;
+  type PreviewViewerState = {
+    index: number;
+    total: number;
+    currentImage: NormalizedImage | null;
+    canPrev: boolean;
+    canNext: boolean;
+  };
+  let previewViewerState: PreviewViewerState = {
+    index: 0,
+    total: 0,
+    currentImage: null,
+    canPrev: false,
+    canNext: false,
+  };
   let brokenListThumbnails = new Set<number>();
   let isPromotionNotificationModalOpen = false;
   let promotionNotificationMessage = '';
@@ -318,6 +342,13 @@ function parseNullableNumber(value: unknown): number | null {
       previewImageIndex = previewTotal - 1;
       previewImageUrl = previewImages[previewImageIndex]?.url ?? null;
     }
+    $: previewViewerState = {
+      index: previewImageIndex,
+      total: previewTotal,
+      currentImage: previewImages[previewImageIndex] ?? null,
+      canPrev: previewTotal > 1 && hasPrevImage(),
+      canNext: previewTotal > 1 && hasNextImage(),
+    };
   $: if (previewTotal > 0) {
     previewImages.forEach((image) => {
       if (!image?.url) return;
@@ -1401,34 +1432,36 @@ function parseNullableNumber(value: unknown): number | null {
       property.price_sale ?? (supportsSale && !supportsRent ? property.price ?? null : null);
     const resolvedRent =
       property.price_rent ?? (supportsRent && !supportsSale ? property.price ?? null : null);
+    const clampedSale = clampPropertyPriceValue(resolvedSale, SALE_PROPERTY_PRICE_MAX);
+    const clampedRent = clampPropertyPriceValue(resolvedRent, RENT_PROPERTY_PRICE_MAX);
     const resolvedSalePromotionPercentage =
       property.promotion_percentage != null
         ? Number(property.promotion_percentage)
         : resolvePromotionPercentage(
-            resolvedSale != null ? Number(resolvedSale) : null,
+            clampedSale != null ? Number(clampedSale) : null,
             property.promotion_price != null ? Number(property.promotion_price) : null
           );
     const resolvedRentPromotionPercentage =
       property.promotional_rent_percentage != null
         ? Number(property.promotional_rent_percentage)
         : resolvePromotionPercentage(
-            resolvedRent != null ? Number(resolvedRent) : null,
+            clampedRent != null ? Number(clampedRent) : null,
             property.promotional_rent_price != null
               ? Number(property.promotional_rent_price)
               : null
           );
 
     const salePromoPrice = calculateDiscountedValue(
-      resolvedSale != null ? Number(resolvedSale) : null,
+      clampedSale != null ? Number(clampedSale) : null,
       resolvedSalePromotionPercentage
     );
     const rentPromoPrice = calculateDiscountedValue(
-      resolvedRent != null ? Number(resolvedRent) : null,
+      clampedRent != null ? Number(clampedRent) : null,
       resolvedRentPromotionPercentage
     );
 
-    editPriceSaleDisplay = resolvedSale != null ? formatCurrency(Number(resolvedSale)) : '';
-    editPriceRentDisplay = resolvedRent != null ? formatCurrency(Number(resolvedRent)) : '';
+    editPriceSaleDisplay = formatPropertyPriceDisplay(clampedSale, SALE_PROPERTY_PRICE_MAX);
+    editPriceRentDisplay = formatPropertyPriceDisplay(clampedRent, RENT_PROPERTY_PRICE_MAX);
     editPromotionSalePercentageDisplay = formatPromotionPercentageInput(
       String(resolvedSalePromotionPercentage ?? '').replace('.', ',')
     );
@@ -1537,11 +1570,13 @@ function parseNullableNumber(value: unknown): number | null {
         merged.price_sale ?? (supportsSale && !supportsRent ? merged.price ?? null : null);
       const resolvedRent =
         merged.price_rent ?? (supportsRent && !supportsSale ? merged.price ?? null : null);
+      const clampedSale = clampPropertyPriceValue(resolvedSale, SALE_PROPERTY_PRICE_MAX);
+      const clampedRent = clampPropertyPriceValue(resolvedRent, RENT_PROPERTY_PRICE_MAX);
       selectedProperty = merged;
       editableProperty = sanitizeEditable({
         ...merged,
-        price_sale: resolvedSale,
-        price_rent: resolvedRent,
+        price_sale: clampedSale,
+        price_rent: clampedRent,
         promotion_percentage:
           merged.promotion_percentage != null
             ? Number(merged.promotion_percentage)
@@ -3316,6 +3351,7 @@ function parseNullableNumber(value: unknown): number | null {
                 <div class="grid gap-3 md:grid-cols-2">
                   <input
                     name="price_sale_display"
+                    maxlength={SALE_PROPERTY_PRICE_INPUT_MAX_LENGTH}
                     class="w-full rounded-md border border-gray-300 px-3 py-2 text-xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
                     type="text"
                     inputmode="numeric"
@@ -3323,9 +3359,15 @@ function parseNullableNumber(value: unknown): number | null {
                     placeholder="Preço de venda"
                     on:input={(event) => {
                       const target = event.target as HTMLInputElement;
-                      editPriceSaleDisplay = formatCurrencyInput(target.value);
+                      editPriceSaleDisplay = formatPropertyPriceInput(
+                        target.value,
+                        SALE_PROPERTY_PRICE_MAX
+                      );
                       if (editableProperty) {
-                        editableProperty.price_sale = parseCurrency(editPriceSaleDisplay);
+                        editableProperty.price_sale = parsePropertyPriceInput(
+                          editPriceSaleDisplay,
+                          SALE_PROPERTY_PRICE_MAX
+                        );
                         editableProperty.price = editableProperty.price_sale ?? editableProperty.price;
                         refreshPromotionPreviewDisplays();
                       }
@@ -3333,17 +3375,23 @@ function parseNullableNumber(value: unknown): number | null {
                   />
                 <input
                   name="price_rent_display"
+                  maxlength={RENT_PROPERTY_PRICE_INPUT_MAX_LENGTH}
                   class="w-full rounded-md border border-gray-300 px-3 py-2 text-xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
                   type="text"
                   inputmode="numeric"
-                  maxlength="13"
                   bind:value={editPriceRentDisplay}
                   placeholder="Preço do aluguel"
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
-                    editPriceRentDisplay = formatCurrencyInput(target.value);
+                    editPriceRentDisplay = formatPropertyPriceInput(
+                      target.value,
+                      RENT_PROPERTY_PRICE_MAX
+                    );
                       if (editableProperty) {
-                        editableProperty.price_rent = parseCurrency(editPriceRentDisplay);
+                        editableProperty.price_rent = parsePropertyPriceInput(
+                          editPriceRentDisplay,
+                          RENT_PROPERTY_PRICE_MAX
+                        );
                         editableProperty.price = editableProperty.price_rent ?? editableProperty.price;
                         refreshPromotionPreviewDisplays();
                       }
@@ -3353,6 +3401,7 @@ function parseNullableNumber(value: unknown): number | null {
               {:else if flags.supportsRent}
                 <input
                   name="price_rent_display"
+                  maxlength={RENT_PROPERTY_PRICE_INPUT_MAX_LENGTH}
                   class="w-full rounded-md border border-gray-300 px-3 py-2 text-2xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
                   type="text"
                   inputmode="numeric"
@@ -3360,9 +3409,15 @@ function parseNullableNumber(value: unknown): number | null {
                   placeholder="Preço do aluguel"
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
-                    editPriceRentDisplay = formatCurrencyInput(target.value);
+                    editPriceRentDisplay = formatPropertyPriceInput(
+                      target.value,
+                      RENT_PROPERTY_PRICE_MAX
+                    );
                     if (editableProperty) {
-                      editableProperty.price_rent = parseCurrency(editPriceRentDisplay);
+                      editableProperty.price_rent = parsePropertyPriceInput(
+                        editPriceRentDisplay,
+                        RENT_PROPERTY_PRICE_MAX
+                      );
                       editableProperty.price = editableProperty.price_rent ?? editableProperty.price;
                       refreshPromotionPreviewDisplays();
                     }
@@ -3371,17 +3426,23 @@ function parseNullableNumber(value: unknown): number | null {
               {:else}
                 <input
                   name="price_sale_display"
+                  maxlength={SALE_PROPERTY_PRICE_INPUT_MAX_LENGTH}
                   class="w-full rounded-md border border-gray-300 px-3 py-2 text-2xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
                   type="text"
                   inputmode="numeric"
-                  maxlength="13"
                   bind:value={editPriceSaleDisplay}
                   placeholder="Preço de venda"
                   on:input={(event) => {
                     const target = event.target as HTMLInputElement;
-                    editPriceSaleDisplay = formatCurrencyInput(target.value);
+                    editPriceSaleDisplay = formatPropertyPriceInput(
+                      target.value,
+                      SALE_PROPERTY_PRICE_MAX
+                    );
                     if (editableProperty) {
-                      editableProperty.price_sale = parseCurrency(editPriceSaleDisplay);
+                      editableProperty.price_sale = parsePropertyPriceInput(
+                        editPriceSaleDisplay,
+                        SALE_PROPERTY_PRICE_MAX
+                      );
                       editableProperty.price = editableProperty.price_sale ?? editableProperty.price;
                       refreshPromotionPreviewDisplays();
                     }
@@ -4517,32 +4578,25 @@ function parseNullableNumber(value: unknown): number | null {
 
 <svelte:window on:keydown={handlePreviewKeydown} />
 
-  {#if isImagePreviewOpen}
+{#if isImagePreviewOpen}
+  <div
+    class="fixed inset-0 z-50 pointer-events-auto"
+    data-testid="image-preview-backdrop"
+  >
+    <div class="absolute inset-0 bg-black/85" aria-hidden="true"></div>
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center pointer-events-auto"
-      role="button"
+      class="relative mx-auto flex h-[94vh] w-[96vw] max-w-[1600px] flex-col items-center justify-center px-2 py-3 sm:px-4"
+      role="dialog"
+      aria-modal="true"
       tabindex="0"
-      aria-label="Fechar visualização da imagem"
-      on:click={closeImagePreview}
       on:keydown={handlePreviewKeydown}
     >
-      <div
-        class="relative flex max-h-[90vh] max-w-[100vw] flex-col items-center"
-        role="dialog"
-        aria-modal="true"
-        tabindex="0"
-        on:click|stopPropagation
-        on:keydown={(event) => {
-          handlePreviewKeydown(event);
-          event.stopPropagation();
-        }}
-      >
       {#if previewTotal > 1}
         <button
           type="button"
-          class="absolute left-0 top-0 z-10 flex h-full w-14 items-center justify-center bg-gradient-to-r from-black/35 to-transparent text-white transition hover:from-black/50"
+          class="absolute left-0 top-0 z-10 flex h-full w-16 items-center justify-center bg-gradient-to-r from-black/35 to-transparent text-white transition hover:from-black/50 sm:w-20"
           on:click|stopPropagation={goPrevImage}
-          disabled={!hasPrevImage()}
+          disabled={!previewViewerState.canPrev}
           aria-label="Imagem anterior"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -4551,9 +4605,9 @@ function parseNullableNumber(value: unknown): number | null {
         </button>
         <button
           type="button"
-          class="absolute right-0 top-0 z-10 flex h-full w-14 items-center justify-center bg-gradient-to-l from-black/35 to-transparent text-white transition hover:from-black/50"
+          class="absolute right-0 top-0 z-10 flex h-full w-16 items-center justify-center bg-gradient-to-l from-black/35 to-transparent text-white transition hover:from-black/50 sm:w-20"
           on:click|stopPropagation={goNextImage}
-          disabled={!hasNextImage()}
+          disabled={!previewViewerState.canNext}
           aria-label="Próxima imagem"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -4561,18 +4615,20 @@ function parseNullableNumber(value: unknown): number | null {
           </svg>
         </button>
       {/if}
-      {#if previewImageUrl}
-        <img
-          src={previewImageUrl}
-          alt=""
-          class="max-h-[min(72vh,85vw)] max-w-[95vw] shrink-0 select-none object-contain"
-          draggable="false"
-          on:error={handlePreviewImageError}
-        />
-      {/if}
+      <div class="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden">
+        {#if previewViewerState.currentImage?.url}
+          <img
+            src={previewViewerState.currentImage.url}
+            alt=""
+            class="max-h-full max-w-full select-none object-contain"
+            draggable="false"
+            on:error={handlePreviewImageError}
+          />
+        {/if}
+      </div>
       {#if previewTotal > 1}
         <div
-          class="show-scrollbar mt-3 max-w-[95vw] overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] touch-pan-x"
+          class="show-scrollbar mt-3 w-full max-w-full overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] touch-pan-x"
           role="navigation"
           aria-label="Miniaturas da galeria"
         >

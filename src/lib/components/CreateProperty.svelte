@@ -11,17 +11,22 @@
     clampCountInput,
     extractApiErrorMessage,
     formatPromotionPercentageInput,
-    formatCurrencyInput,
     formatPhoneBr,
     hasValidPhoneBr,
     normalizeDecimal,
-    parseCurrency,
     parsePromotionPercentage,
     onlyDigits,
     resolveCreatePropertyPrices,
     sanitizeDecimalInput,
     sanitizeDigitsInput,
   } from '$lib/components/create-property-helpers';
+  import {
+    RENT_PROPERTY_PRICE_MAX,
+    SALE_PROPERTY_PRICE_MAX,
+    formatPropertyPriceInput,
+    getPropertyPriceInputMaxLength,
+    parsePropertyPriceInput,
+  } from '$lib/propertyPriceLimits';
   import { PROPERTY_AMENITY_OPTIONS, toggleAmenity, normalizeAmenityList } from '$lib/propertyAmenities';
 
   const propertyTypes = [
@@ -163,6 +168,9 @@
   let submitFeedback: { type: 'success' | 'error'; message: string } | null = null;
   let selectedAmenities: string[] = [];
 
+  const SALE_PRICE_MAX_LENGTH = getPropertyPriceInputMaxLength(SALE_PROPERTY_PRICE_MAX);
+  const RENT_PRICE_MAX_LENGTH = getPropertyPriceInputMaxLength(RENT_PROPERTY_PRICE_MAX);
+
   const cityCache: Record<string, string[]> = {};
   const bairroCache: Record<string, string[]> = {};
   let cities: string[] = [];
@@ -227,8 +235,8 @@
 
   $: salePromotionPercentageValue = parsePromotionPercentage(promotionSalePercentage);
   $: rentPromotionPercentageValue = parsePromotionPercentage(promotionRentPercentage);
-  $: salePriceValue = parseCurrency(priceSale);
-  $: rentPriceValue = parseCurrency(priceRent);
+  $: salePriceValue = parsePropertyPriceInput(priceSale, SALE_PROPERTY_PRICE_MAX);
+  $: rentPriceValue = parsePropertyPriceInput(priceRent, RENT_PROPERTY_PRICE_MAX);
   $: promotionPriceSale = toCurrencyDisplay(
     calculateDiscountedValue(
       purpose !== 'Aluguel' ? salePriceValue : null,
@@ -750,7 +758,10 @@
       price,
       priceSale: resolvedSale,
       priceRent: resolvedRent,
-    } = resolveCreatePropertyPrices(purpose, priceSale, priceRent);
+    } = resolveCreatePropertyPrices(purpose, priceSale, priceRent, {
+      saleMaxValue: SALE_PROPERTY_PRICE_MAX,
+      rentMaxValue: RENT_PROPERTY_PRICE_MAX,
+    });
     if (error) {
       toast.error(error);
       return;
@@ -759,13 +770,13 @@
     const supportsSale = purpose.toLowerCase().includes('vend');
     const supportsRent = purpose.toLowerCase().includes('alug');
     const parsedPromotionPercentageSale =
-      supportsSale ? parsePromotionPercentage(promotionSalePercentage) : null;
+    supportsSale ? parsePromotionPercentage(promotionSalePercentage) : null;
     const parsedPromotionPercentageRent =
       supportsRent ? parsePromotionPercentage(promotionRentPercentage) : null;
     const parsedPromotionPriceSale =
-      supportsSale ? parseCurrency(promotionPriceSale) : null;
+      supportsSale ? parsePropertyPriceInput(promotionPriceSale, SALE_PROPERTY_PRICE_MAX) : null;
     const parsedPromotionPriceRent =
-      supportsRent ? parseCurrency(promotionPriceRent) : null;
+      supportsRent ? parsePropertyPriceInput(promotionPriceRent, RENT_PROPERTY_PRICE_MAX) : null;
 
     if (supportsSale && promotionSalePercentage.trim() && parsedPromotionPercentageSale == null) {
       toast.error('Percentual de desconto da venda inválido. Use valor entre 0,1 e 100.');
@@ -1239,16 +1250,17 @@
         {#if purpose !== 'Aluguel'}
           <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
             Preço de venda *
-            <input
+              <input
               id="create-property-price-sale"
               name="price_sale_display"
+              maxlength={SALE_PRICE_MAX_LENGTH}
               class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               bind:value={priceSale}
               inputmode="numeric"
               placeholder="R$ 450.000,00"
               on:input={(event) => {
                 const target = event.target as HTMLInputElement;
-                priceSale = formatCurrencyInput(target.value);
+                priceSale = formatPropertyPriceInput(target.value, SALE_PROPERTY_PRICE_MAX);
               }}
             />
           </label>
@@ -1259,13 +1271,14 @@
             <input
               id="create-property-price-rent"
               name="price_rent_display"
+              maxlength={RENT_PRICE_MAX_LENGTH}
               class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               bind:value={priceRent}
               inputmode="numeric"
               placeholder="R$ 2.500,00"
               on:input={(event) => {
                 const target = event.target as HTMLInputElement;
-                priceRent = formatCurrencyInput(target.value);
+                priceRent = formatPropertyPriceInput(target.value, RENT_PROPERTY_PRICE_MAX);
               }}
             />
           </label>

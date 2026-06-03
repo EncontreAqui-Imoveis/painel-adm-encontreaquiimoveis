@@ -217,13 +217,17 @@ type ResolvedPrices = {
 export function resolveCreatePropertyPrices(
   purpose: string,
   priceSale: string,
-  priceRent: string
+  priceRent: string,
+  options: {
+    saleMaxValue?: number;
+    rentMaxValue?: number;
+  } = {}
 ): ResolvedPrices {
   const normalizedPurpose = purpose.toLowerCase();
   const supportsSale = normalizedPurpose.includes('vend');
   const supportsRent = normalizedPurpose.includes('alug');
-  const saleValue = parseCurrency(priceSale);
-  const rentValue = parseCurrency(priceRent);
+  const saleValue = parseCurrency(priceSale, options.saleMaxValue);
+  const rentValue = parseCurrency(priceRent, options.rentMaxValue);
 
   if (supportsSale && (!saleValue || saleValue <= 0)) {
     return { error: 'Informe o preço de venda.' };
