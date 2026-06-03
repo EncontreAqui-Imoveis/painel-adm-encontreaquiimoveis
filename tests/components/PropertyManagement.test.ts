@@ -3,14 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   apiGetMock,
+  apiPostMock,
   apiPutMock,
   apiPatchMock,
+  apiDeleteMock,
   toastErrorMock,
   toastSuccessMock,
 } = vi.hoisted(() => ({
   apiGetMock: vi.fn(),
+  apiPostMock: vi.fn(),
   apiPutMock: vi.fn(),
   apiPatchMock: vi.fn(),
+  apiDeleteMock: vi.fn(),
   toastErrorMock: vi.fn(),
   toastSuccessMock: vi.fn(),
 }));
@@ -20,8 +24,10 @@ vi.mock('$lib/apiClient', () => ({
     get: apiGetMock,
     put: apiPutMock,
     patch: apiPatchMock,
+    delete: apiDeleteMock,
   },
   apiClient: {
+    post: apiPostMock,
     put: apiPutMock,
     patch: apiPatchMock,
   },
@@ -359,7 +365,33 @@ function mockPropertyManagementRequests({
     return {};
   });
 
+  apiPostMock.mockImplementation(async (endpoint: string, formData: FormData) => {
+    if (endpoint.match(/\/admin\/properties\/(\d+)\/images$/)) {
+      const property = resolvePropertyById(endpoint);
+      const uploadedImages = Array.from(formData.getAll('images'))
+        .filter((value): value is File => value instanceof File)
+        .map((file, index) => ({
+          id: property.images?.length ? property.images.length + index + 1 : index + 1,
+          url: `https://example.com/uploaded-${file.name}`,
+        }));
+      property.images = [...(property.images ?? []), ...uploadedImages];
+      return { data: { images: uploadedImages } };
+    }
+
+    throw new Error(`Endpoint não esperado no teste: ${endpoint}`);
+  });
+
   apiPatchMock.mockResolvedValue({});
+  apiDeleteMock.mockImplementation(async (endpoint: string) => {
+    const match = endpoint.match(/\/admin\/properties\/(\d+)\/images\/(\d+)$/);
+    if (match) {
+      const property = resolvePropertyById(`/admin/properties/${match[1]}`);
+      const imageId = Number(match[2]);
+      property.images = (property.images ?? []).filter((image) => Number(image.id) !== imageId);
+      return {};
+    }
+    throw new Error(`Endpoint não esperado no teste: ${endpoint}`);
+  });
 }
 
 function getPropertiesListCallCount(): number {
@@ -1709,5 +1741,66 @@ describe('PropertyManagement', () => {
       );
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
+  });
+
+  it('atualiza a galeria do modal imediatamente ao adicionar e remover imagem em edição', async () => {
+    mockPropertyManagementRequests({
+      initialProperty: {
+        ...basePropertyState,
+        images: [{ id: 1, url: 'https://example.com/original.jpg' }],
+      },
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+
+    const imageInput = dialog.querySelector('input[name="images"]');
+    expect(imageInput).toBeTruthy();
+
+    const uploadedFile = new File(['fake-image'], 'nova.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(imageInput, 'files', {
+      value: [uploadedFile],
+      configurable: true,
+    });
+    await fireEvent.change(imageInput as HTMLInputElement, {
+      target: { files: [uploadedFile] },
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByText('1 imagem(ns) selecionada(s)')).toBeInTheDocument();
+    });
+
+    const imageUploadSection = dialog
+      .querySelector('label[for="upload-images-input"]')
+      ?.closest('div.space-y-2');
+    expect(imageUploadSection).toBeTruthy();
+    const uploadSaveButton = within(imageUploadSection as HTMLElement).getByRole('button', {
+      name: 'Salvar',
+    });
+    await fireEvent.click(uploadSaveButton);
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(dialog.querySelectorAll('[data-gallery-image-id]').length).toBe(2);
+    });
+    expect(within(dialog).getAllByRole('button', { name: 'Remover' })).toHaveLength(2);
+
+    const removeButtons = within(dialog).getAllByRole('button', { name: 'Remover' });
+    await fireEvent.click(removeButtons[1]);
+
+    await waitFor(() => {
+      expect(apiDeleteMock).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(dialog.querySelectorAll('[data-gallery-image-id]').length).toBe(1);
+    });
+    expect(within(dialog).getAllByRole('button', { name: 'Remover' })).toHaveLength(1);
   });
 });

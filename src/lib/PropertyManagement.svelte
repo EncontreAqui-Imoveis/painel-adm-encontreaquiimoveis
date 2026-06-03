@@ -259,6 +259,9 @@ function parseNullableNumber(value: unknown): number | null {
   let previewImageUrl: string | null = null;
   let previewImageIndex = 0;
   let previewImagesSnapshot: NormalizedImage[] = [];
+  let selectedPropertyGalleryImages: NormalizedImage[] = [];
+  let visibleSelectedPropertyGalleryImages: NormalizedImage[] = [];
+  let selectedPropertyBrokenGalleryCount = 0;
   let brokenPreviewImages = new Set<string>();
   let galleryScrollEl: HTMLDivElement | null = null;
   let brokenListThumbnails = new Set<number>();
@@ -301,14 +304,20 @@ function parseNullableNumber(value: unknown): number | null {
     { value: 'alqueire', label: 'Alqueire' },
   ];
 
-  $: previewImages = previewImagesSnapshot.length
-    ? previewImagesSnapshot
-    : selectedPropertyImages();
-  $: previewTotal = previewImages.length;
-  $: if (isImagePreviewOpen && previewTotal > 0 && previewImageIndex >= previewTotal) {
-    previewImageIndex = previewTotal - 1;
-    previewImageUrl = previewImages[previewImageIndex]?.url ?? null;
-  }
+    $: previewImages = previewImagesSnapshot.length
+      ? previewImagesSnapshot
+      : selectedPropertyImages();
+    $: previewTotal = previewImages.length;
+    $: visibleSelectedPropertyGalleryImages = selectedPropertyGalleryImages.filter(
+      (image) => !brokenPreviewImages.has(image.url),
+    );
+    $: selectedPropertyBrokenGalleryCount = selectedPropertyGalleryImages.filter((image) =>
+      brokenPreviewImages.has(image.url),
+    ).length;
+    $: if (isImagePreviewOpen && previewTotal > 0 && previewImageIndex >= previewTotal) {
+      previewImageIndex = previewTotal - 1;
+      previewImageUrl = previewImages[previewImageIndex]?.url ?? null;
+    }
   $: if (previewTotal > 0) {
     previewImages.forEach((image) => {
       if (!image?.url) return;
@@ -375,6 +384,7 @@ function parseNullableNumber(value: unknown): number | null {
 
   function markImageAsBroken(url?: string | null) {
     if (!url) return;
+    if (/^(blob:|data:|file:)/i.test(url)) return;
     if (brokenPreviewImages.has(url)) return;
     brokenPreviewImages = new Set(brokenPreviewImages);
     brokenPreviewImages.add(url);
@@ -820,6 +830,7 @@ function parseNullableNumber(value: unknown): number | null {
     if (typeof rawUrl !== 'string' || rawUrl.trim().length === 0) return null;
     const cleaned = rawUrl.trim();
     if (/^https?:\/\//i.test(cleaned)) return cleaned;
+    if (/^(blob:|data:|file:)/i.test(cleaned)) return cleaned;
     if (/^\/\/res\.cloudinary\.com\//i.test(cleaned)) return `https:${cleaned}`;
     if (/^res\.cloudinary\.com\//i.test(cleaned)) return `https://${cleaned}`;
     if (/^\/\//.test(cleaned)) return `https:${cleaned}`;
@@ -1119,12 +1130,15 @@ function parseNullableNumber(value: unknown): number | null {
   }
 
   function selectedPropertyImages() {
-    return normalizeImages(selectedProperty?.images ?? null);
+    return selectedPropertyGalleryImages;
   }
 
   function syncSelectedPropertyMedia(
     patch: Partial<Pick<PropertyDetails, 'images' | 'video_url'>>,
-    options: { focusImageUrl?: string | null } = {},
+    options: {
+      focusImageUrl?: string | null;
+      galleryImages?: NormalizedImage[] | null;
+    } = {},
   ) {
     if (!selectedProperty) return;
     selectedProperty = { ...selectedProperty, ...patch };
@@ -1137,11 +1151,16 @@ function parseNullableNumber(value: unknown): number | null {
 
     if ('images' in patch) {
       const nextImages = normalizeImages(patch.images ?? null);
+      const nextGalleryImages =
+        options.galleryImages === undefined
+          ? nextImages
+          : normalizeImages(options.galleryImages ?? null);
+      selectedPropertyGalleryImages = nextGalleryImages;
       const nextPreviewState = reconcilePropertyPreviewMediaState({
         currentSnapshot: previewImagesSnapshot,
         currentIndex: previewImageIndex,
         currentUrl: previewImageUrl,
-        nextImages,
+        nextImages: nextGalleryImages,
         isPreviewOpen: isImagePreviewOpen,
         focusImageUrl: options.focusImageUrl ?? null,
       });
@@ -1157,18 +1176,23 @@ function parseNullableNumber(value: unknown): number | null {
     void tick().then(() => {
       const target = scrollContainer.querySelector<HTMLElement>(`[data-gallery-image-id="${imageId}"]`);
       if (!target) return;
-      const containerRect = scrollContainer.getBoundingClientRect();
-      const targetRect = target.getBoundingClientRect();
-      const nextLeft =
-        scrollContainer.scrollLeft +
-        (targetRect.left - containerRect.left) -
-        (containerRect.width - targetRect.width) / 2;
-      scrollContainer.scrollTo({
-        left: Math.max(0, nextLeft),
-        behavior: 'smooth',
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const nextLeft =
+          scrollContainer.scrollLeft +
+          (targetRect.left - containerRect.left) -
+          (containerRect.width - targetRect.width) / 2;
+        const resolvedLeft = Math.max(0, nextLeft);
+        if (typeof scrollContainer.scrollTo === 'function') {
+          scrollContainer.scrollTo({
+            left: resolvedLeft,
+            behavior: 'auto',
+          });
+        } else {
+          scrollContainer.scrollLeft = resolvedLeft;
+        }
       });
-    });
-  }
+    }
 
   function patchSelectedPropertyDetails(patch: Partial<PropertyDetails>) {
     if (!selectedProperty) return;
@@ -1181,6 +1205,9 @@ function parseNullableNumber(value: unknown): number | null {
     properties = properties.map((item) =>
       item.id === nextSelected.id ? { ...item, ...patch } : item,
     );
+    if ('images' in patch) {
+      selectedPropertyGalleryImages = normalizeImages(patch.images ?? null);
+    }
   }
 
   function shouldRefreshPropertyListAfterEdit(
@@ -1361,14 +1388,6 @@ function parseNullableNumber(value: unknown): number | null {
     const raw = String(value ?? '').trim();
     if (!raw || raw === '0') return 'S/N';
     return raw;
-  }
-
-  function visibleSelectedPropertyImages() {
-    return selectedPropertyImages().filter((image) => !brokenPreviewImages.has(image.url));
-  }
-
-  function brokenSelectedPropertyImagesCount() {
-    return selectedPropertyImages().filter((image) => brokenPreviewImages.has(image.url)).length;
   }
 
   function findImageIndexByUrl(url: string) {
@@ -1554,6 +1573,7 @@ function parseNullableNumber(value: unknown): number | null {
         syncEditPriceDisplays(editableProperty);
         syncEditExtraDisplays(editableProperty);
       }
+      selectedPropertyGalleryImages = normalizeImages(merged.images ?? null);
       isModalOpen = true;
     } catch (err) {
       console.error('Falha ao buscar detalhes do imóvel:', err);
@@ -1583,6 +1603,7 @@ function parseNullableNumber(value: unknown): number | null {
     editBathroomsAsZero = false;
     editGarageSpotsAsZero = false;
     brokenPreviewImages = new Set();
+    selectedPropertyGalleryImages = [];
     isEditMode = false;
     editError = null;
     rejectDialogOpen = false;
@@ -2084,9 +2105,12 @@ function parseNullableNumber(value: unknown): number | null {
     }
   }
 
-  function clearStagedImages() {
-    stagedImagePreviews.forEach((url) => URL.revokeObjectURL(url));
-    stagedImagePreviews = [];
+  function clearStagedImages(options: { revokePreviews?: boolean } = {}) {
+    const revokePreviews = options.revokePreviews ?? true;
+    if (revokePreviews) {
+      stagedImagePreviews.forEach((url) => URL.revokeObjectURL(url));
+      stagedImagePreviews = [];
+    }
     stagedImages = [];
     if (imageInputEl) {
       imageInputEl.value = '';
@@ -2161,10 +2185,27 @@ function parseNullableNumber(value: unknown): number | null {
   async function uploadStagedImages() {
     if (!selectedProperty || stagedImages.length === 0) return;
     const stagedImagesSnapshot = [...stagedImages];
+    const previousDataImages = normalizeImages(selectedProperty?.images ?? null);
+    const previousGalleryImages = selectedPropertyImages();
+    const optimisticImages = stagedImagePreviews.map((url, index) => ({
+      id: -((Date.now() + index) || index + 1),
+      url,
+    }));
     imageUploading = true;
     imageUploadError = null;
 
     try {
+        if (optimisticImages.length > 0) {
+          syncSelectedPropertyMedia(
+            { images: previousDataImages },
+            {
+              focusImageUrl: optimisticImages[optimisticImages.length - 1]?.url ?? null,
+              galleryImages: [...previousGalleryImages, ...optimisticImages],
+            },
+          );
+          revealGalleryImage(optimisticImages[optimisticImages.length - 1]?.id);
+        }
+
       const form = new FormData();
       stagedImages.forEach((file) => form.append('images', file));
 
@@ -2176,20 +2217,36 @@ function parseNullableNumber(value: unknown): number | null {
 
       toast.success('Imagens enviadas com sucesso.');
       const uploadedImages = normalizeImages(response.data?.images ?? null);
-      if (uploadedImages.length > 0) {
-        syncSelectedPropertyMedia(
-          { images: [...selectedPropertyImages(), ...uploadedImages] },
-          {
-            focusImageUrl: uploadedImages[uploadedImages.length - 1]?.url ?? null,
-          },
-        );
-        revealGalleryImage(uploadedImages[uploadedImages.length - 1]?.id);
-      } else {
+        if (uploadedImages.length > 0) {
+          const confirmedGalleryImages = [...previousGalleryImages];
+          optimisticImages.forEach((optimisticImage, index) => {
+          const confirmedImage = uploadedImages[index];
+          confirmedGalleryImages.push({
+            id: confirmedImage?.id ?? optimisticImage.id,
+            url: optimisticImage.url,
+          });
+          });
+          syncSelectedPropertyMedia(
+            { images: [...previousDataImages, ...uploadedImages] },
+            {
+              focusImageUrl: uploadedImages[uploadedImages.length - 1]?.url ?? null,
+              galleryImages: confirmedGalleryImages,
+            },
+          );
+          revealGalleryImage(uploadedImages[uploadedImages.length - 1]?.id);
+        } else {
         await reviewProperty(selectedProperty as PropertySummary);
       }
-      clearStagedImages();
-    } catch (err: any) {
+        clearStagedImages({ revokePreviews: false });
+      } catch (err: any) {
       console.error('Erro ao enviar imagens:', err);
+      syncSelectedPropertyMedia(
+        { images: previousDataImages },
+        {
+          focusImageUrl: previousDataImages[0]?.url ?? null,
+          galleryImages: previousGalleryImages,
+        },
+      );
       const status = err?.response?.status;
       if (status === 401) {
         toast.error('Sua sessão expirou. Por favor, faca login novamente.');
@@ -2217,26 +2274,47 @@ function parseNullableNumber(value: unknown): number | null {
       return;
     }
     imageDeleteError = null;
-    const previousImages = selectedPropertyImages();
-    const nextImages = previousImages.filter((image) => image.id !== imageId);
+    const previousDataImages = normalizeImages(selectedProperty?.images ?? null);
+      const previousGalleryImages = selectedPropertyImages();
+      const nextDataImages = previousDataImages.filter((image) => image.id !== imageId);
+      const nextGalleryImages = previousGalleryImages.filter((image) => image.id !== imageId);
     try {
-      syncSelectedPropertyMedia({ images: nextImages });
-      const nextVisibleImage = nextImages[Math.min(previousImages.findIndex((image) => image.id === imageId), Math.max(nextImages.length - 1, 0))];
-      revealGalleryImage(nextVisibleImage?.id);
-      if (isImagePreviewOpen) {
-        previewImagesSnapshot = nextImages;
-        previewImageIndex = Math.min(previewImageIndex, Math.max(nextImages.length - 1, 0));
-        previewImageUrl = nextImages[previewImageIndex]?.url ?? null;
-      }
-      await api.delete(`/admin/properties/${selectedProperty.id}/images/${imageId}`);
-      toast.success('Imagem removida com sucesso.');
-    } catch (err: any) {
-      syncSelectedPropertyMedia({ images: previousImages }, { focusImageUrl: previousImages[0]?.url ?? null });
+      syncSelectedPropertyMedia(
+        { images: nextDataImages },
+        { galleryImages: nextGalleryImages },
+      );
+      const nextVisibleImage =
+        nextGalleryImages[
+          Math.min(
+            previousGalleryImages.findIndex((image) => image.id === imageId),
+            Math.max(nextGalleryImages.length - 1, 0),
+          )
+        ];
+        revealGalleryImage(nextVisibleImage?.id);
+        if (isImagePreviewOpen) {
+          previewImagesSnapshot = nextGalleryImages;
+          previewImageIndex = Math.min(previewImageIndex, Math.max(nextGalleryImages.length - 1, 0));
+          previewImageUrl = nextGalleryImages[previewImageIndex]?.url ?? null;
+        }
+        await api.delete(`/admin/properties/${selectedProperty.id}/images/${imageId}`);
+        const removedImage = previousGalleryImages.find((image) => image.id === imageId);
+        if (removedImage?.url && /^blob:/i.test(removedImage.url)) {
+          URL.revokeObjectURL(removedImage.url);
+        }
+        toast.success('Imagem removida com sucesso.');
+      } catch (err: any) {
+      syncSelectedPropertyMedia(
+        { images: previousDataImages },
+        {
+          focusImageUrl: previousDataImages[0]?.url ?? null,
+          galleryImages: previousGalleryImages,
+        },
+      );
       revealGalleryImage(imageId);
       if (isImagePreviewOpen) {
-        previewImagesSnapshot = previousImages;
-        previewImageIndex = Math.min(previewImageIndex, Math.max(previousImages.length - 1, 0));
-        previewImageUrl = previousImages[previewImageIndex]?.url ?? null;
+        previewImagesSnapshot = previousGalleryImages;
+        previewImageIndex = Math.min(previewImageIndex, Math.max(previousGalleryImages.length - 1, 0));
+        previewImageUrl = previousGalleryImages[previewImageIndex]?.url ?? null;
       }
       console.error('Erro ao remover imagem:', err);
       const status = err?.response?.status;
@@ -3473,7 +3551,7 @@ function parseNullableNumber(value: unknown): number | null {
               bind:this={galleryScrollEl}
               class="show-scrollbar mt-2 flex max-w-full min-w-0 gap-3 overflow-x-auto overscroll-x-contain rounded-md bg-gray-50 p-3 touch-pan-x [-webkit-overflow-scrolling:touch] dark:bg-gray-800/60"
             >
-                {#each visibleSelectedPropertyImages() as image (image.id)}
+                {#each visibleSelectedPropertyGalleryImages as image (image.id)}
                 <div class="relative flex shrink-0 flex-col items-center gap-2" data-gallery-image-id={image.id}>
                   <button
                     type="button"
@@ -3497,9 +3575,9 @@ function parseNullableNumber(value: unknown): number | null {
                 </div>
               {/each}
             </div>
-            {#if brokenSelectedPropertyImagesCount() > 0}
+            {#if selectedPropertyBrokenGalleryCount > 0}
               <p class="mt-2 text-xs text-amber-600 dark:text-amber-300">
-                {brokenSelectedPropertyImagesCount()} imagem(ns) corrompida(s) foram ocultada(s).
+                  {selectedPropertyBrokenGalleryCount} imagem(ns) corrompida(s) foram ocultada(s).
               </p>
             {/if}
           {:else}
@@ -3569,7 +3647,7 @@ function parseNullableNumber(value: unknown): number | null {
                 {/if}
                 Salvar
               </Button>
-              <Button variant="outline" on:click={clearStagedImages} disabled={imageUploading}>
+                <Button variant="outline" on:click={() => clearStagedImages()} disabled={imageUploading}>
                 Sair
               </Button>
             </div>
