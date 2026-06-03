@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { toast } from 'svelte-sonner';
   import { Loader2 } from 'lucide-svelte';
   import * as Dialog from '$lib/components/ui/dialog';
@@ -20,6 +20,7 @@
   import PromotionNotificationModal from '$lib/components/PromotionNotificationModal.svelte';
   import { fetchPlatformResponse, resolveApiAssetUrl } from './adminFetchService';
   import { clearSessionToken, hasSessionToken } from './sessionState';
+  import { reconcilePropertyPreviewMediaState } from '$lib/propertyMediaState';
   import type { PropertyStatus, PropertyImage as PropertyImageType } from './types';
   import {
     PROPERTY_AMENITY_OPTIONS,
@@ -259,6 +260,7 @@ function parseNullableNumber(value: unknown): number | null {
   let previewImageIndex = 0;
   let previewImagesSnapshot: NormalizedImage[] = [];
   let brokenPreviewImages = new Set<string>();
+  let galleryScrollEl: HTMLDivElement | null = null;
   let brokenListThumbnails = new Set<number>();
   let isPromotionNotificationModalOpen = false;
   let promotionNotificationMessage = '';
@@ -1120,28 +1122,36 @@ function parseNullableNumber(value: unknown): number | null {
     return normalizeImages(selectedProperty?.images ?? null);
   }
 
-  function patchSelectedPropertyMedia(
+  function syncSelectedPropertyMedia(
     patch: Partial<Pick<PropertyDetails, 'images' | 'video_url'>>,
+    options: { revealGalleryEnd?: boolean; focusImageUrl?: string | null } = {},
   ) {
     if (!selectedProperty) return;
     selectedProperty = { ...selectedProperty, ...patch };
     properties = properties.map((item) =>
       item.id === selectedProperty?.id ? { ...item, ...patch } : item,
     );
+    if (editableProperty && 'images' in patch) {
+      editableProperty = { ...editableProperty, images: patch.images ?? null };
+    }
 
     if ('images' in patch) {
       const nextImages = normalizeImages(patch.images ?? null);
-      if (isImagePreviewOpen) {
-        previewImagesSnapshot = nextImages;
-        if (nextImages.length === 0) {
-          previewImageIndex = 0;
-          previewImageUrl = null;
-        } else {
-          previewImageIndex = Math.min(previewImageIndex, nextImages.length - 1);
-          previewImageUrl = nextImages[previewImageIndex]?.url ?? null;
-        }
-      } else {
-        previewImagesSnapshot = [];
+      const nextPreviewState = reconcilePropertyPreviewMediaState({
+        currentSnapshot: previewImagesSnapshot,
+        currentIndex: previewImageIndex,
+        currentUrl: previewImageUrl,
+        nextImages,
+        isPreviewOpen: isImagePreviewOpen,
+        focusImageUrl: options.focusImageUrl ?? null,
+      });
+      previewImagesSnapshot = nextPreviewState.snapshot;
+      previewImageIndex = nextPreviewState.index;
+      previewImageUrl = nextPreviewState.url;
+      if (options.revealGalleryEnd) {
+        void tick().then(() => {
+          galleryScrollEl?.scrollTo({ left: galleryScrollEl.scrollWidth, behavior: 'smooth' });
+        });
       }
     }
   }
@@ -2153,7 +2163,13 @@ function parseNullableNumber(value: unknown): number | null {
       toast.success('Imagens enviadas com sucesso.');
       const uploadedImages = normalizeImages(response.data?.images ?? null);
       if (uploadedImages.length > 0) {
-        patchSelectedPropertyMedia({ images: [...selectedPropertyImages(), ...uploadedImages] });
+        syncSelectedPropertyMedia(
+          { images: [...selectedPropertyImages(), ...uploadedImages] },
+          {
+            revealGalleryEnd: true,
+            focusImageUrl: uploadedImages[uploadedImages.length - 1]?.url ?? null,
+          },
+        );
       } else {
         await reviewProperty(selectedProperty as PropertySummary);
       }
@@ -2190,10 +2206,7 @@ function parseNullableNumber(value: unknown): number | null {
     const previousImages = selectedPropertyImages();
     const nextImages = previousImages.filter((image) => image.id !== imageId);
     try {
-      patchSelectedPropertyMedia({ images: nextImages });
-      if (editableProperty) {
-        editableProperty = { ...editableProperty, images: nextImages };
-      }
+      syncSelectedPropertyMedia({ images: nextImages });
       if (isImagePreviewOpen) {
         previewImagesSnapshot = nextImages;
         previewImageIndex = Math.min(previewImageIndex, Math.max(nextImages.length - 1, 0));
@@ -2202,7 +2215,7 @@ function parseNullableNumber(value: unknown): number | null {
       await api.delete(`/admin/properties/${selectedProperty.id}/images/${imageId}`);
       toast.success('Imagem removida com sucesso.');
     } catch (err: any) {
-      patchSelectedPropertyMedia({ images: previousImages });
+      syncSelectedPropertyMedia({ images: previousImages }, { focusImageUrl: previousImages[0]?.url ?? null });
       if (isImagePreviewOpen) {
         previewImagesSnapshot = previousImages;
         previewImageIndex = Math.min(previewImageIndex, Math.max(previousImages.length - 1, 0));
@@ -2249,7 +2262,7 @@ function parseNullableNumber(value: unknown): number | null {
     videoDeleteError = null;
     const previousVideoUrl = selectedProperty.video_url ?? null;
     try {
-      patchSelectedPropertyMedia({ video_url: null });
+      syncSelectedPropertyMedia({ video_url: null });
       await api.delete(`/admin/properties/${selectedProperty.id}/video`);
       toast.success('Vídeo removido com sucesso.');
       clearStagedVideo();
@@ -2257,7 +2270,7 @@ function parseNullableNumber(value: unknown): number | null {
         videoInputEl.value = '';
       }
     } catch (err: any) {
-      patchSelectedPropertyMedia({ video_url: previousVideoUrl });
+      syncSelectedPropertyMedia({ video_url: previousVideoUrl });
       console.error('Erro ao remover vídeo:', err);
       const status = err?.response?.status;
       if (status === 401) {
@@ -2323,7 +2336,7 @@ function parseNullableNumber(value: unknown): number | null {
     const optimisticVideoUrl = stagedVideoPreview;
     const previousVideoUrl = selectedProperty.video_url ?? null;
     try {
-      patchSelectedPropertyMedia({ video_url: optimisticVideoUrl });
+      syncSelectedPropertyMedia({ video_url: optimisticVideoUrl });
       const form = new FormData();
       form.append('video', stagedVideo);
       const response = await apiClient.post<{ video?: string | null }>(
@@ -2336,12 +2349,12 @@ function parseNullableNumber(value: unknown): number | null {
           ? responseData.video.trim()
           : null;
       if (persistedVideoUrl) {
-        patchSelectedPropertyMedia({ video_url: persistedVideoUrl });
+        syncSelectedPropertyMedia({ video_url: persistedVideoUrl });
       }
       toast.success('Vídeo enviado com sucesso.');
       clearStagedVideo();
     } catch (err: any) {
-      patchSelectedPropertyMedia({ video_url: previousVideoUrl });
+      syncSelectedPropertyMedia({ video_url: previousVideoUrl });
       console.error('Erro ao enviar video:', err);
       videoDeleteError =
         extractApiErrorMessage(err, '') ||
@@ -3436,10 +3449,11 @@ function parseNullableNumber(value: unknown): number | null {
               </div>
           </div>
 
-        <div>
+          <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Galeria</h3>
           {#if selectedPropertyImages().length > 0}
             <div
+              bind:this={galleryScrollEl}
               class="show-scrollbar mt-2 flex max-w-full min-w-0 gap-3 overflow-x-auto overscroll-x-contain rounded-md bg-gray-50 p-3 touch-pan-x [-webkit-overflow-scrolling:touch] dark:bg-gray-800/60"
             >
                 {#each visibleSelectedPropertyImages() as image (image.id)}
