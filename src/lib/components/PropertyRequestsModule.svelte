@@ -15,7 +15,6 @@
   let creationCount = 0;
   let editCount = 0;
   let refreshInFlight = false;
-  let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
   function formatBadgeCount(value: number): string {
     const normalized = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
@@ -55,16 +54,6 @@
 
   onMount(() => {
     refreshTabCounts();
-    refreshInterval = setInterval(() => {
-      void refreshTabCounts();
-    }, 60_000);
-
-    return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-        refreshInterval = null;
-      }
-    };
   });
 </script>
 

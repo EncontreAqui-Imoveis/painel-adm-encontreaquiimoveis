@@ -1,5 +1,10 @@
 import { baseURL, handleUnauthorizedResponse } from './api';
 import { clearSessionToken, readSessionToken } from './sessionState';
+import {
+  getRateLimitKey,
+  isRateLimited,
+  registerRateLimitBackoff,
+} from './rateLimit';
 
 type AdminFetchOptions = RequestInit & {
   skipAuth?: boolean;
@@ -19,6 +24,16 @@ export async function fetchPlatformResponse(
   options: AdminFetchOptions = {}
 ): Promise<Response | null> {
   const { skipAuth = false, headers, ...init } = options;
+  const rateLimitKey = getRateLimitKey(
+    String(init.method ?? 'GET'),
+    endpoint,
+  );
+  if (isRateLimited(rateLimitKey)) {
+    return new Response(null, {
+      status: 429,
+      statusText: 'Too Many Requests',
+    });
+  }
   const resolvedHeaders = new Headers(headers ?? undefined);
 
   if (!skipAuth) {
@@ -34,6 +49,13 @@ export async function fetchPlatformResponse(
     ...init,
     headers: resolvedHeaders,
   });
+
+  if (response.status === 429) {
+    registerRateLimitBackoff(
+      rateLimitKey,
+      response.headers.get('retry-after'),
+    );
+  }
 
   if (!skipAuth && handleUnauthorizedResponse(response.status)) {
     return null;

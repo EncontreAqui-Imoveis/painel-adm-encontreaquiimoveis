@@ -1138,7 +1138,7 @@ describe('PropertyManagement', () => {
     expect(within(getAmenitySection(reopenedDialog, false)).getByText('Wi-Fi')).toBeInTheDocument();
   });
 
-  it('fecha modal somente após PUT 2xx e atualiza a lista pelo refetch', async () => {
+  it('fecha modal somente após PUT 2xx e reapresenta edição simples sem refetch global', async () => {
     const releasePut = createDeferred<void>();
     let property = clone(basePropertyState);
 
@@ -1197,7 +1197,7 @@ describe('PropertyManagement', () => {
     releasePut.resolve();
 
     await waitFor(() => {
-      expect(getPropertiesListCallCount()).toBeGreaterThan(listCallsBeforeSave);
+      expect(getPropertiesListCallCount()).toBe(listCallsBeforeSave);
       expect(toastSuccessMock).toHaveBeenCalledWith('Imóvel atualizado com sucesso.');
     });
 

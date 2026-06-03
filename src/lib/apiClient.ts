@@ -5,6 +5,11 @@ import { baseURL, handleUnauthorizedResponse } from './api';
 import { extractApiErrorMessage } from '$lib/components/create-property-helpers';
 import { reportObservedError } from './observability';
 import { authToken } from './store';
+import {
+  getRateLimitKey,
+  isRateLimited,
+  registerRateLimitBackoff,
+} from './rateLimit';
 
 const SENSITIVE_KEYS = ['authorization', 'token', 'password', 'senha', 'cookie', 'email', 'phone', 'telefone', 'cep'];
 const BEARER_REGEX = /Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi;
@@ -13,6 +18,7 @@ const EMAIL_REGEX = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
 type RequestIdAwareError = Record<string, unknown> & {
   requestId?: string;
+  skipErrorToast?: boolean;
   response?: {
     status?: number;
     data?: Record<string, unknown>;
@@ -145,6 +151,20 @@ apiClient.interceptors.request.use((config) => {
   const extended = config as ExtendedAxiosConfig;
   const shouldSkipAuth = extended.skipAuth ?? false;
   const resolvedToken = shouldSkipAuth ? null : extended.token ?? get(authToken);
+  const rateLimitKey = getRateLimitKey(
+    String(config.method ?? 'GET'),
+    String(config.url ?? ''),
+  );
+
+  if ((config.method ?? 'GET').toUpperCase() === 'GET' && isRateLimited(rateLimitKey)) {
+    const rateLimitError = Object.assign(
+      new Error('Aguarde antes de repetir esta solicitação.'),
+      {
+        skipErrorToast: true,
+      },
+    ) as unknown as RequestIdAwareError;
+    return Promise.reject(rateLimitError);
+  }
 
   const headers = config.headers ?? new AxiosHeaders();
   config.headers = headers;
@@ -182,6 +202,30 @@ apiClient.interceptors.response.use(
       (error as RequestIdAwareError).requestId = requestId;
     }
 
+    const responseStatus = (error as RequestIdAwareError).response?.status;
+    if (responseStatus === 429) {
+      const rateLimitKey = getRateLimitKey(
+        String((error as RequestIdAwareError).config?.method ?? 'GET'),
+        String((error as RequestIdAwareError).config?.url ?? ''),
+      );
+      const headers = (error as RequestIdAwareError).response?.headers;
+      let retryAfter: string | number | null = null;
+      if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
+        const headerMap = headers as Record<string, unknown>;
+        const headerValue =
+          headerMap['retry-after'] ??
+          headerMap['Retry-After'] ??
+          headerMap['Retry-after'];
+        if (typeof headerValue === 'string' || typeof headerValue === 'number') {
+          retryAfter = headerValue;
+        }
+      }
+      registerRateLimitBackoff(
+        rateLimitKey,
+        retryAfter,
+      );
+    }
+
     sanitizeErrorForLogging(error);
     const safeResponseData = redactValue(error.response?.data) as Record<string, unknown> | undefined;
 
@@ -211,7 +255,7 @@ apiClient.interceptors.response.use(
     );
 
     const cfg = error.config as ExtendedAxiosConfig | undefined;
-    if (!cfg?.skipErrorToast) {
+    if (!cfg?.skipErrorToast && !(error as RequestIdAwareError).skipErrorToast) {
       toast.error(fallbackMessage);
     }
     return Promise.reject(error);

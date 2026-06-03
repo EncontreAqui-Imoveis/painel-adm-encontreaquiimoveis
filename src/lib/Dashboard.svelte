@@ -74,6 +74,7 @@
     };
     let pendingCountsInterval: ReturnType<typeof setInterval> | null = null;
     let pendingCountsRequestInFlight = false;
+    let isPageVisible = true;
     let announcementsCountRequestInFlight = false;
 
     interface Stats {
@@ -614,6 +615,23 @@
         }
     }
 
+    function shouldPatchDashboardListLocally(): boolean {
+        return activeView === "properties" || activeView === "brokers" || activeView === "clients";
+    }
+
+    function patchDashboardListItem(id: number, data: Partial<DataItem>) {
+        allData = allData.map((item) => (item.id === id ? ({ ...item, ...data } as DataItem) : item));
+    }
+
+    function removeDashboardListItem(id: number) {
+        allData = allData.filter((item) => item.id !== id);
+        totalItems = Math.max(0, totalItems - 1);
+        totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+        if (currentPage > totalPages) {
+            currentPage = totalPages;
+        }
+    }
+
     /** Total em respostas paginadas do admin (MySQL costuma enviar COUNT como string). */
     function readListTotal(payload: unknown): number {
         if (payload == null) return 0;
@@ -1026,9 +1044,10 @@
 
     function shouldPollPendingCounts(view: View = activeView) {
         return (
-            view === "dashboard" ||
-            view === "verification" ||
-            view === "property_requests"
+            isPageVisible &&
+            (view === "dashboard" ||
+                view === "verification" ||
+                view === "property_requests")
         );
     }
 
@@ -1045,6 +1064,22 @@
         pendingCountsInterval = setInterval(() => {
             void fetchPendingCounts();
         }, 60_000);
+    }
+
+    function handlePendingCountsVisibilityChange() {
+        isPageVisible = !document.hidden;
+        if (!isPageVisible) {
+            if (pendingCountsInterval) {
+                clearInterval(pendingCountsInterval);
+                pendingCountsInterval = null;
+            }
+            return;
+        }
+
+        syncPendingCountsPolling();
+        if (shouldPollPendingCounts(activeView)) {
+            void fetchPendingCounts();
+        }
     }
 
     async function fetchChartData() {
@@ -1196,7 +1231,11 @@
             if (!response) {
                 return;
             }
-            fetchData();
+            if (shouldPatchDashboardListLocally()) {
+                removeDashboardListItem(id);
+            } else {
+                fetchData();
+            }
             if (shouldPollPendingCounts(activeView)) {
                 void fetchPendingCounts();
             }
@@ -1245,7 +1284,15 @@
             }
 
             showSaveMessage("Dados salvos com sucesso!", "success");
-            await fetchData();
+            const shouldRefreshList =
+                activeView === "clients" &&
+                statusFilter !== "" &&
+                Object.prototype.hasOwnProperty.call(data, "status");
+            if (shouldRefreshList || !shouldPatchDashboardListLocally()) {
+                await fetchData();
+            } else {
+                patchDashboardListItem(id, data);
+            }
             if (shouldPollPendingCounts(activeView)) {
                 await fetchPendingCounts();
             }
@@ -1277,6 +1324,14 @@
     }
 
     onMount(async () => {
+        isPageVisible = typeof document === "undefined" ? true : !document.hidden;
+        document.addEventListener(
+            "visibilitychange",
+            handlePendingCountsVisibilityChange,
+        );
+        window.addEventListener("focus", handlePendingCountsVisibilityChange);
+        window.addEventListener("blur", handlePendingCountsVisibilityChange);
+
         lastReadAnnouncementMarker = readLastReadAnnouncementMarkerFromStorage();
         await ensureViewComponents(activeView);
         fetchData();
@@ -1289,6 +1344,12 @@
     });
 
     onDestroy(() => {
+        document.removeEventListener(
+            "visibilitychange",
+            handlePendingCountsVisibilityChange,
+        );
+        window.removeEventListener("focus", handlePendingCountsVisibilityChange);
+        window.removeEventListener("blur", handlePendingCountsVisibilityChange);
         if (pendingCountsInterval) {
             clearInterval(pendingCountsInterval);
         }

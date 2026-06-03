@@ -1916,6 +1916,10 @@
     }
   }
 
+  function syncSelectedContractInList(contract: ContractItem): void {
+    items = items.map((item) => (item.id === contract.id ? { ...item, ...contract } : item));
+  }
+
   function hydratePartyInfoFormsFromSelected() {
     if (!selected) return;
     sellerInfoForm = {
@@ -2100,7 +2104,9 @@
         return;
       }
       await reloadSelectedContract(selected.id);
-      refresh();
+      if (selected) {
+        syncSelectedContractInList(selected);
+      }
     } catch (error) {
       console.error('Erro ao avaliar documentação por lado:', error);
       toast.error('Não foi possível registrar a avaliação.');
@@ -2229,12 +2235,10 @@
           toast.error('Alguns documentos não puderam ser enviados.');
         }
         await reloadSelectedContract(selected.id);
-        await fetchContracts();
       } else {
         await uploadMatrixDocumentFile(files[0], matrixUploadContext);
         toast.success('Documento enviado com sucesso.');
         await reloadSelectedContract(selected.id);
-        await fetchContracts();
       }
     } catch (error) {
       console.error('Erro ao enviar documento na matriz:', error);
@@ -2258,7 +2262,6 @@
       await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
       toast.success('Documento removido com sucesso.');
       await reloadSelectedContract(selected.id);
-      await fetchContracts();
     } catch (error) {
       console.error('Erro ao excluir documento da matriz:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível excluir o documento.'));
@@ -2279,7 +2282,6 @@
       await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
       toast.success('Minuta removida com sucesso.');
       await reloadSelectedContract(selected.id);
-      await fetchContracts();
     } catch (error) {
       console.error('Erro ao excluir minuta:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível excluir a minuta.'));
@@ -2295,7 +2297,6 @@
       await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
       toast.success(successMessage);
       await reloadSelectedContract(selected.id);
-      await fetchContracts();
     } catch (error) {
       console.error('Erro ao excluir documento do contrato:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível excluir o documento.'));
@@ -2343,7 +2344,9 @@
       await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
       toast.success('Documento removido com sucesso.');
       await reloadSelectedContract(selected.id);
-      await fetchContracts();
+      if (selected) {
+        syncSelectedContractInList(selected);
+      }
     } catch (error) {
       console.error('Erro ao excluir documento do contrato:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível excluir o documento.'));
@@ -2371,9 +2374,12 @@
         await api.delete(`/contracts/${selected.id}/documents/${pendingReplacementDocumentId}`);
       }
       toast.success('Documento físico anexado com sucesso.');
-      closeModal(true);
       pendingReplacementDocumentId = null;
-      refresh();
+      await reloadSelectedContract(selected.id);
+      if (selected) {
+        syncSelectedContractInList(selected);
+      }
+      closeModal(true);
     } catch (error) {
       console.error('Erro ao anexar documento físico:', error);
       toast.error('Não foi possível anexar o documento físico.');
@@ -2416,7 +2422,9 @@
       selectedSignedFile = null;
       pendingReplacementDocumentId = null;
       await reloadSelectedContract(selected.id);
-      await fetchContracts();
+      if (selected) {
+        syncSelectedContractInList(selected);
+      }
     } catch (error) {
       console.error('Erro ao anexar documento ao contrato finalizado:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível anexar o documento.'));

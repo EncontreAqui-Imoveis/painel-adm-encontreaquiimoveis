@@ -1146,6 +1146,30 @@ function parseNullableNumber(value: unknown): number | null {
     }
   }
 
+  function patchSelectedPropertyDetails(patch: Partial<PropertyDetails>) {
+    if (!selectedProperty) return;
+    const nextSelected = { ...selectedProperty, ...patch };
+    selectedProperty = nextSelected;
+    editableProperty = sanitizeEditable({
+      ...(editableProperty ?? nextSelected),
+      ...patch,
+    });
+    properties = properties.map((item) =>
+      item.id === nextSelected.id ? { ...item, ...patch } : item,
+    );
+  }
+
+  function shouldRefreshPropertyListAfterEdit(
+    original: PropertyDetails,
+    patch: Record<string, unknown>,
+  ): boolean {
+    const listSensitiveKeys = ['title', 'purpose', 'city', 'state', 'bairro', 'public_code'];
+    return listSensitiveKeys.some((key) => {
+      if (!Object.prototype.hasOwnProperty.call(patch, key)) return false;
+      return patch[key] !== original[key as keyof PropertyDetails];
+    });
+  }
+
   function humanizeStatus(status: PropertyStatus, purpose?: string | null): string {
     if (status === 'approved' && purpose) {
       return purpose;
@@ -1998,7 +2022,15 @@ function parseNullableNumber(value: unknown): number | null {
       } else {
         await apiClient.put(`/admin/properties/${selectedProperty.id}`, payload);
       }
-      await fetchProperties();
+      const shouldRefreshList = shouldRefreshPropertyListAfterEdit(
+        original,
+        payload as Record<string, unknown>,
+      );
+      if (shouldRefreshList) {
+        await fetchProperties();
+      } else {
+        patchSelectedPropertyDetails(payload as Partial<PropertyDetails>);
+      }
       toast.success('Imóvel atualizado com sucesso.');
       isEditMode = false;
       closeModal();
@@ -2112,12 +2144,19 @@ function parseNullableNumber(value: unknown): number | null {
       const form = new FormData();
       stagedImages.forEach((file) => form.append('images', file));
 
-      await apiClient.post(`/admin/properties/${selectedProperty.id}/images`, form, {
+      const response = await apiClient.post<{
+        images?: Array<{ id?: number; url?: string; image_url?: string }>;
+      }>(`/admin/properties/${selectedProperty.id}/images`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       toast.success('Imagens enviadas com sucesso.');
-      await reviewProperty(selectedProperty as PropertySummary);
+      const uploadedImages = normalizeImages(response.data?.images ?? null);
+      if (uploadedImages.length > 0) {
+        patchSelectedPropertyMedia({ images: [...selectedPropertyImages(), ...uploadedImages] });
+      } else {
+        await reviewProperty(selectedProperty as PropertySummary);
+      }
       clearStagedImages();
     } catch (err: any) {
       console.error('Erro ao enviar imagens:', err);
