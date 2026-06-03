@@ -1124,7 +1124,7 @@ function parseNullableNumber(value: unknown): number | null {
 
   function syncSelectedPropertyMedia(
     patch: Partial<Pick<PropertyDetails, 'images' | 'video_url'>>,
-    options: { revealGalleryEnd?: boolean; focusImageUrl?: string | null } = {},
+    options: { focusImageUrl?: string | null } = {},
   ) {
     if (!selectedProperty) return;
     selectedProperty = { ...selectedProperty, ...patch };
@@ -1148,12 +1148,26 @@ function parseNullableNumber(value: unknown): number | null {
       previewImagesSnapshot = nextPreviewState.snapshot;
       previewImageIndex = nextPreviewState.index;
       previewImageUrl = nextPreviewState.url;
-      if (options.revealGalleryEnd) {
-        void tick().then(() => {
-          galleryScrollEl?.scrollTo({ left: galleryScrollEl.scrollWidth, behavior: 'smooth' });
-        });
-      }
     }
+  }
+
+  function revealGalleryImage(imageId: number | null | undefined) {
+    const scrollContainer = galleryScrollEl;
+    if (!scrollContainer || imageId == null || !Number.isFinite(imageId)) return;
+    void tick().then(() => {
+      const target = scrollContainer.querySelector<HTMLElement>(`[data-gallery-image-id="${imageId}"]`);
+      if (!target) return;
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const nextLeft =
+        scrollContainer.scrollLeft +
+        (targetRect.left - containerRect.left) -
+        (containerRect.width - targetRect.width) / 2;
+      scrollContainer.scrollTo({
+        left: Math.max(0, nextLeft),
+        behavior: 'smooth',
+      });
+    });
   }
 
   function patchSelectedPropertyDetails(patch: Partial<PropertyDetails>) {
@@ -2166,10 +2180,10 @@ function parseNullableNumber(value: unknown): number | null {
         syncSelectedPropertyMedia(
           { images: [...selectedPropertyImages(), ...uploadedImages] },
           {
-            revealGalleryEnd: true,
             focusImageUrl: uploadedImages[uploadedImages.length - 1]?.url ?? null,
           },
         );
+        revealGalleryImage(uploadedImages[uploadedImages.length - 1]?.id);
       } else {
         await reviewProperty(selectedProperty as PropertySummary);
       }
@@ -2207,6 +2221,8 @@ function parseNullableNumber(value: unknown): number | null {
     const nextImages = previousImages.filter((image) => image.id !== imageId);
     try {
       syncSelectedPropertyMedia({ images: nextImages });
+      const nextVisibleImage = nextImages[Math.min(previousImages.findIndex((image) => image.id === imageId), Math.max(nextImages.length - 1, 0))];
+      revealGalleryImage(nextVisibleImage?.id);
       if (isImagePreviewOpen) {
         previewImagesSnapshot = nextImages;
         previewImageIndex = Math.min(previewImageIndex, Math.max(nextImages.length - 1, 0));
@@ -2216,6 +2232,7 @@ function parseNullableNumber(value: unknown): number | null {
       toast.success('Imagem removida com sucesso.');
     } catch (err: any) {
       syncSelectedPropertyMedia({ images: previousImages }, { focusImageUrl: previousImages[0]?.url ?? null });
+      revealGalleryImage(imageId);
       if (isImagePreviewOpen) {
         previewImagesSnapshot = previousImages;
         previewImageIndex = Math.min(previewImageIndex, Math.max(previousImages.length - 1, 0));
@@ -3457,7 +3474,7 @@ function parseNullableNumber(value: unknown): number | null {
               class="show-scrollbar mt-2 flex max-w-full min-w-0 gap-3 overflow-x-auto overscroll-x-contain rounded-md bg-gray-50 p-3 touch-pan-x [-webkit-overflow-scrolling:touch] dark:bg-gray-800/60"
             >
                 {#each visibleSelectedPropertyImages() as image (image.id)}
-                <div class="relative flex shrink-0 flex-col items-center gap-2">
+                <div class="relative flex shrink-0 flex-col items-center gap-2" data-gallery-image-id={image.id}>
                   <button
                     type="button"
                     class="rounded-md p-0 shadow focus:outline-none focus:ring-2 focus:ring-green-500"
