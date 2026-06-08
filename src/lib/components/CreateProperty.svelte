@@ -3,12 +3,15 @@
   import { toast } from 'svelte-sonner';
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
+  import PropertyFormShell from '$lib/components/property/PropertyFormShell.svelte';
+  import PropertyBasicFields from '$lib/components/property/PropertyBasicFields.svelte';
+  import PropertyLocationFields from '$lib/components/property/PropertyLocationFields.svelte';
+  import PropertyStructureFields from '$lib/components/property/PropertyStructureFields.svelte';
+  import PropertyAmenitiesFields from '$lib/components/property/PropertyAmenitiesFields.svelte';
   import { uploadMultipartWithProgress } from '$lib/mediaUploadService';
   import type { Broker } from '$lib/types';
   import {
     formatCep,
-    clampAreaInput,
-    clampCountInput,
     extractApiErrorMessage,
     formatPromotionPercentageInput,
     formatPhoneBr,
@@ -27,33 +30,8 @@
     getPropertyPriceInputMaxLength,
     parsePropertyPriceInput,
   } from '$lib/propertyPriceLimits';
-  import { PROPERTY_AMENITY_OPTIONS, toggleAmenity, normalizeAmenityList } from '$lib/propertyAmenities';
+  import { normalizeAmenityList } from '$lib/propertyAmenities';
 
-  const propertyTypes = [
-    'Casa',
-    'Apartamento',
-    'Terreno',
-    'Flat',
-    'Condomínio Fechado',
-    'Área rural',
-    'Rancho',
-    'Galpão / Barracão',
-    'Chácara',
-    'Imóvel comercial',
-    'Área comercial',
-    'Cobertura / Penthouse',
-    'Cobertura',
-    'Sobrado',
-    'Kitnet',
-    'Sala comercial',
-    'Sala Comercial',
-    'Loja',
-    'Fazenda',
-    'Galpão',
-    'Empresa',
-    'Prédio',
-  ];
-  const purposes = ['Venda', 'Aluguel', 'Venda e Aluguel'];
   const MAX_IMAGE_SIZE_MB = 15;
   const MAX_VIDEO_SIZE_MB = 100;
   const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
@@ -1069,623 +1047,87 @@
   });
 </script>
 
-<div class="space-y-6">
-  <div class="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-    <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
-      <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Cadastrar imóvel</h1>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        Preencha os dados principais do imóvel, envie fotos e finalize o cadastro.
-      </p>
-    </div>
-    <div class="space-y-6 p-6">
-      <div class="grid gap-4 md:grid-cols-2">
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Título *
-          <input
-            id="create-property-title"
-            name="title"
-            maxlength="120"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={title}
-            placeholder="Ex: Casa no Canaã 2"
-          />
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Tipo *
-          <select
-            id="create-property-type"
-            name="type"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={type}
-          >
-            {#each propertyTypes as option}
-              <option value={option}>{option}</option>
-            {/each}
-          </select>
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Finalidade *
-          <select
-            id="create-property-purpose"
-            name="purpose"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={purpose}
-          >
-            {#each purposes as option}
-              <option value={option}>{option}</option>
-            {/each}
-          </select>
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Status inicial *
-          <select
-            id="create-property-status"
-            name="status"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={status}
-          >
-            <option value="approved">Aprovado</option>
-            <option value="pending_approval">Pendente</option>
-          </select>
-        </label>
-      </div>
+<PropertyFormShell
+  mode="create"
+  variant="orange"
+  title="Cadastrar imóvel"
+  description="Preencha os dados principais do imóvel, envie fotos e finalize o cadastro."
+>
+  <div class="space-y-6">
+    <PropertyBasicFields
+      bind:title
+      bind:type
+      bind:purpose
+      bind:status
+      bind:ownerName
+      bind:ownerPhone
+      bind:brokerId
+      bind:brokerPhone
+      bind:brokerQuery
+      bind:brokerDropdownOpen
+      {brokers}
+      bind:brokersLoading
+      bind:brokersError
+      bind:selectedBroker
+      bind:description
+      bind:priceSale
+      bind:priceRent
+      bind:promotionSalePercentage
+      bind:promotionRentPercentage
+      bind:promotionPriceSale
+      bind:promotionPriceRent
+      onBrokerQueryInput={handleBrokerQueryInput}
+      onBrokerFocus={() => (brokerDropdownOpen = true)}
+      onBrokerBlur={() =>
+        setTimeout(() => {
+          brokerDropdownOpen = false;
+        }, 120)}
+      onClearBrokerSelection={clearBrokerSelection}
+      onSelectBroker={selectBroker}
+    />
 
-      <div class="grid gap-4 md:grid-cols-2">
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Proprietário do imóvel (opcional)
-          <input
-            id="create-property-owner-name"
-            name="owner_name"
-            maxlength="120"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={ownerName}
-            placeholder="Nome do proprietário"
-          />
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Telefone do proprietário (opcional)
-          <input
-            id="create-property-owner-phone"
-            name="owner_phone"
-            maxlength="19"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={ownerPhone}
-            inputmode="numeric"
-            placeholder="+55 (00) 00000-0000"
-            on:input={(event) => {
-              const target = event.target as HTMLInputElement;
-              ownerPhone = formatPhoneBr(target.value);
-            }}
-          />
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Corretor responsável
-          <div class="relative">
-            <input
-              id="create-property-broker-query"
-              name="broker_query"
-              maxlength="120"
-              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={brokerQuery}
-              placeholder="Digite ao menos 2 letras para buscar corretor"
-              on:focus={() => (brokerDropdownOpen = true)}
-              on:blur={() =>
-                setTimeout(() => {
-                  brokerDropdownOpen = false;
-                }, 120)}
-              on:input={(event) => {
-                const target = event.target as HTMLInputElement;
-                handleBrokerQueryInput(target.value);
-              }}
-            />
-            {#if brokerDropdownOpen}
-              <div class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
-                <button
-                  type="button"
-                  class="w-full border-b border-gray-200 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                  on:click={clearBrokerSelection}
-                >
-                  Sem corretor
-                </button>
-                {#if brokersLoading}
-                  <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Buscando corretores...</p>
-                {:else if brokers.length === 0}
-                  <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nenhum corretor encontrado.</p>
-                {:else}
-                  {#each brokers as broker}
-                    <button
-                      type="button"
-                      class="w-full border-t border-gray-100 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800"
-                      on:click={() => selectBroker(broker)}
-                    >
-                      <span class="block font-medium text-gray-900 dark:text-gray-100">{broker.name}</span>
-                      <span class="block text-xs text-gray-500 dark:text-gray-400">{broker.email} {broker.phone ? `· ${broker.phone}` : ''}</span>
-                    </button>
-                  {/each}
-                {/if}
-              </div>
-            {/if}
-          </div>
-          {#if selectedBroker}
-            <span class="text-xs text-emerald-600 dark:text-emerald-400">
-              Selecionado: {selectedBroker.name} (ID {selectedBroker.id})
-            </span>
-          {/if}
-          {#if brokersError}
-            <span class="text-xs text-red-500 dark:text-red-400">{brokersError}</span>
-          {/if}
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Telefone do corretor responsável
-          <input
-            id="create-property-broker-phone"
-            name="broker_phone"
-            maxlength="19"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={brokerPhone}
-            inputmode="numeric"
-            placeholder="+55 (00) 00000-0000"
-            disabled={!brokerId}
-            on:input={(event) => {
-              const target = event.target as HTMLInputElement;
-              brokerPhone = formatPhoneBr(target.value);
-            }}
-          />
-        </label>
-      </div>
+    <PropertyStructureFields
+      idPrefix="create-property"
+      bind:bedrooms
+      bind:bedroomsAsZero
+      bind:bathrooms
+      bind:bathroomsAsZero
+      bind:garageSpots
+      bind:garageSpotsAsZero
+      bind:areaConstruida
+      bind:areaConstruidaUnidade
+      bind:areaTerreno
+      bind:areaTerrenoUnidade
+    />
 
-      <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-        Descrição *
-        <textarea
-          id="create-property-description"
-          name="description"
-          maxlength="500"
-          class="min-h-[110px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          bind:value={description}
-          placeholder="Descreva o imóvel"
-        ></textarea>
-      </label>
+    <PropertyLocationFields
+      idPrefix="create-property"
+      bind:cep
+      bind:semCep
+      bind:state
+      bind:city
+      bind:address
+      bind:bairro
+      bairroOptional={bairroOptional}
+      bind:numero
+      bind:semNumero
+      bind:quadra
+      bind:semQuadra
+      bind:lote
+      bind:semLote
+      bind:complemento
+      {cities}
+      bind:citiesLoading
+      bind:citiesError
+      {bairros}
+      bind:bairrosLoading
+      bind:bairrosError
+      bind:cepLookupError
+      onStateChange={fetchCitiesForState}
+      onCepLookup={lookupCep}
+    />
 
-      <div class="grid gap-4 md:grid-cols-2">
-        {#if purpose !== 'Aluguel'}
-          <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-            Preço de venda *
-              <input
-              id="create-property-price-sale"
-              name="price_sale_display"
-              maxlength={SALE_PRICE_MAX_LENGTH}
-              class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={priceSale}
-              inputmode="numeric"
-              placeholder="R$ 450.000,00"
-              on:input={(event) => {
-                const target = event.target as HTMLInputElement;
-                priceSale = formatPropertyPriceInput(target.value, SALE_PROPERTY_PRICE_MAX);
-              }}
-            />
-          </label>
-        {/if}
-        {#if purpose !== 'Venda'}
-          <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-            Preço do aluguel *
-            <input
-              id="create-property-price-rent"
-              name="price_rent_display"
-              maxlength={RENT_PRICE_MAX_LENGTH}
-              class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={priceRent}
-              inputmode="numeric"
-              placeholder="R$ 2.500,00"
-              on:input={(event) => {
-                const target = event.target as HTMLInputElement;
-                priceRent = formatPropertyPriceInput(target.value, RENT_PROPERTY_PRICE_MAX);
-              }}
-            />
-          </label>
-        {/if}
-      </div>
-
-      <div class="grid gap-4 md:grid-cols-2">
-        {#if purpose !== 'Aluguel'}
-          <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-            <label for="create-property-promotion-sale-percentage">% Desconto (Venda)</label>
-            <input
-              id="create-property-promotion-sale-percentage"
-              name="promotion_percentage"
-              class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={promotionSalePercentage}
-              inputmode="decimal"
-              placeholder="Ex: 08,5"
-              on:input={(event) => {
-                const target = event.target as HTMLInputElement;
-                promotionSalePercentage = formatPromotionPercentageInput(target.value);
-              }}
-            />
-            <span class="text-xs text-emerald-700 dark:text-emerald-300">
-              Valor promocional (Venda): {promotionPriceSale || '-'}
-            </span>
-          </div>
-        {/if}
-        {#if purpose !== 'Venda'}
-          <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-            <label for="create-property-promotion-rent-percentage">% Desconto (Aluguel)</label>
-            <input
-              id="create-property-promotion-rent-percentage"
-              name="promotional_rent_percentage"
-              class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={promotionRentPercentage}
-              inputmode="decimal"
-              placeholder="Ex: 12,0"
-              on:input={(event) => {
-                const target = event.target as HTMLInputElement;
-                promotionRentPercentage = formatPromotionPercentageInput(target.value);
-              }}
-            />
-            <span class="text-xs text-emerald-700 dark:text-emerald-300">
-              Valor promocional (Aluguel): {promotionPriceRent || '-'}
-            </span>
-          </div>
-        {/if}
-      </div>
-
-      <div class="grid gap-4 md:grid-cols-3">
-        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          <label for="create-property-bedrooms" class="flex items-center justify-between gap-3">
-            <span>Quartos *</span>
-            <label class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-              <input
-                type="checkbox"
-                bind:checked={bedroomsAsZero}
-                on:change={() => {
-                  if (bedroomsAsZero) bedrooms = '0';
-                }}
-              />
-              Sem quarto
-            </label>
-          </label>
-          <input
-            id="create-property-bedrooms"
-            name="bedrooms"
-            maxlength="2"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
-            bind:value={bedrooms}
-            inputmode="numeric"
-            pattern="\d*"
-            disabled={bedroomsAsZero}
-            on:input={(event) => {
-              const target = event.target as HTMLInputElement;
-              bedrooms = clampCountInput(target.value);
-            }}
-          />
-        </div>
-        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          <label for="create-property-bathrooms" class="flex items-center justify-between gap-3">
-            <span>Banheiros *</span>
-            <label class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-              <input
-                type="checkbox"
-                bind:checked={bathroomsAsZero}
-                on:change={() => {
-                  if (bathroomsAsZero) bathrooms = '0';
-                }}
-              />
-              Sem banheiro
-            </label>
-          </label>
-          <input
-            id="create-property-bathrooms"
-            name="bathrooms"
-            maxlength="2"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
-            bind:value={bathrooms}
-            inputmode="numeric"
-            pattern="\d*"
-            disabled={bathroomsAsZero}
-            on:input={(event) => {
-              const target = event.target as HTMLInputElement;
-              bathrooms = clampCountInput(target.value);
-            }}
-          />
-        </div>
-        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          <label for="create-property-garage-spots" class="flex items-center justify-between gap-3">
-            <span>Garagens *</span>
-            <label class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-              <input
-                type="checkbox"
-                bind:checked={garageSpotsAsZero}
-                on:change={() => {
-                  if (garageSpotsAsZero) garageSpots = '0';
-                }}
-              />
-              Sem garagem
-            </label>
-          </label>
-          <input
-            id="create-property-garage-spots"
-            name="garage_spots"
-            maxlength="2"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
-            bind:value={garageSpots}
-            inputmode="numeric"
-            pattern="\d*"
-            disabled={garageSpotsAsZero}
-            on:input={(event) => {
-              const target = event.target as HTMLInputElement;
-              garageSpots = clampCountInput(target.value);
-            }}
-          />
-        </div>
-      </div>
-
-      <div class="grid gap-4 md:grid-cols-2">
-        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          <span>Área construída *</span>
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-            <input
-              id="create-property-area-construida"
-              name="area_construida"
-              maxlength="12"
-              class="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={areaConstruida}
-              inputmode="decimal"
-              on:input={(event) => {
-                const target = event.target as HTMLInputElement;
-                areaConstruida = clampAreaInput(target.value);
-              }}
-            />
-            <select
-              id="create-property-area-construida-unidade"
-              name="area_construida_unidade"
-              class="w-full shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:w-44 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={areaConstruidaUnidade}
-            >
-              <option value="m2">m²</option>
-              <option value="hectare">Hectare (ha)</option>
-              <option value="alqueire">Alqueire</option>
-            </select>
-          </div>
-          <span class="text-xs font-normal text-gray-500 dark:text-gray-400"
-            >Informe o valor conforme a unidade selecionada.</span
-          >
-        </div>
-        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          <span>Área do terreno *</span>
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-            <input
-              id="create-property-area-terreno"
-              name="area_terreno"
-              maxlength="12"
-              class="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={areaTerreno}
-              inputmode="decimal"
-              on:input={(event) => {
-                const target = event.target as HTMLInputElement;
-                areaTerreno = clampAreaInput(target.value);
-              }}
-            />
-            <select
-              id="create-property-area-terreno-unidade"
-              name="area_terreno_unidade"
-              class="w-full shrink-0 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:w-44 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={areaTerrenoUnidade}
-            >
-              <option value="m2">m²</option>
-              <option value="hectare">Hectare (ha)</option>
-              <option value="alqueire">Alqueire</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="grid gap-4 md:grid-cols-2">
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          {semCep ? 'CEP (opcional)' : 'CEP'}
-          <input
-            id="create-property-cep"
-            name="cep"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900"
-            bind:value={cep}
-            disabled={semCep}
-            placeholder="00000-000"
-            inputmode="numeric"
-            on:input={(event) => {
-              const target = event.target as HTMLInputElement;
-              cep = formatCep(target.value);
-              if (!semCep && onlyDigits(cep).length === 8) {
-                lookupCep(cep);
-              }
-            }}
-          />
-          <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-            <input
-              type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-              bind:checked={semCep}
-              on:change={() => {
-                if (semCep) cep = '';
-              }}
-            />
-            Sem CEP
-          </label>
-          {#if cepLookupError}
-            <span class="text-xs text-red-500 dark:text-red-400">{cepLookupError}</span>
-          {/if}
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Estado *
-          <select
-            id="create-property-state"
-            name="state"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={state}
-            on:change={() => fetchCitiesForState(state)}
-          >
-            {#each states as uf}
-              <option value={uf}>{uf}</option>
-            {/each}
-          </select>
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Cidade *
-          <input
-            id="create-property-city"
-            name="city"
-            list="cities-list"
-            maxlength="120"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={city}
-            placeholder={citiesLoading ? 'Carregando cidades...' : 'Digite ou selecione'}
-          />
-          <datalist id="cities-list">
-            {#each cities as option}
-              <option value={option}></option>
-            {/each}
-          </datalist>
-          {#if citiesError}
-            <span class="text-xs text-red-500 dark:text-red-400">{citiesError}</span>
-          {/if}
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Endereço *
-          <input
-            id="create-property-address"
-            name="address"
-            maxlength="120"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={address}
-            placeholder="Rua, avenida, etc."
-          />
-        </label>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          {bairroOptional ? 'Bairro' : 'Bairro *'}
-          <input
-            id="create-property-bairro"
-            name="bairro"
-            list="bairros-list"
-            maxlength="120"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={bairro}
-            placeholder={bairrosLoading ? 'Carregando bairros...' : 'Digite ou selecione'}
-          />
-          <datalist id="bairros-list">
-            {#each bairros as option}
-              <option value={option}></option>
-            {/each}
-          </datalist>
-          {#if bairrosError}
-            <span class="text-xs text-red-500 dark:text-red-400">{bairrosError}</span>
-          {/if}
-        </label>
-        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          <label for="numero-input">Número {semNumero ? '(opcional)' : '*'}</label>
-          <input
-            id="numero-input"
-            name="numero"
-            maxlength="25"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900"
-            bind:value={numero}
-            inputmode="numeric"
-            disabled={semNumero}
-            on:input={(event) => {
-              const target = event.target as HTMLInputElement;
-              numero = sanitizeDigitsInput(target.value);
-            }}
-          />
-          <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-            <input
-              type="checkbox"
-              id="create-property-sem-numero"
-              name="sem_numero"
-              class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-              bind:checked={semNumero}
-              on:change={() => {
-                if (semNumero) numero = '';
-              }}
-            />
-            Sem número
-          </label>
-        </div>
-      </div>
-
-      <div class="grid gap-4 md:grid-cols-3">
-        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          <span>{semQuadra ? 'Quadra (opcional)' : 'Quadra *'}</span>
-          <input
-            id="create-property-quadra"
-            name="quadra"
-            maxlength="25"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900"
-            bind:value={quadra}
-            disabled={semQuadra}
-          />
-          <label class="inline-flex items-center gap-2 text-xs font-normal text-gray-600 dark:text-gray-400">
-            <input
-              type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-              bind:checked={semQuadra}
-              on:change={() => {
-                if (semQuadra) quadra = '';
-              }}
-            />
-            Sem quadra
-          </label>
-        </div>
-        <div class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          <span>{semLote ? 'Lote (opcional)' : 'Lote *'}</span>
-          <input
-            id="create-property-lote"
-            name="lote"
-            maxlength="25"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900"
-            bind:value={lote}
-            disabled={semLote}
-          />
-          <label class="inline-flex items-center gap-2 text-xs font-normal text-gray-600 dark:text-gray-400">
-            <input
-              type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-              bind:checked={semLote}
-              on:change={() => {
-                if (semLote) lote = '';
-              }}
-            />
-            Sem lote
-          </label>
-        </div>
-        <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          Complemento (opcional)
-          <input
-            id="create-property-complemento"
-            name="complemento"
-            maxlength="120"
-            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            bind:value={complemento}
-            placeholder="Apartamento, bloco, referência..."
-          />
-        </label>
-      </div>
-
-      <div class="rounded-md border border-gray-200 p-4 dark:border-gray-700">
-        <p class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">Comodidades</p>
-        <div class="grid gap-3 text-sm text-gray-700 dark:text-gray-300 sm:grid-cols-2 lg:grid-cols-3">
-          {#each PROPERTY_AMENITY_OPTIONS as amenity}
-            <label class="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                id={`create-property-amenity-${amenity.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}`}
-                class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                checked={selectedAmenities.includes(amenity)}
-                on:change={(event) => {
-                  const nextChecked = (event.target as HTMLInputElement).checked;
-                  selectedAmenities = toggleAmenity(selectedAmenities, amenity, nextChecked);
-                }}
-              />
-              {amenity}
-            </label>
-          {/each}
-        </div>
-      </div>
+      <PropertyAmenitiesFields bind:selectedAmenities />
 
       <div class="space-y-2">
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="create-images-input">
@@ -1826,9 +1268,9 @@
             </p>
           </div>
           <div class="flex justify-end">
-        <Button on:click={handleSubmit} disabled={isSubmitting}>
-          {isSubmitting ? 'Enviando...' : 'Cadastrar imóvel'}
-        </Button>
+            <Button on:click={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting ? 'Enviando...' : 'Cadastrar imóvel'}
+            </Button>
           </div>
         </div>
       </div>
@@ -1836,5 +1278,4 @@
         <p class="text-xs text-gray-500 dark:text-gray-400">{uploadStatus}</p>
       {/if}
     </div>
-  </div>
-</div>
+</PropertyFormShell>

@@ -6,11 +6,17 @@
   import { exportToCsv } from '$lib/utils/exportUtils';
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
+  import PropertyFormShell from '$lib/components/property/PropertyFormShell.svelte';
+  import PropertyLocationFields from '$lib/components/property/PropertyLocationFields.svelte';
+  import PropertyStructureFields from '$lib/components/property/PropertyStructureFields.svelte';
+  import PropertyAmenitiesFields from '$lib/components/property/PropertyAmenitiesFields.svelte';
+  import PropertyGallerySection from '$lib/components/property/PropertyGallerySection.svelte';
+  import PropertyImageUploadSection from '$lib/components/property/PropertyImageUploadSection.svelte';
+  import PropertyVideoSection from '$lib/components/property/PropertyVideoSection.svelte';
+  import PropertyManagementFooterActions from '$lib/components/property/PropertyManagementFooterActions.svelte';
   import * as Select from '$lib/components/ui/select';
   import { Input } from '$lib/components/ui/input';
 import {
-  clampAreaInput,
-  clampCountInput,
   extractApiErrorMessage,
   formatPromotionPercentageInput,
   parsePromotionPercentage,
@@ -33,12 +39,11 @@ import {
   import { reconcilePropertyPreviewMediaState } from '$lib/propertyMediaState';
   import type { PropertyStatus, PropertyImage as PropertyImageType } from './types';
   import {
-    PROPERTY_AMENITY_OPTIONS,
-    hasAmenity,
-    normalizeAmenityList,
-    toggleAmenity,
-    type PropertyAmenity,
-  } from '$lib/propertyAmenities';
+  PROPERTY_AMENITY_OPTIONS,
+  hasAmenity,
+  normalizeAmenityList,
+  type PropertyAmenity,
+} from '$lib/propertyAmenities';
 function parseNullableNumber(value: unknown): number | null {
   if (value == null || value === '') return null;
   const normalized = String(value)
@@ -237,9 +242,11 @@ function parseNullableNumber(value: unknown): number | null {
   let editSemNumero = false;
   let editSemQuadra = false;
   let editSemLote = false;
+  let editSemCep = false;
   let editBedroomsAsZero = false;
   let editBathroomsAsZero = false;
   let editGarageSpotsAsZero = false;
+  let editSelectedAmenities: string[] = [];
   let isSavingEdit = false;
   let editError: string | null = null;
   let editPriceSaleDisplay = '';
@@ -256,8 +263,6 @@ function parseNullableNumber(value: unknown): number | null {
   let imageInputEl: HTMLInputElement | null = null;
   let stagedVideo: File | null = null;
   let stagedVideoPreview: string | null = null;
-  let isImageDropActive = false;
-  let isVideoDropActive = false;
   let videoUploading = false;
   let videoDeleting = false;
   let videoDeleteError: string | null = null;
@@ -1096,14 +1101,6 @@ function parseNullableNumber(value: unknown): number | null {
     return areaSortDirection === 'asc' ? delta : -delta;
   }
 
-  function updateAmenitySelection(
-    details: PropertyDetails,
-    amenity: (typeof propertyAmenityOptions)[number],
-    checked: boolean
-  ): void {
-    details.amenities = toggleAmenity(details.amenities, amenity, checked);
-  }
-
   function normalizeImages(
     images?:
       | Array<NormalizedImage | PropertyImageType | Record<string, unknown> | string>
@@ -1520,8 +1517,10 @@ function parseNullableNumber(value: unknown): number | null {
       syncEditPriceDisplays(editableProperty);
       syncEditExtraDisplays(editableProperty);
       editSemNumero = isSemNumeroValue(editableProperty.numero);
+      editSemCep = Boolean(editableProperty.sem_cep);
       syncEditLotFlags(editableProperty);
       syncEditZeroFlags(editableProperty);
+      editSelectedAmenities = normalizeAmenityList(editableProperty.amenities);
       if (editSemNumero) {
         editableProperty.numero = '';
       }
@@ -1536,9 +1535,11 @@ function parseNullableNumber(value: unknown): number | null {
       editSemNumero = false;
       editSemQuadra = false;
       editSemLote = false;
+      editSemCep = false;
       editBedroomsAsZero = false;
       editBathroomsAsZero = false;
       editGarageSpotsAsZero = false;
+      editSelectedAmenities = normalizeAmenityList(editableProperty?.amenities);
     }
   }
 
@@ -1552,6 +1553,8 @@ function parseNullableNumber(value: unknown): number | null {
     isEditMode = false;
     selectedProperty = property;
     editableProperty = sanitizeEditable({ ...property } as PropertyDetails);
+    editSemCep = Boolean(editableProperty.sem_cep);
+    editSelectedAmenities = normalizeAmenityList(editableProperty.amenities);
     brokenPreviewImages = new Set();
 
     try {
@@ -1565,6 +1568,8 @@ function parseNullableNumber(value: unknown): number | null {
         ...safeDetails,
         public_code: mergedPublicCode,
       } as PropertyDetails;
+      editSemCep = Boolean(merged.sem_cep);
+      editSelectedAmenities = normalizeAmenityList(merged.amenities);
       const { supportsSale, supportsRent } = getPurposeFlags(merged.purpose ?? null);
       const resolvedSale =
         merged.price_sale ?? (supportsSale && !supportsRent ? merged.price ?? null : null);
@@ -2034,7 +2039,7 @@ function parseNullableNumber(value: unknown): number | null {
         sem_lote: editSemLote ? 1 : 0,
         quadra: editSemQuadra ? null : editableProperty.quadra,
         lote: editSemLote ? null : editableProperty.lote,
-        sem_cep: editableProperty.sem_cep ? 1 : 0,
+        sem_cep: editSemCep ? 1 : 0,
         bedrooms: editableProperty.bedrooms,
         bathrooms: editableProperty.bathrooms,
         garage_spots: editableProperty.garage_spots,
@@ -2045,7 +2050,7 @@ function parseNullableNumber(value: unknown): number | null {
         area_terreno_valor: editableProperty.area_terreno_valor,
         area_terreno_unidade:
           editableProperty.area_terreno_unidade ?? 'm2',
-        amenities: normalizeAmenityList(editableProperty.amenities),
+        amenities: normalizeAmenityList(editSelectedAmenities),
         video_url: editableProperty.video_url,
         type: editableProperty.type,
         owner_name: editableProperty.owner_name,
@@ -2208,7 +2213,6 @@ function parseNullableNumber(value: unknown): number | null {
 
   function handleImageDrop(event: DragEvent) {
     event.preventDefault();
-    isImageDropActive = false;
     const files = Array.from(event.dataTransfer?.files ?? []);
     stageImages(files);
   }
@@ -2445,7 +2449,6 @@ function parseNullableNumber(value: unknown): number | null {
 
   function handleVideoDrop(event: DragEvent) {
     event.preventDefault();
-    isVideoDropActive = false;
     const files = Array.from(event.dataTransfer?.files ?? []);
     const videoFile = files.find((file) => file.type.startsWith('video/')) ?? null;
     if (!videoFile) {
@@ -3292,10 +3295,11 @@ function parseNullableNumber(value: unknown): number | null {
           </span>
         </Dialog.Description>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Painel / Imóveis / Referência {resolveSelectedPropertyPublicCode(selectedProperty)}
+            Dashboard / Imóveis / Referência {resolveSelectedPropertyPublicCode(selectedProperty)}
         </p>
       </Dialog.Header>
 
+      <PropertyFormShell mode="edit" variant="orange" showHeader={false}>
       <div class="min-w-0 space-y-6 overflow-y-auto overflow-x-hidden px-6 py-4">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div class="space-y-1">
@@ -3605,216 +3609,49 @@ function parseNullableNumber(value: unknown): number | null {
               </div>
           </div>
 
-          <div>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Galeria</h3>
-          {#if selectedPropertyImages().length > 0}
-            <div
-              bind:this={galleryScrollEl}
-              class="show-scrollbar mt-2 flex max-w-full min-w-0 gap-3 overflow-x-auto overscroll-x-contain rounded-md bg-gray-50 p-3 touch-pan-x [-webkit-overflow-scrolling:touch] dark:bg-gray-800/60"
-            >
-                {#each visibleSelectedPropertyGalleryImages as image (image.id)}
-                <div class="relative flex shrink-0 flex-col items-center gap-2" data-gallery-image-id={image.id}>
-                  <button
-                    type="button"
-                    class="rounded-md p-0 shadow focus:outline-none focus:ring-2 focus:ring-green-500"
-                    aria-label="Abrir imagem do imóvel"
-                    on:click={() => openImagePreview(image.url, findImageIndexByUrl(image.url))}
-                  >
-                    <img
-                      src={image.url}
-                      alt="Foto do imóvel"
-                      class="h-32 w-48 max-w-none rounded-md object-cover sm:w-56"
-                      loading="lazy"
-                      on:error={() => markImageAsBroken(image.url)}
-                    />
-                  </button>
-                  {#if isEditMode && image.id != null}
-                    <Button variant="destructive" size="sm" on:click={() => handleImageDelete(image.id!)}>
-                      Remover
-                    </Button>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-            {#if selectedPropertyBrokenGalleryCount > 0}
-              <p class="mt-2 text-xs text-amber-600 dark:text-amber-300">
-                  {selectedPropertyBrokenGalleryCount} imagem(ns) corrompida(s) foram ocultada(s).
-              </p>
-            {/if}
-          {:else}
-            <p class="text-sm text-gray-500 dark:text-gray-400">Nenhuma imagem cadastrada.</p>
-          {/if}
-        </div>
+          <PropertyGallerySection
+            bind:containerEl={galleryScrollEl}
+            images={selectedPropertyImages()}
+            visibleImages={visibleSelectedPropertyGalleryImages}
+            brokenCount={selectedPropertyBrokenGalleryCount}
+            isEditMode={isEditMode}
+            getImageIndexByUrl={findImageIndexByUrl}
+            onOpenPreview={openImagePreview}
+            onDeleteImage={handleImageDelete}
+            onMarkBroken={markImageAsBroken}
+          />
         {#if isEditMode}
-          <div class="space-y-2">
-          <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="upload-images-input">Enviar novas imagens</label>
-          <p class="text-xs text-gray-500 dark:text-gray-400">
-            Limite total: 20 imagens por imóvel.
-          </p>
-          <div
-            class={`rounded-md border-2 border-dashed p-3 transition ${
-              isImageDropActive
-                ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                : 'border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-800'
-            }`}
-            role="group"
-            aria-label="Envio de imagens do imóvel"
-            on:dragover|preventDefault={() => (isImageDropActive = true)}
-            on:dragenter|preventDefault={() => (isImageDropActive = true)}
-            on:dragleave={() => (isImageDropActive = false)}
-            on:drop={handleImageDrop}
-          >
-            <input id="upload-images-input" name="images" bind:this={imageInputEl} class="sr-only" type="file" accept="image/*" multiple on:change={handleImageSelection} disabled={imageUploading} />
-            <div class="flex flex-wrap items-center gap-3">
-              <Button type="button" variant="outline" on:click={openImagePicker} disabled={imageUploading}>
-                Escolher imagens
-              </Button>
-              <span class="text-sm text-gray-600 dark:text-gray-300">
-                {#if stagedImages.length > 0}
-                  {stagedImages.length} imagem(ns) selecionada(s)
-                {:else}
-                  Nenhuma imagem selecionada
-                {/if}
-              </span>
-            </div>
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              Arraste e solte imagens aqui ou clique para selecionar.
-            </p>
-          </div>
-          {#if stagedImages.length > 0}
-            <div class="show-scrollbar mt-3 flex gap-3 overflow-x-auto rounded-md bg-gray-50 p-3 dark:bg-gray-800/60">
-              {#each stagedImagePreviews as preview, index}
-                <div class="relative flex-shrink-0">
-                  <img
-                    src={preview}
-                    alt="Prévia da imagem"
-                    class="h-24 w-auto rounded-md object-cover shadow"
-                  />
-                  <button
-                    type="button"
-                    class="absolute right-1 top-1 rounded-full bg-black/70 px-2 py-0.5 text-xs font-semibold text-white hover:bg-black/80"
-                    on:click={() => removeStagedImage(index)}
-                    aria-label="Remover imagem selecionada"
-                  >
-                    X
-                  </button>
-                </div>
-              {/each}
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <Button on:click={uploadStagedImages} disabled={imageUploading}>
-                {#if imageUploading}
-                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                {/if}
-                Salvar
-              </Button>
-                <Button variant="outline" on:click={() => clearStagedImages()} disabled={imageUploading}>
-                Sair
-              </Button>
-            </div>
-          {/if}
-          {#if imageUploading}
-            <p class="text-xs text-gray-500 dark:text-gray-400">Enviando imagens...</p>
-          {/if}
-          {#if imageUploadError}
-            <p class="text-xs text-red-500 dark:text-red-400">{imageUploadError}</p>
-          {/if}
-          </div>
+          <PropertyImageUploadSection
+            bind:inputEl={imageInputEl}
+            stagedImages={stagedImages}
+            stagedImagePreviews={stagedImagePreviews}
+            imageUploading={imageUploading}
+            imageUploadError={imageUploadError}
+            onOpenPicker={openImagePicker}
+            onSelection={handleImageSelection}
+            onDrop={handleImageDrop}
+            onRemoveStagedImage={removeStagedImage}
+            onUpload={uploadStagedImages}
+            onClear={() => clearStagedImages()}
+          />
         {/if}
 
           {#if selectedProperty.video_url || isEditMode}
-            <div>
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Video</h3>
-
-              {#if selectedProperty.video_url}
-                <div class="mt-2 overflow-hidden rounded-lg bg-black/10 dark:bg-gray-800">
-                  <video
-                    class="h-64 w-full rounded-lg object-cover"
-                    src={selectedProperty.video_url}
-                    controls
-                    preload="metadata"
-                  >
-                    <track kind="captions" srclang="pt" label="Portugues" />
-                  </video>
-                </div>
-              {:else}
-                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Nenhum video cadastrado.</p>
-              {/if}
-
-              {#if isEditMode}
-                <div class="mt-3 space-y-2">
-                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="upload-video-input">Enviar vídeo</label>
-                  <div
-                    class={`rounded-md border-2 border-dashed p-3 transition ${
-                      isVideoDropActive
-                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                        : 'border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-800'
-                    }`}
-                    role="group"
-                    aria-label="Envio de video do imóvel"
-                    on:dragover|preventDefault={() => (isVideoDropActive = true)}
-                    on:dragenter|preventDefault={() => (isVideoDropActive = true)}
-                    on:dragleave={() => (isVideoDropActive = false)}
-                    on:drop={handleVideoDrop}
-                  >
-                    <input id="upload-video-input" name="video" bind:this={videoInputEl} class="sr-only" type="file" accept="video/*" on:change={handleVideoSelection} disabled={videoUploading || videoDeleting} />
-                    <div class="flex flex-wrap items-center gap-3">
-                      <Button type="button" variant="outline" on:click={openVideoPicker} disabled={videoUploading || videoDeleting}>
-                        Escolher vídeo
-                      </Button>
-                      <span class="text-sm text-gray-600 dark:text-gray-300">
-                        {stagedVideo ? stagedVideo.name : 'Nenhum vídeo selecionado'}
-                      </span>
-                    </div>
-                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      Arraste e solte um vídeo aqui ou clique para selecionar.
-                    </p>
-                  </div>
-
-                  {#if stagedVideoPreview}
-                    <div class="mt-2 overflow-hidden rounded-lg bg-black/10 dark:bg-gray-800">
-                      <video
-                        class="h-64 w-full rounded-lg object-cover"
-                        src={stagedVideoPreview}
-                        controls
-                        preload="metadata"
-                      >
-                        <track kind="captions" srclang="pt" label="Portugues" />
-                      </video>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                      <Button on:click={uploadStagedVideo} disabled={videoUploading || videoDeleting}>
-                        {#if videoUploading}
-                          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                        {/if}
-                        Salvar
-                      </Button>
-                      <Button variant="outline" on:click={clearStagedVideo} disabled={videoUploading || videoDeleting}>
-                        Sair
-                      </Button>
-                    </div>
-                  {/if}
-
-                  {#if selectedProperty.video_url}
-                    <div class="flex flex-wrap items-center gap-2">
-                      <Button variant="outline" on:click={handleVideoDelete} disabled={videoDeleting || videoUploading}>
-                        {#if videoDeleting}
-                          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                        {/if}
-                        Remover vídeo
-                      </Button>
-                    </div>
-                  {/if}
-
-                  {#if videoUploading}
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Enviando video...</p>
-                  {/if}
-                  {#if videoDeleteError}
-                    <p class="text-xs text-red-500 dark:text-red-400">{videoDeleteError}</p>
-                  {/if}
-                </div>
-              {/if}
-            </div>
+            <PropertyVideoSection
+              bind:inputEl={videoInputEl}
+              existingVideoUrl={selectedProperty.video_url ?? null}
+              stagedVideo={stagedVideo}
+              stagedVideoPreview={stagedVideoPreview}
+              videoUploading={videoUploading}
+              videoDeleting={videoDeleting}
+              videoDeleteError={videoDeleteError}
+              onOpenPicker={openVideoPicker}
+              onSelection={handleVideoSelection}
+              onDrop={handleVideoDrop}
+              onUpload={uploadStagedVideo}
+              onClear={clearStagedVideo}
+              onDelete={handleVideoDelete}
+            />
           {/if}
 
         <div>
@@ -3839,311 +3676,46 @@ function parseNullableNumber(value: unknown): number | null {
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Localização e atributos</h3>
           {#if isEditMode && editableProperty}
             {@const editBairroOptional = isOptionalBairroPropertyType(editableProperty.type)}
-            <div class="mt-2 grid gap-2 text-sm text-gray-700 dark:text-gray-300 md:grid-cols-2">
-              <label class="flex flex-col gap-1">
-                <strong>Estado:</strong>
-                <input name="state" maxlength="2" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.state} />
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>{editableProperty.sem_cep ? 'CEP (opcional)' : 'CEP'}:</strong>
-                <input
-                  name="cep"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
-                  bind:value={editableProperty.cep}
-                  disabled={Boolean(editableProperty.sem_cep)}
-                  inputmode="numeric"
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    if (editableProperty) {
-                      editableProperty.cep = formatCep(target.value);
-                    }
-                  }}
-                />
-              </label>
-              <label class="flex items-center gap-2 md:col-span-2">
-                <input
-                  type="checkbox"
-                  name="sem_cep"
-                  checked={Boolean(editableProperty.sem_cep)}
-                  on:change={(event) => {
-                    const target = event.currentTarget as HTMLInputElement;
-                    if (!editableProperty) return;
-                    editableProperty.sem_cep = target.checked;
-                    if (target.checked) {
-                      editableProperty.cep = '';
-                    }
-                  }}
-                />
-                <span>Sem CEP</span>
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>Cidade:</strong>
-                <input
-                  name="city"
-                  list="property-cities-list"
-                  maxlength="120"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
-                  bind:value={editableProperty.city}
-                />
-                <datalist id="property-cities-list">
-                  {#each cities as cityOption}
-                    <option value={cityOption}></option>
-                  {/each}
-                </datalist>
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>{editBairroOptional ? 'Bairro (opcional)' : 'Bairro'}:</strong>
-                <input name="bairro" maxlength="120" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.bairro} />
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>Endereço:</strong>
-                <input name="address" maxlength="120" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.address} />
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>Número:</strong>
-                <input
-                  name="numero"
-                  maxlength="25"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
-                  bind:value={editableProperty.numero}
-                  inputmode="numeric"
-                  disabled={editSemNumero}
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    if (editableProperty) {
-                      editableProperty.numero = sanitizeDigitsInput(target.value);
-                    }
-                  }}
-                />
-              </label>
-              <label class="flex items-center gap-2 md:col-span-2">
-                <input
-                  type="checkbox"
-                  name="sem_numero"
-                  bind:checked={editSemNumero}
-                  on:change={() => {
-                    if (editSemNumero && editableProperty) {
-                      editableProperty.numero = '';
-                    }
-                  }}
-                />
-                <span>Sem número</span>
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>Complemento:</strong>
-                <input name="complemento" maxlength="120" class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700" bind:value={editableProperty.complemento} />
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>Quadra:</strong>
-                <input
-                  name="quadra"
-                  maxlength="25"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
-                  bind:value={editableProperty.quadra}
-                  disabled={editSemQuadra}
-                />
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="sem_quadra"
-                  bind:checked={editSemQuadra}
-                  on:change={() => {
-                    if (editSemQuadra && editableProperty) {
-                      editableProperty.quadra = '';
-                    }
-                  }}
-                />
-                <span>Sem quadra</span>
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>Lote:</strong>
-                <input
-                  name="lote"
-                  maxlength="25"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
-                  bind:value={editableProperty.lote}
-                  disabled={editSemLote}
-                />
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="sem_lote"
-                  bind:checked={editSemLote}
-                  on:change={() => {
-                    if (editSemLote && editableProperty) {
-                      editableProperty.lote = '';
-                    }
-                  }}
-                />
-                <span>Sem lote</span>
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong class="flex items-center justify-between gap-3">
-                  <span>Quartos:</span>
-                  <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    <input
-                      type="checkbox"
-                      bind:checked={editBedroomsAsZero}
-                      on:change={() => {
-                        if (editBedroomsAsZero && editableProperty) {
-                          editableProperty.bedrooms = 0;
-                        }
-                      }}
-                    />
-                    Sem quarto
-                  </span>
-                </strong>
-                <input
-                  name="bedrooms"
-                  type="text"
-                  inputmode="numeric"
-                  maxlength="2"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
-                  bind:value={editableProperty.bedrooms}
-                  disabled={editBedroomsAsZero}
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    if (editableProperty) {
-                      const digits = clampCountInput(target.value);
-                      editableProperty.bedrooms = digits !== '' ? Number(digits) : null;
-                    }
-                  }}
-                />
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong class="flex items-center justify-between gap-3">
-                  <span>Banheiros:</span>
-                  <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    <input
-                      type="checkbox"
-                      bind:checked={editBathroomsAsZero}
-                      on:change={() => {
-                        if (editBathroomsAsZero && editableProperty) {
-                          editableProperty.bathrooms = 0;
-                        }
-                      }}
-                    />
-                    Sem banheiro
-                  </span>
-                </strong>
-                <input
-                  name="bathrooms"
-                  type="text"
-                  inputmode="numeric"
-                  maxlength="2"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
-                  bind:value={editableProperty.bathrooms}
-                  disabled={editBathroomsAsZero}
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    if (editableProperty) {
-                      const digits = clampCountInput(target.value);
-                      editableProperty.bathrooms = digits !== '' ? Number(digits) : null;
-                    }
-                  }}
-                />
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong class="flex items-center justify-between gap-3">
-                  <span>Garagens:</span>
-                  <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    <input
-                      type="checkbox"
-                      bind:checked={editGarageSpotsAsZero}
-                      on:change={() => {
-                        if (editGarageSpotsAsZero && editableProperty) {
-                          editableProperty.garage_spots = 0;
-                        }
-                      }}
-                    />
-                    Sem garagem
-                  </span>
-                </strong>
-                <input
-                  name="garage_spots"
-                  type="text"
-                  inputmode="numeric"
-                  maxlength="2"
-                  class="w-full rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 dark:disabled:bg-gray-900"
-                  bind:value={editableProperty.garage_spots}
-                  disabled={editGarageSpotsAsZero}
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    if (editableProperty) {
-                      const digits = clampCountInput(target.value);
-                      editableProperty.garage_spots = digits !== '' ? Number(digits) : null;
-                    }
-                  }}
-                />
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>Área construída:</strong>
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                    <input
-                    name="area_construida_valor"
-                    type="text"
-                    inputmode="decimal"
-                    maxlength="12"
-                    class="w-full min-w-0 rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
-                    bind:value={editableProperty.area_construida_valor}
-                    on:input={(event) => {
-                      const target = event.target as HTMLInputElement;
-                      if (editableProperty) {
-                        const sanitized = clampAreaInput(target.value);
-                        const parsed = sanitized
-                          ? Number(sanitized.replace(',', '.'))
-                          : null;
-                        editableProperty.area_construida_valor = parsed;
-                        editableProperty.area_construida = parsed;
-                      }
-                    }}
-                  />
-                  <select
-                    name="area_construida_unidade"
-                    class="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 sm:w-44"
-                    bind:value={editableProperty.area_construida_unidade}
-                  >
-                    {#each areaUnitOptions as unit}
-                      <option value={unit.value}>{unit.label}</option>
-                    {/each}
-                  </select>
-                </div>
-              </label>
-              <label class="flex flex-col gap-1">
-                <strong>Área do terreno:</strong>
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                    <input
-                    name="area_terreno_valor"
-                    type="text"
-                    inputmode="decimal"
-                    maxlength="12"
-                    class="w-full min-w-0 rounded border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-700"
-                    bind:value={editableProperty.area_terreno_valor}
-                    on:input={(event) => {
-                      const target = event.target as HTMLInputElement;
-                      if (editableProperty) {
-                        const sanitized = clampAreaInput(target.value);
-                        const parsed = sanitized
-                          ? Number(sanitized.replace(',', '.'))
-                          : null;
-                        editableProperty.area_terreno_valor = parsed;
-                        editableProperty.area_terreno = parsed;
-                      }
-                    }}
-                  />
-                  <select
-                    name="area_terreno_unidade"
-                    class="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 sm:w-44"
-                    bind:value={editableProperty.area_terreno_unidade}
-                  >
-                    {#each areaUnitOptions as unit}
-                      <option value={unit.value}>{unit.label}</option>
-                    {/each}
-                  </select>
-                </div>
-              </label>
+            <div class="mt-4 space-y-6">
+              <PropertyLocationFields
+                idPrefix="edit-property"
+                bind:cep={editableProperty.cep}
+                bind:semCep={editSemCep}
+                bind:state={editableProperty.state}
+                bind:city={editableProperty.city}
+                bind:address={editableProperty.address}
+                bind:bairro={editableProperty.bairro}
+                bairroOptional={editBairroOptional}
+                bind:numero={editableProperty.numero}
+                bind:semNumero={editSemNumero}
+                bind:quadra={editableProperty.quadra}
+                bind:semQuadra={editSemQuadra}
+                bind:lote={editableProperty.lote}
+                bind:semLote={editSemLote}
+                bind:complemento={editableProperty.complemento}
+                {cities}
+                citiesLoading={false}
+                citiesError={null}
+                bairros={[]}
+                bairrosLoading={false}
+                bairrosError={null}
+                cepLookupError={null}
+                onStateChange={() => {}}
+                onCepLookup={() => {}}
+              />
+              <PropertyStructureFields
+                idPrefix="edit-property"
+                bind:bedrooms={editableProperty.bedrooms}
+                bind:bedroomsAsZero={editBedroomsAsZero}
+                bind:bathrooms={editableProperty.bathrooms}
+                bind:bathroomsAsZero={editBathroomsAsZero}
+                bind:garageSpots={editableProperty.garage_spots}
+                bind:garageSpotsAsZero={editGarageSpotsAsZero}
+                bind:areaConstruida={editableProperty.area_construida_valor}
+                bind:areaConstruidaUnidade={editableProperty.area_construida_unidade}
+                bind:areaTerreno={editableProperty.area_terreno_valor}
+                bind:areaTerrenoUnidade={editableProperty.area_terreno_unidade}
+              />
               <label class="flex flex-col gap-1 md:col-span-2">
                 <strong>Tipo do imóvel:</strong>
                 <select
@@ -4282,25 +3854,10 @@ function parseNullableNumber(value: unknown): number | null {
 
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Comodidades</h3>
-          <div class="mt-2 flex flex-wrap gap-2 text-sm">
-            {#if isEditMode && editableProperty}
-              {#each propertyAmenityOptions as amenity}
-                <label class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 text-xs dark:border-gray-700">
-                  <input
-                    type="checkbox"
-                    name={`amenity-${amenity.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}`}
-                    checked={isAmenityChecked(editableProperty, amenity)}
-                    on:change={(event) => {
-                      const checked = (event.target as HTMLInputElement).checked;
-                      if (editableProperty) {
-                        updateAmenitySelection(editableProperty, amenity, checked);
-                      }
-                    }}
-                  />
-                  {amenity}
-                </label>
-              {/each}
-            {:else}
+          {#if isEditMode && editableProperty}
+            <PropertyAmenitiesFields bind:selectedAmenities={editSelectedAmenities} />
+          {:else}
+            <div class="mt-2 flex flex-wrap gap-2 text-sm">
               <div class="w-full">
                 <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   Ativas
@@ -4329,8 +3886,8 @@ function parseNullableNumber(value: unknown): number | null {
                   {/each}
                 </div>
               </div>
-            {/if}
-          </div>
+            </div>
+          {/if}
         </div>
 
         {#if editError}
@@ -4346,46 +3903,20 @@ function parseNullableNumber(value: unknown): number | null {
       </div>
 
       <Dialog.Footer>
-        <Button variant="outline" on:click={closeModal} disabled={isProcessing}>
-          Sair
-        </Button>
-        {#if allowApproval}
-          {#if selectedProperty.status !== 'rejected'}
-            <Button variant="destructive" on:click={() => handleStatusUpdate('rejected')} disabled={isProcessing}>
-              {#if isProcessing}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-              {/if}
-              Rejeitar
-            </Button>
-          {/if}
-        {/if}
-          {#if isEditMode && editableProperty}
-            <Button
-              className={allowApproval
-                ? 'bg-green-500 text-black hover:bg-green-600'
-                : 'bg-emerald-400 text-white hover:bg-emerald-500'}
-              on:click={saveEdits}
-              disabled={isSavingEdit || isProcessing}
-            >
-            {#if isSavingEdit}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Salvar
-          </Button>
-        {/if}
-        {#if allowApproval && selectedProperty.status !== 'approved'}
-          <Button
-            className="bg-green-600 text-white hover:bg-green-700"
-            on:click={() => handleStatusUpdate('approved')}
-            disabled={isProcessing}
-          >
-            {#if isProcessing}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Aprovar
-          </Button>
-        {/if}
+        <PropertyManagementFooterActions
+          allowApproval={allowApproval}
+          isEditMode={isEditMode}
+          selectedStatus={selectedProperty.status}
+          hasEditableProperty={Boolean(editableProperty)}
+          isProcessing={isProcessing}
+          isSavingEdit={isSavingEdit}
+          onClose={closeModal}
+          onReject={() => handleStatusUpdate('rejected')}
+          onSave={saveEdits}
+          onApprove={() => handleStatusUpdate('approved')}
+        />
       </Dialog.Footer>
+      </PropertyFormShell>
     {/if}
   </Dialog.Content>
 </Dialog.Root>

@@ -356,7 +356,7 @@
 
     const viewConfig: Record<View, ViewConfig> = {
         dashboard: {
-            title: "Painel",
+            title: "Dashboard",
         },
         properties: {
             endpoint: "/admin/properties-with-brokers",
@@ -445,7 +445,7 @@
 
     // Funcao helper para obter configuracao da view com fallback seguro
     function getViewConfig(view: View): ViewConfig {
-        return viewConfig[view] || { title: "Painel" };
+        return viewConfig[view] || { title: "Dashboard" };
     }
 
     function isValidView(view: string): view is View {

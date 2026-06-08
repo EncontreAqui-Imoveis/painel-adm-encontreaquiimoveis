@@ -90,7 +90,7 @@
             </div>
             <div class="text-center">
                 <h2 class="text-3xl font-bold text-gray-900 dark:text-white">Encontre Aqui Imóveis</h2>
-                <p class="mt-1 text-gray-500 dark:text-gray-400">Painel Administrativo</p>
+                <p class="mt-1 text-gray-500 dark:text-gray-400">Dashboard Administrativo</p>
             </div>
             <form on:submit|preventDefault={handleLogin} class="space-y-6">
                 <div>
