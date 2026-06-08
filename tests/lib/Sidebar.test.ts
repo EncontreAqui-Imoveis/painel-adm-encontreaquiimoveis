@@ -90,7 +90,7 @@ describe('Sidebar', () => {
       expect(onNavigate).toHaveBeenCalledWith('notifications');
     });
 
-    expect(screen.getByRole('button', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Painel' })).toBeInTheDocument();
   });
 
   it('reacts to hashchange events for valid views only', async () => {
@@ -136,7 +136,7 @@ describe('Sidebar', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Imóveis' }));
 
-    const soldMenuItem = await screen.findByRole('button', { name: 'Vendidos/Alugados' });
+    const soldMenuItem = await screen.findByRole('button', { name: 'Vendidos / Alugados' });
     expect(soldMenuItem).toBeInTheDocument();
 
     await fireEvent.click(soldMenuItem);

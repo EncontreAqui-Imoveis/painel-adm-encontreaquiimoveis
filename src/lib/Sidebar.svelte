@@ -379,7 +379,7 @@
       on:click={() => handleNavigation('dashboard')}
     >
       <LayoutDashboard class="mt-0.5 h-5 w-5 shrink-0" />
-      <span class="min-w-0 flex-1">Dashboard</span>
+      <span class="min-w-0 flex-1">Painel</span>
     </button>
 
     <div class="space-y-1">

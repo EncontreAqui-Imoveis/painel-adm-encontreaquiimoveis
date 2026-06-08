@@ -356,7 +356,7 @@
 
     const viewConfig: Record<View, ViewConfig> = {
         dashboard: {
-            title: "Dashboard",
+            title: "Painel",
         },
         properties: {
             endpoint: "/admin/properties-with-brokers",
@@ -445,7 +445,7 @@
 
     // Funcao helper para obter configuracao da view com fallback seguro
     function getViewConfig(view: View): ViewConfig {
-        return viewConfig[view] || { title: "Dashboard" };
+        return viewConfig[view] || { title: "Painel" };
     }
 
     function isValidView(view: string): view is View {
@@ -1675,7 +1675,7 @@
                                             <div
                                                 class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"
                                             ></div>
-                                            Railway Status
+                                            Status da Railway
                                             <svg
                                                 class="w-4 h-4 ml-1 opacity-80 group-hover:translate-x-1 transition-transform"
                                                 fill="none"
@@ -1699,7 +1699,7 @@
                                             <div
                                                 class="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.8)]"
                                             ></div>
-                                            Vercel Status
+                                            Status da Vercel
                                             <svg
                                                 class="w-4 h-4 ml-1 opacity-80 group-hover:translate-x-1 transition-transform"
                                                 fill="none"

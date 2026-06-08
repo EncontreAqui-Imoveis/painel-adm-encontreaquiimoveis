@@ -80,6 +80,19 @@ describe('CreateUser', () => {
     expect(optionLabels).toEqual(['Cliente', 'Corretor', 'Auxiliar Administrativo']);
   });
 
+  it('exibe status inicial do corretor com labels normalizadas', async () => {
+    render(CreateUser);
+
+    await fireEvent.change(screen.getByLabelText('Tipo de usuário *'), {
+      target: { value: 'broker' },
+    });
+
+    const brokerStatusSelect = screen.getByLabelText('Status inicial do corretor *') as HTMLSelectElement;
+    const optionLabels = Array.from(brokerStatusSelect.options).map((option) => option.textContent?.trim());
+
+    expect(optionLabels).toEqual(['Aprovado', 'Pendente de verificação']);
+  });
+
   it('envia profileType auxiliary_administrative e mantém UX de sucesso', async () => {
     render(CreateUser);
 

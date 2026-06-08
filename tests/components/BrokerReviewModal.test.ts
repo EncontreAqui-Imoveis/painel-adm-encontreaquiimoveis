@@ -73,6 +73,7 @@ describe('BrokerReviewModal', () => {
     render(BrokerReviewModal, { open: true, broker, showApprove: true });
 
     await screen.findByText('Revisar Corretor');
+    expect(screen.getByText('Pendente de verificação')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
 
     const dialog = screen.getByRole('dialog');
@@ -239,6 +240,39 @@ describe('BrokerReviewModal', () => {
     expect(screen.queryByAltText('Selfie')).not.toBeInTheDocument();
   });
 
+  it('permite substituir documento existente sem fechar o modal', async () => {
+    apiGetMock.mockResolvedValueOnce({
+      data: {
+        ...broker,
+        creci_front_url: 'https://example.com/front.jpg',
+        creci_back_url: 'https://example.com/back.jpg',
+        selfie_url: 'https://example.com/selfie.jpg',
+      },
+    });
+
+    render(BrokerReviewModal, { open: true, broker, showApprove: true });
+
+    await screen.findByText('Revisar Corretor');
+    expect(screen.getByText('Pendente de verificação')).toBeInTheDocument();
+
+    const replaceButton = screen.getByRole('button', { name: /Substituir frente do CRECI/i });
+    await fireEvent.click(replaceButton);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await fireEvent.change(fileInput, {
+      target: {
+        files: [new File(['conteudo'], 'doc-substituido.png', { type: 'image/png' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith(
+        '/admin/brokers/10/documents',
+        expect.any(FormData),
+      );
+    });
+  });
+
   it('mostra erro ao reenviar documento quando o endpoint responde falha', async () => {
     apiPostMock.mockRejectedValueOnce({
       response: {
@@ -251,8 +285,8 @@ describe('BrokerReviewModal', () => {
     render(BrokerReviewModal, { open: true, broker, showApprove: true });
 
     await screen.findByText('Revisar Corretor');
-    const uploadButtons = screen.getAllByRole('button', { name: 'Enviar Documento' });
-    await fireEvent.click(uploadButtons[0]);
+    const uploadButton = screen.getByRole('button', { name: /Enviar frente do CRECI/i });
+    await fireEvent.click(uploadButton);
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput).toBeTruthy();

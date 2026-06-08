@@ -7,7 +7,8 @@
   import { Loader2, Trash2, Upload, Eye, X } from 'lucide-svelte';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
-import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/create-property-helpers';
+  import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/create-property-helpers';
+  import { formatBrokerStatusLabel, getBrokerStatusBadgeClass } from '$lib/utils/brokerStatus';
   import type { BrokerDocuments } from '$lib/types';
 
   type BrokerDetail = {
@@ -103,6 +104,12 @@ import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/c
   let resolvedCreciFrontUrl = '';
   let resolvedCreciBackUrl = '';
   let resolvedSelfieUrl = '';
+  type DocumentLabelKey = 'creciFront' | 'creciBack' | 'selfie';
+  const DOCUMENT_LABELS: Record<DocumentLabelKey, string> = {
+    creciFront: 'Frente do CRECI',
+    creciBack: 'Verso do CRECI',
+    selfie: 'Selfie com CRECI',
+  };
   let brokerForm = {
     name: '',
     email: '',
@@ -186,6 +193,21 @@ import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/c
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
     return date.toLocaleDateString('pt-BR');
+  }
+
+  function getDocumentLabel(docType: DocumentLabelKey): string {
+    return DOCUMENT_LABELS[docType];
+  }
+
+  function getDocumentActionLabel(
+    action: 'send' | 'replace' | 'view' | 'delete',
+    docType: DocumentLabelKey
+  ): string {
+    const label = getDocumentLabel(docType).toLowerCase();
+    if (action === 'replace') return `Substituir ${label}`;
+    if (action === 'view') return `Visualizar ${label}`;
+    if (action === 'delete') return `Excluir ${label}`;
+    return `Enviar ${label}`;
   }
 
   async function fetchBrokerDetail(brokerId: number) {
@@ -631,8 +653,8 @@ import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/c
               </div>
               <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Status</div>
-                <div class="font-medium text-gray-900 dark:text-gray-100">
-                  {brokerDetail?.status ?? broker.status ?? '-'}
+                <div class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getBrokerStatusBadgeClass(brokerDetail?.status ?? broker.status ?? null)}`}>
+                  {formatBrokerStatusLabel(brokerDetail?.status ?? broker.status ?? null)}
                 </div>
               </div>
               <div>
@@ -653,17 +675,19 @@ import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/c
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <!-- Frente CRECI -->
                 <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
-                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">Frente do CRECI</div>
+                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">
+                    {getDocumentLabel('creciFront')}
+                  </div>
                   {#if resolvedCreciFrontUrl}
                     <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                      <img src={resolvedCreciFrontUrl} alt="Frente do CRECI" class="h-full w-full object-cover" />
+                      <img src={resolvedCreciFrontUrl} alt={getDocumentLabel('creciFront')} class="h-full w-full object-cover" />
                       <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                         <div class="flex gap-2">
                           <button
                             type="button"
                             class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(resolvedCreciFrontUrl, 'Frente do CRECI')}
-                            title="Visualizar"
+                            on:click={() => openPreview(resolvedCreciFrontUrl, getDocumentLabel('creciFront'))}
+                            title={getDocumentActionLabel('view', 'creciFront')}
                           >
                             <Eye class="h-4 w-4" />
                           </button>
@@ -672,13 +696,23 @@ import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/c
                             class="rounded-full bg-red-500 p-2 text-white shadow-sm hover:bg-red-600"
                             on:click={() => handleDocumentDelete('creciFront')}
                             disabled={isDeletingDocument}
-                            title="Excluir"
+                            title={getDocumentActionLabel('delete', 'creciFront')}
                           >
                             {#if isDeletingDocument}
                               <Loader2 class="h-4 w-4 animate-spin" />
                             {:else}
                               <Trash2 class="h-4 w-4" />
                             {/if}
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-full bg-green-600 p-2 text-white shadow-sm hover:bg-green-700"
+                            on:click={() => triggerDocumentUpload('creciFront')}
+                            disabled={isUploadingDocument}
+                            title={getDocumentActionLabel('replace', 'creciFront')}
+                            aria-label={getDocumentActionLabel('replace', 'creciFront')}
+                          >
+                            <Upload class="h-4 w-4" />
                           </button>
                         </div>
                       </div>
@@ -693,24 +727,28 @@ import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/c
                       <div class="rounded-full border border-gray-300 p-2 dark:border-gray-600">
                         <Upload class="h-5 w-5" />
                       </div>
-                      <span class="text-[10px] font-medium uppercase tracking-wider">Enviar Documento</span>
+                      <span class="text-[10px] font-medium uppercase tracking-wider">
+                        {getDocumentActionLabel('send', 'creciFront')}
+                      </span>
                     </button>
                   {/if}
                 </div>
 
                 <!-- Verso CRECI -->
                 <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
-                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">Verso do CRECI</div>
+                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">
+                    {getDocumentLabel('creciBack')}
+                  </div>
                   {#if resolvedCreciBackUrl}
                     <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                      <img src={resolvedCreciBackUrl} alt="Verso do CRECI" class="h-full w-full object-cover" />
+                      <img src={resolvedCreciBackUrl} alt={getDocumentLabel('creciBack')} class="h-full w-full object-cover" />
                       <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                         <div class="flex gap-2">
                           <button
                             type="button"
                             class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(resolvedCreciBackUrl, 'Verso do CRECI')}
-                            title="Visualizar"
+                            on:click={() => openPreview(resolvedCreciBackUrl, getDocumentLabel('creciBack'))}
+                            title={getDocumentActionLabel('view', 'creciBack')}
                           >
                             <Eye class="h-4 w-4" />
                           </button>
@@ -719,13 +757,23 @@ import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/c
                             class="rounded-full bg-red-500 p-2 text-white shadow-sm hover:bg-red-600"
                             on:click={() => handleDocumentDelete('creciBack')}
                             disabled={isDeletingDocument}
-                            title="Excluir"
+                            title={getDocumentActionLabel('delete', 'creciBack')}
                           >
                             {#if isDeletingDocument}
                               <Loader2 class="h-4 w-4 animate-spin" />
                             {:else}
                               <Trash2 class="h-4 w-4" />
                             {/if}
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-full bg-green-600 p-2 text-white shadow-sm hover:bg-green-700"
+                            on:click={() => triggerDocumentUpload('creciBack')}
+                            disabled={isUploadingDocument}
+                            title={getDocumentActionLabel('replace', 'creciBack')}
+                            aria-label={getDocumentActionLabel('replace', 'creciBack')}
+                          >
+                            <Upload class="h-4 w-4" />
                           </button>
                         </div>
                       </div>
@@ -740,24 +788,28 @@ import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/c
                       <div class="rounded-full border border-gray-300 p-2 dark:border-gray-600">
                         <Upload class="h-5 w-5" />
                       </div>
-                      <span class="text-[10px] font-medium uppercase tracking-wider">Enviar Documento</span>
+                      <span class="text-[10px] font-medium uppercase tracking-wider">
+                        {getDocumentActionLabel('send', 'creciBack')}
+                      </span>
                     </button>
                   {/if}
                 </div>
 
                 <!-- Selfie -->
                 <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
-                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">Selfie com CRECI</div>
+                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">
+                    {getDocumentLabel('selfie')}
+                  </div>
                   {#if resolvedSelfieUrl}
                     <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                      <img src={resolvedSelfieUrl} alt="Selfie" class="h-full w-full object-cover" />
+                      <img src={resolvedSelfieUrl} alt={getDocumentLabel('selfie')} class="h-full w-full object-cover" />
                       <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                         <div class="flex gap-2">
                           <button
                             type="button"
                             class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(resolvedSelfieUrl, 'Selfie com CRECI')}
-                            title="Visualizar"
+                            on:click={() => openPreview(resolvedSelfieUrl, getDocumentLabel('selfie'))}
+                            title={getDocumentActionLabel('view', 'selfie')}
                           >
                             <Eye class="h-4 w-4" />
                           </button>
@@ -766,13 +818,23 @@ import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/c
                             class="rounded-full bg-red-500 p-2 text-white shadow-sm hover:bg-red-600"
                             on:click={() => handleDocumentDelete('selfie')}
                             disabled={isDeletingDocument}
-                            title="Excluir"
+                            title={getDocumentActionLabel('delete', 'selfie')}
                           >
                             {#if isDeletingDocument}
                               <Loader2 class="h-4 w-4 animate-spin" />
                             {:else}
                               <Trash2 class="h-4 w-4" />
                             {/if}
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-full bg-green-600 p-2 text-white shadow-sm hover:bg-green-700"
+                            on:click={() => triggerDocumentUpload('selfie')}
+                            disabled={isUploadingDocument}
+                            title={getDocumentActionLabel('replace', 'selfie')}
+                            aria-label={getDocumentActionLabel('replace', 'selfie')}
+                          >
+                            <Upload class="h-4 w-4" />
                           </button>
                         </div>
                       </div>
@@ -787,7 +849,9 @@ import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/c
                       <div class="rounded-full border border-gray-300 p-2 dark:border-gray-600">
                         <Upload class="h-5 w-5" />
                       </div>
-                      <span class="text-[10px] font-medium uppercase tracking-wider">Enviar Documento</span>
+                      <span class="text-[10px] font-medium uppercase tracking-wider">
+                        {getDocumentActionLabel('send', 'selfie')}
+                      </span>
                     </button>
                   {/if}
                 </div>

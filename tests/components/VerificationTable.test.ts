@@ -69,6 +69,7 @@ describe('VerificationTable', () => {
 
     expect(await screen.findByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Rejeitar' })).toBeInTheDocument();
+    expect(screen.getByText('Pendente de verificação')).toBeInTheDocument();
   });
 
   it('mostra corretores pendentes mesmo sem documentos reais', async () => {

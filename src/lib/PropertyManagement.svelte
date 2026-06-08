@@ -3292,7 +3292,7 @@ function parseNullableNumber(value: unknown): number | null {
           </span>
         </Dialog.Description>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Dashboard / Imóveis / Referência {resolveSelectedPropertyPublicCode(selectedProperty)}
+            Painel / Imóveis / Referência {resolveSelectedPropertyPublicCode(selectedProperty)}
         </p>
       </Dialog.Header>
 

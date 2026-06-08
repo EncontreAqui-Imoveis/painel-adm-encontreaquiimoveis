@@ -3,6 +3,7 @@
     import { Button } from '$lib/components/ui/button';
     import BrokerReviewModal from './components/BrokerReviewModal.svelte';
     import type { Broker, BrokerDocuments } from './types';
+    import { formatBrokerStatusLabel, getBrokerStatusBadgeClass } from '$lib/utils/brokerStatus';
 
     export let pendingBrokers: Broker[] = [];
     const dispatch = createEventDispatcher();
@@ -11,27 +12,6 @@
     let isMobileLayout =
         typeof window !== 'undefined' ? window.innerWidth < 768 : false;
     let analysisBrokers: Broker[] = [];
-
-    // Função para obter texto do status
-    function getStatusText(status: string) {
-        const statusMap: Record<string, string> = {
-            'pending_verification': 'Pendente',
-            'approved': 'Aprovado', 
-            'rejected': 'Rejeitado',
-            'pending': 'Pendente'
-        };
-        return statusMap[status] || status;
-    }
-
-    function getStatusClasses(status: string) {
-        const statusMap: Record<string, string> = {
-            'approved': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-            'rejected': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-            'pending_verification': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-            'pending': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-        };
-        return statusMap[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-    }
 
     // ✅ CORREÇÃO: Função simplificada para URLs
     function getDocumentUrl(url: string | null | undefined): string {
@@ -115,8 +95,8 @@
                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{broker.email}</p>
                         <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">CRECI: {broker.creci}</p>
                     </div>
-                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {getStatusClasses(broker.status)}">
-                        {getStatusText(broker.status)}
+                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium {getBrokerStatusBadgeClass(broker.status)}">
+                        {formatBrokerStatusLabel(broker.status)}
                     </span>
                 </div>
                 <div class="mt-3 space-y-2 text-sm text-gray-500 italic">
