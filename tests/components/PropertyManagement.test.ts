@@ -1324,7 +1324,7 @@ describe('PropertyManagement', () => {
 
     await fireEvent.click(getRevisarButtons()[0]);
     const reopenedDialog = await screen.findByRole('dialog');
-    expect(await within(reopenedDialog).findByText(/Painel \/ Imóveis \/ Referência PUB-PEND-01/)).toBeInTheDocument();
+    expect(await within(reopenedDialog).findByText(/Dashboard \/ Imóveis \/ Referência PUB-PEND-01/)).toBeInTheDocument();
     expect(findListItemByLabel(reopenedDialog, 'Área construída')).toHaveTextContent('3210 ha');
     expect(findAmenityInActiveSection(reopenedDialog, 'Mobiliada')).toBeInTheDocument();
     expect(findAmenityInActiveSection(reopenedDialog, 'Academia')).toBeInTheDocument();
@@ -1752,7 +1752,7 @@ describe('PropertyManagement', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(
-      within(dialog).getByText('Painel / Imóveis / Referência Sem referência pública')
+      within(dialog).getByText('Dashboard / Imóveis / Referência Sem referência pública')
     ).toBeInTheDocument();
 
     await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));

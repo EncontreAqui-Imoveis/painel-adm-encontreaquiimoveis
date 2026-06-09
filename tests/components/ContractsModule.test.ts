@@ -439,8 +439,10 @@ describe('ContractsModule', () => {
     expect(formData.get('documentCategory')).toBe('outro');
     expect(formData.get('side')).toBe('seller');
 
-    expect(screen.getAllByRole('button', { name: 'Substituir' })).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Adicionar outro' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Substituir' })).toHaveLength(2);
+      expect(screen.getByRole('button', { name: 'Adicionar outro' })).toBeInTheDocument();
+    });
   });
 
   it('envia slot outro explícito na matriz para buyer', async () => {

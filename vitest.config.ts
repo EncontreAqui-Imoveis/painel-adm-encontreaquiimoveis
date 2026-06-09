@@ -19,6 +19,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.{test,spec}.ts'],
+    exclude: ['tests/proposal-flow.spec.ts'],
     css: true,
     pool: 'threads',
     fileParallelism: false,

@@ -5,50 +5,34 @@
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
   import Pagination from '$lib/Pagination.svelte';
-
-  type PaymentBreakdown = {
-    dinheiro: number;
-    permuta: number;
-    financiamento: number;
-    outros: number;
-  };
-
-  type NegotiationItem = {
-    id: string;
-    status: string;
-    internalStatus: string;
-    propertyId: number;
-    propertyCode?: string | null;
-    propertyTitle?: string | null;
-    propertyAddress?: string | null;
-    brokerName?: string | null;
-    capturingBrokerName?: string | null;
-    sellingBrokerName?: string | null;
-    clientName?: string | null;
-    clientCpf?: string | null;
-    value?: number | null;
-    validityDate?: string | null;
-    payment?: PaymentBreakdown | null;
-    updatedAt?: string | null;
-    signedDocumentId?: number | null;
-    signedDocumentFileName?: string | null;
-    capturingBrokerId?: string | number | null;
-    sellingBrokerId?: string | number | null;
-  };
-
-  type ResponsibleOption = {
-    id: number;
-    name: string;
-    email?: string | null;
-  };
-
-  type ProposalFilterKey = 'sent' | 'signed' | 'refused';
-
-  const PROPOSAL_FILTERS: Array<{ key: ProposalFilterKey; label: string; status: string }> = [
-    { key: 'sent', label: 'Propostas Enviadas', status: 'PROPOSAL_UNSIGNED' },
-    { key: 'signed', label: 'Propostas Assinadas', status: 'PROPOSAL_SIGNED' },
-    { key: 'refused', label: 'Propostas Recusadas', status: 'REFUSED' },
-  ];
+  import ProposalDetailModal from '$lib/components/negotiations/ProposalDetailModal.svelte';
+  import {
+    extractSignedDocumentFileName,
+    extractSignedDocumentId,
+    formatCurrency,
+    formatDate,
+    getBrokerName,
+    getStatusBadgeClass,
+    getStatusLabel,
+    isSignedProposal,
+    normalizeErrorMessage,
+    normalizeResponsibleOption,
+    canSaveResponsiblesSelection as canSaveResponsiblesSelectionHelper,
+    hasResponsiblesInconsistentState as hasResponsiblesInconsistentStateHelper,
+    hasResponsibleChanges as hasResponsibleChangesHelper,
+    paymentLines,
+    PROPOSAL_FILTERS,
+    readClientCpf,
+    readClientName,
+    responsibleSnapshot,
+    responsiblesBlockApproval as responsiblesBlockApprovalHelper,
+    selectedFilterStatus,
+    type NegotiationItem,
+    type PaginatedResponse,
+    type ProposalFilterKey,
+    type ResponsibleOption,
+    type ResponsibleSelectionState,
+  } from '$lib/components/negotiations/negotiationRequestsHelpers';
 
   type TopProposal = {
     negotiationId: string;
@@ -66,14 +50,6 @@
     proposalCount: number;
     updatedAt?: string | null;
     topProposal?: TopProposal | null;
-  };
-
-  type PaginatedResponse<T> = {
-    data?: T[];
-    page?: number;
-    limit?: number;
-    total?: number;
-    propertyId?: number;
   };
 
   let summaryItems: NegotiationSummaryItem[] = [];
@@ -123,90 +99,6 @@
   let previewImageUrl: string | null = null;
   let previewImageAlt = 'Pré-visualização do imóvel';
 
-  function normalizeClient(item: NegotiationItem | null): { name: string; cpf: string } {
-    if (!item) return { name: '-', cpf: '-' };
-    const raw =
-      item.clientName ??
-      (item as unknown as Record<string, unknown>).client_name ??
-      (item as unknown as Record<string, unknown>).client;
-
-    let name = '-';
-    let cpf = '-';
-
-    if (typeof raw === 'string' && raw.trim().length > 0) {
-      name = raw.trim();
-    } else if (raw && typeof raw === 'object') {
-      const nestedName = (raw as Record<string, unknown>).name;
-      if (typeof nestedName === 'string' && nestedName.trim().length > 0) {
-        name = nestedName.trim();
-      }
-    }
-
-    const rawCpf =
-      item.clientCpf ??
-      (item as unknown as Record<string, unknown>).client_cpf ??
-      (item as unknown as Record<string, unknown>).cpf ??
-      (item as unknown as Record<string, unknown>).client;
-
-    if (typeof rawCpf === 'string' && rawCpf.trim().length > 0) {
-      cpf = rawCpf.trim();
-    } else if (rawCpf && typeof rawCpf === 'object') {
-      const nestedCpf = (rawCpf as Record<string, unknown>).cpf;
-      if (typeof nestedCpf === 'string' && nestedCpf.trim().length > 0) {
-        cpf = nestedCpf.trim();
-      }
-    }
-
-    return { name, cpf };
-  }
-
-  function readClientName(item: NegotiationItem | null): string {
-    return normalizeClient(item).name;
-  }
-
-  function readClientCpf(item: NegotiationItem | null): string {
-    return normalizeClient(item).cpf;
-  }
-
-  function getBrokerName(item: NegotiationItem): string {
-    return item.brokerName ?? item.capturingBrokerName ?? '-';
-  }
-
-  function getStatusLabel(status?: string, internalStatus?: string): string {
-    const value = String(status ?? internalStatus ?? '').trim().toUpperCase();
-    if (!value) return '-';
-    if (value === 'PROPOSAL_UNSIGNED') return 'Proposta enviada';
-    if (value === 'PROPOSAL_SIGNED') return 'Proposta assinada';
-    if (value === 'REFUSED') return 'Recusada';
-    if (value === 'UNDER_REVIEW' || value === 'DOCUMENTATION_PHASE') return 'Em análise';
-    if (value === 'APPROVED' || value === 'IN_NEGOTIATION') return 'Aprovada';
-    if (value === 'PROPOSAL_SENT') return 'Proposta enviada';
-    if (value === 'PROPOSAL_DRAFT') return 'Rascunho';
-    if (value === 'REJECTED') return 'Rejeitada';
-    if (value === 'CANCELLED') return 'Cancelada';
-    return value;
-  }
-
-  function getStatusBadgeClass(status?: string, internalStatus?: string): string {
-    const value = String(status ?? internalStatus ?? '').trim().toUpperCase();
-    if (value === 'PROPOSAL_SIGNED') {
-      return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-    }
-    if (value === 'PROPOSAL_UNSIGNED') {
-      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
-    }
-    if (value === 'REFUSED') {
-      return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-    }
-    if (value === 'APPROVED' || value === 'IN_NEGOTIATION') {
-      return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-    }
-    if (value === 'REJECTED' || value === 'CANCELLED') {
-      return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-    }
-    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
-  }
-
   function requestSummaryFetch(resetPage = false) {
     if (resetPage) summaryPage = 1;
     summaryRefreshKey += 1;
@@ -217,59 +109,33 @@
     propertyRefreshKey += 1;
   }
 
-  function formatCurrency(value?: number | null) {
-    const amount = Number(value ?? 0);
-    if (!Number.isFinite(amount)) return 'R$ 0,00';
-    return amount.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      minimumFractionDigits: 2,
-    });
-  }
-
-  function formatDate(value?: string | null) {
-    if (!value) return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString('pt-BR');
-  }
-
-  function paymentLines(payment?: PaymentBreakdown | null) {
-    const normalized = payment ?? {
-      dinheiro: 0,
-      permuta: 0,
-      financiamento: 0,
-      outros: 0,
-    };
-    return [
-      { label: 'Dinheiro', value: normalized.dinheiro ?? 0 },
-      { label: 'Permuta', value: normalized.permuta ?? 0 },
-      { label: 'Financiamento', value: normalized.financiamento ?? 0 },
-      { label: 'Outros', value: normalized.outros ?? 0 },
-    ];
-  }
-
-  function idsMatch(a?: string | number | null, b?: string | number | null): boolean {
-    if (a == null || b == null) return false;
-    return String(a) === String(b);
-  }
-
   function isApproveBusy() {
     return processingAction || uploadingSignedPdf || deletingSignedPdf || savingResponsibles;
   }
 
-  function hasResponsiblesInconsistentState(proposalId?: string | null): boolean {
-    if (!proposalId) return true;
-    if (responsiblesLoading) return true;
-    if (responsiblesLoadError.trim().length > 0) return true;
-    return responsiblesLoadedProposalId !== proposalId;
+  function currentResponsibleSelectionState(): ResponsibleSelectionState {
+    return {
+      loading: responsiblesLoading,
+      loadError: responsiblesLoadError,
+      loadedProposalId: responsiblesLoadedProposalId,
+      snapshot: responsiblesSnapshot,
+    };
   }
 
-  /** Com PDF já anexado, aprovar não pode depender do carregamento de responsáveis. */
+  function hasResponsiblesInconsistentState(proposalId?: string | null): boolean {
+    return hasResponsiblesInconsistentStateHelper(proposalId, currentResponsibleSelectionState());
+  }
+
   function responsiblesBlockApproval(proposal: NegotiationItem | null): boolean {
-    if (!proposal) return true;
-    if (proposal.signedDocumentId != null) return false;
-    return hasResponsiblesInconsistentState(proposal.id);
+    return responsiblesBlockApprovalHelper(proposal, currentResponsibleSelectionState());
+  }
+
+  function hasResponsibleChanges(): boolean {
+    return hasResponsibleChangesHelper(
+      selectedResponsibles,
+      currentResponsibleSelectionState(),
+      selectedProposal?.id ?? null
+    );
   }
 
   function requiresSignedPdf() {
@@ -284,38 +150,12 @@
     return 'Envie sua proposta assinada';
   }
 
-  function normalizeErrorMessage(error: unknown, fallback: string): string {
-    if (error && typeof error === 'object') {
-      const maybeError = error as {
-        response?: { data?: { message?: string; error?: string } };
-        message?: string;
-      };
-      const apiMessage =
-        maybeError.response?.data?.message ?? maybeError.response?.data?.error ?? maybeError.message;
-      if (typeof apiMessage === 'string' && apiMessage.trim().length > 0) {
-        return apiMessage;
-      }
-    }
-    return fallback;
-  }
-
   function clearSignedPdfSelection() {
     selectedSignedPdfFile = null;
     signedPdfInputRenderKey += 1;
   }
 
-  function selectedFilterStatus(): string {
-    return PROPOSAL_FILTERS.find((item) => item.key === selectedProposalFilter)?.status ?? 'PROPOSAL_SIGNED';
-  }
-
   /** Elegível para aprovar/rejeitar: PDF assinado anexado OU status já assinado (backend às vezes mantém outro status). */
-  function isSignedProposal(item: NegotiationItem | null): boolean {
-    if (!item) return false;
-    if (item.signedDocumentId != null) return true;
-    const value = String(item?.status ?? item?.internalStatus ?? '').trim().toUpperCase();
-    return value === 'PROPOSAL_SIGNED';
-  }
-
   function clearResponsibleSearchDebounce() {
     if (!responsibleSearchDebounce) return;
     clearTimeout(responsibleSearchDebounce);
@@ -326,29 +166,6 @@
     if (!responsibleBlurTimeout) return;
     clearTimeout(responsibleBlurTimeout);
     responsibleBlurTimeout = null;
-  }
-
-  function responsibleSnapshot(list: ResponsibleOption[]): string {
-    return [...list]
-      .map((item) => item.id)
-      .sort((a, b) => a - b)
-      .join(',');
-  }
-
-  function normalizeResponsibleOption(item: unknown): ResponsibleOption | null {
-    if (!item || typeof item !== 'object') return null;
-    const raw = item as Record<string, unknown>;
-    const rawId = raw.id ?? raw.userId ?? raw.responsibleId;
-    const parsedId = Number(rawId);
-    if (!Number.isFinite(parsedId)) return null;
-
-    const rawName = raw.name ?? raw.fullName ?? raw.nome;
-    const name =
-      typeof rawName === 'string' && rawName.trim().length > 0
-        ? rawName.trim()
-        : `Responsável #${parsedId}`;
-    const email = typeof raw.email === 'string' ? raw.email : null;
-    return { id: parsedId, name, email };
   }
 
   function onResponsibleSearchInput(event: Event) {
@@ -460,13 +277,10 @@
     }
   }
 
-  function hasResponsibleChanges(): boolean {
-    if (hasResponsiblesInconsistentState(selectedProposal?.id ?? null)) return true;
-    return responsibleSnapshot(selectedResponsibles) !== responsiblesSnapshot;
-  }
-
   async function saveResponsiblesSelection(proposalId: string, silent = false): Promise<boolean> {
-    if (hasResponsiblesInconsistentState(proposalId)) {
+    if (
+      !canSaveResponsiblesSelectionHelper(proposalId, selectedResponsibles, currentResponsibleSelectionState())
+    ) {
       responsibleError = 'Recarregue os responsáveis antes de salvar.';
       return false;
     }
@@ -522,58 +336,6 @@
     }
   }
 
-  function extractSignedDocumentId(payload: unknown): number | null {
-    const sources: unknown[] = [payload];
-    if (payload && typeof payload === 'object') {
-      const nested = (payload as Record<string, unknown>).data;
-      sources.push(nested);
-    }
-
-    for (const source of sources) {
-      if (!source || typeof source !== 'object') continue;
-      const record = source as Record<string, unknown>;
-      const candidate =
-        record.signedDocumentId ??
-        record.signed_document_id ??
-        record.signedProposalDocumentId ??
-        record.documentId ??
-        record.document_id;
-      if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-        return candidate;
-      }
-      if (typeof candidate === 'string' && candidate.trim().length > 0) {
-        const parsed = Number(candidate);
-        if (Number.isFinite(parsed)) return parsed;
-      }
-    }
-
-    return null;
-  }
-
-  function extractSignedDocumentFileName(payload: unknown): string | null {
-    const sources: unknown[] = [payload];
-    if (payload && typeof payload === 'object') {
-      sources.push((payload as Record<string, unknown>).data);
-    }
-
-    for (const source of sources) {
-      if (!source || typeof source !== 'object') continue;
-      const record = source as Record<string, unknown>;
-      const candidate =
-        record.signedDocumentFileName ??
-        record.signed_document_file_name ??
-        record.fileName ??
-        record.file_name ??
-        record.originalFileName ??
-        record.original_file_name;
-      if (typeof candidate === 'string' && candidate.trim().length > 0) {
-        return candidate.trim();
-      }
-    }
-
-    return null;
-  }
-
   function clearPropertyModalState() {
     showPropertyModal = false;
     selectedProperty = null;
@@ -587,7 +349,7 @@
     summaryLoading = true;
     try {
       const params = new URLSearchParams();
-      params.set('status', selectedFilterStatus());
+      params.set('status', selectedFilterStatus(selectedProposalFilter));
       params.set('page', String(summaryPage));
       params.set('limit', String(summaryItemsPerPage));
 
@@ -616,7 +378,7 @@
     propertyLoading = true;
     try {
       const params = new URLSearchParams();
-      params.set('status', selectedFilterStatus());
+      params.set('status', selectedFilterStatus(selectedProposalFilter));
       params.set('page', String(propertyPage));
       params.set('limit', String(propertyItemsPerPage));
 
@@ -1180,319 +942,49 @@
   </div>
 {/if}
 
-  {#if showDetailModal && selectedProposal}
-  <div
-    class="fixed inset-0 z-[60] flex max-h-dvh items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
-    role="presentation"
-    on:click={(event) => {
-      if (event.target === event.currentTarget) {
-        closeDetailModal();
-      }
-    }}
-    on:keydown={() => {}}
-  >
-    <div class="my-auto flex w-full max-w-2xl flex-col rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900 sm:max-h-[90vh]">
-      <div class="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Análise da proposta</h3>
-          <p class="text-sm text-gray-500 dark:text-gray-400">
-            {selectedProposal.propertyCode
-              ? `${selectedProposal.propertyCode}`
-              : `#${selectedProposal.propertyId}`}
-            {#if selectedProposal.propertyTitle}
-              - {selectedProposal.propertyTitle}
-            {/if}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" title="Fechar modal" className="px-2" on:click={() => closeDetailModal()} disabled={isApproveBusy()}>
-          <X class="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div class="min-h-0 max-h-[min(70vh,32rem)] flex-1 overflow-y-auto pr-1 sm:max-h-[min(65vh,40rem)]">
-        <div class="grid gap-4 md:grid-cols-2">
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Comprador / Proponente</p>
-            <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{readClientName(selectedProposal)}</p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(selectedProposal)}</p>
-          </div>
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Validade</p>
-            <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">
-              {formatDate(selectedProposal.validityDate)}
-            </p>
-          </div>
-        </div>
-
-        <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
-          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Condições de pagamento</p>
-          <div class="mt-2 grid gap-2 sm:grid-cols-2">
-            {#each paymentLines(selectedProposal.payment) as item (item.label)}
-              <div class="rounded bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-                <span class="font-semibold">{item.label}:</span> {formatCurrency(item.value)}
-              </div>
-            {/each}
-          </div>
-          <p class="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
-            Valor total: {formatCurrency(selectedProposal.value)}
-          </p>
-        </div>
-
-        <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
-          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">PDF assinado</p>
-          <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
-            {#if selectedProposal.signedDocumentId != null}
-              PDF assinado anexado.
-            {:else}
-              Nenhum PDF assinado anexado.
-            {/if}
-          </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {#if selectedProposal.signedDocumentId != null}
-              Você pode visualizar, excluir ou substituir.
-            {:else}
-              Envie um PDF assinado para habilitar a aprovação.
-            {/if}
-          </p>
-          <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">
-            {signedPdfDisplayName()}
-          </p>
-
-          {#if requiresSignedPdf()}
-            <p class="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-              Para aprovar, é obrigatório anexar um PDF assinado.
-            </p>
-          {/if}
-
-          <div class="mt-3">
-            <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
-              O envio inicia automaticamente ao selecionar o arquivo.
-            </p>
-            {#key signedPdfInputRenderKey}
-              <input
-                bind:this={signedPdfFileInput}
-                type="file"
-                accept="application/pdf"
-                on:change={handleSignedPdfChange}
-                class="sr-only"
-              />
-            {/key}
-            <div class="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={uploadingSignedPdf || deletingSignedPdf || processingAction}
-                on:click={() => signedPdfFileInput?.click()}
-              >
-                {#if uploadingSignedPdf}
-                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                {/if}
-                {selectedProposal?.signedDocumentId != null ? 'Substituir PDF' : 'Enviar PDF'}
-              </Button>
-            </div>
-            {#if uploadingSignedPdf}
-              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Enviando PDF assinado...</p>
-            {/if}
-          </div>
-
-          <div class="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              on:click={deleteSignedPdf}
-              disabled={deletingSignedPdf || uploadingSignedPdf || processingAction || selectedProposal.signedDocumentId == null}
-            >
-              {#if deletingSignedPdf}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-              {/if}
-              Excluir PDF
-            </Button>
-            <Button
-              variant="outline"
-              on:click={viewSignedPdf}
-              disabled={viewingPdf || uploadingSignedPdf || deletingSignedPdf || selectedProposal.signedDocumentId == null}
-            >
-              {#if viewingPdf}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-              {/if}
-              Visualizar PDF Assinado
-            </Button>
-          </div>
-        </div>
-
-        <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
-          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-            Responsável por acompanhar o processo
-          </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Selecione até 5 pessoas para acompanhar esta proposta.
-          </p>
-
-          <div class="mt-3 space-y-2">
-            <div class="relative">
-              <input
-                type="text"
-                value={responsibleSearchQuery}
-                on:focus={openResponsibleDropdown}
-                on:blur={scheduleCloseResponsibleDropdown}
-                on:input={onResponsibleSearchInput}
-                placeholder="Digite ao menos 2 letras para buscar responsável"
-                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-green-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                disabled={responsiblesLoading || savingResponsibles}
-              />
-
-              {#if responsibleDropdownOpen}
-                <div class="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900">
-                  {#if responsibleSearchQuery.trim().length < 2}
-                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-                      Digite ao menos 2 letras para buscar.
-                    </p>
-                  {:else if searchingResponsibles}
-                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Buscando responsáveis...</p>
-                  {:else if responsibleOptions.length === 0}
-                    <p class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Nenhum responsável encontrado.</p>
-                  {:else}
-                    {#each responsibleOptions as option (`${option.id}`)}
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between border-t border-gray-100 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-800"
-                        on:click={() => addResponsible(option)}
-                      >
-                        <span>{option.name}</span>
-                        {#if option.email}
-                          <span class="text-xs text-gray-500 dark:text-gray-400">{option.email}</span>
-                        {/if}
-                      </button>
-                    {/each}
-                  {/if}
-                </div>
-              {/if}
-            </div>
-
-            {#if responsiblesLoading}
-              <p class="text-xs text-gray-500 dark:text-gray-400">Carregando responsáveis...</p>
-            {/if}
-            {#if responsiblesLoadError}
-              <div class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-                <p>{responsiblesLoadError}</p>
-                {#if selectedProposal}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-2"
-                    on:click={() => {
-                      const p = selectedProposal;
-                      if (p) void fetchResponsibles(p.id);
-                    }}
-                    disabled={responsiblesLoading || savingResponsibles || processingAction}
-                  >
-                    {#if responsiblesLoading}
-                      <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                    {/if}
-                    Tentar novamente
-                  </Button>
-                {/if}
-              </div>
-            {/if}
-
-            {#if selectedResponsibles.length > 0}
-              <div class="flex flex-wrap gap-2">
-                {#each selectedResponsibles as responsible (responsible.id)}
-                  <span class="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-                    {responsible.name}
-                    <button
-                      type="button"
-                      aria-label={`Remover ${responsible.name}`}
-                      class="text-gray-500 hover:text-red-600 dark:text-gray-300 dark:hover:text-red-300"
-                      on:click={() => removeResponsible(responsible.id)}
-                      disabled={savingResponsibles}
-                    >
-                      ×
-                    </button>
-                  </span>
-                {/each}
-              </div>
-            {:else}
-              <p class="text-xs text-gray-500 dark:text-gray-400">Nenhum responsável selecionado.</p>
-            {/if}
-
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              {selectedResponsibles.length}/5 responsáveis selecionados.
-            </p>
-            {#if responsibleError}
-              <p class="text-xs font-medium text-red-600 dark:text-red-400">{responsibleError}</p>
-            {/if}
-            <div>
-              <Button
-                size="sm"
-                variant="outline"
-                on:click={() => selectedProposal && saveResponsiblesSelection(selectedProposal.id)}
-                disabled={savingResponsibles || responsiblesLoading || hasResponsiblesInconsistentState(selectedProposal?.id ?? null) || !hasResponsibleChanges()}
-              >
-                {#if savingResponsibles}
-                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                {/if}
-                Salvar responsáveis
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div class="mt-4">
-          <label
-            for="reject-reason"
-            class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            Motivo da rejeição (obrigatório para rejeitar)
-          </label>
-          <textarea
-            id="reject-reason"
-            bind:value={rejectReason}
-            maxlength="500"
-            rows={4}
-            class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-red-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-            placeholder="Descreva o motivo da rejeição..."
-          ></textarea>
-        </div>
-      </div>
-
-      <div class="mt-5 flex flex-col gap-2 border-t border-gray-200 pt-4 dark:border-gray-700 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-        <p class="order-last text-left text-sm text-gray-500 dark:text-gray-400 sm:order-first sm:mr-auto sm:max-w-md">
-          {#if !isSignedProposal(selectedProposal) || requiresSignedPdf()}
-            Anexe o PDF assinado para aprovar ou rejeitar esta proposta.
-          {:else if responsiblesBlockApproval(selectedProposal)}
-            Valide/corrija o carregamento dos responsáveis para aprovar. Rejeitar ainda pode ser usado.
-          {/if}
-        </p>
-        <div class="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            variant="destructive"
-            className="bg-red-600 text-white hover:bg-red-700"
-            on:click={rejectSelected}
-            disabled={isApproveBusy() || !isSignedProposal(selectedProposal) || requiresSignedPdf()}
-            title={!isSignedProposal(selectedProposal) || requiresSignedPdf() ? 'Exija PDF assinado anexado' : 'Rejeitar proposta com motivo abaixo'}
-          >
-            {#if processingAction}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Rejeitar
-          </Button>
-          <Button
-            variant="outline"
-            className="bg-green-600 text-white hover:bg-green-700"
-            on:click={approveSelected}
-            disabled={isApproveBusy() || requiresSignedPdf() || responsiblesBlockApproval(selectedProposal) || !isSignedProposal(selectedProposal)}
-            title={requiresSignedPdf() ? 'Anexe o PDF assinado' : responsiblesBlockApproval(selectedProposal) ? 'Corrija responsáveis' : 'Aprovar e seguir para contratos'}
-          >
-            {#if processingAction || savingResponsibles}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Aprovar
-          </Button>
-        </div>
-      </div>
-    </div>
-  </div>
-{/if}
+  <ProposalDetailModal
+    {showDetailModal}
+    {selectedProposal}
+    {closeDetailModal}
+    {isApproveBusy}
+    {formatDate}
+    {formatCurrency}
+    {readClientName}
+    {readClientCpf}
+    {paymentLines}
+    {signedPdfDisplayName}
+    {requiresSignedPdf}
+    {uploadingSignedPdf}
+    {deletingSignedPdf}
+    {viewingPdf}
+    {processingAction}
+    {signedPdfInputRenderKey}
+    {handleSignedPdfChange}
+    {deleteSignedPdf}
+    {viewSignedPdf}
+    {responsibleDropdownOpen}
+    {responsibleSearchQuery}
+    {searchingResponsibles}
+    {responsibleOptions}
+    {responsiblesLoading}
+    {responsiblesLoadError}
+    {selectedResponsibles}
+    {responsibleError}
+    {savingResponsibles}
+    {openResponsibleDropdown}
+    {scheduleCloseResponsibleDropdown}
+    {onResponsibleSearchInput}
+    {addResponsible}
+    {fetchResponsibles}
+    {removeResponsible}
+    {saveResponsiblesSelection}
+    {hasResponsiblesInconsistentState}
+    {hasResponsibleChanges}
+    {responsiblesBlockApproval}
+    bind:rejectReason
+    {rejectSelected}
+    {approveSelected}
+  />
 
 {#if isImagePreviewOpen && previewImageUrl}
   <div

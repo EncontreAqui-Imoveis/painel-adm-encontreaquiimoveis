@@ -25,7 +25,7 @@ describe('create-property-helpers promotion percentage', () => {
   });
 
   it('clamps currency masks to the configured max value', () => {
-    expect(formatCurrencyInput('9999999999', 999999.99)).toBe('R$ 999.999,99');
+    expect(formatCurrencyInput('9999999999', 999999.99)).toBe('R$\u00A0999.999,99');
     expect(parseCurrency('9999999999', 999999.99)).toBe(999999.99);
   });
 });

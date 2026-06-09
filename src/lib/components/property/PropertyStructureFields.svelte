@@ -2,16 +2,16 @@
   import { clampAreaInput, clampCountInput } from '$lib/components/create-property-helpers';
 
   export let idPrefix = 'create-property';
-  export let bedrooms = '';
+  export let bedrooms: string | number | null | undefined = '';
   export let bedroomsAsZero = false;
-  export let bathrooms = '';
+  export let bathrooms: string | number | null | undefined = '';
   export let bathroomsAsZero = false;
-  export let garageSpots = '';
+  export let garageSpots: string | number | null | undefined = '';
   export let garageSpotsAsZero = false;
-  export let areaConstruida = '';
-  export let areaConstruidaUnidade: 'm2' | 'hectare' | 'alqueire' = 'm2';
-  export let areaTerreno = '';
-  export let areaTerrenoUnidade: 'm2' | 'hectare' | 'alqueire' = 'm2';
+  export let areaConstruida: string | number | null | undefined = '';
+  export let areaConstruidaUnidade: 'm2' | 'hectare' | 'alqueire' | null | undefined = 'm2';
+  export let areaTerreno: string | number | null | undefined = '';
+  export let areaTerrenoUnidade: 'm2' | 'hectare' | 'alqueire' | null | undefined = 'm2';
 </script>
 
 <div class="space-y-6">

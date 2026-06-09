@@ -90,7 +90,7 @@ describe('Sidebar', () => {
       expect(onNavigate).toHaveBeenCalledWith('notifications');
     });
 
-    expect(screen.getByRole('button', { name: 'Painel' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dashboard' })).toBeInTheDocument();
   });
 
   it('reacts to hashchange events for valid views only', async () => {

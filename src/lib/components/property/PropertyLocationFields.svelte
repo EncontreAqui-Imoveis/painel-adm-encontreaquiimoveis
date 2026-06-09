@@ -32,20 +32,20 @@
   ];
 
   export let idPrefix = 'create-property';
-  export let cep = '';
+  export let cep: string | null | undefined = '';
   export let semCep = false;
-  export let state = 'GO';
-  export let city = '';
-  export let address = '';
-  export let bairro = '';
+  export let state: string | null | undefined = 'GO';
+  export let city: string | null | undefined = '';
+  export let address: string | null | undefined = '';
+  export let bairro: string | null | undefined = '';
   export let bairroOptional = false;
-  export let numero = '';
+  export let numero: string | null | undefined = '';
   export let semNumero = false;
-  export let quadra = '';
+  export let quadra: string | null | undefined = '';
   export let semQuadra = false;
-  export let lote = '';
+  export let lote: string | null | undefined = '';
   export let semLote = false;
-  export let complemento = '';
+  export let complemento: string | null | undefined = '';
   export let cities: string[] = [];
   export let citiesLoading = false;
   export let citiesError: string | null = null;
@@ -99,7 +99,7 @@
         name="state"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={state}
-        on:change={() => onStateChange(state)}
+        on:change={() => onStateChange(String(state ?? ''))}
       >
         {#each states as uf}
           <option value={uf}>{uf}</option>

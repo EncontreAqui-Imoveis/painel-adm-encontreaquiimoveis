@@ -14,23 +14,56 @@
   import PropertyImageUploadSection from '$lib/components/property/PropertyImageUploadSection.svelte';
   import PropertyVideoSection from '$lib/components/property/PropertyVideoSection.svelte';
   import PropertyManagementFooterActions from '$lib/components/property/PropertyManagementFooterActions.svelte';
+  import PropertyDecisionDialogs from '$lib/components/property/PropertyDecisionDialogs.svelte';
+  import PropertyManagementActionBar from '$lib/components/property/PropertyManagementActionBar.svelte';
+  import {
+    humanizePropertyRequestType,
+    inferPropertyRequestType,
+    propertyRequestTypeBadgeClasses,
+    reviewPropertyRequestTypeLabel,
+    type PropertyRequestTypeFilter,
+  } from '$lib/components/property/propertyReviewHelpers';
+  import {
+    humanizePropertyStatus,
+    propertyStatusBadgeClasses,
+    normalizePublicCode,
+    publicCodeLabel,
+    resolveSelectedPropertyPublicCode,
+  } from '$lib/components/property/propertyPresentationHelpers';
+  import {
+    buildPropertyEditPayload,
+    resolvePropertyEditUpdateStrategy,
+  } from '$lib/components/property/propertyEditHelpers';
+  import {
+    formatAreaWithUnit,
+    formatCurrency,
+    formatNumeroDisplay,
+    getPurposeFlags,
+    isOptionalBairroPropertyType,
+    isSemNumeroValue,
+    normalizeAreaUnit,
+    normalizeCityLabel,
+    resolvePriceLines,
+    type AreaUnit,
+  } from '$lib/components/property/propertyFormattingHelpers';
   import * as Select from '$lib/components/ui/select';
   import { Input } from '$lib/components/ui/input';
-import {
-  extractApiErrorMessage,
-  formatPromotionPercentageInput,
-  parsePromotionPercentage,
-} from '$lib/components/create-property-helpers';
-import {
-  RENT_PROPERTY_PRICE_MAX,
-  RENT_PROPERTY_PRICE_INPUT_MAX_LENGTH,
-  SALE_PROPERTY_PRICE_MAX,
-  SALE_PROPERTY_PRICE_INPUT_MAX_LENGTH,
-  clampPropertyPriceValue,
-  formatPropertyPriceDisplay,
-  formatPropertyPriceInput,
-  parsePropertyPriceInput,
-} from '$lib/propertyPriceLimits';
+  import {
+    extractApiErrorMessage,
+    formatPromotionPercentageInput,
+    parsePromotionPercentage,
+  } from '$lib/components/create-property-helpers';
+  import { formatPropertySaveError } from '$lib/components/property/propertyErrorHelpers';
+  import {
+    RENT_PROPERTY_PRICE_MAX,
+    RENT_PROPERTY_PRICE_INPUT_MAX_LENGTH,
+    SALE_PROPERTY_PRICE_MAX,
+    SALE_PROPERTY_PRICE_INPUT_MAX_LENGTH,
+    clampPropertyPriceValue,
+    formatPropertyPriceDisplay,
+    formatPropertyPriceInput,
+    parsePropertyPriceInput,
+  } from '$lib/propertyPriceLimits';
   import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
   import Pagination from '$lib/Pagination.svelte';
   import PromotionNotificationModal from '$lib/components/PromotionNotificationModal.svelte';
@@ -39,11 +72,11 @@ import {
   import { reconcilePropertyPreviewMediaState } from '$lib/propertyMediaState';
   import type { PropertyStatus, PropertyImage as PropertyImageType } from './types';
   import {
-  PROPERTY_AMENITY_OPTIONS,
-  hasAmenity,
-  normalizeAmenityList,
-  type PropertyAmenity,
-} from '$lib/propertyAmenities';
+    PROPERTY_AMENITY_OPTIONS,
+    hasAmenity,
+    normalizeAmenityList,
+    type PropertyAmenity,
+  } from '$lib/propertyAmenities';
 function parseNullableNumber(value: unknown): number | null {
   if (value == null || value === '') return null;
   const normalized = String(value)
@@ -54,45 +87,6 @@ function parseNullableNumber(value: unknown): number | null {
   const numeric = Number(normalized);
   return Number.isFinite(numeric) ? numeric : null;
 }
-
-  function getRequestIdFromError(error: unknown): string {
-    const requestId = (error as { requestId?: unknown })?.requestId;
-    if (typeof requestId === 'string' && requestId.trim()) return requestId.trim();
-
-    const response = (error as {
-      response?: {
-        data?: { requestId?: unknown; request_id?: unknown };
-        headers?: unknown;
-      };
-    })?.response;
-
-    const payloadRequestId =
-      typeof response?.data?.requestId === 'string'
-        ? response.data.requestId.trim()
-        : typeof response?.data?.request_id === 'string'
-          ? response.data.request_id.trim()
-          : '';
-    if (payloadRequestId) return payloadRequestId;
-
-    const headers = response?.headers;
-    if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
-      const headerMap = headers as Record<string, unknown>;
-      const rawHeader = headerMap['x-request-id'] ?? headerMap['X-Request-Id'];
-      if (typeof rawHeader === 'string' && rawHeader.trim()) return rawHeader.trim();
-      if (Array.isArray(rawHeader) && rawHeader[0]) {
-        const value = String(rawHeader[0]).trim();
-        if (value) return value;
-      }
-    }
-
-    return '';
-  }
-
-  function formatSaveError(error: unknown, fallback: string): string {
-    const message = extractApiErrorMessage(error, fallback);
-    const requestId = getRequestIdFromError(error);
-    return requestId ? `${message} (requestId: ${requestId})` : message;
-  }
 
   interface PropertySummary {
     id: number;
@@ -135,7 +129,6 @@ function parseNullableNumber(value: unknown): number | null {
   }
 
   type NormalizedImage = PropertyImageType;
-  type AreaUnit = 'm2' | 'hectare' | 'alqueire';
 
   type PropertyDetails = PropertySummary & {
     description?: string | null;
@@ -192,8 +185,6 @@ function parseNullableNumber(value: unknown): number | null {
     search: string;
     purpose: 'all' | 'Venda' | 'Aluguel';
   };
-  type PropertyRequestTypeFilter = 'all' | 'creation' | 'edit';
-
   export let initialStatus: PropertyStatus | 'all' = 'approved';
   export let allowApproval = false;
   export let initialReviewRequestType: PropertyRequestTypeFilter = 'all';
@@ -739,38 +730,8 @@ function parseNullableNumber(value: unknown): number | null {
     }
   }
 
-  function formatCurrency(value?: number | null): string {
-    if (value == null || Number.isNaN(value)) return '-';
-    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-
-  function normalizeCityLabel(city: unknown): string | null {
-    if (typeof city === 'string') {
-      const trimmed = city.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    }
-    if (!city || typeof city !== 'object') {
-      return null;
-    }
-
-    const record = city as Record<string, unknown>;
-    const rawCity = record.nome ?? record.name ?? record.city ?? record.label ?? record.cidade;
-    if (typeof rawCity === 'string') {
-      const trimmed = rawCity.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    }
-
-    return null;
-  }
-
   function onlyDigits(value: string) {
     return value.replace(/\D/g, '');
-  }
-
-  function formatCep(value: string) {
-    const digits = onlyDigits(value).slice(0, 8);
-    if (digits.length <= 5) return digits;
-    return `${digits.slice(0, 5)}-${digits.slice(5)}`;
   }
 
   function formatCurrencyInput(raw: string) {
@@ -813,53 +774,8 @@ function parseNullableNumber(value: unknown): number | null {
     return Number((((basePrice - promoPrice) / basePrice) * 100).toFixed(2));
   }
 
-  function sanitizeDigitsInput(value: string) {
-    return onlyDigits(value);
-  }
-
-  function sanitizeDecimalInput(value: string) {
-    const cleaned = value.replace(/[^\d.,]/g, '');
-    const parts = cleaned.split(/[.,]/);
-    const integer = parts.shift() ?? '';
-    const decimal = parts.join('');
-    if (!decimal) return integer;
-    return `${integer},${decimal}`;
-  }
-
-  function getPurposeFlags(purpose?: string | null) {
-    const normalized = (purpose ?? '').toLowerCase();
-    const supportsSale = normalized.includes('vend');
-    const supportsRent = normalized.includes('alug');
-    return { supportsSale, supportsRent, isDual: supportsSale && supportsRent };
-  }
-
   function isBrokerCredenciado(property?: PropertyDetails | null) {
     return Boolean(property?.broker_id) && property?.broker_status === 'approved';
-  }
-
-  function resolvePriceLines(property: {
-    price?: number | null;
-    price_sale?: number | null;
-    price_rent?: number | null;
-    purpose?: string | null;
-  }) {
-    const lines: Array<{ label: string; value: number }> = [];
-    const { supportsSale, supportsRent } = getPurposeFlags(property.purpose ?? null);
-    const salePrice =
-      property.price_sale ?? (supportsSale && !supportsRent ? property.price ?? null : null);
-    const rentPrice =
-      property.price_rent ?? (supportsRent && !supportsSale ? property.price ?? null : null);
-
-    if (salePrice != null && Number(salePrice) > 0) {
-      lines.push({ label: 'Venda', value: Number(salePrice) });
-    }
-    if (rentPrice != null && Number(rentPrice) > 0) {
-      lines.push({ label: 'Aluguel', value: Number(rentPrice) });
-    }
-    if (lines.length === 0 && property.price != null) {
-      lines.push({ label: 'Preço', value: Number(property.price) });
-    }
-    return lines;
   }
 
   function normalizeImageUrl(rawUrl: unknown): string | null {
@@ -1238,77 +1154,6 @@ function parseNullableNumber(value: unknown): number | null {
     }
   }
 
-  function shouldRefreshPropertyListAfterEdit(
-    original: PropertyDetails,
-    patch: Record<string, unknown>,
-  ): boolean {
-    const listSensitiveKeys = ['title', 'purpose', 'city', 'state', 'bairro', 'public_code'];
-    return listSensitiveKeys.some((key) => {
-      if (!Object.prototype.hasOwnProperty.call(patch, key)) return false;
-      return patch[key] !== original[key as keyof PropertyDetails];
-    });
-  }
-
-  function humanizeStatus(status: PropertyStatus, purpose?: string | null): string {
-    if (status === 'approved' && purpose) {
-      return purpose;
-    }
-    const map: Record<string, string> = {
-      pending_approval: 'Aprovação Pendente',
-      approved: 'Disponível',
-      rented: 'Alugado',
-      sold: 'Vendido',
-    };
-    return map[status] ?? status ?? 'Indefinido';
-  }
-
-  function statusBadgeClasses(status: PropertyStatus): string {
-    const classes: Record<string, string> = {
-      approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-      rented: 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
-      sold: 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
-    };
-
-    return classes[status] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
-  }
-
-  function inferRequestType(property: PropertySummary): 'creation' | 'edit' {
-    if (property.request_type === 'creation' || property.request_type === 'edit') {
-      return property.request_type;
-    }
-
-    const createdAtRaw = String(property.created_at ?? '').trim();
-    const updatedAtRaw = String(property.updated_at ?? '').trim();
-    if (!createdAtRaw || !updatedAtRaw) {
-      return 'creation';
-    }
-
-    const createdAt = Date.parse(createdAtRaw);
-    const updatedAt = Date.parse(updatedAtRaw);
-    if (!Number.isFinite(createdAt) || !Number.isFinite(updatedAt)) {
-      return 'creation';
-    }
-
-    return updatedAt - createdAt >= 60 * 1000 ? 'edit' : 'creation';
-  }
-
-  function humanizeRequestType(type: 'creation' | 'edit'): string {
-    return type === 'edit' ? 'Edição' : 'Criação';
-  }
-
-  function requestTypeBadgeClasses(type: 'creation' | 'edit'): string {
-    if (type === 'edit') {
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-    }
-    return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200';
-  }
-
-  function reviewRequestTypeLabel(type: PropertyRequestTypeFilter): string {
-    if (type === 'edit') return 'somente edição';
-    if (type === 'creation') return 'somente criação';
-    return 'criação e edição';
-  }
-
   function setReviewRequestType(type: PropertyRequestTypeFilter) {
     if (reviewRequestType === type) return;
     reviewRequestType = type;
@@ -1337,54 +1182,6 @@ function parseNullableNumber(value: unknown): number | null {
     return coerced as unknown as PropertyDetails;
   }
 
-  function normalizeAreaUnit(value: unknown): AreaUnit | null {
-    const normalized = String(value ?? '').trim().toLowerCase();
-    if (normalized === 'm2' || normalized === 'hectare' || normalized === 'alqueire') {
-      return normalized;
-    }
-    if (normalized === 'm²' || normalized === 'm 2') {
-      return 'm2';
-    }
-    if (normalized === 'ha' || normalized === 'ha.' || normalized === 'hectares') {
-      return 'hectare';
-    }
-    return null;
-  }
-
-  function areaUnitLabel(value: unknown): string {
-    const normalized = normalizeAreaUnit(value);
-    if (normalized === 'hectare') return 'ha';
-    if (normalized === 'alqueire') return 'alqueire';
-    return 'm²';
-  }
-
-  function formatAreaWithUnit(value: unknown, unit: unknown): string {
-    if (value === null || value === undefined || value === '') return '-';
-    const parsed = parseNullableNumber(value);
-    if (parsed === null) return `${String(value)} ${areaUnitLabel(unit)}`;
-    return `${parsed} ${areaUnitLabel(unit)}`;
-  }
-
-  function publicCodeLabel(value: unknown, fallback = 'Sem referência pública') {
-    const normalized = normalizePublicCode(value);
-    return normalized || fallback;
-  }
-
-  function resolveSelectedPropertyPublicCode(property: PropertySummary | null): string {
-    return publicCodeLabel(property?.public_code);
-  }
-
-  function normalizePublicCode(value: unknown): string | null {
-    const normalized = String(value ?? '').trim();
-    if (!normalized || normalized === '-') return null;
-    return normalized;
-  }
-
-  function isOptionalBairroPropertyType(value: unknown): boolean {
-    const normalized = String(value ?? '').trim().toLowerCase();
-    return normalized === 'área rural' || normalized === 'chácara' || normalized === 'rancho';
-  }
-
   function markThumbnailAsBroken(propertyId: number) {
     if (brokenListThumbnails.has(propertyId)) return;
     brokenListThumbnails = new Set(brokenListThumbnails);
@@ -1405,17 +1202,6 @@ function parseNullableNumber(value: unknown): number | null {
     );
     if (images.length === 0) return;
     openImagePreview(images[0].url, 0, images);
-  }
-
-  function isSemNumeroValue(value: unknown): boolean {
-    const normalized = String(value ?? '').trim();
-    return normalized === '' || normalized === '0';
-  }
-
-  function formatNumeroDisplay(value: unknown): string {
-    const raw = String(value ?? '').trim();
-    if (!raw || raw === '0') return 'S/N';
-    return raw;
   }
 
   function findImageIndexByUrl(url: string) {
@@ -1861,222 +1647,31 @@ function parseNullableNumber(value: unknown): number | null {
     editError = null;
 
     try {
-      const numericKeys = new Set([
-        'price',
-        'price_sale',
-        'price_rent',
-        'promotion_percentage',
-        'promotional_rent_percentage',
-        'promotion_price',
-        'promotional_rent_price',
-        'area_construida',
-        'area_terreno',
-        'area_construida_valor',
-        'area_terreno_valor',
-        'bedrooms',
-        'bathrooms',
-        'garage_spots',
-        'sale_value',
-        'commission_rate',
-        'commission_value',
-        'valor_condominio',
-        'valor_iptu',
-      ]);
+      const editResult = buildPropertyEditPayload({
+        originalProperty: selectedProperty as PropertyDetails,
+        editableProperty,
+        flags: {
+          editSemNumero,
+          editSemQuadra,
+          editSemLote,
+          editSemCep,
+        },
+        state: {
+          editPromotionSalePercentageDisplay,
+          editPromotionRentPercentageDisplay,
+          editValorCondominioDisplay,
+          editValorIptuDisplay,
+          editSelectedAmenities,
+        },
+      });
 
-      const normalizeInput = (value: unknown) =>
-        value === '' || value === undefined || value === null ? null : value;
-      const requestedStatus: PropertyStatus | null = (() => {
-        switch (editableProperty.status) {
-          case 'approved':
-          case 'sold':
-          case 'rented':
-          case 'rejected':
-            return editableProperty.status;
-          default:
-            return null;
-        }
-      })();
-      const numeroRaw = String(editableProperty.numero ?? '').trim();
-      const numeroDigits = sanitizeDigitsInput(numeroRaw);
-      if (!editSemNumero && numeroRaw.length > 0 && numeroDigits.length === 0) {
-        editError = 'Número do endereço deve conter apenas dígitos.';
-        isSavingEdit = false;
-        return;
-      }
-      const purposeFlags = getPurposeFlags(
-        editableProperty.purpose ?? selectedProperty.purpose ?? null
-      );
-      const rawPrice = normalizeInput(editableProperty.price);
-      const rawPriceSale = normalizeInput(editableProperty.price_sale);
-      const rawPriceRent = normalizeInput(editableProperty.price_rent);
-      const resolvedPriceSale =
-        purposeFlags.supportsSale
-          ? rawPriceSale ?? (purposeFlags.supportsRent ? null : rawPrice)
-          : null;
-      const resolvedPriceRent =
-        purposeFlags.supportsRent
-          ? rawPriceRent ?? (purposeFlags.supportsSale ? null : rawPrice)
-          : null;
-      const resolvedPrice = resolvedPriceSale ?? resolvedPriceRent ?? rawPrice ?? null;
-      const resolvedPriceSaleValue =
-        resolvedPriceSale != null ? Number(resolvedPriceSale) : null;
-      const resolvedPriceRentValue =
-        resolvedPriceRent != null ? Number(resolvedPriceRent) : null;
-      const resolvedPriceValue =
-        resolvedPrice != null ? Number(resolvedPrice) : null;
-      const promotionSalePercentageValue = purposeFlags.supportsSale
-        ? parsePercentage(editPromotionSalePercentageDisplay)
-        : null;
-      const promotionRentPercentageValue = purposeFlags.supportsRent
-        ? parsePercentage(editPromotionRentPercentageDisplay)
-        : null;
-      const promotionPriceSaleValue = calculateDiscountedValue(
-        resolvedPriceSaleValue,
-        promotionSalePercentageValue
-      );
-      const promotionPriceRentValue = calculateDiscountedValue(
-        resolvedPriceRentValue,
-        promotionRentPercentageValue
-      );
-
-      if (
-        purposeFlags.supportsSale &&
-        editPromotionSalePercentageDisplay.trim() &&
-        promotionSalePercentageValue == null
-      ) {
-        editError = 'Percentual de desconto da venda inválido.';
+      if (!editResult.ok) {
+        editError = editResult.error;
         isSavingEdit = false;
         return;
       }
 
-      if (
-        purposeFlags.supportsRent &&
-        editPromotionRentPercentageDisplay.trim() &&
-        promotionRentPercentageValue == null
-      ) {
-        editError = 'Percentual de desconto do aluguel inválido.';
-        isSavingEdit = false;
-        return;
-      }
-
-      if (purposeFlags.isDual) {
-        if (
-          resolvedPriceSaleValue == null ||
-          resolvedPriceSaleValue <= 0 ||
-          resolvedPriceRentValue == null ||
-          resolvedPriceRentValue <= 0
-        ) {
-          editError = 'Informe os preços de venda e aluguel.';
-          isSavingEdit = false;
-          return;
-        }
-      } else if (resolvedPriceValue == null || resolvedPriceValue <= 0) {
-        editError = 'Informe um preço válido.';
-        isSavingEdit = false;
-        return;
-      }
-
-      if (
-        promotionPriceSaleValue != null &&
-        resolvedPriceSaleValue != null &&
-        promotionPriceSaleValue >= resolvedPriceSaleValue
-      ) {
-        editError = 'Preço promocional de venda deve ser menor que o preço de venda.';
-        isSavingEdit = false;
-        return;
-      }
-
-      if (
-        promotionPriceRentValue != null &&
-        resolvedPriceRentValue != null &&
-        promotionPriceRentValue >= resolvedPriceRentValue
-      ) {
-        editError = 'Preço promocional de aluguel deve ser menor que o preço de aluguel.';
-        isSavingEdit = false;
-        return;
-      }
-
-      const normalizeValue = (key: string, value: unknown) => {
-        if (value === undefined) return undefined;
-        if (value === '' || value === null) return null;
-        if (key === 'description' && (value === null || value === undefined)) {
-          return '';
-        }
-        if (numericKeys.has(key)) {
-          const num = Number(value);
-          return Number.isFinite(num) ? num : null;
-        }
-        return value;
-      };
-
-      const basePayload: Record<string, unknown> = {
-        title: editableProperty.title,
-        description: editableProperty.description,
-        purpose: editableProperty.purpose,
-        price: resolvedPriceValue ?? undefined,
-        price_sale: purposeFlags.supportsSale ? (resolvedPriceSaleValue ?? undefined) : null,
-        price_rent: purposeFlags.supportsRent ? (resolvedPriceRentValue ?? undefined) : null,
-        promotion_price: purposeFlags.supportsSale ? promotionPriceSaleValue : null,
-        promotional_rent_price: purposeFlags.supportsRent ? promotionPriceRentValue : null,
-        promotion_percentage: purposeFlags.supportsSale ? promotionSalePercentageValue : null,
-        promotional_rent_percentage: purposeFlags.supportsRent ? promotionRentPercentageValue : null,
-        is_promoted:
-          (promotionPriceSaleValue ?? 0) > 0 ||
-          (promotionPriceRentValue ?? 0) > 0 ||
-          (promotionSalePercentageValue ?? 0) > 0 ||
-          (promotionRentPercentageValue ?? 0) > 0
-            ? 1
-            : 0,
-        address: editableProperty.address,
-        cep: editableProperty.cep ? onlyDigits(editableProperty.cep) : editableProperty.cep,
-        city: editableProperty.city,
-        state: editableProperty.state,
-        bairro: editableProperty.bairro,
-        numero: editSemNumero ? null : (numeroDigits.length > 0 ? numeroDigits : null),
-        sem_numero: editSemNumero ? 1 : 0,
-        complemento: editableProperty.complemento,
-        sem_quadra: editSemQuadra ? 1 : 0,
-        sem_lote: editSemLote ? 1 : 0,
-        quadra: editSemQuadra ? null : editableProperty.quadra,
-        lote: editSemLote ? null : editableProperty.lote,
-        sem_cep: editSemCep ? 1 : 0,
-        bedrooms: editableProperty.bedrooms,
-        bathrooms: editableProperty.bathrooms,
-        garage_spots: editableProperty.garage_spots,
-        area_construida: editableProperty.area_construida_valor,
-        area_construida_valor: editableProperty.area_construida_valor,
-        area_construida_unidade: editableProperty.area_construida_unidade ?? 'm2',
-        area_terreno: editableProperty.area_terreno_valor,
-        area_terreno_valor: editableProperty.area_terreno_valor,
-        area_terreno_unidade:
-          editableProperty.area_terreno_unidade ?? 'm2',
-        amenities: normalizeAmenityList(editSelectedAmenities),
-        video_url: editableProperty.video_url,
-        type: editableProperty.type,
-        owner_name: editableProperty.owner_name,
-        owner_phone: editableProperty.owner_phone,
-        valor_condominio: parseCurrency(editValorCondominioDisplay),
-        valor_iptu: parseCurrency(editValorIptuDisplay),
-        broker_id: editableProperty.broker_id,
-        owner_id: editableProperty.owner_id,
-      };
-      if (requestedStatus) {
-        basePayload.status = requestedStatus;
-      }
-
-      // Enviar todos os campos normalizados (inclusive booleans) para garantir persistência
-      const payload = Object.fromEntries(
-        Object.entries(basePayload)
-          .map(([key, value]) => [key, normalizeValue(key, value)])
-          .filter(([, value]) => value !== undefined)
-      );
-
-      const original = selectedProperty as PropertyDetails;
-      const statusChanged = requestedStatus != null && requestedStatus !== original.status;
-
-      const fieldsBesidesStatus = Object.keys(payload).filter((k) => k !== 'status');
-      const onlyStatusChanged =
-        statusChanged && fieldsBesidesStatus.every((k) => (payload as any)[k] === (original as any)[k]);
+      const { payload, requestedStatus, shouldRefreshList } = editResult;
 
       if (requestedStatus === 'rejected') {
         rejectObservation = '';
@@ -2096,8 +1691,14 @@ function parseNullableNumber(value: unknown): number | null {
         return;
       }
 
-      if (onlyStatusChanged) {
-        if (requestedStatus === 'approved') {
+      const updateStrategy = resolvePropertyEditUpdateStrategy(
+        selectedProperty as PropertyDetails,
+        payload,
+        requestedStatus,
+      );
+
+      if (updateStrategy.useStatusOnlyUpdate) {
+        if (updateStrategy.endpoint === 'approve') {
           await api.patch(`/admin/properties/${selectedProperty.id}/approve`, {});
         } else {
           await api.patch(`/admin/properties/${selectedProperty.id}/status`, {
@@ -2107,10 +1708,6 @@ function parseNullableNumber(value: unknown): number | null {
       } else {
         await apiClient.put(`/admin/properties/${selectedProperty.id}`, payload);
       }
-      const shouldRefreshList = shouldRefreshPropertyListAfterEdit(
-        original,
-        payload as Record<string, unknown>,
-      );
       if (shouldRefreshList) {
         await fetchProperties();
       } else {
@@ -2123,22 +1720,22 @@ function parseNullableNumber(value: unknown): number | null {
       console.error('Erro ao salvar imóvel:', err);
       const status = err?.response?.status;
       if (status === 403) {
-        editError = formatSaveError(
+        editError = formatPropertySaveError(
           err,
           'Permissão negada pelo servidor para atualizar este imóvel. Verifique campos obrigatórios e permissão do usuário.'
         );
       } else if (status === 404) {
-        editError = formatSaveError(
+        editError = formatPropertySaveError(
           err,
           'Imóvel não encontrado ou rota de atualização ausente no servidor.'
         );
       } else if (status === 500) {
-        editError = formatSaveError(
+        editError = formatPropertySaveError(
           err,
           'Erro interno no servidor ao salvar o imóvel. Tente novamente e revise os campos.'
         );
       } else {
-        editError = formatSaveError(err, 'Não foi possível salvar o imóvel.');
+        editError = formatPropertySaveError(err, 'Não foi possível salvar o imóvel.');
       }
     } finally {
       isSavingEdit = false;
@@ -2658,7 +2255,7 @@ function parseNullableNumber(value: unknown): number | null {
             Pendentes: {isLoading ? '...' : totalItems}
           </div>
           <div class="rounded-lg border border-green-100 bg-white/80 px-4 py-2 text-sm text-gray-700 shadow-sm dark:border-green-900/60 dark:bg-gray-900/70 dark:text-gray-200">
-            Filtro: pendente de aprovação • {reviewRequestTypeLabel(reviewRequestType)}
+            Filtro: pendente de aprovação • {reviewPropertyRequestTypeLabel(reviewRequestType)}
           </div>
         </div>
       </div>
@@ -3043,7 +2640,7 @@ function parseNullableNumber(value: unknown): number | null {
       </h2>
       <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
         {#if isReviewOnly}
-          Não há itens pendentes no recorte "{reviewRequestTypeLabel(reviewRequestType)}".
+          Não há itens pendentes no recorte "{reviewPropertyRequestTypeLabel(reviewRequestType)}".
         {:else}
           Ajuste os filtros para visualizar outros resultados.
         {/if}
@@ -3095,15 +2692,15 @@ function parseNullableNumber(value: unknown): number | null {
                 <div class="text-xs text-gray-500 dark:text-gray-400">ID: {property.id}</div>
               </div>
             </div>
-            <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClasses(property.status)}`}>
-              {humanizeStatus(property.status, property.purpose)}
+            <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${propertyStatusBadgeClasses(property.status)}`}>
+              {humanizePropertyStatus(property.status, property.purpose)}
             </span>
           </div>
           {#if isReviewOnly}
-            {@const requestType = inferRequestType(property)}
+            {@const requestType = inferPropertyRequestType(property)}
             <div class="mt-2">
-              <span class={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${requestTypeBadgeClasses(requestType)}`}>
-                Solicitação: {humanizeRequestType(requestType)}
+              <span class={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${propertyRequestTypeBadgeClasses(requestType)}`}>
+                Solicitação: {humanizePropertyRequestType(requestType)}
               </span>
             </div>
           {/if}
@@ -3238,10 +2835,10 @@ function parseNullableNumber(value: unknown): number | null {
                 </div>
               </td>
               {#if isReviewOnly}
-                {@const requestType = inferRequestType(property)}
+                {@const requestType = inferPropertyRequestType(property)}
                 <td class="px-6 py-4">
-                  <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${requestTypeBadgeClasses(requestType)}`}>
-                    {humanizeRequestType(requestType)}
+                  <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${propertyRequestTypeBadgeClasses(requestType)}`}>
+                    {humanizePropertyRequestType(requestType)}
                   </span>
                 </td>
               {/if}
@@ -3290,8 +2887,8 @@ function parseNullableNumber(value: unknown): number | null {
         <Dialog.Title>{selectedProperty.title}</Dialog.Title>
         <Dialog.Description>
           Status:
-          <span class={`ml-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${statusBadgeClasses(selectedProperty.status)}`}>
-            {humanizeStatus(selectedProperty.status, selectedProperty.purpose)}
+          <span class={`ml-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${propertyStatusBadgeClasses(selectedProperty.status)}`}>
+            {humanizePropertyStatus(selectedProperty.status, selectedProperty.purpose)}
           </span>
         </Dialog.Description>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -3562,51 +3159,15 @@ function parseNullableNumber(value: unknown): number | null {
             {/if}
           </div>
 
-              <div class="flex items-center gap-2">
-                <Button variant="outline" on:click={toggleEditMode} disabled={isSavingEdit}>
-                  {isEditMode ? 'Cancelar edicao' : 'Editar dados'}
-                </Button>
-                {#if isEditMode && editableProperty}
-                  <Button
-                    className="bg-emerald-500 text-white hover:bg-emerald-600"
-                    on:click={saveEdits}
-                    disabled={isSavingEdit || isProcessing}
-                  >
-                    {#if isSavingEdit}
-                      <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                    {/if}
-                    Salvar
-                  </Button>
-                {/if}
-                {#if selectedProperty}
-                  <Button
-                    variant="outline"
-                    on:click={openPromotionNotificationFromSelected}
-                    disabled={isProcessing || isSavingEdit}
-                  >
-                    Notificar promoção
-                  </Button>
-                {/if}
-                {#if isEditMode && editableProperty}
-                  <div class="flex items-center gap-2">
-                    <label class="text-xs text-gray-500 dark:text-gray-400" for="status-select">Status</label>
-                    <select
-                      id="status-select"
-                      name="status"
-                      class="rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:border-green-500 focus:ring-2 focus:ring-green-500"
-                      bind:value={editableProperty.status}
-                    >
-                      <option value="approved">Disponível</option>
-                      {#if editableProperty.purpose === 'Aluguel' || editableProperty.purpose === 'Venda e Aluguel'}
-                        <option value="rented">Alugado</option>
-                      {/if}
-                      {#if editableProperty.purpose === 'Venda' || editableProperty.purpose === 'Venda e Aluguel'}
-                        <option value="sold">Vendido</option>
-                      {/if}
-                    </select>
-                  </div>
-                {/if}
-              </div>
+              <PropertyManagementActionBar
+                isEditMode={isEditMode}
+                editableProperty={editableProperty}
+                isSavingEdit={isSavingEdit}
+                isProcessing={isProcessing}
+                toggleEditMode={toggleEditMode}
+                saveEdits={saveEdits}
+                openPromotionNotificationFromSelected={openPromotionNotificationFromSelected}
+              />
           </div>
 
           <PropertyGallerySection
@@ -3921,177 +3482,26 @@ function parseNullableNumber(value: unknown): number | null {
   </Dialog.Content>
 </Dialog.Root>
 
-{#if rejectDialogOpen}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-    <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
-      <div class="flex items-start justify-between gap-3">
-        <div class="space-y-2">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Rejeitar imóvel</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-300">
-            Informe a observação que justifica a rejeição antes de concluir a ação.
-          </p>
-        </div>
-        <button
-          type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-          on:click={() => {
-            rejectDialogOpen = false;
-            rejectObservation = '';
-            rejectObservationError = null;
-          }}
-          aria-label="Fechar modal"
-        >
-          ×
-        </button>
-      </div>
-      <label class="mt-4 block">
-        <span class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">Observação</span>
-        <textarea
-          rows="4"
-          maxlength="500"
-          bind:value={rejectObservation}
-          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          placeholder="Explique o motivo da rejeição"
-        ></textarea>
-      </label>
-      {#if rejectObservationError}
-        <p class="mt-2 text-sm text-red-600 dark:text-red-300">{rejectObservationError}</p>
-      {/if}
-      <div class="mt-6 flex justify-end gap-2">
-        <Button variant="outline" on:click={() => {
-          rejectDialogOpen = false;
-          rejectObservation = '';
-          rejectObservationError = null;
-        }} disabled={isProcessing}>
-          Cancelar
-        </Button>
-        <Button variant="destructive" on:click={confirmRejectProperty} disabled={isProcessing}>
-          {#if isProcessing}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-          {/if}
-          Confirmar rejeição
-        </Button>
-      </div>
-    </div>
-  </div>
-{/if}
-
-{#if soldDialogOpen}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-    <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
-      <div class="flex items-start justify-between gap-3">
-        <div class="space-y-2">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Imóvel vendido</h3>
-          <p class="text-sm text-gray-600 dark:text-gray-300">
-            Esse imóvel foi vendido pelo Encontre Aqui?
-          </p>
-        </div>
-        <button
-          type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-          on:click={() => { resetSoldDialogState(); }}
-          aria-label="Fechar modal"
-        >×</button>
-      </div>
-
-      {#if soldByPlatform === null}
-        <div class="mt-6 flex justify-center gap-4">
-          <Button
-            className="bg-emerald-500 text-white hover:bg-emerald-600"
-            on:click={() => { soldByPlatform = true; }}
-          >Sim, vendido pelo Encontre Aqui</Button>
-          <Button
-            variant="outline"
-            on:click={() => { soldByPlatform = false; }}
-          >Não</Button>
-        </div>
-      {:else if soldByPlatform === false}
-        <p class="mt-4 text-sm text-gray-600 dark:text-gray-300">
-          O imóvel será marcado como vendido e movido para a lista de imóveis vendidos.
-        </p>
-        <div class="mt-6 flex justify-end gap-2">
-          <Button variant="outline" on:click={() => { resetSoldDialogState(); }} disabled={isSavingSold}>
-            Cancelar
-          </Button>
-          <Button
-            className="bg-emerald-500 text-white hover:bg-emerald-600"
-            on:click={handleSoldSave}
-            disabled={isSavingSold}
-          >
-            {#if isSavingSold}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Confirmar
-          </Button>
-        </div>
-      {:else}
-        <div class="mt-4 space-y-3">
-          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200">Comissão (VGV)</h4>
-          <label class="flex flex-col gap-1">
-            <span class="text-xs text-gray-500 dark:text-gray-400">Valor da venda (VGV)</span>
-            <input
-              name="sold_sale_value"
-              type="text"
-              inputmode="numeric"
-              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={soldSaleValue}
-              placeholder="R$ 0,00"
-              on:input={(event) => {
-                const target = event.target as HTMLInputElement;
-                soldSaleValue = formatCurrencyInput(target.value);
-              }}
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-xs text-gray-500 dark:text-gray-400">Taxa de comissão (%)</span>
-            <input
-              name="sold_commission_rate"
-              type="text"
-              inputmode="decimal"
-              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={soldCommissionRate}
-              placeholder="Ex: 5,00"
-              on:input={(event) => {
-                const target = event.target as HTMLInputElement;
-                soldCommissionRate = formatCurrencyInput(target.value);
-              }}
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-xs text-gray-500 dark:text-gray-400">Valor da comissão</span>
-            <input
-              name="sold_commission_value"
-              type="text"
-              inputmode="numeric"
-              class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              bind:value={soldCommissionValue}
-              placeholder="R$ 0,00"
-              on:input={(event) => {
-                const target = event.target as HTMLInputElement;
-                soldCommissionValue = formatCurrencyInput(target.value);
-              }}
-            />
-          </label>
-        </div>
-        <div class="mt-6 flex justify-end gap-2">
-          <Button variant="outline" on:click={() => { resetSoldDialogState(); }} disabled={isSavingSold}>
-            Cancelar
-          </Button>
-          <Button
-            className="bg-emerald-500 text-white hover:bg-emerald-600"
-            on:click={handleSoldSave}
-            disabled={isSavingSold}
-          >
-            {#if isSavingSold}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Salvar e marcar como vendido
-          </Button>
-        </div>
-      {/if}
-    </div>
-  </div>
-{/if}
+<PropertyDecisionDialogs
+  rejectDialogOpen={rejectDialogOpen}
+  bind:rejectObservation={rejectObservation}
+  bind:rejectObservationError={rejectObservationError}
+  isProcessing={isProcessing}
+  confirmRejectProperty={confirmRejectProperty}
+  closeRejectDialog={() => {
+    rejectDialogOpen = false;
+    rejectObservation = '';
+    rejectObservationError = null;
+  }}
+  soldDialogOpen={soldDialogOpen}
+  bind:soldByPlatform={soldByPlatform}
+  bind:soldSaleValue={soldSaleValue}
+  bind:soldCommissionRate={soldCommissionRate}
+  bind:soldCommissionValue={soldCommissionValue}
+  isSavingSold={isSavingSold}
+  resetSoldDialogState={resetSoldDialogState}
+  handleSoldSave={handleSoldSave}
+/>
 
 <PromotionNotificationModal
   open={isPromotionNotificationModalOpen}

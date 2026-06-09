@@ -5,14 +5,24 @@
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
   import {
-    formatCurrencyInput,
-    formatPromotionPercentageInput,
-    parseCurrency,
-    parsePromotionPercentage,
-  } from '$lib/components/create-property-helpers';
-
-  type FinalizeSplitMode = 'amount' | 'percentage';
-  type CommissionFieldKey = 'comissaoCaptador' | 'comissaoVendedor' | 'taxaPlataforma';
+    COMMISSION_AMOUNT_MAX_LENGTH,
+    COMMISSION_CURRENCY_MAX,
+    COMMISSION_PERCENT_MAX,
+    COMMISSION_PERCENT_MAX_LENGTH,
+    convertAmountFieldToPercentage,
+    convertPercentageFieldToAmount,
+    formatCommissionCurrency,
+    formatCommissionPercentageInputValue,
+    hasExactSaleSplit,
+    parseCommissionMoney,
+    parseCommissionPercentage,
+    readCommissionValue,
+    requiresExactSaleSplit,
+    resolveCommissionPropertyLabel,
+    type CommissionFieldKey,
+    type FinalizeSplitMode,
+  } from '$lib/components/commissions/commissionsHelpers';
+  import { formatCurrencyInput } from '$lib/components/create-property-helpers';
 
   type CommissionsSummary = {
     totalVGV: number;
@@ -100,42 +110,22 @@
     (_item, index) => currentYear - 4 + index
   );
 
-  const brlFormatter = new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const formatCurrency = formatCommissionCurrency;
 
   function toNumber(value: unknown): number {
     const numeric = Number(value ?? 0);
     if (!Number.isFinite(numeric)) return 0;
     return Number(numeric.toFixed(2));
   }
-
-  const COMMISSION_CURRENCY_MAX = 999999.99;
-  const COMMISSION_PERCENT_MAX = 100;
-  const COMMISSION_AMOUNT_MAX_LENGTH = 13;
-  const COMMISSION_PERCENT_MAX_LENGTH = 6;
   const commissionFields: Array<{ key: CommissionFieldKey; label: string }> = [
     { key: 'comissaoCaptador', label: 'Comissão Captador' },
     { key: 'comissaoVendedor', label: 'Comissão Complementar' },
     { key: 'taxaPlataforma', label: 'Taxa Encontre Aqui' },
   ];
 
-  function formatCurrency(value: number): string {
-    return brlFormatter.format(Number.isFinite(value) ? value : 0);
-  }
-
   function syncIsMobileLayout() {
     if (typeof window === 'undefined') return;
     isMobileLayout = window.innerWidth < 768;
-  }
-
-  function readCommissionValue(value: unknown): string {
-    const numeric = toNumber(value);
-    if (numeric <= 0) return '';
-    return formatCurrencyInput(String(Math.round(numeric * 100)), COMMISSION_CURRENCY_MAX);
   }
 
   function formatDate(value?: string | null): string {
@@ -146,12 +136,7 @@
   }
 
   function propertyLabel(item: CommissionsTransaction): string {
-    const title = String(item.propertyTitle ?? '').trim();
-    const code = String(item.propertyCode ?? '').trim();
-    if (code && title) return `${code} - ${title}`;
-    if (title) return title;
-    if (code) return code;
-    return `Imóvel #${item.propertyId}`;
+    return resolveCommissionPropertyLabel(item);
   }
 
   function resolveApiErrorMessage(error: unknown, fallback: string): string {
@@ -221,45 +206,8 @@
     }
   }
 
-  function requiresExactSaleSplit(item: CommissionsTransaction | null): boolean {
-    const purpose = String(item?.propertyPurpose ?? '').trim().toLowerCase();
-    const isRentalOnly = purpose.includes('alug') && !purpose.includes('venda');
-    return !isRentalOnly;
-  }
-
-  function parseMoney(value: string, maxValue = COMMISSION_CURRENCY_MAX): number | null {
-    const parsed = parseCurrency(value, maxValue);
-    if (parsed == null || !Number.isFinite(parsed)) return null;
-    return Number(parsed.toFixed(2));
-  }
-
   function formatPercentageInput(raw: string, maxValue = COMMISSION_PERCENT_MAX): string {
-    return formatPromotionPercentageInput(raw, maxValue);
-  }
-
-  function parsePercentage(value: string, maxValue = COMMISSION_PERCENT_MAX): number | null {
-    const parsed = parsePromotionPercentage(value, maxValue);
-    if (parsed == null || !Number.isFinite(parsed)) return null;
-    return Number(parsed.toFixed(2));
-  }
-
-  function convertAmountFieldToPercentage(rawAmount: string, saleValue: number | null): string {
-    if (saleValue == null || saleValue <= 0) return '';
-    const amount = parseMoney(rawAmount, COMMISSION_CURRENCY_MAX);
-    if (amount == null) return '';
-    const percentage = Number(((amount / saleValue) * 100).toFixed(2));
-    return percentage.toLocaleString('pt-BR', {
-      minimumFractionDigits: percentage % 1 === 0 ? 0 : 2,
-      maximumFractionDigits: 2,
-    });
-  }
-
-  function convertPercentageFieldToAmount(rawPercentage: string, saleValue: number | null): string {
-    if (saleValue == null || saleValue <= 0) return '';
-    const percentage = parsePercentage(rawPercentage, COMMISSION_PERCENT_MAX);
-    if (percentage == null) return '';
-    const amount = Number(((saleValue * percentage) / 100).toFixed(2));
-    return formatCurrencyInput(String(Math.round(amount * 100)), COMMISSION_CURRENCY_MAX);
+    return formatCommissionPercentageInputValue(raw, maxValue);
   }
 
   function handleMoneyInput(field: CommissionFieldKey | 'valorVenda', event: Event) {
@@ -283,7 +231,7 @@
 
   function switchCommissionFieldMode(field: CommissionFieldKey, mode: FinalizeSplitMode) {
     if (commissionFieldModes[field] === mode) return;
-    const saleValue = parseMoney(commissionForm.valorVenda);
+    const saleValue = parseCommissionMoney(commissionForm.valorVenda);
     if (mode === 'percentage') {
       commissionForm = {
         ...commissionForm,
@@ -302,14 +250,14 @@
   }
 
   function resolveCommissionAmounts() {
-    const valorVenda = parseMoney(commissionForm.valorVenda);
+    const valorVenda = parseCommissionMoney(commissionForm.valorVenda);
     if (valorVenda == null) return null;
     const resolvedFields = commissionFields.map(({ key }) => {
       if (commissionFieldModes[key] === 'amount') {
-        const value = parseMoney(commissionForm[key], COMMISSION_CURRENCY_MAX);
+        const value = parseCommissionMoney(commissionForm[key], COMMISSION_CURRENCY_MAX);
         return value == null ? null : value;
       }
-      const percentage = parsePercentage(commissionForm[key], COMMISSION_PERCENT_MAX);
+      const percentage = parseCommissionPercentage(commissionForm[key], COMMISSION_PERCENT_MAX);
       return percentage == null ? null : Number(((valorVenda * percentage) / 100).toFixed(2));
     });
     if (resolvedFields.some((value) => value == null)) return null;
@@ -320,17 +268,6 @@
       comissaoVendedor,
       taxaPlataforma,
     };
-  }
-
-  function hasExactSaleSplit(values: NonNullable<ReturnType<typeof resolveCommissionAmounts>>) {
-    const total = Number(
-      (
-        values.comissaoCaptador +
-        values.comissaoVendedor +
-        values.taxaPlataforma
-      ).toFixed(2)
-    );
-    return Math.abs(total - values.valorVenda) <= 0.01;
   }
 
   function openEditModal(item: CommissionsTransaction) {

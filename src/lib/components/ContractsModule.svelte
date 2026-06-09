@@ -15,7 +15,6 @@
     ZoomOut,
   } from 'lucide-svelte';
   import { toast } from 'svelte-sonner';
-  import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import type { InputProps } from '$lib/components/ui/input/input-props';
@@ -27,91 +26,122 @@
     parseCurrency,
   } from '$lib/components/create-property-helpers';
   import Pagination from '$lib/Pagination.svelte';
-  import { renderPdfPreview } from '$lib/pdfPreviewRenderer';
+  import ContractDocumentPreview from '$lib/components/contracts/ContractDocumentPreview.svelte';
+  import ContractDocumentMatrix from '$lib/components/contracts/ContractDocumentMatrix.svelte';
+  import ContractApprovalActions from '$lib/components/contracts/ContractApprovalActions.svelte';
+  import ContractDraftUploadPanel from '$lib/components/contracts/ContractDraftUploadPanel.svelte';
+  import ContractFinalizedEditorPanel from '$lib/components/contracts/ContractFinalizedEditorPanel.svelte';
+  import {
+    type ContractStatus,
+    getContractDetails,
+    listContracts,
+    saveContractPartyInfo,
+  } from '$lib/components/contracts/contractsApi';
+  import {
+    deleteContractDocument,
+    deleteFinalizedContractDocument,
+    deleteFinalizedContractById,
+    downloadContractDocumentByUrl,
+    downloadContractDocumentsZip,
+    evaluateContractSide as evaluateContractSideRequest,
+    finalizeContract,
+    reopenFinalizedContractById,
+    submitContractDraft,
+    transitionContractById,
+    uploadFinalizedContractDocument,
+    uploadMatrixDocument,
+    uploadSignedDocument,
+  } from '$lib/components/contracts/contractsActions';
+  import { loadContractDocumentPreview } from '$lib/components/contracts/contractsPreviewService';
+  import {
+    approvalAllowsProgress,
+    approvalBadgeClass,
+    approvalLabel,
+    canApproveSide,
+    canRejectSide,
+    canRestartSide,
+    documentFileName,
+    documentLabel,
+    documentSideLabel,
+    documentStatusClass,
+    documentStatusLabel,
+    formatDate,
+    getApprovalNextStepLabel,
+    getApprovalProgressLabel,
+    getApprovalProgressToneClass,
+    getSideApprovalUiState,
+    hasDocumentReviewStatus,
+    previousStageLabel,
+    normalizeDocumentStatus,
+    statusLabel,
+    tableActionLabel,
+    tabs,
+  } from '$lib/components/contracts/contractsDisplayHelpers';
+  import {
+    buildBuyerInfoPayload,
+    buildSellerInfoPayload,
+    hasExactSaleSplit,
+    resolveApiErrorMessage,
+    resolveFinalizeCommissionAmounts,
+    type FinalizeCommissionField,
+    type FinalizeFieldMode,
+  } from '$lib/components/contracts/contractsFormHelpers';
+  import {
+    buyerMatrixDocumentTypes,
+    type MatrixRequirement,
+    type MatrixRow,
+    type MatrixSide,
+    type RequiredFieldDescriptor,
+    buyerRentalRequiredInfoFields,
+    buyerRequiredInfoFields,
+    contractScopedDocumentTypes,
+    documentTypeLabels,
+    formatDocumentPreviewName,
+    formatPhoneMaskBr,
+    getBuyerDisplayName,
+    getContractPartySummary,
+    getRecordValueRaw,
+    hasRecordValue,
+    maritalStatusOptions,
+    matrixDocumentSortOrder,
+    normalizePossiblyMojibakeText,
+    outroMatrixSlotTypes,
+    rentRequiredDocTypes,
+    saleRequiredDocTypes,
+    sellerRequiredInfoFields,
+    signedReviewDocTypes,
+  } from '$lib/components/contracts/contractsDataHelpers';
+  import {
+    canAddAnotherMatrixDocument,
+    computeApprovalLockReasons,
+    draftSubmitLabel,
+    draftUploadInputLabel,
+    getAllContractDocuments,
+    getCurrentDraftDocument,
+    getDocumentForMatrixCell,
+    getDocumentsForMatrixCell,
+    getMatrixRows,
+    hasCurrentDraftDocument,
+    isDoubleEndedDeal,
+    isOutroMatrixDocumentType,
+    listBlockingDocumentStatuses,
+    listMissingBuyerInfo,
+    listMissingRequiredDocuments,
+    listMissingSellerInfo,
+    matrixCellUploadLabel,
+    requiresExactSaleSplit,
+    resolveMatrixUploadCategory,
+    resolveOutroMatrixDocumentType,
+    resolveOutroMatrixDocumentTypes,
+  } from '$lib/components/contracts/contractsMatrixHelpers';
+  import type {
+    ContractApprovalStatus,
+    ContractDocument,
+    ContractItem,
+  } from '$lib/components/contracts/types';
 
   /** TS do IDE: tipo inferido do `Input` costuma omitir `id`/handlers; aqui usamos o contrato explícito. */
   const LabeledTextInput = Input as unknown as Component<InputProps, {}, 'value'>;
-
-  type FinalizeFieldMode = 'amount' | 'percentage';
-  type FinalizeCommissionField = 'comissaoCaptador' | 'comissaoVendedor' | 'taxaPlataforma';
-
-  type ContractStatus =
-    | 'AWAITING_DOCS'
-    | 'IN_DRAFT'
-    | 'AWAITING_SIGNATURES'
-    | 'FINALIZED';
-
-  type ContractApprovalStatus =
-    | 'PENDING'
-    | 'APPROVED'
-    | 'APPROVED_WITH_RES'
-    | 'REJECTED'
-    | 'NOT_APPLICABLE';
-
-  type ContractDocument = {
-    id: number;
-    type?: string | null;
-    documentType?: string | null;
-    status?: ContractApprovalStatus | null;
-    metadata?: Record<string, unknown> | null;
-    side?: 'seller' | 'buyer' | null;
-    originalFileName?: string | null;
-    downloadUrl?: string | null;
-    createdAt?: string | null;
-  };
-
-  type ContractItem = {
-    id: string;
-    status: ContractStatus;
-    negotiationId: string;
-    propertyId: number;
-    propertyCode?: string | null;
-    propertyTitle?: string | null;
-    propertyImageUrl?: string | null;
-    propertyPurpose?: string | null;
-    capturingBrokerId?: number | null;
-    sellingBrokerId?: number | null;
-    capturingBrokerName?: string | null;
-    sellingBrokerName?: string | null;
-    buyerClientName?: string | null;
-    buyer_client_name?: string | null;
-    sellerInfo?: Record<string, unknown> | null;
-    buyerInfo?: Record<string, unknown> | null;
-    sellerApprovalStatus?: ContractApprovalStatus | null;
-    buyerApprovalStatus?: ContractApprovalStatus | null;
-    sellerApprovalReason?: Record<string, unknown> | null;
-    buyerApprovalReason?: Record<string, unknown> | null;
-    approvalProgress?: {
-      status?: string | null;
-      label?: string | null;
-      nextStep?: string | null;
-    } | null;
-    commissionData?: Record<string, unknown> | null;
-    workflowMetadata?: Record<string, unknown> | null;
-    responsibleUserIds?: number[] | null;
-    documents?: ContractDocument[];
-    documentRequirements?: unknown;
-    documentProgress?: unknown;
-    agencyName?: string | null;
-    agencyAddress?: string | null;
-    createdAt?: string | null;
-    updatedAt?: string | null;
-  };
-
-  type RequiredFieldDescriptor = {
-    keys: string[];
-    label: string;
-  };
-  type MatrixSide = 'seller' | 'buyer';
-  type MatrixRequirement = {
-    documentType: string;
-    side: MatrixSide;
-  };
-  type MatrixRow = {
-    documentType: string;
-    sellerRequired: boolean;
-    buyerRequired: boolean;
-  };
 
   type ModalMode = 'review_docs' | 'upload_draft' | 'finalize' | 'edit_finalized';
 
@@ -119,103 +149,6 @@
     contract?: ContractItem;
     documents?: ContractDocument[];
   };
-
-  const tabs: { key: ContractStatus; label: string }[] = [
-    { key: 'AWAITING_DOCS', label: 'Aguardando Documentação' },
-    { key: 'IN_DRAFT', label: 'Em Confecção' },
-    { key: 'AWAITING_SIGNATURES', label: 'Aguardando Assinaturas' },
-    { key: 'FINALIZED', label: 'Finalizados' },
-  ];
-
-  const documentTypeLabels: Record<string, string> = {
-    doc_identidade: 'Documento de Identidade',
-    comprovante_endereco: 'Comprovante de Endereço',
-    certidao_casamento_nascimento: 'Certidão de Casamento/Nascimento',
-    certidao_inteiro_teor: 'Certidão de Inteiro Teor',
-    certidao_onus_acoes: 'Certidão de Ônus/Ações',
-    comprovante_renda: 'Comprovante de Renda',
-    contrato_minuta: 'Contrato (Minuta)',
-    contrato_assinado: 'Contrato Assinado',
-    comprovante_pagamento: 'Comprovante de Pagamento',
-    boleto_vistoria: 'Boleto de Vistoria',
-    outro: 'Outro',
-    cliente_cnh: 'CNH do Cliente',
-    cliente_identidade: 'Identidade (RG) do Cliente',
-    cliente_cpf: 'CPF do Cliente',
-  };
-
-  const outroMatrixSlotTypes = Array.from({ length: 15 }, (_, index) =>
-    `cliente_outro_${String(index + 1).padStart(2, '0')}`
-  );
-
-  const signedReviewDocTypes = new Set([
-    'contrato_assinado',
-    'comprovante_pagamento',
-    'boleto_vistoria',
-  ]);
-  const contractScopedDocumentTypes = new Set([
-    'contrato_minuta',
-    'contrato_assinado',
-    'comprovante_pagamento',
-    'boleto_vistoria',
-    'outro',
-    ...outroMatrixSlotTypes,
-  ]);
-  const saleRequiredDocTypes = [
-    'doc_identidade',
-    'comprovante_endereco',
-    'certidao_casamento_nascimento',
-    'certidao_inteiro_teor',
-    'certidao_onus_acoes',
-  ];
-  const rentRequiredDocTypes = [
-    'doc_identidade',
-    'comprovante_endereco',
-    'certidao_casamento_nascimento',
-    'comprovante_renda',
-  ];
-  const sellerRequiredInfoFields: RequiredFieldDescriptor[] = [
-    { keys: ['estado_civil', 'estadoCivil'], label: 'Estado Civil' },
-    { keys: ['profissao'], label: 'Profissão' },
-    { keys: ['email'], label: 'E-mail' },
-    { keys: ['telefone', 'phone'], label: 'Telefone' },
-    { keys: ['dados_bancarios', 'dadosBancarios'], label: 'Dados Bancários' },
-  ];
-  const buyerRequiredInfoFields: RequiredFieldDescriptor[] = [
-    { keys: ['estado_civil', 'estadoCivil'], label: 'Estado Civil' },
-    { keys: ['profissao'], label: 'Profissão' },
-    { keys: ['email'], label: 'E-mail' },
-    { keys: ['telefone', 'phone'], label: 'Telefone' },
-  ];
-  const buyerRentalRequiredInfoFields: RequiredFieldDescriptor[] = [
-    { keys: ['garantia_locacao', 'garantiaLocacao'], label: 'Garantia de Locação' },
-  ];
-  const maritalStatusOptions = [
-    '',
-    'Solteiro(a)',
-    'Casado(a)',
-    'Divorciado(a)',
-    'Viúvo(a)',
-    'Separado(a)',
-    'União estável',
-    'Não informado',
-  ];
-  const matrixDocumentSortOrder = [
-    'doc_identidade',
-    'comprovante_endereco',
-    'certidao_casamento_nascimento',
-    'certidao_inteiro_teor',
-    'certidao_onus_acoes',
-    'comprovante_renda',
-    'outro',
-  ];
-  const buyerMatrixDocumentTypes = new Set([
-    'doc_identidade',
-    'comprovante_endereco',
-    'certidao_casamento_nascimento',
-    'comprovante_renda',
-    'outro',
-  ]);
 
   let activeTab: ContractStatus = 'AWAITING_DOCS';
   let items: ContractItem[] = [];
@@ -263,7 +196,6 @@
   type DocumentPreviewPdfPage = {
     pageNumber: number;
     dataUrl: string;
-    text: string;
   };
   let documentPreviewPdfPages: DocumentPreviewPdfPage[] = [];
   let documentPreviewPdfText = '';
@@ -311,129 +243,6 @@
     telefone: '',
     garantiaLocacao: '',
   };
-
-  function getRecordValueRaw(
-    source: Record<string, unknown> | null | undefined,
-    keys: string[]
-  ): string {
-    if (!source) return '';
-    for (const key of keys) {
-      const value = source[key];
-      if (value != null && String(value).trim().length > 0) {
-        return String(value).trim();
-      }
-    }
-    return '';
-  }
-
-  function getRecordValue(
-    source: Record<string, unknown> | null | undefined,
-    keys: string[]
-  ): string {
-    const raw = getRecordValueRaw(source, keys);
-    return raw.length ? raw : '-';
-  }
-
-  function hasRecordValue(
-    source: Record<string, unknown> | null | undefined,
-    keys: string[]
-  ): boolean {
-    if (!source) return false;
-    return keys.some((key) => {
-      const value = source[key];
-      return value != null && String(value).trim().length > 0;
-    });
-  }
-
-  function getBuyerDisplayName(contract: ContractItem): string {
-    const directName =
-      contract.buyerClientName ??
-      contract.buyer_client_name ??
-      (contract as unknown as Record<string, unknown>).client_name ??
-      (contract as unknown as Record<string, unknown>).clientName ??
-      (contract as unknown as Record<string, unknown>).buyerName ??
-      (contract as unknown as Record<string, unknown>).buyer_name ??
-      null;
-    if (directName && String(directName).trim().length > 0) {
-      return String(directName).trim();
-    }
-    const buyerInfo = contract.buyerInfo ?? null;
-    const fromInfo = getRecordValueRaw(buyerInfo, [
-      'nome',
-      'name',
-      'nome_completo',
-      'fullName',
-      'full_name',
-      'buyerName',
-      'buyer_name',
-      'clientName',
-      'client_name',
-    ]);
-    if (fromInfo) {
-      return fromInfo;
-    }
-
-    if (buyerInfo && typeof buyerInfo === 'object') {
-      const nestedBuyer = (buyerInfo as Record<string, unknown>).buyer;
-      if (nestedBuyer && typeof nestedBuyer === 'object' && !Array.isArray(nestedBuyer)) {
-        const nestedBuyerName = getRecordValueRaw(nestedBuyer as Record<string, unknown>, [
-          'nome',
-          'name',
-          'nome_completo',
-          'fullName',
-          'full_name',
-          'buyerName',
-          'buyer_name',
-          'clientName',
-          'client_name',
-        ]);
-        if (nestedBuyerName) {
-          return nestedBuyerName;
-        }
-      }
-    }
-    return '-';
-  }
-
-  function getContractPartySummary(contract: ContractItem): string {
-    return `Captador: ${contract.capturingBrokerName ?? '-'} · Comprador: ${getBuyerDisplayName(contract)}`;
-  }
-
-  function formatPhoneMaskBr(value: string): string {
-    const digits = onlyDigits(value).slice(0, 11);
-    if (!digits) return '';
-    if (digits.length <= 2) return `(${digits}`;
-    if (digits.length <= 7) {
-      return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-    }
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-  }
-
-  function normalizePhoneForPayload(value: string): string | null {
-    const digits = onlyDigits(value).slice(0, 11);
-    return digits.length ? digits : null;
-  }
-
-  function normalizePossiblyMojibakeText(value: string): string {
-    const trimmed = String(value ?? '').trim();
-    if (!trimmed) return '';
-    if (!/[ÃÂ�]/.test(trimmed)) return trimmed;
-
-    try {
-      const bytes = Uint8Array.from(trimmed, (char) => char.charCodeAt(0));
-      const decoded = new TextDecoder('utf-8').decode(bytes).trim();
-      if (!decoded || decoded.includes('�')) return trimmed;
-      return decoded;
-    } catch {
-      return trimmed;
-    }
-  }
-
-  function formatDocumentPreviewName(doc: ContractDocument | null): string {
-    if (!doc) return 'Documento';
-    const original = normalizePossiblyMojibakeText(String(doc.originalFileName ?? ''));
-    return original || documentLabel(doc.documentType ?? doc.type ?? null);
-  }
 
   function lockViewportGestureScroll() {
     if (typeof document === 'undefined') return;
@@ -550,40 +359,22 @@
     });
 
     try {
-      const response = await apiClient.get(doc.downloadUrl, {
-        responseType: 'blob',
-      });
-      const blob =
-        response.data instanceof Blob
-          ? response.data
-          : new Blob([response.data], { type: 'application/octet-stream' });
-      const contentType = String(
-        response.headers?.['content-type'] ?? response.headers?.['Content-Type'] ?? blob.type ?? ''
-      ).toLowerCase();
-      const objectUrl = URL.createObjectURL(blob);
       const resolvedName = formatDocumentPreviewName(doc);
-      const isPdfFile = contentType.includes('pdf') || resolvedName.toLowerCase().endsWith('.pdf');
+      const preview = await loadContractDocumentPreview(doc.downloadUrl, resolvedName);
+      if (renderToken !== documentPreviewRenderToken) {
+        return;
+      }
+      const objectUrl = URL.createObjectURL(preview.blob);
       documentPreviewObjectUrl = objectUrl;
       documentPreviewOwnsObjectUrl = true;
-      documentPreviewKind = contentType.includes('image/') && !isPdfFile ? 'image' : 'pdf';
+      documentPreviewKind = preview.kind;
       documentPreviewSourceUrl = objectUrl;
       documentPreviewFileName = resolvedName;
 
       if (documentPreviewKind === 'pdf') {
-        documentPreviewPdfPages = [];
-        documentPreviewPdfText = '';
-        documentPreviewPdfFallbackUsed = false;
-        try {
-          const rendered = await renderPdfPreview(blob);
-          if (renderToken === documentPreviewRenderToken) {
-            documentPreviewPdfPages = rendered.pages;
-            documentPreviewPdfText = rendered.text;
-            documentPreviewPdfFallbackUsed = Boolean(rendered.usedFallback);
-          }
-        } catch (pdfError) {
-          console.error('Erro ao renderizar PDF:', pdfError);
-          throw pdfError;
-        }
+        documentPreviewPdfPages = preview.pdfPages;
+        documentPreviewPdfText = preview.pdfText;
+        documentPreviewPdfFallbackUsed = preview.pdfFallbackUsed;
       } else {
         documentPreviewPdfPages = [];
         documentPreviewPdfText = '';
@@ -662,247 +453,9 @@
     return 'Foto do imóvel';
   }
 
-  function formatDate(value?: string | null): string {
-    if (!value) return '-';
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return value;
-    return parsed.toLocaleDateString('pt-BR');
-  }
-
-  function documentLabel(type?: string | null): string {
-    if (!type) return 'Documento';
-    const normalized = String(type).trim().toLowerCase();
-    if (normalized.startsWith('cliente_outro_')) {
-      return 'Outro';
-    }
-    return documentTypeLabels[normalized] ?? type;
-  }
-
-  function normalizeDocumentStatus(doc?: ContractDocument | null): string {
-    const direct = String(doc?.status ?? '').trim().toUpperCase();
-    if (direct.length > 0) {
-      return direct;
-    }
-
-    const metadata = doc?.metadata ?? null;
-    return String(
-      metadata?.status ?? metadata?.reviewStatus ?? metadata?.validationStatus ?? ''
-    )
-      .trim()
-      .toUpperCase();
-  }
-
-  function hasDocumentReviewStatus(doc?: ContractDocument | null): boolean {
-    const status = normalizeDocumentStatus(doc);
-    return (
-      status === 'REJECTED' ||
-      status === 'NOT_APPLICABLE' ||
-      status === 'PENDING'
-    );
-  }
-
-  function documentStatusLabel(doc?: ContractDocument | null): string {
-    const status = normalizeDocumentStatus(doc);
-    if (status === 'APPROVED') return 'Aprovado';
-    if (status === 'APPROVED_WITH_RES') return 'Aprovado com ressalvas';
-    if (status === 'REJECTED') return 'Rejeitado';
-    if (status === 'NOT_APPLICABLE') return 'Não aplicável';
-    if (status === 'PENDING') return 'Pendente';
-    return '';
-  }
-
-  function documentStatusClass(doc?: ContractDocument | null): string {
-    const status = normalizeDocumentStatus(doc);
-    if (status === 'APPROVED') {
-      return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
-    }
-    if (status === 'APPROVED_WITH_RES') {
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
-    }
-    if (status === 'REJECTED') {
-      return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
-    }
-    if (status === 'NOT_APPLICABLE') {
-      return 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300';
-    }
-    if (status === 'PENDING') {
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
-    }
-    return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
-  }
-
-  function documentSideLabel(doc?: ContractDocument | null): string {
-    const side = doc ? getDocumentSide(doc) : null;
-    if (side === 'seller') return 'Captador';
-    if (side === 'buyer') return 'Comprador';
-    return '';
-  }
-
-  function documentFileName(doc?: ContractDocument | null): string {
-    const original = normalizePossiblyMojibakeText(String(doc?.originalFileName ?? ''));
-    if (original.length > 0) {
-      return original;
-    }
-    const type = String(doc?.documentType ?? '').trim();
-    if (type.length > 0) {
-      return `${type}.pdf`;
-    }
-    return 'documento.pdf';
-  }
-
-  function tableActionLabel(status: ContractStatus): string {
-    if (status === 'AWAITING_DOCS') return 'Analisar Documentação';
-    if (status === 'IN_DRAFT') return 'Anexar Minuta';
-    if (status === 'AWAITING_SIGNATURES') return 'Finalizar Venda/Locação';
-    return 'Editar';
-  }
-
-  function statusLabel(status: ContractStatus): string {
-    return tabs.find((tab) => tab.key === status)?.label ?? status;
-  }
-
   function syncIsMobileLayout() {
     if (typeof window === 'undefined') return;
     isMobileLayout = window.innerWidth < 768;
-  }
-
-  function previousStageLabel(currentStatus: ContractStatus): string {
-    if (currentStatus === 'IN_DRAFT') {
-      return 'a aba de documentos pendentes';
-    }
-    if (currentStatus === 'AWAITING_SIGNATURES') {
-      return 'a aba de confecção da minuta';
-    }
-    return 'a etapa anterior';
-  }
-
-  function approvalLabel(status?: ContractApprovalStatus | null): string {
-    switch (String(status ?? '').toUpperCase()) {
-      case 'APPROVED':
-        return 'Aprovado';
-      case 'APPROVED_WITH_RES':
-        return 'Aprovado com ressalvas';
-      case 'REJECTED':
-        return 'Rejeitado';
-      default:
-        return 'Pendente';
-    }
-  }
-
-  function approvalBadgeClass(status?: ContractApprovalStatus | null): string {
-    switch (String(status ?? '').toUpperCase()) {
-      case 'APPROVED':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
-      case 'APPROVED_WITH_RES':
-        return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
-      case 'REJECTED':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
-      default:
-        return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
-    }
-  }
-
-  function approvalAllowsProgress(status?: ContractApprovalStatus | null): boolean {
-    const normalized = String(status ?? '').trim().toUpperCase();
-    return normalized === 'APPROVED' || normalized === 'APPROVED_WITH_RES';
-  }
-
-  function getSideApprovalUiState(status?: ContractApprovalStatus | null): 'pending' | 'approved' | 'rejected' {
-    const normalized = String(status ?? '').trim().toUpperCase();
-    if (normalized === 'REJECTED') return 'rejected';
-    if (approvalAllowsProgress(status)) return 'approved';
-    return 'pending';
-  }
-
-  function canApproveSide(status?: ContractApprovalStatus | null): boolean {
-    const uiState = getSideApprovalUiState(status);
-    return uiState === 'pending' || uiState === 'rejected';
-  }
-
-  function canRejectSide(status?: ContractApprovalStatus | null): boolean {
-    const uiState = getSideApprovalUiState(status);
-    return uiState === 'pending' || uiState === 'approved';
-  }
-
-  function canRestartSide(status?: ContractApprovalStatus | null): boolean {
-    return getSideApprovalUiState(status) !== 'pending';
-  }
-
-  function getApprovalProgressLabel(contract: ContractItem | null | undefined): string {
-    if (!contract) return 'Pendente';
-    const backendLabel = contract.approvalProgress?.label?.trim();
-    if (backendLabel) return backendLabel;
-
-    const sellerStatus = String(contract.sellerApprovalStatus ?? '').trim().toUpperCase();
-    const buyerStatus = String(contract.buyerApprovalStatus ?? '').trim().toUpperCase();
-    const sellerProgress = approvalAllowsProgress(contract.sellerApprovalStatus);
-    const buyerProgress = approvalAllowsProgress(contract.buyerApprovalStatus);
-
-    if (sellerStatus === 'REJECTED' || buyerStatus === 'REJECTED') {
-      return 'Rejeitado';
-    }
-
-    if (sellerProgress && buyerProgress) {
-      return sellerStatus === 'APPROVED_WITH_RES' || buyerStatus === 'APPROVED_WITH_RES'
-        ? 'Aprovado com ressalvas'
-        : 'Aprovado';
-    }
-
-    if (sellerProgress || buyerProgress) {
-      return 'Em análise';
-    }
-
-    return 'Pendente';
-  }
-
-  function getApprovalProgressToneClass(contract: ContractItem | null | undefined): string {
-    const backendStatus = String(contract?.approvalProgress?.status ?? '').trim().toUpperCase();
-    const sellerStatus = String(contract?.sellerApprovalStatus ?? '').trim().toUpperCase();
-    const buyerStatus = String(contract?.buyerApprovalStatus ?? '').trim().toUpperCase();
-    const status = backendStatus || sellerStatus || buyerStatus;
-
-    if (status === 'REJECTED') {
-      return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
-    }
-    if (status === 'APPROVED_WITH_RES') {
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
-    }
-    if (status === 'APPROVED') {
-      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300';
-    }
-    if (status === 'IN_PROGRESS') {
-      return 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300';
-    }
-    return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
-  }
-
-  function getApprovalNextStepLabel(contract: ContractItem | null | undefined): string {
-    if (!contract) return 'Aguardando avaliação dos dois lados';
-    const backendNextStep = contract.approvalProgress?.nextStep?.trim();
-    if (backendNextStep) return backendNextStep;
-
-    const sellerStatus = String(contract.sellerApprovalStatus ?? '').trim().toUpperCase();
-    const buyerStatus = String(contract.buyerApprovalStatus ?? '').trim().toUpperCase();
-    const sellerProgress = approvalAllowsProgress(contract.sellerApprovalStatus);
-    const buyerProgress = approvalAllowsProgress(contract.buyerApprovalStatus);
-
-    if (sellerStatus === 'REJECTED' || buyerStatus === 'REJECTED') {
-      return 'Aguardando correção do lado rejeitado';
-    }
-
-    if (sellerProgress && buyerProgress) {
-      return 'Pronto para a minuta';
-    }
-
-    if (sellerProgress && !buyerProgress) {
-      return 'Aguardando aprovação do comprador';
-    }
-
-    if (!sellerProgress && buyerProgress) {
-      return 'Aguardando aprovação do captador';
-    }
-
-    return 'Aguardando avaliação dos dois lados';
   }
 
   function shouldHydrateContractDetails(contract: ContractItem): boolean {
@@ -1171,52 +724,6 @@
     };
   }
 
-  function resolveCommissionFieldAmount(field: FinalizeCommissionField, saleValue: number): number | null {
-    const rawValue = finalizeForm[field];
-    if (getFinalizeFieldMode(field) === 'amount') {
-      return parseMoney(rawValue);
-    }
-    const percentage = parsePercentage(rawValue);
-    if (percentage == null) return null;
-    return Number(((saleValue * percentage) / 100).toFixed(2));
-  }
-
-  function resolveFinalizeCommissionAmounts() {
-    const valorVenda = parseMoney(finalizeForm.valorVenda);
-    if (valorVenda == null) return null;
-
-    const comissaoCaptador = resolveCommissionFieldAmount('comissaoCaptador', valorVenda);
-    const comissaoVendedor = resolveCommissionFieldAmount('comissaoVendedor', valorVenda);
-    const taxaPlataforma = resolveCommissionFieldAmount('taxaPlataforma', valorVenda);
-    if (
-      comissaoCaptador == null ||
-      comissaoVendedor == null ||
-      taxaPlataforma == null
-    ) {
-      return null;
-    }
-
-    return {
-      valorVenda,
-      comissaoCaptador,
-      comissaoVendedor,
-      taxaPlataforma,
-    };
-  }
-
-  function hasExactSaleSplit(
-    values: NonNullable<ReturnType<typeof resolveFinalizeCommissionAmounts>>
-  ): boolean {
-    const total = Number(
-      (
-        values.comissaoCaptador +
-        values.comissaoVendedor +
-        values.taxaPlataforma
-      ).toFixed(2)
-    );
-    return Math.abs(total - values.valorVenda) <= 0.01;
-  }
-
   function getDocumentsForFinalize(contract: ContractItem): ContractDocument[] {
     return getAllContractDocuments(contract).filter((doc) =>
       signedReviewDocTypes.has((doc.documentType ?? '').trim().toLowerCase())
@@ -1241,575 +748,22 @@
     );
   }
 
-  function getDocumentSide(doc: ContractDocument): 'seller' | 'buyer' | null {
-    const side = String(doc.side ?? '').trim().toLowerCase();
-    if (side === 'seller' || side === 'buyer') {
-      return side;
-    }
-    return null;
-  }
+  let contractMatrixRows: Array<{
+    documentType: string;
+    sellerRequired: boolean;
+    buyerRequired: boolean;
+    sellerDocs: ContractDocument[];
+    buyerDocs: ContractDocument[];
+  }> = [];
 
-  function documentSideOrder(doc: ContractDocument): number {
-    const side = getDocumentSide(doc);
-    if (side === 'buyer') return 0;
-    if (side === 'seller') return 1;
-    return 2;
-  }
-
-  function isDoubleEndedDeal(_contract: ContractItem): boolean {
-    // "corretor vendedor/selling broker" virou legado e não participa mais da UI.
-    return false;
-  }
-
-  function matrixSortWeight(documentType: string): number {
-    const index = matrixDocumentSortOrder.indexOf(String(documentType ?? '').trim().toLowerCase());
-    return index >= 0 ? index : matrixDocumentSortOrder.length;
-  }
-
-  function shouldShowBuyerMatrixSide(documentType: string): boolean {
-    return buyerMatrixDocumentTypes.has(String(documentType ?? '').trim().toLowerCase());
-  }
-
-  function requiresExactSaleSplit(contract: ContractItem | null): boolean {
-    const purpose = String(contract?.propertyPurpose ?? '').trim().toLowerCase();
-    const isRentalOnly = purpose.includes('alug') && !purpose.includes('venda');
-    return !isRentalOnly;
-  }
-
-  function getRequiredDocTypes(contract: ContractItem): string[] {
-    const purpose = String(contract.propertyPurpose ?? '').trim().toLowerCase();
-    const isSale = purpose.includes('venda') || purpose.includes('sale');
-    const isRent = purpose.includes('alug') || purpose.includes('rent');
-
-    if (isSale && isRent) {
-      return Array.from(new Set([...saleRequiredDocTypes, ...rentRequiredDocTypes]));
-    }
-    if (isRent) {
-      return [...rentRequiredDocTypes];
-    }
-    return [...saleRequiredDocTypes];
-  }
-
-  function normalizeMatrixSide(value: unknown): MatrixSide | null {
-    const side = String(value ?? '').trim().toLowerCase();
-    if (side === 'seller') return 'seller';
-    if (side === 'buyer') return 'buyer';
-    if (side === 'captador' || side === 'capturing') return 'seller';
-    return null;
-  }
-
-  function normalizeMatrixDocumentType(value: unknown): string {
-    return String(value ?? '').trim().toLowerCase();
-  }
-
-  function readRawMatrixRequirements(contract: ContractItem): MatrixRequirement[] {
-    const raw = contract.documentRequirements;
-    const entries: MatrixRequirement[] = [];
-
-    const categoryToDocumentTypes = (category: string): string[] => {
-      switch (category.trim().toLowerCase()) {
-        case 'identidade':
-          return ['doc_identidade'];
-        case 'comprovante_endereco':
-          return ['comprovante_endereco'];
-        case 'estado_civil':
-          return ['certidao_casamento_nascimento'];
-        case 'conjuge_documentos':
-          return ['outro'];
-        case 'comprovante_renda':
-          return ['comprovante_renda'];
-        case 'dados_bancarios':
-          return ['outro'];
-        case 'docs_imovel':
-          return ['certidao_inteiro_teor', 'certidao_onus_acoes'];
-        default:
-          return [];
-      }
-    };
-
-    const pushFromSideRows = (side: MatrixSide, rows: unknown) => {
-      if (!Array.isArray(rows)) return;
-      for (const row of rows) {
-        if (!row || typeof row !== 'object') continue;
-        const source = row as Record<string, unknown>;
-        const applicability = String(source.applicability ?? '').trim().toLowerCase();
-        if (applicability === 'not_applicable') continue;
-        const category = String(source.category ?? '').trim();
-        if (!category) continue;
-        const docTypes = categoryToDocumentTypes(category);
-        for (const documentType of docTypes) {
-          entries.push({ documentType, side });
-        }
-      }
-    };
-
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      const source = raw as Record<string, unknown>;
-      pushFromSideRows('seller', source.seller);
-      pushFromSideRows('buyer', source.buyer);
-      return entries;
-    }
-
-    if (Array.isArray(raw)) {
-      for (const entry of raw) {
-        if (!entry || typeof entry !== 'object') continue;
-        const source = entry as Record<string, unknown>;
-        const documentType = normalizeMatrixDocumentType(
-          source.documentType ?? source.type ?? source.document ?? source.key
-        );
-        const side = normalizeMatrixSide(source.side ?? source.party ?? source.role);
-        if (!documentType || !side) continue;
-        entries.push({ documentType, side });
-      }
-    }
-
-    return entries;
-  }
-
-  function getMatrixRows(contract: ContractItem): MatrixRow[] {
-    const requirements = readRawMatrixRequirements(contract);
-    if (requirements.length === 0) {
-      const fallbackTypes = getRequiredDocTypes(contract);
-      return fallbackTypes
-        .map((documentType) => ({
-          documentType,
-          sellerRequired: true,
-          buyerRequired: shouldShowBuyerMatrixSide(documentType),
+  $: contractMatrixRows =
+    selected != null
+      ? getMatrixRows(selected).map((row) => ({
+          ...row,
+          sellerDocs: getDocumentsForMatrixCell(selected, row.documentType, 'seller'),
+          buyerDocs: getDocumentsForMatrixCell(selected, row.documentType, 'buyer'),
         }))
-        .sort((left, right) => matrixSortWeight(left.documentType) - matrixSortWeight(right.documentType));
-    }
-
-    const rows = new Map<string, MatrixRow>();
-    for (const requirement of requirements) {
-      const normalizedDocumentType = isOutroMatrixDocumentType(requirement.documentType)
-        ? 'outro'
-        : requirement.documentType;
-      const current = rows.get(normalizedDocumentType) ?? {
-        documentType: normalizedDocumentType,
-        sellerRequired: false,
-        buyerRequired: false,
-      };
-      if (requirement.side === 'seller') current.sellerRequired = true;
-      if (requirement.side === 'buyer') current.buyerRequired = true;
-      rows.set(normalizedDocumentType, current);
-    }
-
-    return Array.from(rows.values())
-      .map((row) => ({
-        ...row,
-        buyerRequired: row.buyerRequired || shouldShowBuyerMatrixSide(row.documentType),
-      }))
-      .sort(
-      (left, right) => matrixSortWeight(left.documentType) - matrixSortWeight(right.documentType)
-      );
-  }
-
-  function readProgressStatus(
-    contract: ContractItem,
-    documentType: string,
-    side: MatrixSide
-  ): string {
-    const raw = contract.documentProgress;
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      const source = raw as Record<string, unknown>;
-          const sideNode = source[side];
-          if (sideNode && typeof sideNode === 'object') {
-            const categories = (sideNode as Record<string, unknown>).categories;
-            if (Array.isArray(categories)) {
-              const normalizedType = normalizeMatrixDocumentType(documentType);
-              const typeToCategory = (type: string, matrixSide: MatrixSide): string[] => {
-                if (type === 'comprovante_endereco') return ['comprovante_endereco'];
-                if (type === 'certidao_casamento_nascimento') return ['estado_civil'];
-                if (type === 'comprovante_renda') return ['comprovante_renda'];
-                if (type === 'certidao_inteiro_teor' || type === 'certidao_onus_acoes') return ['docs_imovel'];
-                if (type === 'outro') {
-                  return ['outro', matrixSide === 'buyer' ? 'conjuge_documentos' : 'dados_bancarios'];
-                }
-                if (type.startsWith('cliente_outro_')) {
-                  return ['outro'];
-                }
-                return ['identidade'];
-              };
-              const targetCategories = typeToCategory(normalizedType, side);
-              const categoryRow = categories.find((item) => {
-                if (!item || typeof item !== 'object') return false;
-                const row = item as Record<string, unknown>;
-                const category = String(row.category ?? '').trim().toLowerCase();
-                return targetCategories.includes(category);
-              }) as Record<string, unknown> | undefined;
-              if (categoryRow) {
-                return String(categoryRow.status ?? '').trim().toUpperCase();
-              }
-            }
-          }
-      return '';
-    }
-    if (!Array.isArray(raw)) return '';
-    const normalizedType = normalizeMatrixDocumentType(documentType);
-    const match = raw.find((entry) => {
-      if (!entry || typeof entry !== 'object') return false;
-      const source = entry as Record<string, unknown>;
-      const entryType = normalizeMatrixDocumentType(
-        source.documentType ?? source.type ?? source.document ?? source.key
-      );
-      const entrySide = normalizeMatrixSide(source.side ?? source.party ?? source.role);
-      return entryType === normalizedType && entrySide === side;
-    });
-    if (!match || typeof match !== 'object') return '';
-    const source = match as Record<string, unknown>;
-    return String(source.status ?? source.state ?? source.progress ?? '').trim().toUpperCase();
-  }
-
-  function matrixCellStatus(
-    contract: ContractItem,
-    documentType: string,
-    side: MatrixSide
-  ): string {
-    const doc = getDocumentForMatrixCell(contract, documentType, side);
-    const docStatus = normalizeDocumentStatus(doc);
-    if (docStatus) return docStatus;
-    return readProgressStatus(contract, documentType, side);
-  }
-
-  function matrixCellStatusLabel(status: string): string {
-    const value = String(status).trim().toUpperCase();
-    if (value === 'APPROVED') return 'Aprovado';
-    if (value === 'REJECTED') return 'Rejeitado';
-    if (value === 'PENDING') return 'Pendente';
-    if (value === 'SENT' || value === 'UPLOADED' || value === 'SUBMITTED') return 'Enviado';
-    if (!value) return 'Pendente';
-    return value;
-  }
-
-  function matrixCellStatusClass(status: string): string {
-    const value = String(status).trim().toUpperCase();
-    if (value === 'APPROVED') {
-      return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
-    }
-    if (value === 'REJECTED') {
-      return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
-    }
-    if (value === 'PENDING' || value === 'MISSING' || !value) {
-      return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
-    }
-    return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
-  }
-
-  function getNonProposalDocuments(contract: ContractItem): ContractDocument[] {
-    return (contract.documents ?? []).filter((doc) => {
-      const documentType = String(doc.documentType ?? '').trim().toLowerCase();
-      return documentType !== 'proposal';
-    });
-  }
-
-  function documentMatchesCurrentContract(
-    contract: ContractItem,
-    doc: ContractDocument
-  ): boolean {
-    const documentType = String(doc.documentType ?? '').trim().toLowerCase();
-    if (!contractScopedDocumentTypes.has(documentType)) {
-      return true;
-    }
-
-    const metadataContractId = String(doc.metadata?.contractId ?? '').trim();
-    if (!metadataContractId) {
-      return false;
-    }
-
-    return metadataContractId === contract.id;
-  }
-
-  function getAllContractDocuments(contract: ContractItem): ContractDocument[] {
-    return getNonProposalDocuments(contract)
-      .filter((doc) => documentMatchesCurrentContract(contract, doc))
-      .sort((left, right) => {
-      const leftSideOrder = documentSideOrder(left);
-      const rightSideOrder = documentSideOrder(right);
-      if (leftSideOrder !== rightSideOrder) {
-        return leftSideOrder - rightSideOrder;
-      }
-      const leftDate = left.createdAt ? new Date(left.createdAt).getTime() : 0;
-      const rightDate = right.createdAt ? new Date(right.createdAt).getTime() : 0;
-      if (leftDate !== rightDate) {
-        return rightDate - leftDate;
-      }
-      return Number(right.id ?? 0) - Number(left.id ?? 0);
-    });
-  }
-
-  function getCurrentDraftDocument(contract: ContractItem | null): ContractDocument | null {
-    if (!contract) return null;
-    return (
-      getAllContractDocuments(contract).find(
-        (doc) => String(doc.documentType ?? '').trim().toLowerCase() === 'contrato_minuta'
-      ) ?? null
-    );
-  }
-
-  function hasCurrentDraftDocument(contract: ContractItem | null): boolean {
-    return getCurrentDraftDocument(contract) != null;
-  }
-
-  function draftUploadInputLabel(contract: ContractItem | null): string {
-    return hasCurrentDraftDocument(contract) ? 'Trocar minuta' : 'PDF da minuta';
-  }
-
-  function draftSubmitLabel(contract: ContractItem | null): string {
-    return hasCurrentDraftDocument(contract) ? 'Substituir minuta' : 'Anexar Minuta';
-  }
-
-  function listMissingRecordFields(
-    source: Record<string, unknown> | null | undefined,
-    fields: RequiredFieldDescriptor[]
-  ): string[] {
-    return fields
-      .filter((field) => !hasRecordValue(source, field.keys))
-      .map((field) => field.label);
-  }
-
-  function listMissingSellerInfo(contract: ContractItem): string[] {
-    return listMissingRecordFields(contract.sellerInfo ?? null, sellerRequiredInfoFields);
-  }
-
-  function listMissingBuyerInfo(contract: ContractItem): string[] {
-    const normalizedPurpose = String(contract.propertyPurpose ?? '').toLowerCase();
-    const requiresRentalGuarantee =
-      normalizedPurpose.includes('alug') || normalizedPurpose.includes('rent');
-    const requiredFields = requiresRentalGuarantee
-      ? [...buyerRequiredInfoFields, ...buyerRentalRequiredInfoFields]
-      : buyerRequiredInfoFields;
-
-    return listMissingRecordFields(contract.buyerInfo ?? null, requiredFields);
-  }
-
-  function listMissingRequiredDocuments(contract: ContractItem): string[] {
-    const rows = getMatrixRows(contract);
-    const missing: string[] = [];
-
-    if (isDoubleEndedDeal(contract)) {
-      for (const row of rows) {
-        if (!row.sellerRequired) continue;
-        if (getDocumentForMatrixCell(contract, row.documentType, 'seller') == null) {
-          missing.push(documentLabel(row.documentType));
-        }
-      }
-      return missing;
-    }
-
-    for (const row of rows) {
-      const sellerDoc = getDocumentForMatrixCell(contract, row.documentType, 'seller');
-      const buyerDoc = getDocumentForMatrixCell(contract, row.documentType, 'buyer');
-      if (row.documentType !== 'outro' && row.sellerRequired && sellerDoc == null) {
-        missing.push(`${documentLabel(row.documentType)} (Captador)`);
-      }
-      if (row.documentType !== 'outro' && row.buyerRequired && buyerDoc == null) {
-        missing.push(`${documentLabel(row.documentType)} (Comprador)`);
-      }
-    }
-
-    return missing;
-  }
-
-  function listBlockingDocumentStatuses(contract: ContractItem): string[] {
-    return getNonProposalDocuments(contract)
-      .map((doc) => {
-      const status = String(doc.status ?? '').trim().toUpperCase();
-      if (isOutroMatrixDocumentType(doc.documentType)) {
-        return null;
-      }
-      if (!status) {
-        return null;
-      }
-      if (status !== 'REJECTED' && status !== 'PENDING') {
-        return null;
-      }
-
-      const side = getDocumentSide(doc);
-      const sideLabel = side === 'seller' ? ' (Captador)' : side === 'buyer' ? ' (Comprador)' : '';
-      const label = documentLabel(doc.documentType) + sideLabel;
-      return `${label}: ${status === 'REJECTED' ? 'rejeitado' : 'pendente'}`;
-    })
-      .filter((item): item is string => item != null);
-  }
-
-  function computeApprovalLockReasons(contract: ContractItem | null): string[] {
-    if (!contract || modalMode !== 'review_docs') {
-      return [];
-    }
-
-    const reasons: string[] = [];
-    const missingSellerInfo = listMissingSellerInfo(contract);
-    const missingBuyerInfo = listMissingBuyerInfo(contract);
-    const missingDocuments = listMissingRequiredDocuments(contract);
-    const blockingDocuments = listBlockingDocumentStatuses(contract);
-
-    if (missingSellerInfo.length > 0) {
-      reasons.push(`Captador sem: ${missingSellerInfo.join(', ')}`);
-    }
-
-    if (missingBuyerInfo.length > 0) {
-      reasons.push(`Comprador sem: ${missingBuyerInfo.join(', ')}`);
-    }
-
-    if (missingDocuments.length > 0) {
-      reasons.push(`Documentos faltando: ${missingDocuments.join(', ')}`);
-    }
-
-    if (blockingDocuments.length > 0) {
-      reasons.push(`Documentos bloqueados: ${blockingDocuments.join(', ')}`);
-    }
-
-    return reasons;
-  }
-
-  function getDocumentForMatrixCell(
-    contract: ContractItem,
-    documentType: string,
-    side: 'seller' | 'buyer'
-  ): ContractDocument | null {
-    const normalizedType = documentType.trim().toLowerCase();
-    const docs = getNonProposalDocuments(contract).filter(
-      (doc) => String(doc.documentType ?? '').trim().toLowerCase() === normalizedType
-    );
-    if (docs.length === 0) {
-      return null;
-    }
-
-    const direct = docs.find((doc) => getDocumentSide(doc) === side);
-    if (direct) {
-      return direct;
-    }
-
-    const neutral = docs.find((doc) => getDocumentSide(doc) == null);
-    if (neutral) {
-      return neutral;
-    }
-
-    if (isDoubleEndedDeal(contract)) {
-      return docs[0] ?? null;
-    }
-
-    return null;
-  }
-
-  function getDocumentsForMatrixCell(
-    contract: ContractItem,
-    documentType: string,
-    side: 'seller' | 'buyer'
-  ): ContractDocument[] {
-    const normalizedType = documentType.trim().toLowerCase();
-    const docs = getNonProposalDocuments(contract).filter(
-      (doc) =>
-        documentTypeMatchesMatrixCell(
-          String(doc.documentType ?? '').trim().toLowerCase(),
-          normalizedType
-        )
-    );
-    if (docs.length === 0) {
-      return [];
-    }
-
-    const direct = docs.filter((doc) => getDocumentSide(doc) === side);
-    const neutral = docs.filter((doc) => getDocumentSide(doc) == null);
-
-    const ordered = [...direct, ...neutral];
-    if (ordered.length > 0) {
-      return Array.from(new Map(ordered.map((doc) => [doc.id, doc])).values());
-    }
-
-    if (isDoubleEndedDeal(contract)) {
-      return Array.from(new Map(docs.map((doc) => [doc.id, doc])).values());
-    }
-
-    return [];
-  }
-
-  function canAddAnotherMatrixDocument(
-    contract: ContractItem,
-    documentType: string,
-    side: 'seller' | 'buyer'
-  ): boolean {
-    const docs = getDocumentsForMatrixCell(contract, documentType, side);
-    if (!isOutroMatrixDocumentType(documentType)) {
-      return true;
-    }
-    return docs.length < 15;
-  }
-
-  function matrixCellUploadLabel(
-    contract: ContractItem,
-    documentType: string,
-    side: 'seller' | 'buyer'
-  ): string {
-    const docs = getDocumentsForMatrixCell(contract, documentType, side);
-    return docs.length > 0 ? 'Substituir' : 'Enviar';
-  }
-
-  function resolveMatrixUploadCategory(documentType: string, side: 'seller' | 'buyer'): string {
-    const normalizedType = documentType.trim().toLowerCase();
-    if (normalizedType === 'doc_identidade') return 'identidade';
-    if (normalizedType === 'comprovante_endereco') return 'comprovante_endereco';
-    if (normalizedType === 'certidao_casamento_nascimento') return 'estado_civil';
-    if (normalizedType === 'comprovante_renda') return 'comprovante_renda';
-    if (normalizedType === 'certidao_inteiro_teor' || normalizedType === 'certidao_onus_acoes') {
-      return 'docs_imovel';
-    }
-    if (normalizedType === 'dados_bancarios') return 'dados_bancarios';
-    if (normalizedType === 'outro' || normalizedType.startsWith('cliente_outro_')) return 'outro';
-    return normalizedType;
-  }
-
-  function isOutroMatrixDocumentType(value: unknown): boolean {
-    const normalized = String(value ?? '').trim().toLowerCase();
-    return normalized === 'outro' || normalized.startsWith('cliente_outro_');
-  }
-
-  function documentTypeMatchesMatrixCell(documentType: string, matrixType: string): boolean {
-    if (matrixType === 'outro') {
-      return isOutroMatrixDocumentType(documentType);
-    }
-    return documentType === matrixType;
-  }
-
-  function resolveOutroMatrixDocumentType(contract: ContractItem, side: 'seller' | 'buyer'): string | null {
-    const docs = getDocumentsForMatrixCell(contract, 'outro', side);
-    if (docs.length >= outroMatrixSlotTypes.length) {
-      return null;
-    }
-
-    const usedTypes = new Set(
-      docs
-        .map((doc) => String(doc.documentType ?? '').trim().toLowerCase())
-        .filter((value) => value.startsWith('cliente_outro_'))
-    );
-
-    for (const slotType of outroMatrixSlotTypes) {
-      if (!usedTypes.has(slotType)) {
-        return slotType;
-      }
-    }
-
-    return null;
-  }
-
-  function resolveOutroMatrixDocumentTypes(
-    contract: ContractItem,
-    side: 'seller' | 'buyer',
-    count: number
-  ): string[] {
-    const docs = getDocumentsForMatrixCell(contract, 'outro', side);
-    if (docs.length >= outroMatrixSlotTypes.length) {
-      return [];
-    }
-
-    const usedTypes = new Set(
-      docs
-        .map((doc) => String(doc.documentType ?? '').trim().toLowerCase())
-        .filter((value) => value.startsWith('cliente_outro_'))
-    );
-    const availableSlots = outroMatrixSlotTypes.filter((slotType) => !usedTypes.has(slotType));
-    return availableSlots.slice(0, Math.max(0, count));
-  }
+      : [];
 
   function isMatrixUploading(key: string): boolean {
     return Number(matrixUploadingCounts[key] ?? 0) > 0;
@@ -1831,18 +785,9 @@
   async function fetchContracts() {
     isLoading = true;
     try {
-      const params = new URLSearchParams({
-        status: activeTab,
-        page: String(currentPage),
-        limit: String(itemsPerPage),
-      });
-      const response = await api.get<{ data?: ContractItem[]; total?: number }>(
-        `/admin/contracts?${params.toString()}`
-      );
-
-      const data = Array.isArray(response?.data) ? response.data : [];
-      items = data;
-      totalItems = Number(response?.total ?? data.length);
+      const response = await listContracts<ContractItem>(activeTab, currentPage, itemsPerPage);
+      items = response.items;
+      totalItems = response.total;
       totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
       if (currentPage > totalPages) {
         currentPage = totalPages;
@@ -1863,43 +808,8 @@
     refreshKey += 1;
   }
 
-  function resolveApiErrorMessage(error: unknown, fallback: string): string {
-    if (!error || typeof error !== 'object') {
-      return fallback;
-    }
-
-    const source = error as {
-      requestId?: unknown;
-      response?: {
-        headers?: Record<string, unknown>;
-        data?: Record<string, unknown>;
-      };
-    };
-    const data = source.response?.data ?? {};
-    const backendMessage =
-      typeof data.error === 'string'
-        ? data.error.trim()
-        : typeof data.message === 'string'
-          ? data.message.trim()
-          : '';
-    const requestId =
-      typeof source.requestId === 'string'
-        ? source.requestId.trim()
-        : typeof data.requestId === 'string'
-          ? data.requestId.trim()
-          : typeof data.request_id === 'string'
-            ? data.request_id.trim()
-            : '';
-
-    if (!backendMessage) {
-      return fallback;
-    }
-
-    return requestId ? `${backendMessage} (Req: ${requestId})` : backendMessage;
-  }
-
   async function reloadSelectedContract(contractId: string): Promise<void> {
-    const payload = await api.get<ContractDetailResponse>(`/contracts/${contractId}`);
+    const payload = await getContractDetails<ContractItem>(contractId);
     if (!payload?.contract || !selected || selected.id !== contractId) {
       return;
     }
@@ -1908,7 +818,7 @@
       ...selected,
       ...payload.contract,
       documents: Array.isArray(payload.documents)
-        ? payload.documents
+        ? (payload.documents as ContractDocument[])
         : selected.documents ?? [],
     };
     if (showModal) {
@@ -1938,50 +848,13 @@
     };
   }
 
-  function trimInfoValue(raw: string): string | null {
-    const t = raw.trim();
-    return t.length ? t : null;
-  }
-
-  function buildSellerInfoPayload(): Record<string, unknown> {
-    if (!selected) return {};
-    const prev =
-      selected.sellerInfo && typeof selected.sellerInfo === 'object'
-        ? { ...(selected.sellerInfo as Record<string, unknown>) }
-        : {};
-    return {
-      ...prev,
-      estado_civil: trimInfoValue(sellerInfoForm.estadoCivil),
-      profissao: trimInfoValue(sellerInfoForm.profissao),
-      email: trimInfoValue(sellerInfoForm.email),
-      telefone: normalizePhoneForPayload(sellerInfoForm.telefone),
-      dados_bancarios: trimInfoValue(sellerInfoForm.dadosBancarios),
-    };
-  }
-
-  function buildBuyerInfoPayload(): Record<string, unknown> {
-    if (!selected) return {};
-    const prev =
-      selected.buyerInfo && typeof selected.buyerInfo === 'object'
-        ? { ...(selected.buyerInfo as Record<string, unknown>) }
-        : {};
-    return {
-      ...prev,
-      estado_civil: trimInfoValue(buyerInfoForm.estadoCivil),
-      profissao: trimInfoValue(buyerInfoForm.profissao),
-      email: trimInfoValue(buyerInfoForm.email),
-      telefone: normalizePhoneForPayload(buyerInfoForm.telefone),
-      garantia_locacao: trimInfoValue(buyerInfoForm.garantiaLocacao),
-    };
-  }
-
   async function saveContractPartyData() {
     if (!selected) return;
     savingPartyData = true;
     try {
-      await api.put(`/admin/contracts/${selected.id}/data`, {
-        sellerInfo: buildSellerInfoPayload(),
-        buyerInfo: buildBuyerInfoPayload(),
+      await saveContractPartyInfo(selected.id, {
+        sellerInfo: buildSellerInfoPayload(selected.sellerInfo, sellerInfoForm),
+        buyerInfo: buildBuyerInfoPayload(selected.buyerInfo, buyerInfoForm),
       });
       toast.success('Dados do captador e do comprador salvos.');
       await reloadSelectedContract(selected.id);
@@ -2089,13 +962,11 @@
 
     evaluatingSide = side;
     try {
-      const response = await api.put<{ movedToDraft?: boolean }>(
-        `/admin/contracts/${selected.id}/evaluate-side`,
-        {
-          side,
-          status,
-          reason: reason || undefined,
-        }
+      const response = await evaluateContractSideRequest(
+        selected.id,
+        side,
+        status,
+        reason || undefined
       );
       toast.success('Avaliação registrada com sucesso.');
       if (response?.movedToDraft === true) {
@@ -2166,14 +1037,16 @@
       return false;
     }
 
-    const form = new FormData();
-    form.append('documentType', storageDocumentType);
-    form.append('documentCategory', resolveMatrixUploadCategory(storageDocumentType, context.side));
-    form.append('side', context.side);
-    form.append('file', file);
-    await apiClient.post(`/contracts/${selected.id}/documents`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    await uploadMatrixDocument(
+      selected.id,
+      file,
+      {
+        documentType: storageDocumentType,
+        side: context.side,
+        existingDocumentType: context.existingDocumentType,
+      },
+      resolveMatrixUploadCategory(storageDocumentType, context.side)
+    );
     return true;
   }
 
@@ -2259,7 +1132,7 @@
 
     matrixDeletingDocumentId = doc.id;
     try {
-      await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
+      await deleteContractDocument(selected.id, doc.id);
       toast.success('Documento removido com sucesso.');
       await reloadSelectedContract(selected.id);
     } catch (error) {
@@ -2279,7 +1152,7 @@
 
     deletingDraftDocumentId = doc.id;
     try {
-      await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
+      await deleteContractDocument(selected.id, doc.id);
       toast.success('Minuta removida com sucesso.');
       await reloadSelectedContract(selected.id);
     } catch (error) {
@@ -2294,7 +1167,7 @@
     if (!selected || !doc?.id) return;
     matrixDeletingDocumentId = doc.id;
     try {
-      await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
+      await deleteContractDocument(selected.id, doc.id);
       toast.success(successMessage);
       await reloadSelectedContract(selected.id);
     } catch (error) {
@@ -2341,7 +1214,7 @@
 
     deletingFinalizedDocumentId = doc.id;
     try {
-      await api.delete(`/contracts/${selected.id}/documents/${doc.id}`);
+      await deleteFinalizedContractDocument(selected.id, doc.id);
       toast.success('Documento removido com sucesso.');
       await reloadSelectedContract(selected.id);
       if (selected) {
@@ -2364,14 +1237,9 @@
 
     uploadingSignedDoc = true;
     try {
-      const form = new FormData();
-      form.append('documentType', signedDocType);
-      form.append('file', selectedSignedFile);
-      await apiClient.post(`/admin/contracts/${selected.id}/signed-docs`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await uploadSignedDocument(selected.id, signedDocType, selectedSignedFile);
       if (pendingReplacementDocumentId) {
-        await api.delete(`/contracts/${selected.id}/documents/${pendingReplacementDocumentId}`);
+        await deleteContractDocument(selected.id, pendingReplacementDocumentId);
       }
       toast.success('Documento físico anexado com sucesso.');
       pendingReplacementDocumentId = null;
@@ -2405,18 +1273,14 @@
 
     uploadingSignedDoc = true;
     try {
-      const form = new FormData();
-      form.append('documentType', signedDocType);
-      if (finalizedDocumentRequiresSide(signedDocType)) {
-        form.append('side', selectedSignedDocSide);
-      }
-      form.append('file', selectedSignedFile);
-
-      await apiClient.post(`/admin/contracts/${selected.id}/finalized-docs`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await uploadFinalizedContractDocument(
+        selected.id,
+        signedDocType,
+        selectedSignedFile,
+        finalizedDocumentRequiresSide(signedDocType) ? selectedSignedDocSide : undefined
+      );
       if (pendingReplacementDocumentId) {
-        await api.delete(`/contracts/${selected.id}/documents/${pendingReplacementDocumentId}`);
+        await deleteContractDocument(selected.id, pendingReplacementDocumentId);
       }
       toast.success('Documento anexado ao contrato finalizado.');
       selectedSignedFile = null;
@@ -2450,16 +1314,7 @@
 
     uploadingDraft = true;
     try {
-      const form = new FormData();
-      if (selectedDraftFile) {
-        form.append('file', selectedDraftFile);
-      }
-      if (reuseCurrentDraft) {
-        form.append('reuseCurrentDraft', 'true');
-      }
-      await apiClient.post(`/admin/contracts/${selected.id}/draft`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      await submitContractDraft(selected.id, selectedDraftFile, reuseCurrentDraft);
       toast.success(
         reuseCurrentDraft
           ? 'Minuta atual mantida e contrato avançado para assinaturas.'
@@ -2480,7 +1335,10 @@
   async function submitFinalize() {
     if (!selected) return;
 
-    const resolvedCommissionAmounts = resolveFinalizeCommissionAmounts();
+    const resolvedCommissionAmounts = resolveFinalizeCommissionAmounts(
+      finalizeForm,
+      finalizeFieldModes
+    );
 
     if (resolvedCommissionAmounts == null) {
       toast.error('Preencha todos os campos de comissão com valores válidos.');
@@ -2502,13 +1360,11 @@
 
     finalizingContract = true;
     try {
-      await api.post(`/admin/contracts/${selected.id}/finalize`, {
-        commission_data: {
-          valorVenda,
-          comissaoCaptador,
-          comissaoVendedor,
-          taxaPlataforma,
-        },
+      await finalizeContract(selected.id, {
+        valorVenda,
+        comissaoCaptador,
+        comissaoVendedor,
+        taxaPlataforma,
       });
       toast.success('Contrato finalizado com sucesso.');
       closeModal(true);
@@ -2530,7 +1386,7 @@
 
     deletingFinalizedDocumentId = doc.id;
     try {
-      await api.delete(`/admin/contracts/${selected.id}/finalized-docs/${doc.id}`);
+      await deleteFinalizedContractDocument(selected.id, doc.id);
       toast.success('Documento removido com sucesso.');
       await reloadSelectedContract(selected.id);
       await fetchContracts();
@@ -2551,14 +1407,8 @@
 
     reopeningContract = true;
     try {
-      const response = (await api.put(`/admin/contracts/${selected.id}/reopen`, {})) as {
-        message?: string;
-        data?: { message?: string };
-      };
-      toast.success(
-        String(response?.message ?? response?.data?.message ?? '').trim() ||
-          'Contrato reiniciado com sucesso.'
-      );
+      const response = await reopenFinalizedContractById(selected.id);
+      toast.success(String(response?.message ?? response?.data?.message ?? '').trim() || 'Contrato reiniciado com sucesso.');
       closeModal(true);
       refresh();
     } catch (error) {
@@ -2577,7 +1427,7 @@
 
     deletingContract = true;
     try {
-      await api.delete(`/admin/contracts/${contract.id}`);
+      await deleteFinalizedContractById(contract.id);
       toast.success('Contrato finalizado excluído com sucesso.');
       closeModal(true);
       refresh();
@@ -2592,13 +1442,7 @@
   async function downloadAllDocuments(contract: ContractItem) {
     downloadingAllDocuments = true;
     try {
-      const response = await apiClient.get(`/admin/contracts/${contract.id}/documents.zip`, {
-        responseType: 'blob',
-      });
-      const blob =
-        response.data instanceof Blob
-          ? response.data
-          : new Blob([response.data], { type: 'application/zip' });
+      const blob = await downloadContractDocumentsZip(contract.id);
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = objectUrl;
@@ -2622,9 +1466,7 @@
 
     movingToPreviousStage = true;
     try {
-      await api.put(`/admin/contracts/${selected.id}/transition`, {
-        direction: 'previous',
-      });
+      await transitionContractById(selected.id, 'previous');
       toast.success(`Contrato voltou para ${destinationLabel}.`);
       closeModal(true);
       refresh();
@@ -2644,29 +1486,13 @@
 
     downloadingDocumentId = doc.id;
     try {
-      const response = await apiClient.get(doc.downloadUrl, {
-        responseType: 'blob',
-      });
-      const dispositionHeader = String(
-        response.headers?.['content-disposition'] ??
-          response.headers?.['Content-Disposition'] ??
-          ''
-      );
-      const utfMatch = dispositionHeader.match(/filename\*=UTF-8''([^;]+)/i);
-      const basicMatch = dispositionHeader.match(/filename=\"?([^\";]+)\"?/i);
-      const resolvedFromHeader = utfMatch?.[1]
-        ? decodeURIComponent(utfMatch[1])
-        : basicMatch?.[1];
+      const response = await downloadContractDocumentByUrl(doc.downloadUrl);
       const fallbackName =
         normalizePossiblyMojibakeText(doc.originalFileName ?? '') ||
         `${String(doc.documentType ?? 'documento').trim() || 'documento'}.pdf`;
-      const downloadName = normalizePossiblyMojibakeText(resolvedFromHeader || fallbackName);
+      const downloadName = normalizePossiblyMojibakeText(response.downloadName || fallbackName);
 
-      const blob =
-        response.data instanceof Blob
-          ? response.data
-          : new Blob([response.data], { type: 'application/octet-stream' });
-      const objectUrl = URL.createObjectURL(blob);
+      const objectUrl = URL.createObjectURL(response.blob);
       const anchor = document.createElement('a');
       anchor.href = objectUrl;
       anchor.download = downloadName;
@@ -2717,7 +1543,7 @@
     fetchContracts();
   }
 
-  $: approvalLockReasons = computeApprovalLockReasons(selected);
+  $: approvalLockReasons = computeApprovalLockReasons(selected, modalMode);
   $: isReadyToApprove = approvalLockReasons.length === 0;
   $: sellerApprovalDisabled = evaluatingSide === 'seller' || !isReadyToApprove;
 </script>
@@ -3233,419 +2059,35 @@
             </Button>
           </div>
 
-          <div id="contract-doc-matrix" class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p
-              id="contract-doc-matrix-help"
-              class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
-            >
-              Matriz de Documentos
-            </p>
-            <div class="mt-2 overflow-x-auto">
-              <table class="w-full min-w-[620px] text-sm" aria-describedby="contract-doc-matrix-help">
-                <thead>
-                  <tr class="border-b border-gray-200 dark:border-gray-700">
-                    <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
-                      Documento
-                    </th>
-                    <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
-                      Captador
-                    </th>
-                    <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">
-                      Comprador
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each getMatrixRows(selected) as row}
-                    {@const documentType = row.documentType}
-                    {@const sellerDocs = getDocumentsForMatrixCell(selected, documentType, 'seller')}
-                    {@const buyerDocs = getDocumentsForMatrixCell(selected, documentType, 'buyer')}
-                    <tr class="border-b border-gray-100 dark:border-gray-800">
-                      <td class="px-3 py-3 text-gray-700 dark:text-gray-200">
-                        {documentLabel(documentType)}
-                      </td>
-                      <td class="px-3 py-3">
-                        {#if row.sellerRequired}
-                          <div class="space-y-2">
-                            {#if sellerDocs.length === 0}
-                              <div class="flex flex-wrap items-center gap-2">
-                                <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                  Pendente
-                                </span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  on:click={() => triggerMatrixUpload(documentType, 'seller')}
-                                >
-                                  {#if isMatrixUploading(`seller:${documentType}`)}
-                                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                  {/if}
-                                  Enviar
-                                </Button>
-                              </div>
-                            {:else}
-                              {#each sellerDocs as sellerDoc (sellerDoc.id)}
-                                <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                                  <div class="flex flex-wrap items-center gap-2">
-                                    <button
-                                      type="button"
-                                      class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
-                                      on:click={() => selected && openDocumentPreview(sellerDoc, selected)}
-                                    >
-                                      {documentFileName(sellerDoc)}
-                                    </button>
-                                  </div>
-                                  <div class="mt-2 flex flex-wrap items-center gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      on:click={() => selected && viewDocument(sellerDoc, selected)}
-                                      disabled={downloadingDocumentId === sellerDoc.id}
-                                    >
-                                      {#if downloadingDocumentId === sellerDoc.id}
-                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                      {/if}
-                                      Baixar
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      on:click={() =>
-                                        triggerMatrixUpload(
-                                          documentType,
-                                          'seller',
-                                          String(sellerDoc.documentType ?? '').trim().toLowerCase()
-                                          )
-                                      }
-                                      disabled={!canAddAnotherMatrixDocument(selected, documentType, 'seller')}
-                                    >
-                                      {#if isMatrixUploading(`seller:${documentType}`)}
-                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                      {/if}
-                                      {matrixCellUploadLabel(selected, documentType, 'seller')}
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      on:click={() => deleteMatrixDocument(sellerDoc)}
-                                      disabled={matrixDeletingDocumentId === sellerDoc.id}
-                                    >
-                                      {#if matrixDeletingDocumentId === sellerDoc.id}
-                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                      {/if}
-                                      Excluir
-                                    </Button>
-                                  </div>
-                                </div>
-                              {/each}
-                              {#if documentType.trim().toLowerCase() === 'outro'}
-                                <div class="mt-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700">
-                                  {#if canAddAnotherMatrixDocument(selected, documentType, 'seller')}
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      on:click={() => triggerMatrixUpload(documentType, 'seller')}
-                                    >
-                                      {#if isMatrixUploading(`seller:${documentType}`)}
-                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                      {/if}
-                                      Adicionar outro
-                                    </Button>
-                                  {:else}
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                                      Limite de 15 documentos atingido.
-                                    </p>
-                                  {/if}
-                                </div>
-                              {/if}
-                            {/if}
-                          </div>
-                        {:else}
-                          <span class="text-xs text-gray-500 dark:text-gray-400">N/A</span>
-                        {/if}
-                      </td>
-                      <td class="px-3 py-3">
-                        {#if row.buyerRequired}
-                          <div class="space-y-2">
-                            {#if buyerDocs.length === 0}
-                              <div class="flex flex-wrap items-center gap-2">
-                                <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                  Pendente
-                                </span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  on:click={() => triggerMatrixUpload(documentType, 'buyer')}
-                                >
-                                  {#if isMatrixUploading(`buyer:${documentType}`)}
-                                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                  {/if}
-                                  Enviar
-                                </Button>
-                              </div>
-                            {:else}
-                              {#each buyerDocs as buyerDoc (buyerDoc.id)}
-                                <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                                  <div class="flex flex-wrap items-center gap-2">
-                                    <button
-                                      type="button"
-                                      class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
-                                      on:click={() => selected && openDocumentPreview(buyerDoc, selected)}
-                                    >
-                                      {documentFileName(buyerDoc)}
-                                    </button>
-                                  </div>
-                                  <div class="mt-2 flex flex-wrap items-center gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      on:click={() => selected && viewDocument(buyerDoc, selected)}
-                                      disabled={downloadingDocumentId === buyerDoc.id}
-                                    >
-                                      {#if downloadingDocumentId === buyerDoc.id}
-                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                      {/if}
-                                      Baixar
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      on:click={() =>
-                                        triggerMatrixUpload(
-                                          documentType,
-                                          'buyer',
-                                          String(buyerDoc.documentType ?? '').trim().toLowerCase()
-                                          )
-                                      }
-                                      disabled={!canAddAnotherMatrixDocument(selected, documentType, 'buyer')}
-                                    >
-                                      {#if isMatrixUploading(`buyer:${documentType}`)}
-                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                      {/if}
-                                      {matrixCellUploadLabel(selected, documentType, 'buyer')}
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      on:click={() => deleteMatrixDocument(buyerDoc)}
-                                      disabled={matrixDeletingDocumentId === buyerDoc.id}
-                                    >
-                                      {#if matrixDeletingDocumentId === buyerDoc.id}
-                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                      {/if}
-                                      Excluir
-                                    </Button>
-                                  </div>
-                                </div>
-                              {/each}
-                              {#if documentType.trim().toLowerCase() === 'outro'}
-                                <div class="mt-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700">
-                                  {#if canAddAnotherMatrixDocument(selected, documentType, 'buyer')}
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      on:click={() => triggerMatrixUpload(documentType, 'buyer')}
-                                    >
-                                      {#if isMatrixUploading(`buyer:${documentType}`)}
-                                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                                      {/if}
-                                      Adicionar outro
-                                    </Button>
-                                  {:else}
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                                      Limite de 15 documentos atingido.
-                                    </p>
-                                  {/if}
-                                </div>
-                              {/if}
-                            {/if}
-                          </div>
-                        {:else}
-                          <span class="text-xs text-gray-500 dark:text-gray-400">N/A</span>
-                        {/if}
-                      </td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <ContractDocumentMatrix
+            contract={selected}
+            rows={contractMatrixRows}
+            documentLabel={documentLabel}
+            documentFileName={documentFileName}
+            isMatrixUploading={isMatrixUploading}
+            matrixCellUploadLabel={matrixCellUploadLabel}
+            canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
+            downloadingDocumentId={downloadingDocumentId}
+            matrixDeletingDocumentId={matrixDeletingDocumentId}
+            onOpenPreview={(doc) => selected && openDocumentPreview(doc, selected)}
+            onDownload={(doc) => selected && viewDocument(doc, selected)}
+            onReplace={(documentType, side, existingDocumentType) => {
+              triggerMatrixUpload(documentType, side, existingDocumentType ?? null);
+            }}
+            onDelete={deleteMatrixDocument}
+            onUpload={triggerMatrixUpload}
+          />
 
-          <div class="space-y-3 rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            {#if !isReadyToApprove}
-              <div
-                class="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900/60 dark:bg-red-950/30"
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                <p class="text-sm font-medium text-red-700 dark:text-red-300">
-                  Aprovação bloqueada.
-                </p>
-                <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-red-600 dark:text-red-300">
-                  {#each approvalLockReasons as reason}
-                    <li>{reason}</li>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
-            <div>
-                <p class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                  Avaliação Captador
-                </p>
-                <div class="flex flex-wrap gap-2">
-                  {#if getSideApprovalUiState(selected.sellerApprovalStatus) === 'pending'}
-                    <Button
-                      size="sm"
-                      className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
-                      on:click={() => evaluateContractSide('seller', 'APPROVED')}
-                      disabled={sellerApprovalDisabled}
-                      title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
-                    >
-                      Aprovar<span class="sr-only"> captador</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-                      on:click={() => evaluateContractSide('seller', 'APPROVED_WITH_RES')}
-                    >
-                      Aprovar c/ ressalvas<span class="sr-only"> captador</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      on:click={() => evaluateContractSide('seller', 'REJECTED')}
-                      disabled={evaluatingSide === 'seller'}
-                    >
-                      Rejeitar
-                    </Button>
-                  {:else if getSideApprovalUiState(selected.sellerApprovalStatus) === 'approved'}
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      on:click={() => evaluateContractSide('seller', 'REJECTED')}
-                      disabled={evaluatingSide === 'seller'}
-                    >
-                      Rejeitar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-                      on:click={() => evaluateContractSide('seller', 'PENDING')}
-                    >
-                      Reiniciar
-                    </Button>
-                  {:else}
-                    <Button
-                      size="sm"
-                      className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
-                      on:click={() => evaluateContractSide('seller', 'APPROVED')}
-                      disabled={sellerApprovalDisabled}
-                      title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
-                    >
-                      Aprovar<span class="sr-only"> captador</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-                      on:click={() => evaluateContractSide('seller', 'APPROVED_WITH_RES')}
-                    >
-                      Aprovar c/ ressalvas<span class="sr-only"> captador</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-                      on:click={() => evaluateContractSide('seller', 'PENDING')}
-                    >
-                      Reiniciar
-                    </Button>
-                  {/if}
-                </div>
-              </div>
-            {#if !isDoubleEndedDeal(selected)}
-              <div>
-                <p class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                  Avaliação Comprador
-                </p>
-                <div class="flex flex-wrap gap-2">
-                  {#if getSideApprovalUiState(selected.buyerApprovalStatus) === 'pending'}
-                    <Button
-                      size="sm"
-                      className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
-                      on:click={() => evaluateContractSide('buyer', 'APPROVED')}
-                      disabled={evaluatingSide === 'buyer' || !isReadyToApprove}
-                      title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
-                    >
-                      Aprovar<span class="sr-only"> comprador</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-                      on:click={() => evaluateContractSide('buyer', 'APPROVED_WITH_RES')}
-                    >
-                      Aprovar c/ ressalvas<span class="sr-only"> comprador</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      on:click={() => evaluateContractSide('buyer', 'REJECTED')}
-                      disabled={evaluatingSide === 'buyer'}
-                    >
-                      Rejeitar
-                    </Button>
-                  {:else if getSideApprovalUiState(selected.buyerApprovalStatus) === 'approved'}
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      on:click={() => evaluateContractSide('buyer', 'REJECTED')}
-                      disabled={evaluatingSide === 'buyer'}
-                    >
-                      Rejeitar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-                      on:click={() => evaluateContractSide('buyer', 'PENDING')}
-                    >
-                      Reiniciar
-                    </Button>
-                  {:else}
-                    <Button
-                      size="sm"
-                      className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
-                      on:click={() => evaluateContractSide('buyer', 'APPROVED')}
-                      disabled={evaluatingSide === 'buyer' || !isReadyToApprove}
-                      title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
-                    >
-                      Aprovar<span class="sr-only"> comprador</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-                      on:click={() => evaluateContractSide('buyer', 'APPROVED_WITH_RES')}
-                    >
-                      Aprovar c/ ressalvas<span class="sr-only"> comprador</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-                      on:click={() => evaluateContractSide('buyer', 'PENDING')}
-                    >
-                      Reiniciar
-                    </Button>
-                  {/if}
-                </div>
-              </div>
-            {/if}
-          </div>
+          <ContractApprovalActions
+            contract={selected}
+            approvalLockReasons={approvalLockReasons}
+            isReadyToApprove={isReadyToApprove}
+            evaluatingSide={evaluatingSide}
+            sellerApprovalDisabled={sellerApprovalDisabled}
+            isDoubleEndedDeal={isDoubleEndedDeal}
+            getSideApprovalUiState={getSideApprovalUiState}
+            evaluateContractSide={evaluateContractSide}
+          />
 
           <div class="mt-1 flex justify-end">
             <Button variant="outline" on:click={() => closeModal()}>Fechar</Button>
@@ -3661,246 +2103,31 @@
           />
         </div>
         {:else if modalMode === 'upload_draft'}
-        <div class="space-y-4">
-          {#if getCurrentDraftDocument(selected)}
-            <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                Minuta atual
-              </p>
-              <div class="mt-2 flex flex-col gap-3 rounded bg-gray-50 px-3 py-3 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
-                <div class="min-w-0">
-                  <button
-                    type="button"
-                    class="mt-1 block text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
-                    on:click={() => {
-                      const draftDoc = getCurrentDraftDocument(selected);
-                      if (selected && draftDoc) {
-                        void openDocumentPreview(draftDoc, selected);
-                      }
-                    }}
-                  >
-                    {documentFileName(getCurrentDraftDocument(selected))}
-                  </button>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Enviado em {formatDate(getCurrentDraftDocument(selected)?.createdAt)}
-                  </p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    on:click={() => {
-                      const draftDoc = getCurrentDraftDocument(selected);
-                      if (selected && draftDoc) {
-                        selected && openDocumentPreview(draftDoc, selected);
-                      }
-                    }}
-                  >
-                    Visualizar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    on:click={() => {
-                      const draftDoc = getCurrentDraftDocument(selected);
-                      if (selected && draftDoc) {
-                        viewDocument(draftDoc, selected);
-                      }
-                    }}
-                    disabled={downloadingDocumentId === getCurrentDraftDocument(selected)?.id}
-                  >
-                    {#if downloadingDocumentId === getCurrentDraftDocument(selected)?.id}
-                      <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                    {/if}
-                    Baixar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    on:click={() => {
-                      const draftDoc = getCurrentDraftDocument(selected);
-                      if (selected && draftDoc) {
-                        void deleteDraftDocument(draftDoc);
-                      }
-                    }}
-                    disabled={deletingDraftDocumentId === getCurrentDraftDocument(selected)?.id}
-                  >
-                    {#if deletingDraftDocumentId === getCurrentDraftDocument(selected)?.id}
-                      <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                    {/if}
-                    Excluir minuta
-                  </Button>
-                </div>
-              </div>
-            </div>
-          {/if}
-
-          <div class="rounded-2xl border border-dashed border-gray-300 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-950/20">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="min-w-0">
-                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  PDF da minuta
-                </p>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                  {#if hasCurrentDraftDocument(selected)}
-                    Se quiser trocar a minuta atual, selecione um novo PDF abaixo.
-                  {:else}
-                    Selecione o PDF que será usado como minuta oficial deste contrato.
-                  {/if}
-                </p>
-              </div>
-              <span class={`rounded-full px-3 py-1 text-xs font-semibold ${hasCurrentDraftDocument(selected) ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}`}>
-                {hasCurrentDraftDocument(selected) ? 'Minuta anexada' : 'Minuta pendente'}
-              </span>
-            </div>
-
-            <div class="mt-4 flex flex-wrap items-center gap-3">
-              <input
-                id="draft-pdf"
-                type="file"
-                accept="application/pdf,.pdf"
-                bind:this={draftUploadInputEl}
-                on:change={handleDraftFileChange}
-                class="sr-only"
-                aria-hidden="true"
-                tabindex="-1"
-              />
-              <Button variant="outline" on:click={triggerDraftPicker}>
-                {draftUploadInputLabel(selected)}
-              </Button>
-              {#if hasCurrentDraftDocument(selected) && !selectedDraftFile}
-                <Button
-                  variant="outline"
-                  on:click={() => submitDraft({ reuseCurrentDraft: true })}
-                  disabled={uploadingDraft || movingToPreviousStage}
-                >
-                  {#if uploadingDraft}
-                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                  {/if}
-                  Prosseguir com a mesma minuta
-                </Button>
-              {/if}
-              {#if selectedDraftFile}
-                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                  {selectedDraftFile.name}
-                </span>
-              {:else}
-                <span class="text-xs text-gray-500 dark:text-gray-400">
-                  {hasCurrentDraftDocument(selected)
-                    ? 'Selecione um arquivo apenas se quiser substituir a minuta atual.'
-                    : 'Nenhum arquivo selecionado.'}
-                </span>
-              {/if}
-            </div>
-          </div>
-
-          <div id="finalized-document-upload" class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-              Documentos do contrato
-            </p>
-            {#if getAllContractDocuments(selected).length === 0}
-              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Nenhum documento do contrato anexado até o momento.
-              </p>
-            {:else}
-              <div class="mt-2 space-y-2">
-                {#each getAllContractDocuments(selected) as doc (doc.id)}
-                  <div class="flex flex-col gap-2 rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
-                          on:click={() => selected && openDocumentPreview(doc, selected)}
-                        >
-                          {documentLabel(doc.documentType)}
-                        </button>
-                        {#if documentSideLabel(doc)}
-                          <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                            {documentSideLabel(doc)}
-                          </span>
-                        {/if}
-                      </div>
-                      <button
-                        type="button"
-                        class="mt-1 block truncate text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
-                        on:click={() => selected && openDocumentPreview(doc, selected)}
-                      >
-                        {documentFileName(doc)}
-                      </button>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">
-                        Enviado em {formatDate(doc.createdAt)}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      on:click={() => selected && openDocumentPreview(doc, selected)}
-                    >
-                      Visualizar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      on:click={() => selected && viewDocument(doc, selected)}
-                      disabled={downloadingDocumentId === doc.id}
-                    >
-                      {#if downloadingDocumentId === doc.id}
-                        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                      {/if}
-                      Baixar
-                    </Button>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-
-          <div class="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              on:click={moveContractToPreviousStage}
-              disabled={uploadingDraft || movingToPreviousStage}
-            >
-              {#if movingToPreviousStage}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-              {/if}
-              Voltar
-            </Button>
-            <Button
-              variant="outline"
-              on:click={() => closeModal()}
-              disabled={uploadingDraft || movingToPreviousStage}
-            >
-              Fechar
-            </Button>
-            {#if hasCurrentDraftDocument(selected)}
-              {#if selectedDraftFile}
-                <Button
-                  className="bg-green-600 text-white hover:bg-green-700"
-                  on:click={() => submitDraft()}
-                  disabled={uploadingDraft || movingToPreviousStage}
-                >
-                  {#if uploadingDraft}
-                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                  {/if}
-                  {draftSubmitLabel(selected)}
-                </Button>
-              {/if}
-            {:else}
-              <Button
-                className="bg-green-600 text-white hover:bg-green-700"
-                on:click={() => submitDraft()}
-                disabled={uploadingDraft || movingToPreviousStage || !selectedDraftFile}
-              >
-                {#if uploadingDraft}
-                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                {/if}
-                {draftSubmitLabel(selected)}
-              </Button>
-            {/if}
-          </div>
-        </div>
+        <ContractDraftUploadPanel
+          contract={selected}
+          currentDraftDocument={getCurrentDraftDocument(selected)}
+          documents={selected ? getAllContractDocuments(selected) : []}
+          selectedDraftFile={selectedDraftFile}
+          uploadingDraft={uploadingDraft}
+          movingToPreviousStage={movingToPreviousStage}
+          deletingDraftDocumentId={deletingDraftDocumentId}
+          downloadingDocumentId={downloadingDocumentId}
+          documentFileName={documentFileName}
+          documentLabel={documentLabel}
+          documentSideLabel={documentSideLabel}
+          formatDate={formatDate}
+          hasCurrentDraftDocument={hasCurrentDraftDocument}
+          draftUploadInputLabel={draftUploadInputLabel}
+          draftSubmitLabel={draftSubmitLabel}
+          triggerDraftPicker={triggerDraftPicker}
+          submitDraft={submitDraft}
+          moveContractToPreviousStage={moveContractToPreviousStage}
+          closeModal={closeModal}
+          openDocumentPreview={(doc, contract) => openDocumentPreview(doc, contract)}
+          viewDocument={(doc, contract) => viewDocument(doc, contract)}
+          deleteDraftDocument={(doc) => deleteDraftDocument(doc)}
+          handleDraftFileChange={handleDraftFileChange}
+        />
         {:else if modalMode === 'finalize'}
         <div class="space-y-4">
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
@@ -4306,455 +2533,66 @@
           </div>
         </div>
         {:else if modalMode === 'edit_finalized'}
-        <div class="space-y-4">
-          <p class="text-sm text-gray-600 dark:text-gray-300">
-            Gerencie os documentos e o ciclo final deste contrato.
-          </p>
-
-          <div class="rounded-md border border-gray-200 p-3 text-sm dark:border-gray-700">
-            <p><span class="font-semibold">Status:</span> {statusLabel(selected.status)}</p>
-            <p><span class="font-semibold">Atualizado em:</span> {formatDate(selected.updatedAt ?? selected.createdAt)}</p>
-            <p><span class="font-semibold">Valor:</span> {readCommissionValue(selected.commissionData ?? null, 'valorVenda') || '-'}</p>
-          </div>
-
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <div class="flex items-center justify-between gap-3">
-              <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                Documentos do contrato finalizado
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                on:click={() => selected && downloadAllDocuments(selected)}
-                disabled={downloadingAllDocuments || getAllContractDocuments(selected).length === 0}
-              >
-                {#if downloadingAllDocuments}
-                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                {/if}
-                Baixar tudo (.zip)
-              </Button>
-            </div>
-            {#if getAllContractDocuments(selected).length === 0}
-              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Nenhum documento vinculado a este contrato.
-              </p>
-            {:else}
-              <div class="mt-2 space-y-2">
-                {#each getAllContractDocuments(selected) as doc (doc.id)}
-                  <div class="flex flex-col gap-2 rounded bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="min-w-0">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <p class="font-medium text-gray-900 dark:text-gray-100">
-                          {documentLabel(doc.documentType)}
-                        </p>
-                        {#if documentSideLabel(doc)}
-                          <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                            {documentSideLabel(doc)}
-                          </span>
-                        {/if}
-                      </div>
-                      <button
-                        type="button"
-                        class="mt-1 block truncate text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
-                        on:click={() => selected && openDocumentPreview(doc, selected)}
-                      >
-                        {documentFileName(doc)}
-                      </button>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">
-                        Enviado em {formatDate(doc.createdAt)}
-                      </p>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        on:click={() => selected && openDocumentPreview(doc, selected)}
-                      >
-                        Visualizar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        on:click={() => selected && viewDocument(doc, selected)}
-                        disabled={downloadingDocumentId === doc.id}
-                      >
-                        {#if downloadingDocumentId === doc.id}
-                          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                        {/if}
-                        Baixar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        on:click={() => prepareSignedDocumentReplacement(doc)}
-                      >
-                        Substituir
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        on:click={() => deleteFinalizedDocument(doc)}
-                        disabled={deletingFinalizedDocumentId === doc.id}
-                      >
-                        {#if deletingFinalizedDocumentId === doc.id}
-                          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                        {/if}
-                        Excluir
-                      </Button>
-                    </div>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-
-          <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-              Adicionar documento
-            </p>
-            <div class="mt-3 grid gap-3 md:grid-cols-3">
-              <label class="text-sm text-gray-700 dark:text-gray-200">
-                Tipo do Documento
-                <select
-                  bind:value={signedDocType}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-                >
-                  {#each Object.entries(documentTypeLabels) as [value, label]}
-                    <option value={value}>{label}</option>
-                  {/each}
-                </select>
-              </label>
-              {#if finalizedDocumentRequiresSide(signedDocType)}
-                <label class="text-sm text-gray-700 dark:text-gray-200">
-                  Lado
-                  <select
-                    bind:value={selectedSignedDocSide}
-                    class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-                  >
-                    <option value="seller">Captador</option>
-                    <option value="buyer">Comprador</option>
-                  </select>
-                </label>
-              {/if}
-              <label class="text-sm text-gray-700 dark:text-gray-200">
-                Arquivo
-                <input
-                  bind:this={signedUploadInputEl}
-                  type="file"
-                  accept="application/pdf,image/png,image/jpeg,image/webp"
-                  on:change={handleSignedFileChange}
-                  class="mt-1 block w-full text-sm text-gray-700 dark:text-gray-200"
-                />
-              </label>
-            </div>
-            {#if selectedSignedFile}
-              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Selecionado: {selectedSignedFile.name}
-              </p>
-            {/if}
-            {#if pendingReplacementDocumentId}
-              <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
-                <span>Substituição em andamento.</span>
-                <Button size="sm" variant="outline" on:click={cancelSignedDocumentReplacement}>
-                  Cancelar substituição
-                </Button>
-              </div>
-            {/if}
-            <div class="mt-3 flex justify-end">
-              <Button
-                className="bg-blue-600 text-white hover:bg-blue-700"
-                on:click={uploadFinalizedDocument}
-                disabled={uploadingSignedDoc || !selectedSignedFile}
-              >
-                {#if uploadingSignedDoc}
-                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                {/if}
-                Adicionar documento
-              </Button>
-            </div>
-          </div>
-
-          <div class="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              on:click={() => closeModal()}
-              disabled={reopeningContract || deletingContract || uploadingSignedDoc}
-            >
-              Fechar
-            </Button>
-            <Button
-              variant="outline"
-              on:click={reopenFinalizedContract}
-              disabled={reopeningContract || deletingContract || uploadingSignedDoc}
-            >
-              {#if reopeningContract}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-              {/if}
-              Reiniciar Contrato
-            </Button>
-              <Button
-                variant="destructive"
-                on:click={() => selected && deleteFinalizedContract(selected)}
-                disabled={reopeningContract || deletingContract || uploadingSignedDoc}
-              >
-              {#if deletingContract}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-              {/if}
-              Excluir
-            </Button>
-          </div>
-        </div>
+        <ContractFinalizedEditorPanel
+          contract={selected}
+          documents={selected ? getAllContractDocuments(selected) : []}
+          downloadingAllDocuments={downloadingAllDocuments}
+          deletingFinalizedDocumentId={deletingFinalizedDocumentId}
+          deletingContract={deletingContract}
+          reopeningContract={reopeningContract}
+          uploadingSignedDoc={uploadingSignedDoc}
+          selectedSignedFile={selectedSignedFile}
+          pendingReplacementDocumentId={pendingReplacementDocumentId}
+          signedUploadInputEl={signedUploadInputEl}
+          signedDocType={signedDocType}
+          selectedSignedDocSide={selectedSignedDocSide}
+          documentTypeLabels={documentTypeLabels}
+          documentLabel={documentLabel}
+          documentSideLabel={documentSideLabel}
+          documentFileName={documentFileName}
+          formatDate={formatDate}
+          statusLabel={statusLabel}
+          readCommissionValue={readCommissionValue}
+          finalizedDocumentRequiresSide={finalizedDocumentRequiresSide}
+          prepareSignedDocumentReplacement={prepareSignedDocumentReplacement}
+          deleteFinalizedDocument={deleteFinalizedDocument}
+          downloadAllDocuments={downloadAllDocuments}
+          uploadFinalizedDocument={uploadFinalizedDocument}
+          handleSignedFileChange={handleSignedFileChange}
+          cancelSignedDocumentReplacement={cancelSignedDocumentReplacement}
+          closeModal={closeModal}
+          reopenFinalizedContract={reopenFinalizedContract}
+          deleteFinalizedContract={deleteFinalizedContract}
+          openDocumentPreview={(doc, contract) => openDocumentPreview(doc, contract)}
+          viewDocument={(doc, contract) => viewDocument(doc, contract)}
+        />
         {/if}
       </div>
     </div>
   </div>
 {/if}
 
-{#if documentPreviewOpen}
-  <div
-    class={`fixed inset-0 z-[60] flex items-center justify-center overflow-hidden overscroll-none bg-black/75 ${
-      documentPreviewIsFullscreen ? 'p-0' : 'p-3'
-    }`}
-    role="presentation"
-    on:click={(event) => {
-      if (event.target === event.currentTarget) {
-        closeDocumentPreview();
-      }
-    }}
-    on:keydown={() => {}}
-  >
-    <div
-      bind:this={documentPreviewFullscreenTargetEl}
-      class={`flex w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-gray-950 ${
-        documentPreviewIsFullscreen
-          ? 'fixed inset-0 h-screen max-h-screen max-w-none rounded-none bg-black'
-          : 'max-h-[92vh] max-w-6xl rounded-2xl'
-      }`}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="document-preview-title"
-    >
-      {#if !documentPreviewIsFullscreen}
-        <div class="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-800">
-          <div class="min-w-0">
-            <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              {documentPreviewDoc ? 'Documento do contrato' : 'Imagem do imóvel'}
-            </p>
-            <h3 id="document-preview-title" class="truncate text-base font-semibold text-gray-900 dark:text-gray-100">
-              {documentPreviewTitle || 'Visualização'}
-            </h3>
-            {#if documentPreviewFileName}
-              <p class="truncate text-xs text-gray-500 dark:text-gray-400">
-                {documentPreviewFileName}
-              </p>
-            {/if}
-          </div>
-          <div class="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              on:click={toggleDocumentPreviewFullscreen}
-              title="Alternar tela cheia"
-            >
-              <Maximize2 class="h-4 w-4" />
-            </Button>
-            <button
-              type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-              on:click={() => closeDocumentPreview()}
-              aria-label="Fechar visualização"
-            >
-              <X class="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      {/if}
-
-      <div class={`flex min-h-0 flex-1 flex-col gap-3 overflow-hidden ${documentPreviewIsFullscreen ? 'p-0' : 'p-4'}`}>
-        {#if documentPreviewLoading}
-          <div class="flex min-h-[280px] flex-1 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40">
-            <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-              <Loader2 class="h-4 w-4 animate-spin" />
-              Carregando visualização...
-            </div>
-          </div>
-        {:else if documentPreviewError}
-          <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
-            {documentPreviewError}
-          </div>
-        {:else}
-          <div
-            class={`relative min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 overscroll-y-contain ${
-              documentPreviewIsFullscreen ? 'rounded-none border-0 bg-black p-0' : 'p-4'
-            } dark:border-gray-800 dark:bg-black`}
-          >
-            {#if documentPreviewIsFullscreen}
-              <div class="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex items-end justify-between px-4">
-                <div class="pointer-events-auto flex items-center gap-2 rounded-full bg-black/70 px-3 py-2 text-white shadow-2xl backdrop-blur">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
-                    on:click={() => (documentPreviewZoom = Math.max(0.5, Number((documentPreviewZoom - 0.25).toFixed(2))))}
-                    title="Diminuir zoom"
-                  >
-                    <ZoomOut class="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
-                    on:click={() => (documentPreviewZoom = Math.min(3, Number((documentPreviewZoom + 0.25).toFixed(2))))}
-                    title="Aumentar zoom"
-                  >
-                    <ZoomIn class="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 rounded-full px-3 border-white/20 text-white hover:bg-white/10"
-                    on:click={() => (documentPreviewZoom = 1)}
-                  >
-                    100%
-                  </Button>
-                </div>
-                <div class="pointer-events-auto flex items-center gap-2 rounded-full bg-black/70 px-3 py-2 text-white shadow-2xl backdrop-blur">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
-                    on:click={downloadPreviewDocument}
-                    title="Baixar documento"
-                  >
-                    <Download class="h-4 w-4" />
-                  </Button>
-                  {#if documentPreviewDoc}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
-                      on:click={replacePreviewDocument}
-                      title="Substituir documento"
-                    >
-                      <RefreshCcw class="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="h-9 w-9 rounded-full p-0"
-                      on:click={deletePreviewDocument}
-                      title="Excluir documento"
-                    >
-                      <Trash2 class="h-4 w-4" />
-                    </Button>
-                  {/if}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
-                    on:click={toggleDocumentPreviewFullscreen}
-                    title="Sair da tela cheia"
-                  >
-                    <X class="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            {:else}
-              <div class="flex flex-wrap items-center justify-between gap-2 pb-3">
-                <div class="flex items-center gap-2">
-                  <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = Math.max(0.5, Number((documentPreviewZoom - 0.25).toFixed(2))))}>
-                    <ZoomOut class="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = Math.min(3, Number((documentPreviewZoom + 0.25).toFixed(2))))}>
-                    <ZoomIn class="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="outline" on:click={() => (documentPreviewZoom = 1)}>
-                    100%
-                  </Button>
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 w-9 rounded-full p-0"
-                    on:click={downloadPreviewDocument}
-                    title="Baixar documento"
-                  >
-                    <Download class="h-4 w-4" />
-                  </Button>
-                  {#if documentPreviewDoc}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-9 w-9 rounded-full p-0"
-                      on:click={replacePreviewDocument}
-                      title="Substituir documento"
-                    >
-                      <RefreshCcw class="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="h-9 w-9 rounded-full p-0"
-                      on:click={deletePreviewDocument}
-                      title="Excluir documento"
-                    >
-                      <Trash2 class="h-4 w-4" />
-                    </Button>
-                  {/if}
-                  <Button size="sm" variant="outline" on:click={toggleDocumentPreviewFullscreen} title="Alternar tela cheia">
-                    <Maximize2 class="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            {/if}
-
-            <div
-              class="relative flex min-h-full w-full justify-center overflow-hidden overscroll-y-contain"
-              style={`transform: scale(${documentPreviewZoom}); transform-origin: top center;`}
-            >
-              {#if documentPreviewKind === 'image'}
-                <img
-                  src={documentPreviewSourceUrl}
-                  alt={documentPreviewFileName}
-                  class={`max-w-full rounded-lg object-contain shadow-2xl ${
-                    documentPreviewIsFullscreen ? 'max-h-[100vh]' : 'max-h-[76vh]'
-                  }`}
-                />
-              {:else}
-                <div class="flex w-full max-w-[960px] flex-col items-center gap-4">
-                  {#if documentPreviewPdfText}
-                    <p class="sr-only" data-testid="document-preview-pdf-text">{documentPreviewPdfText}</p>
-                  {/if}
-                  {#if documentPreviewPdfFallbackUsed && documentPreviewPdfText}
-                    <div
-                      class="pointer-events-none absolute left-4 top-4 z-20 max-w-[min(32rem,calc(100%-2rem))] rounded-md bg-black/70 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur"
-                      data-testid="document-preview-pdf-visible-text"
-                    >
-                      {documentPreviewPdfText.split(' ').filter(Boolean).slice(0, 12).join(' ')}
-                    </div>
-                  {/if}
-                  {#if documentPreviewPdfPages.length === 0}
-                    <div class="flex min-h-[280px] w-full items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300">
-                      Renderizando páginas do PDF...
-                    </div>
-                  {:else}
-                    {#each documentPreviewPdfPages as page (page.pageNumber)}
-                      <div class="w-full rounded-lg bg-white p-2 shadow-2xl dark:bg-gray-950">
-                        <img
-                          src={page.dataUrl}
-                          alt={`${documentPreviewFileName} - página ${page.pageNumber}`}
-                          class="h-auto w-full rounded-md object-contain"
-                        />
-                      </div>
-                    {/each}
-                  {/if}
-                </div>
-              {/if}
-            </div>
-          </div>
-        {/if}
-      </div>
-    </div>
-  </div>
-{/if}
+<ContractDocumentPreview
+  open={documentPreviewOpen}
+  isFullscreen={documentPreviewIsFullscreen}
+  bind:fullscreenTargetEl={documentPreviewFullscreenTargetEl}
+  loading={documentPreviewLoading}
+  error={documentPreviewError}
+  title={documentPreviewTitle}
+  fileName={documentPreviewFileName}
+  kind={documentPreviewKind}
+  sourceUrl={documentPreviewSourceUrl}
+  zoom={documentPreviewZoom}
+  pdfPages={documentPreviewPdfPages}
+  pdfText={documentPreviewPdfText}
+  pdfFallbackUsed={documentPreviewPdfFallbackUsed}
+  doc={documentPreviewDoc}
+  onClose={closeDocumentPreview}
+  onToggleFullscreen={toggleDocumentPreviewFullscreen}
+  onZoomOut={() => (documentPreviewZoom = Math.max(0.5, Number((documentPreviewZoom - 0.25).toFixed(2))))}
+  onZoomIn={() => (documentPreviewZoom = Math.min(3, Number((documentPreviewZoom + 0.25).toFixed(2))))}
+  onResetZoom={() => (documentPreviewZoom = 1)}
+  onDownload={downloadPreviewDocument}
+  onReplace={replacePreviewDocument}
+  onDelete={deletePreviewDocument}
+/>

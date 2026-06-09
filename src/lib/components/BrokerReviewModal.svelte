@@ -1,83 +1,48 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { toast } from 'svelte-sonner';
-  import { api } from '$lib/apiClient';
   import * as Dialog from '$lib/components/ui/dialog';
-  import { Button } from '$lib/components/ui/button';
-  import { Loader2, Trash2, Upload, Eye, X } from 'lucide-svelte';
+  import { Loader2 } from 'lucide-svelte';
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
-  import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
-  import { extractApiErrorMessage, formatCep, onlyDigits } from '$lib/components/create-property-helpers';
-  import { formatBrokerStatusLabel, getBrokerStatusBadgeClass } from '$lib/utils/brokerStatus';
-  import type { BrokerDocuments } from '$lib/types';
+import BrokerEditForm from '$lib/components/broker/BrokerEditForm.svelte';
+import BrokerReviewActions from '$lib/components/broker/BrokerReviewActions.svelte';
+import BrokerDocumentPreviewModal from '$lib/components/broker/BrokerDocumentPreviewModal.svelte';
+import BrokerDocumentsSection from '$lib/components/broker/BrokerDocumentsSection.svelte';
+import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
+import { extractApiErrorMessage, onlyDigits } from '$lib/components/create-property-helpers';
+import { formatBrokerStatusLabel, getBrokerStatusBadgeClass } from '$lib/utils/brokerStatus';
+  import {
+    deleteBrokerDocumentById,
+    demoteBrokerToClientById,
+    fetchBrokerDetailById,
+    lookupCepAddress,
+    reauthAndDeleteBrokerById,
+    saveBrokerById,
+    updateBrokerStatusById,
+    uploadBrokerDocumentById,
+  } from '$lib/components/broker/brokerReviewService';
+import {
+  createBrokerFormState,
+  formatBrokerReviewDate,
+  formatBrokerReviewErrorMessage,
+  getBrokerDocumentActionLabel,
+  getBrokerDocumentLabel,
+  resolveBrokerDocumentUrls,
+  type BrokerDocumentLabelKey,
+  type BrokerDetailLike,
+  type BrokerFormState,
+} from '$lib/components/broker/brokerReviewHelpers';
+  import {
+    createBrokerReviewClosedState,
+    getBrokerIdToLoad,
+    shouldDispatchClose,
+  } from '$lib/components/broker/brokerReviewLifecycle';
 
-  type BrokerDetail = {
-    id: number;
+  type BrokerDetail = BrokerDetailLike & {
     name: string;
     email: string;
-    phone?: string | null;
-    street?: string | null;
-    number?: string | null;
-    complement?: string | null;
-    bairro?: string | null;
-    city?: string | null;
-    state?: string | null;
-    cep?: string | null;
-    creci?: string | null;
-    status?: string | null;
-    created_at?: string | null;
-    creci_front_url?: string | null;
-    creci_back_url?: string | null;
-    selfie_url?: string | null;
-    documents?: BrokerDocuments;
     document_status?: string | null;
-    sem_cep?: number | boolean | null;
-    sem_numero?: number | boolean | null;
   };
-  type BrokerLike = {
-    documents?: BrokerDocuments;
-    [key: string]: unknown;
-  };
-
-  function getRequestIdFromError(error: unknown): string {
-    const requestId = (error as { requestId?: unknown })?.requestId;
-    if (typeof requestId === 'string' && requestId.trim().length > 0) {
-      return requestId.trim();
-    }
-
-    const response = (error as {
-      response?: {
-        data?: { requestId?: unknown; request_id?: unknown };
-        headers?: unknown;
-      };
-    }).response;
-
-    const dataRequestId = typeof response?.data?.requestId === 'string'
-      ? response.data.requestId.trim()
-      : typeof response?.data?.request_id === 'string'
-        ? response.data.request_id.trim()
-        : '';
-    if (dataRequestId) return dataRequestId;
-
-    const headers = response?.headers;
-    if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
-      const headerMap = headers as Record<string, unknown>;
-      const rawHeader = headerMap['x-request-id'] ?? headerMap['X-Request-Id'] ?? headerMap['request-id'];
-      if (typeof rawHeader === 'string' && rawHeader.trim().length > 0) return rawHeader.trim();
-      if (Array.isArray(rawHeader) && rawHeader[0]) {
-        const value = String(rawHeader[0]).trim();
-        if (value) return value;
-      }
-    }
-
-    return '';
-  }
-
-  function formatErrorMessage(error: unknown, fallback: string): string {
-    const message = extractApiErrorMessage(error, fallback);
-    const requestId = getRequestIdFromError(error);
-    return requestId ? `${message} (requestId: ${requestId})` : message;
-  }
 
   export let open = false;
   export let broker: any | null = null;
@@ -100,87 +65,45 @@
   let previewTitle = '';
   let isDeletingDocument = false;
   let isUploadingDocument = false;
-  let documentInputEl: HTMLInputElement;
   let resolvedCreciFrontUrl = '';
   let resolvedCreciBackUrl = '';
   let resolvedSelfieUrl = '';
-  type DocumentLabelKey = 'creciFront' | 'creciBack' | 'selfie';
-  const DOCUMENT_LABELS: Record<DocumentLabelKey, string> = {
-    creciFront: 'Frente do CRECI',
-    creciBack: 'Verso do CRECI',
-    selfie: 'Selfie com CRECI',
-  };
-  let brokerForm = {
-    name: '',
-    email: '',
-    phone: '',
-    street: '',
-    number: '',
-    complement: '',
-    bairro: '',
-    city: '',
-    state: '',
-    cep: '',
-    creci: '',
-    semCep: false,
-    semNumero: false,
-  };
+  let brokerForm: BrokerFormState = createBrokerFormState(null);
   let lastCepLookup = '';
   let cepLookupError: string | null = null;
 
-  $: if (wasOpen && !open) {
+  $: if (shouldDispatchClose(wasOpen, open)) {
     dispatch('close');
   }
   $: wasOpen = open;
 
-  $: if (open && broker?.id && broker.id !== lastBrokerId) {
-    lastBrokerId = broker.id;
-    fetchBrokerDetail(broker.id);
+  $: {
+    const brokerIdToLoad = getBrokerIdToLoad(open, broker?.id, lastBrokerId);
+    if (brokerIdToLoad !== null) {
+      lastBrokerId = brokerIdToLoad;
+      fetchBrokerDetail(brokerIdToLoad);
+    }
   }
 
   $: if (!open) {
-    brokerDetail = null;
-    detailError = null;
-    isDetailLoading = false;
-    lastBrokerId = null;
-    isEditMode = false;
-    deleteError = null;
-    isDeleteDialogOpen = false;
-    lastCepLookup = '';
-    cepLookupError = null;
+    const closed = createBrokerReviewClosedState();
+    brokerDetail = closed.brokerDetail;
+    detailError = closed.detailError;
+    isDetailLoading = closed.isDetailLoading;
+    lastBrokerId = closed.lastBrokerId;
+    isEditMode = closed.isEditMode;
+    deleteError = closed.deleteError;
+    isDeleteDialogOpen = closed.isDeleteDialogOpen;
+    lastCepLookup = closed.lastCepLookup;
+    cepLookupError = closed.cepLookupError;
+    brokerForm = closed.brokerForm;
   }
 
   $: {
-    const source = (brokerDetail as BrokerLike | null) ?? (broker as BrokerLike | null);
-    const fromSource = (key: keyof BrokerDocuments): string | null => {
-      if (source == null) return null;
-      const fromDocuments = source.documents?.[key];
-      if (typeof fromDocuments === 'string' && fromDocuments.trim().length > 0) {
-        return fromDocuments;
-      }
-      const legacyValue = source[key as string];
-      if (typeof legacyValue === 'string' && legacyValue.trim().length > 0) {
-        return legacyValue;
-      }
-      return null;
-    };
-
-    const normalizeDocumentUrl = (url: string | null | undefined): string => {
-      if (!url) return '';
-      const trimmedUrl = url.trim();
-      if (!trimmedUrl) return '';
-      if (trimmedUrl.startsWith('http') || trimmedUrl.includes('cloudinary')) {
-        return trimmedUrl;
-      }
-      if (trimmedUrl.startsWith('/uploads/') || trimmedUrl.startsWith('uploads/')) {
-        return '';
-      }
-      return trimmedUrl;
-    };
-
-    resolvedCreciFrontUrl = normalizeDocumentUrl(fromSource('creci_front_url'));
-    resolvedCreciBackUrl = normalizeDocumentUrl(fromSource('creci_back_url'));
-    resolvedSelfieUrl = normalizeDocumentUrl(fromSource('selfie_url'));
+    const resolved = resolveBrokerDocumentUrls((brokerDetail as BrokerDetailLike | null) ?? broker);
+    resolvedCreciFrontUrl = resolved.creciFrontUrl;
+    resolvedCreciBackUrl = resolved.creciBackUrl;
+    resolvedSelfieUrl = resolved.selfieUrl;
   }
 
   $: hasRealDocuments =
@@ -188,52 +111,19 @@
     Boolean(resolvedCreciBackUrl) ||
     Boolean(resolvedSelfieUrl);
 
-  function formatDate(value?: string | null) {
-    if (!value) return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString('pt-BR');
-  }
-
-  function getDocumentLabel(docType: DocumentLabelKey): string {
-    return DOCUMENT_LABELS[docType];
-  }
-
-  function getDocumentActionLabel(
-    action: 'send' | 'replace' | 'view' | 'delete',
-    docType: DocumentLabelKey
-  ): string {
-    const label = getDocumentLabel(docType).toLowerCase();
-    if (action === 'replace') return `Substituir ${label}`;
-    if (action === 'view') return `Visualizar ${label}`;
-    if (action === 'delete') return `Excluir ${label}`;
-    return `Enviar ${label}`;
-  }
-
   async function fetchBrokerDetail(brokerId: number) {
     isDetailLoading = true;
     detailError = null;
     brokerDetail = null;
     try {
-      const response = await api.get<{ data?: BrokerDetail } | BrokerDetail>(`/admin/brokers/${brokerId}`);
-      const detail = (response as { data?: BrokerDetail })?.data ?? response;
+      const detail = await fetchBrokerDetailById(brokerId);
       if (detail && typeof detail === 'object' && 'id' in detail) {
         brokerDetail = detail as BrokerDetail;
-        brokerForm = {
-          name: brokerDetail.name ?? broker?.name ?? '',
-          email: brokerDetail.email ?? broker?.email ?? '',
-          phone: brokerDetail.phone ?? broker?.phone ?? '',
-          street: brokerDetail.street ?? '',
-          number: brokerDetail.number ?? '',
-          complement: brokerDetail.complement ?? '',
-          bairro: brokerDetail.bairro ?? '',
-          city: brokerDetail.city ?? '',
-          state: brokerDetail.state ?? '',
-          cep: brokerDetail.cep ?? '',
-          creci: brokerDetail.creci ?? broker?.creci ?? '',
-          semCep: Boolean(brokerDetail.sem_cep),
-          semNumero: Boolean(brokerDetail.sem_numero),
-        };
+        brokerForm = createBrokerFormState(brokerDetail, {
+          name: broker?.name ?? '',
+          email: broker?.email ?? '',
+          creci: broker?.creci ?? '',
+        });
         if (Boolean(brokerDetail.sem_numero)) {
           brokerForm.number = '';
         }
@@ -260,13 +150,10 @@
 
     isProcessing = true;
     try {
-      const response = await api.patch<{ role?: string; status?: string; data?: { role?: string; status?: string } }>(`/admin/brokers/${broker.id}/status`, {
-        status: newStatus,
-      });
-      const payload = response?.data && typeof response.data === 'object' ? response.data : response;
-      const resolvedStatus = String(payload?.status ?? newStatus).trim() || newStatus;
-      const resolvedRole =
-        payload?.role ?? (resolvedStatus === 'approved' ? 'broker' : 'client');
+      const { status: resolvedStatus, role: resolvedRole } = await updateBrokerStatusById(
+        broker.id,
+        newStatus
+      );
       brokerDetail = brokerDetail
         ? {
             ...brokerDetail,
@@ -289,7 +176,7 @@
       close();
     } catch (error) {
       console.error('Erro ao atualizar status do corretor:', error);
-      toast.error(formatErrorMessage(error, 'Falha ao atualizar status.'));
+      toast.error(formatBrokerReviewErrorMessage(error, 'Falha ao atualizar status.'));
     } finally {
       isProcessing = false;
     }
@@ -300,13 +187,9 @@
 
     isProcessing = true;
     try {
-      const response = await api.post<{ role?: string; status?: string; data?: { role?: string; status?: string } }>(
-        `/admin/clients/${broker.id}/demote-broker`,
-        {}
+      const { status: resolvedStatus, role: resolvedRole } = await demoteBrokerToClientById(
+        broker.id
       );
-      const payload = response?.data && typeof response.data === 'object' ? response.data : response;
-      const resolvedStatus = String(payload?.status ?? 'rejected').trim() || 'rejected';
-      const resolvedRole = payload?.role ?? 'client';
       brokerDetail = brokerDetail
         ? {
             ...brokerDetail,
@@ -323,7 +206,7 @@
       close();
     } catch (error) {
       console.error('Erro ao tornar usuario cliente:', error);
-      toast.error(formatErrorMessage(error, 'Falha ao tornar usuario cliente.'));
+      toast.error(formatBrokerReviewErrorMessage(error, 'Falha ao tornar usuario cliente.'));
     } finally {
       isProcessing = false;
     }
@@ -337,35 +220,16 @@
   async function handleSave() {
     if (!broker) return;
 
-    const numberDigits = onlyDigits(brokerForm.number.trim());
-    const resolvedCep = brokerForm.semCep ? '' : onlyDigits(brokerForm.cep);
     isProcessing = true;
     try {
-      const response = await api.put<{ status?: string; data?: { status?: string } }>(
-        `/admin/brokers/${broker.id}`,
-        {
-          name: brokerForm.name.trim(),
-          email: brokerForm.email.trim(),
-          phone: brokerForm.phone.trim(),
-          street: brokerForm.street.trim(),
-          number: brokerForm.semNumero ? null : (numberDigits || null),
-          complement: brokerForm.complement.trim(),
-          bairro: brokerForm.bairro.trim(),
-          city: brokerForm.city.trim(),
-          state: brokerForm.state.trim(),
-          cep: resolvedCep || null,
-          sem_numero: brokerForm.semNumero ? 1 : 0,
-          sem_cep: brokerForm.semCep ? 1 : 0,
-          creci: brokerForm.creci.trim(),
-        },
+      const { status: resolvedStatus } = await saveBrokerById(
+        broker.id,
+        brokerForm,
+        brokerDetail?.status ?? broker.status ?? 'pending_verification',
+        'pending_verification',
       );
-      const responsePayload = response && typeof response === 'object' && 'data' in response
-        ? (response as { data?: { status?: string } }).data
-        : response;
-      const resolvedStatus = String(
-        responsePayload?.status ?? brokerDetail?.status ?? broker.status ?? 'pending_verification',
-      ).trim();
-      const mergedStatus = resolvedStatus || null;
+      const numberDigits = onlyDigits(brokerForm.number.trim());
+      const resolvedCep = brokerForm.semCep ? '' : onlyDigits(brokerForm.cep);
       brokerDetail = {
         ...(brokerDetail ?? { id: broker.id }),
         ...brokerForm,
@@ -373,7 +237,7 @@
         cep: resolvedCep || null,
         sem_numero: brokerForm.semNumero ? 1 : 0,
         sem_cep: brokerForm.semCep ? 1 : 0,
-        status: mergedStatus ?? brokerDetail?.status ?? broker.status ?? null,
+        status: resolvedStatus ?? brokerDetail?.status ?? broker.status ?? null,
         created_at: brokerDetail?.created_at ?? broker.created_at ?? null,
       };
       toast.success('Corretor atualizado.');
@@ -385,7 +249,7 @@
       close();
     } catch (error) {
       console.error('Erro ao atualizar corretor:', error);
-      toast.error(formatErrorMessage(error, 'Falha ao atualizar corretor.'));
+      toast.error(formatBrokerReviewErrorMessage(error, 'Falha ao atualizar corretor.'));
     } finally {
       isProcessing = false;
     }
@@ -398,19 +262,17 @@
     lastCepLookup = digits;
     cepLookupError = null;
     try {
-      const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
-      if (!response.ok) throw new Error('Falha ao consultar CEP.');
-      const data = await response.json();
-      if (data?.erro) {
-        cepLookupError = 'CEP não encontrado.';
+      const { street, bairro, city, state, errorMessage } = await lookupCepAddress(digits);
+      if (errorMessage) {
+        cepLookupError = errorMessage;
         return;
       }
       brokerForm = {
         ...brokerForm,
-        street: data?.logradouro ? String(data.logradouro) : brokerForm.street,
-        bairro: data?.bairro ? String(data.bairro) : brokerForm.bairro,
-        city: data?.localidade ? String(data.localidade) : brokerForm.city,
-        state: data?.uf ? String(data.uf) : brokerForm.state,
+        street: street ?? brokerForm.street,
+        bairro: bairro ?? brokerForm.bairro,
+        city: city ?? brokerForm.city,
+        state: state ?? brokerForm.state,
       };
     } catch (error) {
       console.error('Erro ao consultar CEP:', error);
@@ -424,14 +286,7 @@
     isProcessing = true;
     deleteError = null;
     try {
-      const response = await api.post<{ reauthToken: string }>('/admin/reauth', {
-        password,
-      });
-      await api.delete(`/admin/brokers/${broker.id}`, {
-        headers: {
-          'X-Admin-Reauth': response.reauthToken,
-        },
-      });
+      await reauthAndDeleteBrokerById(broker.id, password);
       toast.success('Corretor excluido.');
       dispatch('update');
       close();
@@ -445,13 +300,13 @@
     }
   }
 
-  async function handleDocumentDelete(docType: string) {
+  async function handleDocumentDelete(docType: BrokerDocumentLabelKey) {
     if (!brokerDetail) return;
     if (!confirm(`Tem certeza que deseja excluir o documento?`)) return;
 
     isDeletingDocument = true;
     try {
-      await api.delete(`/admin/brokers/${brokerDetail.id}/documents/${docType}`);
+      await deleteBrokerDocumentById(brokerDetail.id, docType);
       toast.success('Documento excluído.');
       await fetchBrokerDetail(brokerDetail.id);
     } catch (error) {
@@ -462,26 +317,12 @@
     }
   }
 
-  let currentUploadDocType = '';
-  function triggerDocumentUpload(docType: string) {
-    currentUploadDocType = docType;
-    documentInputEl.click();
-  }
+  async function uploadDocument(docType: BrokerDocumentLabelKey, file: File) {
+    if (!brokerDetail) return;
 
-  async function handleDocumentFileChange(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0 || !brokerDetail) return;
-
-    const file = input.files[0];
     isUploadingDocument = true;
-    let uploadSucceeded = false;
-
     try {
-      const formData = new FormData();
-      formData.append(currentUploadDocType, file);
-
-      await api.post(`/admin/brokers/${brokerDetail.id}/documents`, formData);
-      uploadSucceeded = true;
+      await uploadBrokerDocumentById(brokerDetail.id, docType, file);
       toast.success('Documento enviado com sucesso.');
       await fetchBrokerDetail(brokerDetail.id);
     } catch (error) {
@@ -493,9 +334,6 @@
       toast.error(errorMessage);
     } finally {
       isUploadingDocument = false;
-      if (uploadSucceeded) {
-        input.value = '';
-      }
     }
   }
 
@@ -528,103 +366,7 @@
           </div>
         {:else}
           {#if isEditMode}
-            <div class="grid gap-4 sm:grid-cols-2">
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome</span>
-                <input bind:value={brokerForm.name} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-              </label>
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Email</span>
-                <input bind:value={brokerForm.email} type="email" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-              </label>
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Telefone</span>
-                <input bind:value={brokerForm.phone} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-              </label>
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CRECI</span>
-                <input bind:value={brokerForm.creci} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-              </label>
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{brokerForm.semCep ? 'CEP (opcional)' : 'CEP'}</span>
-                <input
-                  bind:value={brokerForm.cep}
-                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
-                  inputmode="numeric"
-                  disabled={brokerForm.semCep}
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    brokerForm = {
-                      ...brokerForm,
-                      cep: formatCep(target.value),
-                    };
-                    void lookupCep(target.value);
-                  }}
-                />
-              </label>
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cidade</span>
-                <input bind:value={brokerForm.city} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-              </label>
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Estado</span>
-                <input bind:value={brokerForm.state} maxlength="2" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm uppercase text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-              </label>
-              <label class="inline-flex items-center gap-2 self-end text-xs text-gray-500 dark:text-gray-400">
-                <input
-                  type="checkbox"
-                  bind:checked={brokerForm.semCep}
-                  on:change={() => {
-                    if (brokerForm.semCep) {
-                      brokerForm = { ...brokerForm, cep: '' };
-                      cepLookupError = null;
-                      lastCepLookup = '';
-                    }
-                  }}
-                />
-                Sem CEP
-              </label>
-              <label class="space-y-1 sm:col-span-2">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Rua</span>
-                <input bind:value={brokerForm.street} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-              </label>
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{brokerForm.semNumero ? 'Número (opcional)' : 'Número'}</span>
-                <input
-                  bind:value={brokerForm.number}
-                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
-                  inputmode="numeric"
-                  disabled={brokerForm.semNumero}
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    brokerForm = { ...brokerForm, number: onlyDigits(target.value) };
-                  }}
-                />
-              </label>
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Complemento</span>
-                <input bind:value={brokerForm.complement} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-              </label>
-              <label class="inline-flex items-center gap-2 self-end text-xs text-gray-500 dark:text-gray-400">
-                <input
-                  type="checkbox"
-                  bind:checked={brokerForm.semNumero}
-                  on:change={() => {
-                    if (brokerForm.semNumero) {
-                      brokerForm = { ...brokerForm, number: '' };
-                    }
-                  }}
-                />
-                Sem número
-              </label>
-              <label class="space-y-1">
-                <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Bairro</span>
-                <input bind:value={brokerForm.bairro} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100" />
-              </label>
-              {#if cepLookupError}
-                <p class="sm:col-span-2 text-xs text-red-500 dark:text-red-400">{cepLookupError}</p>
-              {/if}
-            </div>
+            <BrokerEditForm bind:brokerForm {lookupCep} {cepLookupError} />
           {:else}
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
@@ -660,273 +402,44 @@
               <div>
                 <div class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Cadastrado em</div>
                 <div class="font-medium text-gray-900 dark:text-gray-100">
-                  {formatDate(brokerDetail?.created_at ?? broker.created_at)}
+                  {formatBrokerReviewDate(brokerDetail?.created_at ?? broker.created_at)}
                 </div>
               </div>
             </div>
 
-            <div class="mt-6 space-y-4">
-              <h4 class="text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Documentação</h4>
-              {#if !hasRealDocuments}
-                <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
-                  O corretor ainda não enviou documentos reais para revisão.
-                </p>
-              {/if}
-              <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <!-- Frente CRECI -->
-                <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
-                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">
-                    {getDocumentLabel('creciFront')}
-                  </div>
-                  {#if resolvedCreciFrontUrl}
-                    <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                      <img src={resolvedCreciFrontUrl} alt={getDocumentLabel('creciFront')} class="h-full w-full object-cover" />
-                      <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                        <div class="flex gap-2">
-                          <button
-                            type="button"
-                            class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(resolvedCreciFrontUrl, getDocumentLabel('creciFront'))}
-                            title={getDocumentActionLabel('view', 'creciFront')}
-                          >
-                            <Eye class="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            class="rounded-full bg-red-500 p-2 text-white shadow-sm hover:bg-red-600"
-                            on:click={() => handleDocumentDelete('creciFront')}
-                            disabled={isDeletingDocument}
-                            title={getDocumentActionLabel('delete', 'creciFront')}
-                          >
-                            {#if isDeletingDocument}
-                              <Loader2 class="h-4 w-4 animate-spin" />
-                            {:else}
-                              <Trash2 class="h-4 w-4" />
-                            {/if}
-                          </button>
-                          <button
-                            type="button"
-                            class="rounded-full bg-green-600 p-2 text-white shadow-sm hover:bg-green-700"
-                            on:click={() => triggerDocumentUpload('creciFront')}
-                            disabled={isUploadingDocument}
-                            title={getDocumentActionLabel('replace', 'creciFront')}
-                            aria-label={getDocumentActionLabel('replace', 'creciFront')}
-                          >
-                            <Upload class="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  {:else}
-                    <button
-                      type="button"
-                      class="flex flex-col items-center gap-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400"
-                      on:click={() => triggerDocumentUpload('creciFront')}
-                      disabled={isUploadingDocument}
-                    >
-                      <div class="rounded-full border border-gray-300 p-2 dark:border-gray-600">
-                        <Upload class="h-5 w-5" />
-                      </div>
-                      <span class="text-[10px] font-medium uppercase tracking-wider">
-                        {getDocumentActionLabel('send', 'creciFront')}
-                      </span>
-                    </button>
-                  {/if}
-                </div>
-
-                <!-- Verso CRECI -->
-                <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
-                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">
-                    {getDocumentLabel('creciBack')}
-                  </div>
-                  {#if resolvedCreciBackUrl}
-                    <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                      <img src={resolvedCreciBackUrl} alt={getDocumentLabel('creciBack')} class="h-full w-full object-cover" />
-                      <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                        <div class="flex gap-2">
-                          <button
-                            type="button"
-                            class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(resolvedCreciBackUrl, getDocumentLabel('creciBack'))}
-                            title={getDocumentActionLabel('view', 'creciBack')}
-                          >
-                            <Eye class="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            class="rounded-full bg-red-500 p-2 text-white shadow-sm hover:bg-red-600"
-                            on:click={() => handleDocumentDelete('creciBack')}
-                            disabled={isDeletingDocument}
-                            title={getDocumentActionLabel('delete', 'creciBack')}
-                          >
-                            {#if isDeletingDocument}
-                              <Loader2 class="h-4 w-4 animate-spin" />
-                            {:else}
-                              <Trash2 class="h-4 w-4" />
-                            {/if}
-                          </button>
-                          <button
-                            type="button"
-                            class="rounded-full bg-green-600 p-2 text-white shadow-sm hover:bg-green-700"
-                            on:click={() => triggerDocumentUpload('creciBack')}
-                            disabled={isUploadingDocument}
-                            title={getDocumentActionLabel('replace', 'creciBack')}
-                            aria-label={getDocumentActionLabel('replace', 'creciBack')}
-                          >
-                            <Upload class="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  {:else}
-                    <button
-                      type="button"
-                      class="flex flex-col items-center gap-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400"
-                      on:click={() => triggerDocumentUpload('creciBack')}
-                      disabled={isUploadingDocument}
-                    >
-                      <div class="rounded-full border border-gray-300 p-2 dark:border-gray-600">
-                        <Upload class="h-5 w-5" />
-                      </div>
-                      <span class="text-[10px] font-medium uppercase tracking-wider">
-                        {getDocumentActionLabel('send', 'creciBack')}
-                      </span>
-                    </button>
-                  {/if}
-                </div>
-
-                <!-- Selfie -->
-                <div class="group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 transition-all hover:border-green-300 hover:bg-green-50/30 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-green-700/50">
-                  <div class="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">
-                    {getDocumentLabel('selfie')}
-                  </div>
-                  {#if resolvedSelfieUrl}
-                    <div class="relative h-24 w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                      <img src={resolvedSelfieUrl} alt={getDocumentLabel('selfie')} class="h-full w-full object-cover" />
-                      <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                        <div class="flex gap-2">
-                          <button
-                            type="button"
-                            class="rounded-full bg-white p-2 text-gray-900 shadow-sm hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
-                            on:click={() => openPreview(resolvedSelfieUrl, getDocumentLabel('selfie'))}
-                            title={getDocumentActionLabel('view', 'selfie')}
-                          >
-                            <Eye class="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            class="rounded-full bg-red-500 p-2 text-white shadow-sm hover:bg-red-600"
-                            on:click={() => handleDocumentDelete('selfie')}
-                            disabled={isDeletingDocument}
-                            title={getDocumentActionLabel('delete', 'selfie')}
-                          >
-                            {#if isDeletingDocument}
-                              <Loader2 class="h-4 w-4 animate-spin" />
-                            {:else}
-                              <Trash2 class="h-4 w-4" />
-                            {/if}
-                          </button>
-                          <button
-                            type="button"
-                            class="rounded-full bg-green-600 p-2 text-white shadow-sm hover:bg-green-700"
-                            on:click={() => triggerDocumentUpload('selfie')}
-                            disabled={isUploadingDocument}
-                            title={getDocumentActionLabel('replace', 'selfie')}
-                            aria-label={getDocumentActionLabel('replace', 'selfie')}
-                          >
-                            <Upload class="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  {:else}
-                    <button
-                      type="button"
-                      class="flex flex-col items-center gap-2 text-gray-400 hover:text-green-600 dark:hover:text-green-400"
-                      on:click={() => triggerDocumentUpload('selfie')}
-                      disabled={isUploadingDocument}
-                    >
-                      <div class="rounded-full border border-gray-300 p-2 dark:border-gray-600">
-                        <Upload class="h-5 w-5" />
-                      </div>
-                      <span class="text-[10px] font-medium uppercase tracking-wider">
-                        {getDocumentActionLabel('send', 'selfie')}
-                      </span>
-                    </button>
-                  {/if}
-                </div>
-              </div>
-            </div>
+            <BrokerDocumentsSection
+              hasRealDocuments={hasRealDocuments}
+              resolvedCreciFrontUrl={resolvedCreciFrontUrl}
+              resolvedCreciBackUrl={resolvedCreciBackUrl}
+              resolvedSelfieUrl={resolvedSelfieUrl}
+              isDeletingDocument={isDeletingDocument}
+              isUploadingDocument={isUploadingDocument}
+              getDocumentLabel={getBrokerDocumentLabel}
+              getDocumentActionLabel={getBrokerDocumentActionLabel}
+              openPreview={openPreview}
+              deleteDocument={handleDocumentDelete}
+              uploadDocument={uploadDocument}
+            />
           {/if}
         {/if}
       </div>
 
-      <input
-        type="file"
-        accept="image/*"
-        class="hidden"
-        bind:this={documentInputEl}
-        on:change={handleDocumentFileChange}
+
+      <BrokerReviewActions
+        {isEditMode}
+        {isProcessing}
+        {showApprove}
+        {showReject}
+        {showDemote}
+        hasBrokerDetail={Boolean(brokerDetail)}
+        onClose={close}
+        onToggleEdit={(value) => (isEditMode = value)}
+        onSave={handleSave}
+        onApprove={() => handleStatusUpdate('approved')}
+        onReject={() => handleStatusUpdate('rejected')}
+        onDemote={handleDemoteToClient}
+        onOpenDeleteDialog={() => (isDeleteDialogOpen = true)}
       />
-
-
-      <Dialog.Footer className="flex gap-2">
-        <Button variant="outline" on:click={close} disabled={isProcessing}>
-          Cancelar
-        </Button>
-        {#if isEditMode}
-          <Button variant="outline" on:click={() => (isEditMode = false)} disabled={isProcessing}>
-            Voltar
-          </Button>
-          <Button on:click={handleSave} disabled={isProcessing}>
-            {#if isProcessing}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Salvar alterações
-          </Button>
-        {:else}
-          <Button variant="outline" on:click={() => (isEditMode = true)} disabled={isProcessing || !brokerDetail}>
-            Editar
-          </Button>
-        {#if showApprove}
-          <Button
-            variant="outline"
-            className="bg-green-600 text-white hover:bg-green-700"
-            on:click={() => handleStatusUpdate('approved')}
-            disabled={isProcessing}
-          >
-            {#if isProcessing}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Aprovar
-          </Button>
-        {/if}
-        {#if showReject}
-          <Button variant="destructive" className="bg-red-500 hover:bg-red-600 text-white" on:click={() => handleStatusUpdate('rejected')} disabled={isProcessing}>
-            {#if isProcessing}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Rejeitar
-          </Button>
-        {/if}
-        {#if showDemote}
-          <Button
-            variant="destructive"
-            className="bg-amber-600 text-white hover:bg-amber-700"
-            on:click={handleDemoteToClient}
-            disabled={isProcessing}
-          >
-            {#if isProcessing}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Tornar Usuário
-          </Button>
-        {/if}
-        <Button className="bg-red-700 text-white hover:bg-red-800" on:click={() => (isDeleteDialogOpen = true)} disabled={isProcessing}>
-          Excluir
-        </Button>
-        {/if}
-      </Dialog.Footer>
     {/if}
   </Dialog.Content>
 </Dialog.Root>
@@ -941,22 +454,9 @@
   on:confirm={(event) => handleDelete(event.detail.password)}
 />
 
-{#if isDocumentPreviewOpen}
-  <div
-    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
-    role="presentation"
-    on:click={() => (isDocumentPreviewOpen = false)}
-  >
-    <div class="relative max-h-full max-w-full overflow-hidden">
-      <button
-        type="button"
-        class="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
-        on:click={() => (isDocumentPreviewOpen = false)}
-      >
-        <X class="h-6 w-6" />
-      </button>
-      <img src={previewUrl} alt={previewTitle} class="max-h-[90vh] max-w-full rounded-lg object-contain" />
-      <div class="mt-4 text-center text-white font-medium">{previewTitle}</div>
-    </div>
-  </div>
-{/if}
+<BrokerDocumentPreviewModal
+  open={isDocumentPreviewOpen}
+  url={previewUrl}
+  title={previewTitle}
+  close={() => (isDocumentPreviewOpen = false)}
+/>

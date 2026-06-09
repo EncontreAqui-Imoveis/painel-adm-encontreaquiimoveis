@@ -8,9 +8,9 @@
     import KpiCard from "./KpiCard.svelte";
     import VerificationTable from "./VerificationTable.svelte";
     import SreSignalCard from "./components/SreSignalCard.svelte";
-    import SreTimeSeriesChart from "./components/charts/SreTimeSeriesChart.svelte";
     import SreReleaseHealth from "./components/SreReleaseHealth.svelte";
     import SreExternalServices from "./components/SreExternalServices.svelte";
+    import DashboardHomeOverview from "./components/dashboard/DashboardHomeOverview.svelte";
     import { fetchPlatformResponse } from "./adminFetchService";
     import { clearSessionToken, hasSessionToken } from "./sessionState";
     import { onMount, onDestroy } from "svelte";
@@ -18,20 +18,34 @@
     import { toast } from "svelte-sonner";
     import { Trash2 } from "lucide-svelte";
     import {
-        getNotificationMetadataValue,
-        isUrgentAnnouncement,
-        parseNotificationMetadata,
-    } from "./utils/announcementFilters";
+        formatNotificationDate,
+        getAnnouncementClientPhone,
+        getAnnouncementWhatsappUrl,
+        getMostRecentAnnouncementMarker,
+        getViewConfig,
+        isValidView,
+        persistLastReadAnnouncementMarker,
+        readLastReadAnnouncementMarkerFromStorage,
+        readListTotal,
+        shouldPatchDashboardListLocally,
+        shouldPollPendingCounts,
+        shouldShowUnreadAnnouncements,
+    } from "./dashboardHelpers";
+    import {
+        buildDashboardListParams,
+        parseAnnouncementFeedPayload,
+        parseDashboardListPayload,
+        parseDashboardStatsPayload,
+        parseSreDashboardPayload,
+        parseVerificationBrokersPayload,
+        shouldSkipListFetch,
+    } from "./dashboardDataHelpers";
     import type {
-        Property,
         Broker,
-    BrokerDocuments,
-        User,
         Notification,
         NotificationsSubTab,
         View,
         DataItem,
-        ViewConfig,
     } from "./types";
 
     export let initialView: View = "dashboard";
@@ -354,104 +368,6 @@
     let pendingBrokers: Broker[] = [];
     let pendingDocumentBrokers: Broker[] = [];
 
-    const viewConfig: Record<View, ViewConfig> = {
-        dashboard: {
-            title: "Dashboard",
-        },
-        properties: {
-            endpoint: "/admin/properties-with-brokers",
-            title: "Imóveis disponíveis",
-            headers: [
-                "ID",
-                "Código",
-                "Título",
-                "Tipo",
-                "Status",
-                "Preço",
-                "Cidade",
-                "Anunciante",
-            ],
-            filterOptions: [
-                { value: "p.id", label: "ID" },
-                { value: "p.code", label: "Código" },
-                { value: "p.title", label: "Título" },
-            ],
-            sortColumn: "p.title",
-        },
-        property_requests: {
-            title: "Solicitações de Imóveis",
-        },
-        property_highlights: {
-            title: "Destaques",
-        },
-        sold_properties: {
-            title: "Vendidos / Alugados",
-        },
-        negotiation_requests: {
-            title: "Solicitação de Propostas",
-        },
-        negotiation_progress: {
-            title: "Imóveis em Negociação",
-        },
-        negotiation_contracts: {
-            title: "Contratos",
-        },
-        commissions: {
-            title: "Comissões (VGV)",
-        },
-        create_property: {
-            title: "Cadastrar Imóvel",
-        },
-        create_user: {
-            title: "Cadastrar Usuário",
-        },
-        brokers: {
-            endpoint: "/admin/brokers",
-            title: "Gerenciamento de Corretores",
-            headers: [
-                "ID",
-                "Nome",
-                "Email",
-                "CRECI",
-                "Criado em",
-                "Total de Imóveis",
-            ],
-            filterOptions: [
-                { value: "name", label: "Nome" },
-                { value: "email", label: "Email" },
-            ],
-            sortColumn: "name",
-        },
-        clients: {
-            endpoint: "/admin/clients",
-            title: "Gerenciamento de Clientes",
-            headers: ["ID", "Nome", "Email", "Telefone", "Criado em"],
-            filterOptions: [
-                { value: "name", label: "Nome" },
-                { value: "email", label: "Email" },
-            ],
-            sortColumn: "name",
-        },
-        notifications: {
-            title: "Notificações",
-        },
-        verification: {
-            endpoint: "/admin/brokers/pending",
-            title: "Solicitações de Corretores",
-            headers: ["ID", "Nome", "CRECI", "Ações"],
-            filterOptions: [],
-        },
-    };
-
-    // Funcao helper para obter configuracao da view com fallback seguro
-    function getViewConfig(view: View): ViewConfig {
-        return viewConfig[view] || { title: "Dashboard" };
-    }
-
-    function isValidView(view: string): view is View {
-        return view in viewConfig;
-    }
-
     function handlePropertyManagementViewChange(event: CustomEvent<string>) {
         const nextView = event.detail;
         if (isValidView(nextView)) {
@@ -468,19 +384,7 @@
     async function fetchData() {
         isLoading = true;
 
-        if (
-            activeView === "properties" ||
-            activeView === "property_highlights" ||
-            activeView === "property_requests" ||
-            activeView === "sold_properties" ||
-            activeView === "negotiation_requests" ||
-            activeView === "negotiation_progress" ||
-            activeView === "negotiation_contracts" ||
-            activeView === "commissions" ||
-            activeView === "brokers" ||
-            activeView === "create_property" ||
-            activeView === "create_user"
-        ) {
+        if (shouldSkipListFetch(activeView)) {
             headers = [];
             allData = [];
             totalItems = 0;
@@ -505,14 +409,14 @@
                 }
                 if (!response.ok)
                     throw new Error("Falha ao buscar estatísticas");
-                stats = await response.json();
+                stats = parseDashboardStatsPayload(await response.json());
 
                 // Fetch SRE stats using the standard platform fetch service
                 const sreResponse = await fetchPlatformResponse(
                     "/admin/dashboard/sre",
                 );
                 if (sreResponse && sreResponse.ok) {
-                    sreStats = await sreResponse.json();
+                    sreStats = parseSreDashboardPayload(await sreResponse.json());
                 }
             } catch (error) {
                 console.error(
@@ -545,14 +449,10 @@
                     throw new Error("Falha ao buscar solicitações pendentes");
 
                 const result = await response.json();
-                const requestList = readListData<Broker>(result);
-                pendingBrokers = requestList.filter((broker) =>
-                    hasRealDocuments(broker),
-                );
-                pendingDocumentBrokers = requestList.filter(
-                    (broker) => !hasRealDocuments(broker),
-                );
-                totalItems = pendingBrokers.length;
+                const parsed = parseVerificationBrokersPayload(result);
+                pendingBrokers = parsed.pendingBrokers;
+                pendingDocumentBrokers = parsed.pendingDocumentBrokers;
+                totalItems = parsed.totalItems;
                 totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
                 if (currentPage > totalPages) {
                     currentPage = 1;
@@ -578,18 +478,16 @@
             return;
         }
 
-        const params = new URLSearchParams({
-            page: String(currentPage),
-            limit: String(itemsPerPage),
-            search: searchTerm,
-            searchColumn: searchColumn,
-            sortBy: sortBy,
-            sortOrder: sortOrder,
+        const params = buildDashboardListParams({
+            currentPage,
+            itemsPerPage,
+            searchTerm,
+            searchColumn,
+            sortBy,
+            sortOrder,
+            statusFilter,
+            includeStatusFilter: activeView === "clients",
         });
-
-        if (activeView === "clients" && statusFilter) {
-            params.append("status", statusFilter);
-        }
 
         try {
             const response = await fetchPlatformResponse(
@@ -602,8 +500,9 @@
             if (!response.ok) throw new Error("Falha na autenticação");
 
             const result = await response.json();
-            allData = result.data || result;
-            totalItems = result.total || result.length;
+            const parsed = parseDashboardListPayload<DataItem>(result);
+            allData = parsed.items;
+            totalItems = parsed.total;
             headers = config.headers || [];
         } catch (error) {
             console.error(`Erro ao buscar dados de ${activeView}:`, error);
@@ -613,10 +512,6 @@
         } finally {
             isLoading = false;
         }
-    }
-
-    function shouldPatchDashboardListLocally(): boolean {
-        return activeView === "properties" || activeView === "brokers" || activeView === "clients";
     }
 
     function patchDashboardListItem(id: number, data: Partial<DataItem>) {
@@ -633,184 +528,25 @@
     }
 
     /** Total em respostas paginadas do admin (MySQL costuma enviar COUNT como string). */
-    function readListTotal(payload: unknown): number {
-        if (payload == null) return 0;
-        if (Array.isArray(payload)) return payload.length;
-        if (typeof payload !== "object") return 0;
-        const raw = (payload as { total?: unknown }).total;
-        if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-        if (typeof raw === "string" && raw.trim() !== "") {
-            const n = Number(raw);
-            if (Number.isFinite(n)) return n;
-        }
-        if (typeof raw === "bigint") return Number(raw);
-        return 0;
-    }
-
-    function readListData<T>(payload: unknown): T[] {
-        if (Array.isArray(payload)) return payload as T[];
-        if (payload && typeof payload === "object") {
-            const data = (payload as { data?: unknown }).data;
-            if (Array.isArray(data)) return data as T[];
-        }
-        return [];
-    }
-
-    function getDocumentUrl(url: string | null | undefined): string {
-        if (!url) return "";
-        const trimmedUrl = url.trim();
-        if (!trimmedUrl) return "";
-        if (trimmedUrl.startsWith("http") || trimmedUrl.includes("cloudinary")) {
-            return trimmedUrl;
-        }
-        if (trimmedUrl.startsWith("/uploads/") || trimmedUrl.startsWith("uploads/")) {
-            return "";
-        }
-        return trimmedUrl;
-    }
-
-    function resolveBrokerDocumentField(
-        broker: Broker,
-        field: keyof BrokerDocuments,
-    ): string | null {
-        const fromDocuments = broker.documents?.[field];
-        if (typeof fromDocuments === "string" && fromDocuments.trim().length > 0) {
-            return fromDocuments;
-        }
-
-        const legacySource = broker as unknown as Record<string, unknown>;
-        const legacyValue = legacySource[field as string];
-        if (typeof legacyValue === "string" && legacyValue.trim().length > 0) {
-            return legacyValue;
-        }
-
-        return null;
-    }
-
-    function hasRealDocuments(broker: Broker): boolean {
-        return (
-            Boolean(getDocumentUrl(resolveBrokerDocumentField(broker, "creci_front_url"))) ||
-            Boolean(getDocumentUrl(resolveBrokerDocumentField(broker, "creci_back_url"))) ||
-            Boolean(getDocumentUrl(resolveBrokerDocumentField(broker, "selfie_url")))
-        );
-    }
-
-    function formatNotificationDate(value: string): string {
-        if (!value) return "-";
-        const normalized = value.includes("T") ? value : value.replace(" ", "T");
-        const parsed = new Date(normalized);
-        if (Number.isNaN(parsed.getTime())) return value;
-        return parsed.toLocaleString("pt-BR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    }
-
-    function getAnnouncementClientPhone(item: Notification): string | null {
-        return getNotificationMetadataValue(parseNotificationMetadata(item), "clientPhone");
-    }
-
-    function getAnnouncementWhatsappUrl(item: Notification): string | null {
-        return getNotificationMetadataValue(parseNotificationMetadata(item), "whatsappUrl");
-    }
-
-    function getAnnouncementsForDisplay(list: Notification[]): Notification[] {
-        return list.filter(isUrgentAnnouncement);
-    }
-
-    function parseAnnouncementCreatedAtMs(createdAt: string): number {
-        const parsed = Date.parse(createdAt);
-        return Number.isFinite(parsed) ? parsed : 0;
-    }
-
-    function extractAnnouncementMarker(
-        item: Notification | null | undefined,
-    ): AnnouncementReadMarker | null {
-        if (!item || typeof item.id !== "number") return null;
-        return {
-            createdAtMs: parseAnnouncementCreatedAtMs(item.created_at),
-            id: item.id,
-        };
-    }
-
-    function isAnnouncementMarkerNewer(
-        candidate: AnnouncementReadMarker | null,
-        reference: AnnouncementReadMarker | null,
-    ): boolean {
-        if (!candidate) return false;
-        if (!reference) return true;
-        if (candidate.createdAtMs > reference.createdAtMs) return true;
-        if (candidate.createdAtMs < reference.createdAtMs) return false;
-        return candidate.id > reference.id;
-    }
-
-    function getMostRecentAnnouncementMarker(
-        list: Notification[],
-    ): AnnouncementReadMarker | null {
-        let mostRecent: AnnouncementReadMarker | null = null;
-        for (const item of list) {
-            const marker = extractAnnouncementMarker(item);
-            if (isAnnouncementMarkerNewer(marker, mostRecent)) {
-                mostRecent = marker;
-            }
-        }
-        return mostRecent;
-    }
-
-    function readLastReadAnnouncementMarkerFromStorage():
-        | AnnouncementReadMarker
-        | null {
-        if (typeof window === "undefined") return null;
-        const raw = window.localStorage.getItem(
-            ANNOUNCEMENTS_LAST_READ_STORAGE_KEY,
-        );
-        if (!raw) return null;
-        try {
-            const parsed = JSON.parse(raw) as {
-                createdAtMs?: unknown;
-                id?: unknown;
-            };
-            const createdAtMs = Number(parsed.createdAtMs);
-            const id = Number(parsed.id);
-            if (!Number.isFinite(createdAtMs) || !Number.isFinite(id)) {
-                return null;
-            }
-            return { createdAtMs, id };
-        } catch {
-            return null;
-        }
-    }
-
-    function persistLastReadAnnouncementMarker(
-        marker: AnnouncementReadMarker,
-    ): void {
-        if (typeof window === "undefined") return;
-        window.localStorage.setItem(
-            ANNOUNCEMENTS_LAST_READ_STORAGE_KEY,
-            JSON.stringify(marker),
-        );
-    }
-
     function markAnnouncementsAsRead() {
         const markerToPersist =
             getMostRecentAnnouncementMarker(announcements) ??
             latestAnnouncementMarker;
         if (!markerToPersist) return;
         lastReadAnnouncementMarker = markerToPersist;
-        persistLastReadAnnouncementMarker(markerToPersist);
+        persistLastReadAnnouncementMarker(
+            ANNOUNCEMENTS_LAST_READ_STORAGE_KEY,
+            markerToPersist,
+        );
     }
 
-    $: announcementsUnreadVisualCount =
-        announcementsTotal > 0 &&
-        isAnnouncementMarkerNewer(
-            latestAnnouncementMarker,
-            lastReadAnnouncementMarker,
-        )
-            ? announcementsTotal
-            : 0;
+    $: announcementsUnreadVisualCount = shouldShowUnreadAnnouncements(
+        announcementsTotal,
+        latestAnnouncementMarker,
+        lastReadAnnouncementMarker,
+    )
+        ? announcementsTotal
+        : 0;
 
     async function fetchAnnouncementsCount() {
         if (announcementsCountRequestInFlight) {
@@ -827,12 +563,9 @@
                 return;
             }
             const payload = await response.json();
-            const readPayload = readListData<Notification>(payload);
-            const filteredPayload = getAnnouncementsForDisplay(readPayload);
-            announcementsTotal = filteredPayload.length;
-            const mostRecentFromCount =
-                getMostRecentAnnouncementMarker(filteredPayload);
-            latestAnnouncementMarker = mostRecentFromCount;
+            const parsed = parseAnnouncementFeedPayload(payload);
+            announcementsTotal = parsed.total;
+            latestAnnouncementMarker = parsed.latestMarker;
         } catch (error) {
             console.error("Erro ao buscar total de avisos:", error);
             announcementsTotal = previousTotal;
@@ -860,10 +593,9 @@
                 throw new Error("Falha ao carregar avisos.");
             }
             const payload = await response.json();
-            const readPayload = readListData<Notification>(payload);
-            const filteredPayload = getAnnouncementsForDisplay(readPayload);
-            announcements = filteredPayload;
-            announcementsTotal = filteredPayload.length;
+            const parsed = parseAnnouncementFeedPayload(payload);
+            announcements = parsed.announcements;
+            announcementsTotal = parsed.total;
             if (
                 announcementsCurrentPage > 1 &&
                 announcements.length === 0 &&
@@ -880,8 +612,7 @@
                 );
                 return await fetchAnnouncements(options);
             }
-            latestAnnouncementMarker =
-                getMostRecentAnnouncementMarker(announcements);
+            latestAnnouncementMarker = parsed.latestMarker;
             if (options.markAsRead) {
                 markAnnouncementsAsRead();
             }
@@ -1042,22 +773,13 @@
         }
     }
 
-    function shouldPollPendingCounts(view: View = activeView) {
-        return (
-            isPageVisible &&
-            (view === "dashboard" ||
-                view === "verification" ||
-                view === "property_requests")
-        );
-    }
-
     function syncPendingCountsPolling() {
         if (pendingCountsInterval) {
             clearInterval(pendingCountsInterval);
             pendingCountsInterval = null;
         }
 
-        if (!shouldPollPendingCounts()) {
+        if (!shouldPollPendingCounts(activeView, isPageVisible)) {
             return;
         }
 
@@ -1077,7 +799,7 @@
         }
 
         syncPendingCountsPolling();
-        if (shouldPollPendingCounts(activeView)) {
+        if (shouldPollPendingCounts(activeView, isPageVisible)) {
             void fetchPendingCounts();
         }
     }
@@ -1161,7 +883,7 @@
         sortBy = "id";
         sortOrder = "desc";
         fetchData();
-        if (shouldPollPendingCounts(newView)) {
+        if (shouldPollPendingCounts(newView, isPageVisible)) {
             fetchPendingCounts();
         }
         if (newView === "notifications") {
@@ -1231,12 +953,12 @@
             if (!response) {
                 return;
             }
-            if (shouldPatchDashboardListLocally()) {
+            if (shouldPatchDashboardListLocally(activeView)) {
                 removeDashboardListItem(id);
             } else {
                 fetchData();
             }
-            if (shouldPollPendingCounts(activeView)) {
+            if (shouldPollPendingCounts(activeView, isPageVisible)) {
                 void fetchPendingCounts();
             }
         } catch (error) {
@@ -1288,12 +1010,12 @@
                 activeView === "clients" &&
                 statusFilter !== "" &&
                 Object.prototype.hasOwnProperty.call(data, "status");
-            if (shouldRefreshList || !shouldPatchDashboardListLocally()) {
+            if (shouldRefreshList || !shouldPatchDashboardListLocally(activeView)) {
                 await fetchData();
             } else {
                 patchDashboardListItem(id, data);
             }
-            if (shouldPollPendingCounts(activeView)) {
+            if (shouldPollPendingCounts(activeView, isPageVisible)) {
                 await fetchPendingCounts();
             }
         } catch (error: any) {
@@ -1332,7 +1054,9 @@
         window.addEventListener("focus", handlePendingCountsVisibilityChange);
         window.addEventListener("blur", handlePendingCountsVisibilityChange);
 
-        lastReadAnnouncementMarker = readLastReadAnnouncementMarkerFromStorage();
+        lastReadAnnouncementMarker = readLastReadAnnouncementMarkerFromStorage(
+            ANNOUNCEMENTS_LAST_READ_STORAGE_KEY,
+        );
         await ensureViewComponents(activeView);
         fetchData();
         if (activeView === "dashboard") {
@@ -1447,91 +1171,14 @@
                     ></div>
                 </div>
             {:else if activeView === "dashboard"}
-                <div class="space-y-6">
-                    <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900/50 dark:bg-amber-950/20">
-                            <p class="text-sm font-semibold text-amber-900 dark:text-amber-200">Pendências urgentes</p>
-                            <p class="mt-2 text-3xl font-black text-amber-700 dark:text-amber-300">
-                                {(pendingCounts.propertyRequests ?? 0) + (pendingCounts.brokerRequests ?? 0)}
-                            </p>
-                            <p class="mt-1 text-xs text-amber-800 dark:text-amber-200/90">
-                                Aprovações de imóveis e solicitações de corretores aguardando ação.
-                            </p>
-                            <button
-                                class="mt-4 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
-                                on:click={() => changeView("property_requests")}
-                            >
-                                Ir para pendências
-                            </button>
-                        </div>
-
-                        <div class="rounded-xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-900/50 dark:bg-blue-950/20">
-                            <p class="text-sm font-semibold text-blue-900 dark:text-blue-200">Novas propostas do dia</p>
-                            <p class="mt-2 text-3xl font-black text-blue-700 dark:text-blue-300">
-                                {Number(sreStats?.business?.newProposalsToday ?? sreStats?.newProposalsToday ?? 0)}
-                            </p>
-                            <p class="mt-1 text-xs text-blue-800 dark:text-blue-200/90">
-                                Volume diário para triagem rápida de negociação.
-                            </p>
-                            <button
-                                class="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                                on:click={() => changeView("negotiation_requests")}
-                            >
-                                Abrir propostas
-                            </button>
-                        </div>
-                    </section>
-
-                    <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                        <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Visitas e leads</h2>
-                        <p class="mb-4 mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Tendência recente para leitura rápida de operação.
-                        </p>
-                        {#if NewPropertiesLineChartComponent && chartData}
-                            <div class="h-72">
-                                <svelte:component this={NewPropertiesLineChartComponent} data={chartData.newPropertiesOverTime} />
-                            </div>
-                        {:else}
-                            <div class="flex h-48 items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                                Sem dados de gráfico no momento.
-                            </div>
-                        {/if}
-                    </section>
-
-                    <div class="mb-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#0b0f1a]">
-                        <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
-                            <div>
-                                <h3 class="text-sm font-black uppercase tracking-[0.18em] text-gray-900 dark:text-white">
-                                    Atalhos Operacionais
-                                </h3>
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    Acessos rápidos para monitoramento, deploy e canais oficiais.
-                                </p>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                            {#each externalDashboardShortcuts as shortcut}
-                                <a
-                                    href={shortcut.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="group rounded-2xl border border-gray-200 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900/60 dark:hover:border-indigo-500/40"
-                                >
-                                    <div class="flex items-center justify-between gap-2">
-                                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                            {shortcut.name}
-                                        </p>
-                                        <span class={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${shortcut.badgeClass}`}>
-                                            Link
-                                        </span>
-                                    </div>
-                                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                        {shortcut.description}
-                                    </p>
-                                </a>
-                            {/each}
-                        </div>
-                    </div>
+                <DashboardHomeOverview
+                    {pendingCounts}
+                    {sreStats}
+                    {chartData}
+                    {NewPropertiesLineChartComponent}
+                    {externalDashboardShortcuts}
+                    changeView={changeView}
+                />
 
                     {#if false && sreStats}
                         <!-- SRE Command Center Enclosure -->
@@ -2270,7 +1917,6 @@
                             />
                         </div>
                     </section>
-                </div>
             {:else if activeView === "verification"}
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
                     <div class="p-4 border-b dark:border-gray-700">

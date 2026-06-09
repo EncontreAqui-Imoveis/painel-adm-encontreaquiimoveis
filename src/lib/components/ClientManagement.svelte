@@ -11,30 +11,17 @@
   import AdminPasswordConfirmDialog from '$lib/components/AdminPasswordConfirmDialog.svelte';
   import type { PropertyStatus } from '$lib/types';
   import { formatPhoneDisplayBr } from '$lib/utils/phoneFormat';
-
-  type Client = {
-    id: number;
-    name: string;
-    email: string;
-    phone?: string | null;
-    created_at?: string;
-    role?: string;
-  };
-
-  type ClientDetail = {
-    id: number;
-    name: string;
-    email: string;
-    phone?: string | null;
-    street?: string | null;
-    number?: string | null;
-    complement?: string | null;
-    bairro?: string | null;
-    city?: string | null;
-    state?: string | null;
-    cep?: string | null;
-    created_at?: string;
-  };
+  import {
+    buildClientForm,
+    buildClientUpdatePayload,
+    extractClientApiErrorMessage,
+    isValidPromoteCreci,
+    normalizePromoteCreci,
+    unwrapResponseData,
+    type ClientDetailLike,
+    type ClientFormState,
+    type ClientSummaryLike,
+  } from '$lib/components/client-management/clientManagementHelpers';
 
   type ClientProperty = {
     id: number;
@@ -52,18 +39,8 @@
     search: string;
   };
 
-  type ClientFormState = {
-    name: string;
-    email: string;
-    phone: string;
-    street: string;
-    number: string;
-    complement: string;
-    bairro: string;
-    city: string;
-    state: string;
-    cep: string;
-  };
+  type Client = ClientSummaryLike & { role?: string };
+  type ClientDetail = ClientDetailLike;
 
   let clients: Client[] = [];
   let isLoading = true;
@@ -108,21 +85,6 @@
   let promoteCreci = '';
   let promoteError: string | null = null;
 
-  function buildClientForm(detail: ClientDetail | null, fallback: Client | null): ClientFormState {
-    return {
-      name: detail?.name ?? fallback?.name ?? '',
-      email: detail?.email ?? fallback?.email ?? '',
-      phone: detail?.phone ?? fallback?.phone ?? '',
-      street: detail?.street ?? '',
-      number: detail?.number ?? '',
-      complement: detail?.complement ?? '',
-      bairro: detail?.bairro ?? '',
-      city: detail?.city ?? '',
-      state: detail?.state ?? '',
-      cep: detail?.cep ?? '',
-    };
-  }
-
   function requestFetch(resetPage = false) {
     if (resetPage) {
       currentPage = 1;
@@ -148,7 +110,7 @@
       const response = await api.get<{ data?: Client[]; total?: number } | Client[]>(
         `/admin/users?${params.toString()}`
       );
-      const list = Array.isArray(response) ? response : response?.data;
+      const list = unwrapResponseData<Client[]>(response);
       clients = Array.isArray(list) ? list : [];
       totalItems = Number((response as { total?: number })?.total ?? clients.length);
       totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -272,7 +234,7 @@
   async function fetchClientDetail(clientId: number) {
     try {
       const response = await api.get<{ data?: ClientDetail } | ClientDetail>(`/admin/clients/${clientId}`);
-      const detail = (response as { data?: ClientDetail })?.data ?? response;
+      const detail = unwrapResponseData<ClientDetail>(response);
       if (detail && typeof detail === 'object' && 'id' in detail) {
         clientDetail = detail as ClientDetail;
         clientDetailError = null;
@@ -302,7 +264,7 @@
       const response = await api.get<{ data?: ClientProperty[] } | ClientProperty[]>(
         `/admin/clients/${client.id}/properties`
       );
-      const list = Array.isArray(response) ? response : response?.data;
+      const list = unwrapResponseData<ClientProperty[]>(response);
       clientProperties = Array.isArray(list) ? list : [];
     } catch (err) {
       console.error('Erro ao buscar imoveis do cliente:', err);
@@ -342,18 +304,7 @@
     const clientId = selectedClient.id;
     isProcessing = true;
     try {
-      await api.put(`/admin/clients/${clientId}`, {
-        name: clientForm.name.trim(),
-        email: clientForm.email.trim(),
-        phone: clientForm.phone.trim(),
-        street: clientForm.street.trim(),
-        number: clientForm.number.trim(),
-        complement: clientForm.complement.trim(),
-        bairro: clientForm.bairro.trim(),
-        city: clientForm.city.trim(),
-        state: clientForm.state.trim(),
-        cep: clientForm.cep.trim(),
-      });
+      await api.put(`/admin/clients/${clientId}`, buildClientUpdatePayload(clientForm));
       toast.success('Cliente atualizado.');
       clientDetail = {
         ...(clientDetail ?? { id: clientId }),
@@ -394,8 +345,8 @@
 
   async function submitPromoteBroker() {
     if (!selectedClient) return;
-    const trimmed = promoteCreci.trim();
-    if (trimmed.length < 3) {
+    const trimmed = normalizePromoteCreci(promoteCreci);
+    if (!isValidPromoteCreci(trimmed)) {
       promoteError = 'Informe um CRECI válido.';
       return;
     }
@@ -408,8 +359,7 @@
       requestFetch();
       closeModal();
     } catch (err) {
-      const data = err as { response?: { data?: { error?: string } } };
-      promoteError = data?.response?.data?.error ?? 'Falha ao promover. Tente novamente.';
+      promoteError = extractClientApiErrorMessage(err, 'Falha ao promover. Tente novamente.');
     } finally {
       isProcessing = false;
     }
@@ -434,9 +384,7 @@
       closeModal();
     } catch (err) {
       console.error('Erro ao excluir cliente:', err);
-      deleteError =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        'Falha ao excluir cliente.';
+      deleteError = extractClientApiErrorMessage(err, 'Falha ao excluir cliente.');
     } finally {
       isProcessing = false;
     }

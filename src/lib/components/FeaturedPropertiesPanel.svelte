@@ -2,22 +2,23 @@
   import { onMount } from 'svelte';
   import { toast } from 'svelte-sonner';
   import { api, apiClient } from '$lib/apiClient';
+  import {
+    addStateLabel,
+    candidatePriceLabel,
+    crossScopeBadge,
+    formatCurrency,
+    formatLocation,
+    isDualPurpose,
+    mergeCandidatesWithFeatured,
+    membershipLabel,
+    purposeSupportsRent,
+    purposeSupportsSale,
+    rowAddDisabled,
+    sortFeaturedList,
+    type FeaturedPropertyLike,
+  } from '$lib/components/featured-properties/featuredPropertiesHelpers';
 
-  type FeaturedProperty = {
-    id: number;
-    code?: string | null;
-    title: string;
-    bairro?: string | null;
-    city?: string | null;
-    state?: string | null;
-    price?: number | null;
-    price_sale?: number | null;
-    price_rent?: number | null;
-    purpose?: string | null;
-    broker_name?: string | null;
-    property_image_url?: string | null;
-    position?: number | null;
-  };
+  type FeaturedProperty = FeaturedPropertyLike;
 
   const MAX_FEATURED = 20;
 
@@ -39,42 +40,10 @@
 
   $: canSave = !isSaving && !isLoadingFeatured;
 
-  function sortFeaturedList(items: FeaturedProperty[]): FeaturedProperty[] {
-    return items
-      .map((item, index) => ({ item, index }))
-      .sort((a, b) => {
-        const aPosition = Number.isFinite(Number(a.item.position)) ? Number(a.item.position) : Number.MAX_SAFE_INTEGER;
-        const bPosition = Number.isFinite(Number(b.item.position)) ? Number(b.item.position) : Number.MAX_SAFE_INTEGER;
-        if (aPosition !== bPosition) return aPosition - bPosition;
-        return a.index - b.index;
-      })
-      .map(({ item }) => item);
-  }
-
-  function mergeCandidatesWithFeatured(items: FeaturedProperty[]): FeaturedProperty[] {
-    const merged = new Map<number, FeaturedProperty>();
-    for (const item of [...featuredSale, ...featuredRent, ...items]) {
-      merged.set(item.id, { ...(merged.get(item.id) ?? {}), ...item });
-    }
-    return Array.from(merged.values());
-  }
-
   onMount(() => {
     loadFeatured();
     loadCandidates();
   });
-
-  function formatCurrency(value?: number | null): string {
-    if (value == null || Number.isNaN(value)) return '-';
-    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-
-  function formatLocation(item: FeaturedProperty): string {
-    const parts = [item.bairro, item.city, item.state]
-      .map((value) => String(value ?? '').trim())
-      .filter((value) => value.length > 0);
-    return parts.length > 0 ? parts.join(' - ') : '-';
-  }
 
   function openImagePreview(url: string | null | undefined, alt?: string) {
     if (!url) return;
@@ -94,20 +63,6 @@
       event.preventDefault();
       closeImagePreview();
     }
-  }
-
-  function purposeSupportsSale(p: string | null | undefined): boolean {
-    const t = String(p ?? '').trim();
-    return t === 'Venda' || t === 'Venda e Aluguel';
-  }
-
-  function purposeSupportsRent(p: string | null | undefined): boolean {
-    const t = String(p ?? '').trim();
-    return t === 'Aluguel' || t === 'Venda e Aluguel';
-  }
-
-  function isDualPurpose(p: string | null | undefined): boolean {
-    return purposeSupportsSale(p) && purposeSupportsRent(p);
   }
 
   function openDualModal(item: FeaturedProperty) {
@@ -186,7 +141,7 @@
       const payload = await api.get<{ data?: FeaturedProperty[] }>(
         `/admin/properties-with-brokers?${params.toString()}`
       );
-      candidates = mergeCandidatesWithFeatured(payload?.data ?? []);
+      candidates = mergeCandidatesWithFeatured(featuredSale, featuredRent, payload?.data ?? []);
     } catch (err) {
       console.error('Erro ao carregar imóveis aprovados:', err);
       toast.error('Erro ao carregar imóveis aprovados.');
@@ -270,62 +225,6 @@
 
   function clearRentList() {
     featuredRent = [];
-  }
-
-  function addStateLabel(item: FeaturedProperty): string {
-    const inS = featuredSale.some((i) => i.id === item.id);
-    const inR = featuredRent.some((i) => i.id === item.id);
-    if (inS && inR) return 'Nos dois';
-    if (isDualPurpose(item.purpose) && inS && !inR) return 'Adicionar aluguel';
-    if (isDualPurpose(item.purpose) && inR && !inS) return 'Adicionar venda';
-    return 'Adicionar';
-  }
-
-  function membershipLabel(item: FeaturedProperty): string | null {
-    const inS = featuredSale.some((i) => i.id === item.id);
-    const inR = featuredRent.some((i) => i.id === item.id);
-    if (inS && inR) return 'Já está em Venda e Aluguel';
-    if (inS) return 'Já está em Venda';
-    if (inR) return 'Já está em Aluguel';
-    return null;
-  }
-
-  function candidatePriceLabel(item: FeaturedProperty): string {
-    const supportsSale = purposeSupportsSale(item.purpose);
-    const supportsRent = purposeSupportsRent(item.purpose);
-    const saleValue = item.price_sale ?? (supportsSale && !supportsRent ? item.price : null);
-    const rentValue = item.price_rent ?? (supportsRent && !supportsSale ? item.price : null);
-
-    if (supportsSale && supportsRent) {
-      return `Venda: ${formatCurrency(saleValue)} · Aluguel: ${formatCurrency(rentValue)}`;
-    }
-    if (supportsSale) return formatCurrency(saleValue);
-    if (supportsRent) return formatCurrency(rentValue);
-    return formatCurrency(item.price);
-  }
-
-  function crossScopeBadge(scope: 'sale' | 'rent', item: FeaturedProperty): string | null {
-    const isAlsoInSale = featuredSale.some((featured) => featured.id === item.id);
-    const isAlsoInRent = featuredRent.some((featured) => featured.id === item.id);
-
-    if (scope === 'sale' && isAlsoInRent) return 'Também em Aluguel';
-    if (scope === 'rent' && isAlsoInSale) return 'Também em Venda';
-    return null;
-  }
-
-  function rowAddDisabled(item: FeaturedProperty): boolean {
-    if (isDualPurpose(item.purpose)) {
-      return (
-        featuredSale.some((i) => i.id === item.id) && featuredRent.some((i) => i.id === item.id)
-      );
-    }
-    if (purposeSupportsSale(item.purpose) && !purposeSupportsRent(item.purpose)) {
-      return featuredSale.some((i) => i.id === item.id) || featuredSale.length >= MAX_FEATURED;
-    }
-    if (purposeSupportsRent(item.purpose) && !purposeSupportsSale(item.purpose)) {
-      return featuredRent.some((i) => i.id === item.id) || featuredRent.length >= MAX_FEATURED;
-    }
-    return featuredSale.length >= MAX_FEATURED;
   }
 
   async function saveFeatured() {
@@ -417,9 +316,9 @@
                       <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                         {index + 1}. {item.title}
                       </p>
-                      {#if crossScopeBadge('sale', item)}
+                      {#if crossScopeBadge('sale', item, featuredSale, featuredRent)}
                         <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
-                          {crossScopeBadge('sale', item)}
+                          {crossScopeBadge('sale', item, featuredSale, featuredRent)}
                         </span>
                       {/if}
                     </div>
@@ -497,9 +396,9 @@
                       <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
                         {index + 1}. {item.title}
                       </p>
-                      {#if crossScopeBadge('rent', item)}
+                      {#if crossScopeBadge('rent', item, featuredSale, featuredRent)}
                         <span class="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800 dark:bg-sky-900/50 dark:text-sky-200">
-                          {crossScopeBadge('rent', item)}
+                          {crossScopeBadge('rent', item, featuredSale, featuredRent)}
                         </span>
                       {/if}
                     </div>
@@ -633,13 +532,13 @@
                         class="rounded-md border border-green-200 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-900/30"
                         type="button"
                         on:click={() => requestAdd(item)}
-                        disabled={rowAddDisabled(item)}
+                        disabled={rowAddDisabled(item, featuredSale, featuredRent, MAX_FEATURED)}
                       >
-                        {addStateLabel(item)}
+                        {addStateLabel(item, featuredSale, featuredRent)}
                       </button>
-                      {#if membershipLabel(item)}
+                      {#if membershipLabel(item, featuredSale, featuredRent)}
                         <span class="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                          {membershipLabel(item)}
+                          {membershipLabel(item, featuredSale, featuredRent)}
                         </span>
                       {/if}
                     </div>
