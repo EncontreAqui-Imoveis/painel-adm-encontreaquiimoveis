@@ -12,7 +12,9 @@
   import PropertyAmenitiesFields from '$lib/components/property/PropertyAmenitiesFields.svelte';
   import PropertyGallerySection from '$lib/components/property/PropertyGallerySection.svelte';
   import PropertyImageUploadSection from '$lib/components/property/PropertyImageUploadSection.svelte';
+  import PropertyPricingSection from '$lib/components/property/PropertyPricingSection.svelte';
   import PropertyVideoSection from '$lib/components/property/PropertyVideoSection.svelte';
+  import PropertyManagementQueue from '$lib/components/property/PropertyManagementQueue.svelte';
   import PropertyManagementFooterActions from '$lib/components/property/PropertyManagementFooterActions.svelte';
   import PropertyDecisionDialogs from '$lib/components/property/PropertyDecisionDialogs.svelte';
   import PropertyManagementActionBar from '$lib/components/property/PropertyManagementActionBar.svelte';
@@ -31,6 +33,16 @@
     resolveSelectedPropertyPublicCode,
   } from '$lib/components/property/propertyPresentationHelpers';
   import {
+    resolvePropertyReviewState,
+    submitPropertyReviewStatus,
+  } from '$lib/components/property/propertyReviewFlowHelpers';
+  import {
+    buildPropertyModalResetState,
+    buildSoldDialogResetState,
+    resolvePropertyEditExtraState,
+    resolvePropertyEditNumericFlags,
+  } from '$lib/components/property/propertyModalStateHelpers';
+  import {
     buildPropertyEditPayload,
     resolvePropertyEditUpdateStrategy,
   } from '$lib/components/property/propertyEditHelpers';
@@ -46,6 +58,11 @@
     resolvePriceLines,
     type AreaUnit,
   } from '$lib/components/property/propertyFormattingHelpers';
+  import {
+    compareByAreaSort,
+    propertyMatchesAreaFilter,
+    type AreaMetric,
+  } from '$lib/components/property/propertyAreaFilterHelpers';
   import * as Select from '$lib/components/ui/select';
   import { Input } from '$lib/components/ui/input';
   import {
@@ -210,11 +227,11 @@ function parseNullableNumber(value: unknown): number | null {
   let hasMounted = false;
   let sortConfig: SortConfig = { key: 'p.created_at', order: 'desc' };
   let selectedAmenityFilters: PropertyAmenity[] = [];
-  let areaFilterMetric: 'none' | 'area_construida_valor' | 'area_terreno_valor' = 'none';
+  let areaFilterMetric: AreaMetric = 'none';
   let areaFilterMin = '';
   let areaFilterMax = '';
   let areaFilterUnit: AreaUnit = 'm2';
-  let areaSortMetric: 'none' | 'area_construida_valor' | 'area_terreno_valor' = 'none';
+  let areaSortMetric: AreaMetric = 'none';
   let areaSortDirection: 'asc' | 'desc' = 'desc';
   let isClientSideFiltering = false;
   let hasLoadedFullDatasetForLocalFilters = false;
@@ -374,8 +391,18 @@ function parseNullableNumber(value: unknown): number | null {
   $: listForDisplay = localFilterSignature && shouldUseFullDatasetForLocalFilters
     ? [...properties]
       .filter((property) => propertyMatchesAmenityFilter(property))
-      .filter((property) => propertyMatchesAreaFilter(property))
-      .sort(compareByAreaSort)
+      .filter((property) =>
+        propertyMatchesAreaFilter(
+          property,
+          areaFilterMetric,
+          areaFilterMin,
+          areaFilterMax,
+          areaFilterUnit
+        )
+      )
+      .sort((first, second) =>
+        compareByAreaSort(first, second, areaSortMetric, areaSortDirection)
+      )
     : properties;
   $: totalItemsForDisplay = isClientSideFiltering ? listForDisplay.length : totalItems;
   $: totalPagesForDisplay = Math.max(1, Math.ceil(totalItemsForDisplay / itemsPerPage));
@@ -895,13 +922,13 @@ function parseNullableNumber(value: unknown): number | null {
 
   function ensureAreaFilterMetricSelected(): void {
     if (areaFilterMetric === 'none') {
-      areaFilterMetric = 'area_construida_valor';
+      areaFilterMetric = 'area_terreno_valor';
     }
   }
 
   function ensureAreaSortMetricSelected(): void {
     if (areaSortMetric === 'none') {
-      areaSortMetric = 'area_construida_valor';
+      areaSortMetric = 'area_terreno_valor';
     }
   }
 
@@ -934,87 +961,9 @@ function parseNullableNumber(value: unknown): number | null {
     currentPage = 1;
   }
 
-  function isAreaUnitConvertibleUnit(unit: AreaUnit): boolean {
-    return unit === 'm2' || unit === 'hectare' || unit === 'alqueire';
-  }
-
-  function convertAreaToSquareMeters(value: number, unit: AreaUnit): number | null {
-    if (!Number.isFinite(value)) return null;
-    if (unit === 'm2') return value;
-    if (unit === 'hectare') return value * 10000;
-    if (unit === 'alqueire') return value * 24200;
-    return null;
-  }
-
-  function parseAreaFilterInput(raw: string): number | null {
-    const parsed = parseNullableNumber(raw);
-    if (parsed === null || Number.isNaN(parsed)) {
-      return null;
-    }
-    return parsed;
-  }
-
-  function getAreaComparableValue(
-    property: PropertySummary,
-    metric: 'area_construida_valor' | 'area_terreno_valor'
-  ): number | null {
-    const m2Value =
-      metric === 'area_construida_valor' ? property.area_construida_m2 : property.area_terreno_m2;
-    if (m2Value != null && Number.isFinite(m2Value)) {
-      return m2Value;
-    }
-
-    const areaValue =
-      metric === 'area_construida_valor' ? property.area_construida_valor : property.area_terreno_valor;
-    if (areaValue == null) return null;
-    const areaUnit =
-      metric === 'area_construida_valor'
-        ? normalizeAreaUnit(property.area_construida_unidade) ?? 'm2'
-        : normalizeAreaUnit(property.area_terreno_unidade) ?? 'm2';
-    return convertAreaToSquareMeters(areaValue, areaUnit);
-  }
-
   function propertyMatchesAmenityFilter(property: PropertySummary): boolean {
     if (selectedAmenityFilters.length === 0) return true;
     return selectedAmenityFilters.every((amenity) => hasAmenity(property.amenities, amenity));
-  }
-
-  function propertyMatchesAreaFilter(property: PropertySummary): boolean {
-    if (areaFilterMetric === 'none') return true;
-    const minM2Raw = parseAreaFilterInput(areaFilterMin);
-    const maxM2Raw = parseAreaFilterInput(areaFilterMax);
-    const hasMin = minM2Raw !== null;
-    const hasMax = maxM2Raw !== null;
-    if (!hasMin && !hasMax) return true;
-
-    const minM2 = hasMin ? convertAreaToSquareMeters(minM2Raw, areaFilterUnit) : null;
-    const maxM2 = hasMax ? convertAreaToSquareMeters(maxM2Raw, areaFilterUnit) : null;
-
-    if ((minM2 != null || maxM2 != null) && !isAreaUnitConvertibleUnit(areaFilterUnit)) {
-      return false;
-    }
-
-    const areaM2 = getAreaComparableValue(property, areaFilterMetric);
-    if (areaM2 == null) return false;
-    if (minM2 != null && areaM2 < minM2) return false;
-    if (maxM2 != null && areaM2 > maxM2) return false;
-    return true;
-  }
-
-  function compareByAreaSort(
-    first: PropertySummary,
-    second: PropertySummary
-  ): number {
-    if (areaSortMetric === 'none') return 0;
-    const areaA = getAreaComparableValue(first, areaSortMetric);
-    const areaB = getAreaComparableValue(second, areaSortMetric);
-
-    if (areaA == null && areaB == null) return 0;
-    if (areaA == null) return areaSortDirection === 'asc' ? 1 : -1;
-    if (areaB == null) return areaSortDirection === 'asc' ? -1 : 1;
-
-    const delta = areaA - areaB;
-    return areaSortDirection === 'asc' ? delta : -delta;
   }
 
   function normalizeImages(
@@ -1283,16 +1232,16 @@ function parseNullableNumber(value: unknown): number | null {
   }
 
   function syncEditZeroFlags(property: PropertyDetails) {
-    editBedroomsAsZero = Number(property.bedrooms ?? -1) === 0;
-    editBathroomsAsZero = Number(property.bathrooms ?? -1) === 0;
-    editGarageSpotsAsZero = Number(property.garage_spots ?? -1) === 0;
+    const nextState = resolvePropertyEditNumericFlags(property);
+    editBedroomsAsZero = nextState.editBedroomsAsZero;
+    editBathroomsAsZero = nextState.editBathroomsAsZero;
+    editGarageSpotsAsZero = nextState.editGarageSpotsAsZero;
   }
 
   function syncEditLotFlags(property: PropertyDetails) {
-    const quadra = String(property.quadra ?? '').trim();
-    const lote = String(property.lote ?? '').trim();
-    editSemQuadra = Boolean(property.sem_quadra) || quadra === '';
-    editSemLote = Boolean(property.sem_lote) || lote === '';
+    const nextState = resolvePropertyEditNumericFlags(property);
+    editSemQuadra = nextState.editSemQuadra;
+    editSemLote = nextState.editSemLote;
   }
 
   function toggleEditMode() {
@@ -1345,47 +1294,28 @@ function parseNullableNumber(value: unknown): number | null {
 
     try {
       const details = await api.get<PropertyDetails>(`/admin/properties/${property.id}`);
-      const mergedPublicCode = normalizePublicCode((details as PropertyDetails)?.public_code ?? property.public_code);
-      const safeDetails = Object.fromEntries(
-        Object.entries((details as unknown as Record<string, unknown>) ?? {}).filter(([, value]) => value !== undefined)
-      ) as Partial<PropertyDetails>;
-      const merged = {
-        ...property,
-        ...safeDetails,
-        public_code: mergedPublicCode,
-      } as PropertyDetails;
-      editSemCep = Boolean(merged.sem_cep);
-      editSelectedAmenities = normalizeAmenityList(merged.amenities);
-      const { supportsSale, supportsRent } = getPurposeFlags(merged.purpose ?? null);
-      const resolvedSale =
-        merged.price_sale ?? (supportsSale && !supportsRent ? merged.price ?? null : null);
-      const resolvedRent =
-        merged.price_rent ?? (supportsRent && !supportsSale ? merged.price ?? null : null);
-      const clampedSale = clampPropertyPriceValue(resolvedSale, SALE_PROPERTY_PRICE_MAX);
-      const clampedRent = clampPropertyPriceValue(resolvedRent, RENT_PROPERTY_PRICE_MAX);
-      selectedProperty = merged;
-      editableProperty = sanitizeEditable({
-        ...merged,
-        price_sale: clampedSale,
-        price_rent: clampedRent,
-        promotion_percentage:
-          merged.promotion_percentage != null
-            ? Number(merged.promotion_percentage)
-            : null,
-        promotion_price:
-          merged.promotion_price != null ? Number(merged.promotion_price) : null,
-        promotional_rent_price:
-          merged.promotional_rent_price != null
-            ? Number(merged.promotional_rent_price)
-            : null,
-        promotional_rent_percentage:
-          merged.promotional_rent_percentage != null
-            ? Number(merged.promotional_rent_percentage)
-            : null,
+      const reviewState = resolvePropertyReviewState<PropertyDetails>({
+        property: property as PropertyDetails,
+        details: details as Partial<PropertyDetails>,
+        normalizePublicCode,
+        getPurposeFlags,
+        clampPropertyPriceValue,
+        saleMax: SALE_PROPERTY_PRICE_MAX,
+        rentMax: RENT_PROPERTY_PRICE_MAX,
+        sanitizeEditable,
+        normalizeAmenityList,
+        normalizeImages,
+        isSemNumeroValue,
       });
-      editSemNumero = isSemNumeroValue(merged.numero);
-      syncEditLotFlags(merged);
-      syncEditZeroFlags(merged);
+      selectedProperty = reviewState.mergedProperty;
+      editableProperty = reviewState.editableProperty;
+      editSemCep = reviewState.editSemCep;
+      editSelectedAmenities = reviewState.selectedAmenities;
+      editSemNumero = reviewState.editSemNumero;
+      editSemQuadra = reviewState.editSemQuadra;
+      editSemLote = reviewState.editSemLote;
+      syncEditZeroFlags(reviewState.mergedProperty);
+      syncEditLotFlags(reviewState.mergedProperty);
       if (editSemNumero && editableProperty) {
         editableProperty.numero = '';
       }
@@ -1399,7 +1329,7 @@ function parseNullableNumber(value: unknown): number | null {
         syncEditPriceDisplays(editableProperty);
         syncEditExtraDisplays(editableProperty);
       }
-      selectedPropertyGalleryImages = normalizeImages(merged.images ?? null);
+      selectedPropertyGalleryImages = reviewState.galleryImages;
       isModalOpen = true;
     } catch (err) {
       console.error('Falha ao buscar detalhes do imóvel:', err);
@@ -1419,22 +1349,25 @@ function parseNullableNumber(value: unknown): number | null {
     if (isProcessing) return;
     clearStagedImages();
     clearStagedVideo();
-    isModalOpen = false;
-    selectedProperty = null;
-    editableProperty = null;
-    editSemNumero = false;
-    editSemQuadra = false;
-    editSemLote = false;
-    editBedroomsAsZero = false;
-    editBathroomsAsZero = false;
-    editGarageSpotsAsZero = false;
-    brokenPreviewImages = new Set();
-    selectedPropertyGalleryImages = [];
-    isEditMode = false;
-    editError = null;
-    rejectDialogOpen = false;
-    rejectObservation = '';
-    rejectObservationError = null;
+    const resetState = buildPropertyModalResetState();
+    isModalOpen = resetState.isModalOpen;
+    selectedProperty = resetState.selectedProperty;
+    editableProperty = resetState.editableProperty;
+    editSemNumero = resetState.editSemNumero;
+    editSemQuadra = resetState.editSemQuadra;
+    editSemLote = resetState.editSemLote;
+    editSemCep = resetState.editSemCep;
+    editBedroomsAsZero = resetState.editBedroomsAsZero;
+    editBathroomsAsZero = resetState.editBathroomsAsZero;
+    editGarageSpotsAsZero = resetState.editGarageSpotsAsZero;
+    editSelectedAmenities = resetState.editSelectedAmenities;
+    editError = resetState.editError;
+    rejectDialogOpen = resetState.rejectDialogOpen;
+    rejectObservation = resetState.rejectObservation;
+    rejectObservationError = resetState.rejectObservationError;
+    brokenPreviewImages = resetState.brokenPreviewImages;
+    selectedPropertyGalleryImages = resetState.selectedPropertyGalleryImages as NormalizedImage[];
+    isEditMode = resetState.isEditMode;
     resetAdvertiserState();
     resetSoldDialogState();
   }
@@ -1452,13 +1385,15 @@ function parseNullableNumber(value: unknown): number | null {
     }
     isProcessing = true;
     try {
-      if (newStatus === 'approved') {
-        await api.patch(`/admin/properties/${selectedProperty.id}/approve`, {});
-        toast.success('Imóvel aprovado.');
-      } else {
-        await api.patch(`/admin/properties/${selectedProperty.id}/reject`, {});
-        toast.success('Imóvel rejeitado. O anunciante pode corrigir e reenviar.');
+      const result = await submitPropertyReviewStatus({
+        api,
+        propertyId: selectedProperty.id,
+        newStatus,
+      });
+      if (!result.ok) {
+        throw result.error;
       }
+      toast.success(newStatus === 'approved' ? 'Imóvel aprovado.' : 'Imóvel rejeitado. O anunciante pode corrigir e reenviar.');
       isModalOpen = false;
       clearStagedImages();
       clearStagedVideo();
@@ -1493,7 +1428,15 @@ function parseNullableNumber(value: unknown): number | null {
     isProcessing = true;
     rejectObservationError = null;
     try {
-      await api.patch(`/admin/properties/${selectedProperty.id}/reject`, { reason });
+      const result = await submitPropertyReviewStatus({
+        api,
+        propertyId: selectedProperty.id,
+        newStatus: 'rejected',
+        reason,
+      });
+      if (!result.ok) {
+        throw result.error;
+      }
       toast.success('Imóvel rejeitado. O anunciante pode corrigir e reenviar.');
       rejectDialogOpen = false;
       isModalOpen = false;
@@ -2187,20 +2130,21 @@ function parseNullableNumber(value: unknown): number | null {
   }
 
   function resetSoldDialogState() {
-    soldDialogOpen = false;
-    soldByPlatform = null;
-    soldSaleValue = '';
-    soldCommissionRate = '';
-    soldCommissionValue = '';
-    isSavingSold = false;
+    const nextState = buildSoldDialogResetState();
+    soldDialogOpen = nextState.soldDialogOpen;
+    soldByPlatform = nextState.soldByPlatform;
+    soldSaleValue = nextState.soldSaleValue;
+    soldCommissionRate = nextState.soldCommissionRate;
+    soldCommissionValue = nextState.soldCommissionValue;
+    isSavingSold = nextState.isSavingSold;
   }
 
   function syncEditExtraDisplays(property: PropertyDetails) {
-    editValorCondominioDisplay = property.valor_condominio != null ? formatCurrency(Number(property.valor_condominio)) : '';
-    editValorIptuDisplay = property.valor_iptu != null ? formatCurrency(Number(property.valor_iptu)) : '';
-    // Sync advertiser query
-    advertiserQuery = property.broker_name ?? property.owner_name ?? '';
-    selectedAdvertiser = null;
+    const nextState = resolvePropertyEditExtraState(property);
+    editValorCondominioDisplay = nextState.editValorCondominioDisplay;
+    editValorIptuDisplay = nextState.editValorIptuDisplay;
+    advertiserQuery = nextState.advertiserQuery;
+    selectedAdvertiser = nextState.selectedAdvertiser;
   }
 
   async function handleSoldSave() {
@@ -2629,246 +2573,21 @@ function parseNullableNumber(value: unknown): number | null {
     <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
       {error}
     </div>
-  {:else if displayedProperties.length === 0}
-    <div class="rounded-md border border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-900">
-      <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">
-        {#if isReviewOnly}
-          Nenhuma solicitação encontrada
-        {:else}
-          Nenhum imóvel encontrado
-        {/if}
-      </h2>
-      <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-        {#if isReviewOnly}
-          Não há itens pendentes no recorte "{reviewPropertyRequestTypeLabel(reviewRequestType)}".
-        {:else}
-          Ajuste os filtros para visualizar outros resultados.
-        {/if}
-      </p>
-    </div>
   {:else}
-    <div class="space-y-3 md:hidden">
-      {#each displayedProperties as property}
-        <div
-          class={`w-full rounded-lg border p-4 text-left shadow-sm transition ${
-            isReviewOnly
-              ? 'border-green-200 bg-green-50/40 dark:border-green-800/60 dark:bg-gray-900/70'
-              : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900'
-          }`}
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div class="flex min-w-0 items-start gap-3">
-              <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-100 text-[10px] font-semibold text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                {#if getPropertyCoverUrl(property)}
-                  <div
-                    role="button"
-                    tabindex="0"
-                    class="h-full w-full"
-                    aria-label={`Abrir capa do imóvel ${property.title} em tela cheia`}
-                    on:click|stopPropagation={(event) => openCoverPreviewFromList(property, event)}
-                    on:keydown|stopPropagation={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        openCoverPreviewFromList(property, event);
-                      }
-                    }}
-                  >
-                    <img
-                      src={getPropertyCoverUrl(property)}
-                      alt=""
-                      class="h-full w-full object-cover"
-                      loading="lazy"
-                      on:error={() => markThumbnailAsBroken(property.id)}
-                    />
-                  </div>
-                {:else}
-                  Sem imagem
-                {/if}
-              </div>
-              <div class="min-w-0">
-                <div class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                  {property.title}
-                </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">ID: {property.id}</div>
-              </div>
-            </div>
-            <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${propertyStatusBadgeClasses(property.status)}`}>
-              {humanizePropertyStatus(property.status, property.purpose)}
-            </span>
-          </div>
-          {#if isReviewOnly}
-            {@const requestType = inferPropertyRequestType(property)}
-            <div class="mt-2">
-              <span class={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${propertyRequestTypeBadgeClasses(requestType)}`}>
-                Solicitação: {humanizePropertyRequestType(requestType)}
-              </span>
-            </div>
-          {/if}
-          <div class="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            {property.bairro ?? '-'}
-            {#if property.city}
-              {' - '}{property.city}
-            {/if}
-            {#if property.state}
-              / {property.state}
-            {/if}
-          </div>
-          <div class="mt-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
-            {#each resolvePriceLines(property) as line}
-              <div>{line.label}: {formatCurrency(line.value)}</div>
-            {/each}
-          </div>
-          <div class="mt-2 text-xs text-gray-600 dark:text-gray-300">
-            Anunciante: {property.broker_name ?? '-'}
-          </div>
-          <div class="mt-1 text-xs text-gray-600 dark:text-gray-300">
-            Telefone do anunciante: {formatPhoneDisplayBr(property.broker_phone)}
-          </div>
-          <div class="mt-3 flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-green-500 text-green-700 hover:bg-green-50 dark:border-green-400 dark:text-green-200 dark:hover:bg-green-900/40"
-              on:click={(event) => {
-                event.stopPropagation();
-                reviewProperty(property, event);
-              }}
-              disabled={isDetailLoading && selectedProperty?.id === property.id}
-            >
-              {#if isDetailLoading && selectedProperty?.id === property.id}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                Carregando...
-              {:else}
-                Revisar
-              {/if}
-            </Button>
-          </div>
-        </div>
-      {/each}
-    </div>
-    <div
-      class={`hidden md:block show-scrollbar overflow-x-auto rounded-lg border shadow-sm ${
-        isReviewOnly
-          ? 'border-green-200 bg-green-50/40 dark:border-green-800/60 dark:bg-gray-900/70'
-          : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900'
-      }`}
-    >
-      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-        <thead class="bg-gray-50 dark:bg-gray-900/70">
-          <tr>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              <button type="button" class="flex items-center gap-1" on:click={() => handleSort('p.title')}>
-                Imóvel
-                <span>{getSortIndicator('p.title')}</span>
-              </button>
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              <button type="button" class="flex items-center gap-1" on:click={() => handleSort('p.city')}>
-                Localização
-                <span>{getSortIndicator('p.city')}</span>
-              </button>
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              <button type="button" class="flex items-center gap-1" on:click={() => handleSort('p.price')}>
-                Valor
-                <span>{getSortIndicator('p.price')}</span>
-              </button>
-            </th>
-            {#if isReviewOnly}
-              <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Solicitação
-              </th>
-            {/if}
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Anunciante</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Telefone do anunciante</th>
-            <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Ações</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
-          {#each displayedProperties as property}
-            <tr
-              class="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/60"
-              on:click={(event) => reviewProperty(property, event)}
-            >
-              <td class="px-6 py-4">
-                <div class="flex min-w-0 items-start gap-3">
-                  <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-100 text-[10px] font-semibold text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                    {#if getPropertyCoverUrl(property)}
-                      <button
-                        type="button"
-                        class="h-full w-full"
-                        aria-label={`Abrir capa do imóvel ${property.title} em tela cheia`}
-                        on:click={(event) => openCoverPreviewFromList(property, event)}
-                      >
-                        <img
-                          src={getPropertyCoverUrl(property)}
-                          alt={`Capa do imóvel ${property.title}`}
-                          class="h-full w-full object-cover"
-                          loading="lazy"
-                          on:error={() => markThumbnailAsBroken(property.id)}
-                        />
-                      </button>
-                    {:else}
-                      Sem imagem
-                    {/if}
-                  </div>
-                  <div class="min-w-0">
-                    <div class="font-semibold text-gray-900 dark:text-gray-100">{property.title}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">ID: {property.id}</div>
-                  </div>
-                </div>
-              </td>
-              <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                {property.bairro ?? '-'}
-                {#if property.city}
-                  {' - '}{property.city}
-                {/if}
-                {#if property.state}
-                  / {property.state}
-                {/if}
-              </td>
-              <td class="px-6 py-4 text-sm font-semibold text-gray-800 dark:text-gray-200">
-                <div class="flex flex-col gap-1">
-                  {#each resolvePriceLines(property) as line}
-                    <span>{line.label}: {formatCurrency(line.value)}</span>
-                  {/each}
-                </div>
-              </td>
-              {#if isReviewOnly}
-                {@const requestType = inferPropertyRequestType(property)}
-                <td class="px-6 py-4">
-                  <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${propertyRequestTypeBadgeClasses(requestType)}`}>
-                    {humanizePropertyRequestType(requestType)}
-                  </span>
-                </td>
-              {/if}
-              <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                {property.broker_name ?? '-'}
-              </td>
-              <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                {formatPhoneDisplayBr(property.broker_phone)}
-              </td>
-              <td class="px-6 py-4 text-right">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-green-500 text-green-700 hover:bg-green-50 dark:border-green-400 dark:text-green-200 dark:hover:bg-green-900/40"
-                  on:click={(event) => reviewProperty(property, event)}
-                  disabled={isDetailLoading && selectedProperty?.id === property.id}
-                >
-                  {#if isDetailLoading && selectedProperty?.id === property.id}
-                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                    Carregando...
-                  {:else}
-                    Revisar
-                  {/if}
-                </Button>
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
+    <PropertyManagementQueue
+      {displayedProperties}
+      {isReviewOnly}
+      {reviewRequestType}
+      {selectedProperty}
+      {isDetailLoading}
+      {getPropertyCoverUrl}
+      {openCoverPreviewFromList}
+      {markThumbnailAsBroken}
+      {inferPropertyRequestType}
+      {reviewProperty}
+      {handleSort}
+      {getSortIndicator}
+    />
     <div class="mt-4">
       <Pagination
         bind:currentPage
@@ -2899,265 +2618,18 @@ function parseNullableNumber(value: unknown): number | null {
       <PropertyFormShell mode="edit" variant="orange" showHeader={false}>
       <div class="min-w-0 space-y-6 overflow-y-auto overflow-x-hidden px-6 py-4">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div class="space-y-1">
-            <p class="text-sm font-semibold text-gray-600 dark:text-gray-300">Finalidade</p>
-            {#if isEditMode && editableProperty}
-              <div class="flex flex-col gap-2">
-                <label class="text-xs text-gray-500 dark:text-gray-400" for="purpose-select">Finalidade</label>
-                <select
-                  id="purpose-select"
-                  name="purpose"
-                  class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:border-green-500 focus:ring-2 focus:ring-green-500"
-                  bind:value={editableProperty.purpose}
-                  on:change={() => {
-                    const flags = getPurposeFlags(editableProperty?.purpose ?? null);
-                    if (!flags.supportsSale) {
-                      if (editableProperty) {
-                        editableProperty.price_sale = null;
-                        editableProperty.promotion_price = null;
-                        editableProperty.promotion_percentage = null;
-                      }
-                      editPriceSaleDisplay = '';
-                      editPromotionSalePercentageDisplay = '';
-                      editPromotionPriceSaleDisplay = '';
-                    }
-                    if (!flags.supportsRent) {
-                      if (editableProperty) {
-                        editableProperty.price_rent = null;
-                        editableProperty.promotional_rent_price = null;
-                        editableProperty.promotional_rent_percentage = null;
-                      }
-                      editPriceRentDisplay = '';
-                      editPromotionRentPercentageDisplay = '';
-                      editPromotionPriceRentDisplay = '';
-                    }
-                    if (editableProperty) {
-                      editableProperty.price =
-                        flags.supportsSale && !flags.supportsRent
-                          ? editableProperty.price_sale
-                          : flags.supportsRent && !flags.supportsSale
-                            ? editableProperty.price_rent
-                            : null;
-                    }
-                    refreshPromotionPreviewDisplays();
-                  }}
-                >
-                  <option value="Venda">Venda</option>
-                  <option value="Aluguel">Aluguel</option>
-                  <option value="Venda e Aluguel">Venda e Aluguel</option>
-                </select>
-              </div>
-              {@const flags = getPurposeFlags(editableProperty.purpose ?? null)}
-              {#if flags.isDual}
-                <div class="grid gap-3 md:grid-cols-2">
-                  <input
-                    name="price_sale_display"
-                    maxlength={SALE_PROPERTY_PRICE_INPUT_MAX_LENGTH}
-                    class="w-full rounded-md border border-gray-300 px-3 py-2 text-xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
-                    type="text"
-                    inputmode="numeric"
-                    bind:value={editPriceSaleDisplay}
-                    placeholder="Preço de venda"
-                    on:input={(event) => {
-                      const target = event.target as HTMLInputElement;
-                      editPriceSaleDisplay = formatPropertyPriceInput(
-                        target.value,
-                        SALE_PROPERTY_PRICE_MAX
-                      );
-                      if (editableProperty) {
-                        editableProperty.price_sale = parsePropertyPriceInput(
-                          editPriceSaleDisplay,
-                          SALE_PROPERTY_PRICE_MAX
-                        );
-                        editableProperty.price = editableProperty.price_sale ?? editableProperty.price;
-                        refreshPromotionPreviewDisplays();
-                      }
-                    }}
-                  />
-                <input
-                  name="price_rent_display"
-                  maxlength={RENT_PROPERTY_PRICE_INPUT_MAX_LENGTH}
-                  class="w-full rounded-md border border-gray-300 px-3 py-2 text-xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
-                  type="text"
-                  inputmode="numeric"
-                  bind:value={editPriceRentDisplay}
-                  placeholder="Preço do aluguel"
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    editPriceRentDisplay = formatPropertyPriceInput(
-                      target.value,
-                      RENT_PROPERTY_PRICE_MAX
-                    );
-                      if (editableProperty) {
-                        editableProperty.price_rent = parsePropertyPriceInput(
-                          editPriceRentDisplay,
-                          RENT_PROPERTY_PRICE_MAX
-                        );
-                        editableProperty.price = editableProperty.price_rent ?? editableProperty.price;
-                        refreshPromotionPreviewDisplays();
-                      }
-                    }}
-                  />
-                </div>
-              {:else if flags.supportsRent}
-                <input
-                  name="price_rent_display"
-                  maxlength={RENT_PROPERTY_PRICE_INPUT_MAX_LENGTH}
-                  class="w-full rounded-md border border-gray-300 px-3 py-2 text-2xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
-                  type="text"
-                  inputmode="numeric"
-                  bind:value={editPriceRentDisplay}
-                  placeholder="Preço do aluguel"
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    editPriceRentDisplay = formatPropertyPriceInput(
-                      target.value,
-                      RENT_PROPERTY_PRICE_MAX
-                    );
-                    if (editableProperty) {
-                      editableProperty.price_rent = parsePropertyPriceInput(
-                        editPriceRentDisplay,
-                        RENT_PROPERTY_PRICE_MAX
-                      );
-                      editableProperty.price = editableProperty.price_rent ?? editableProperty.price;
-                      refreshPromotionPreviewDisplays();
-                    }
-                  }}
-                />
-              {:else}
-                <input
-                  name="price_sale_display"
-                  maxlength={SALE_PROPERTY_PRICE_INPUT_MAX_LENGTH}
-                  class="w-full rounded-md border border-gray-300 px-3 py-2 text-2xl font-bold text-green-700 dark:border-gray-700 dark:bg-gray-800 dark:text-green-300"
-                  type="text"
-                  inputmode="numeric"
-                  bind:value={editPriceSaleDisplay}
-                  placeholder="Preço de venda"
-                  on:input={(event) => {
-                    const target = event.target as HTMLInputElement;
-                    editPriceSaleDisplay = formatPropertyPriceInput(
-                      target.value,
-                      SALE_PROPERTY_PRICE_MAX
-                    );
-                    if (editableProperty) {
-                      editableProperty.price_sale = parsePropertyPriceInput(
-                        editPriceSaleDisplay,
-                        SALE_PROPERTY_PRICE_MAX
-                      );
-                      editableProperty.price = editableProperty.price_sale ?? editableProperty.price;
-                      refreshPromotionPreviewDisplays();
-                    }
-                  }}
-                />
-              {/if}
-
-              {#if flags.isDual}
-                <div class="mt-2 grid gap-3 md:grid-cols-2">
-                  <label class="flex flex-col gap-1">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">% Desconto (Venda)</span>
-                    <input
-                      name="promotion_percentage"
-                      class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-gray-700 dark:bg-gray-800 dark:text-amber-300"
-                      type="text"
-                      inputmode="decimal"
-                      maxlength="6"
-                      bind:value={editPromotionSalePercentageDisplay}
-                      placeholder="Ex: 08,5"
-                      on:input={(event) => {
-                        const target = event.target as HTMLInputElement;
-                        editPromotionSalePercentageDisplay = formatPercentageInput(target.value);
-                        refreshPromotionPreviewDisplays();
-                      }}
-                    />
-                    <span class="text-xs text-emerald-700 dark:text-emerald-300">
-                      Valor promocional: {editPromotionPriceSaleDisplay || '-'}
-                    </span>
-                  </label>
-                  <label class="flex flex-col gap-1">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">% Desconto (Aluguel)</span>
-                    <input
-                      name="promotional_rent_percentage"
-                      class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-gray-700 dark:bg-gray-800 dark:text-amber-300"
-                      type="text"
-                      inputmode="decimal"
-                      maxlength="6"
-                      bind:value={editPromotionRentPercentageDisplay}
-                      placeholder="Ex: 12,0"
-                      on:input={(event) => {
-                        const target = event.target as HTMLInputElement;
-                        editPromotionRentPercentageDisplay = formatPercentageInput(target.value);
-                        refreshPromotionPreviewDisplays();
-                      }}
-                    />
-                    <span class="text-xs text-emerald-700 dark:text-emerald-300">
-                      Valor promocional: {editPromotionPriceRentDisplay || '-'}
-                    </span>
-                  </label>
-                </div>
-              {:else if flags.supportsRent}
-                <label class="mt-2 flex flex-col gap-1">
-                  <span class="text-xs text-gray-500 dark:text-gray-400">% Desconto (Aluguel)</span>
-                  <input
-                    name="promotional_rent_percentage"
-                    class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-gray-700 dark:bg-gray-800 dark:text-amber-300"
-                    type="text"
-                    inputmode="decimal"
-                    maxlength="6"
-                    bind:value={editPromotionRentPercentageDisplay}
-                    placeholder="Ex: 12,0"
-                    on:input={(event) => {
-                      const target = event.target as HTMLInputElement;
-                      editPromotionRentPercentageDisplay = formatPercentageInput(target.value);
-                      refreshPromotionPreviewDisplays();
-                    }}
-                  />
-                  <span class="text-xs text-emerald-700 dark:text-emerald-300">
-                    Valor promocional: {editPromotionPriceRentDisplay || '-'}
-                  </span>
-                </label>
-              {:else}
-                <label class="mt-2 flex flex-col gap-1">
-                  <span class="text-xs text-gray-500 dark:text-gray-400">% Desconto (Venda)</span>
-                  <input
-                    name="promotion_percentage"
-                    class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-amber-700 dark:border-gray-700 dark:bg-gray-800 dark:text-amber-300"
-                    type="text"
-                    inputmode="decimal"
-                    maxlength="6"
-                    bind:value={editPromotionSalePercentageDisplay}
-                    placeholder="Ex: 08,5"
-                    on:input={(event) => {
-                      const target = event.target as HTMLInputElement;
-                      editPromotionSalePercentageDisplay = formatPercentageInput(target.value);
-                      refreshPromotionPreviewDisplays();
-                    }}
-                  />
-                  <span class="text-xs text-emerald-700 dark:text-emerald-300">
-                    Valor promocional: {editPromotionPriceSaleDisplay || '-'}
-                  </span>
-                </label>
-              {/if}
-            {:else}
-              <p class="text-base text-gray-800 dark:text-gray-200">{selectedProperty.purpose ?? '-'} </p>
-              <div class="space-y-1">
-                {#each resolvePriceLines(selectedProperty) as line}
-                  <p class="text-3xl font-bold text-green-600 dark:text-green-400">
-                    {line.label}: {formatCurrency(line.value)}
-                  </p>
-                {/each}
-                {#if selectedProperty.promotion_price != null && selectedProperty.promotion_price > 0}
-                  <p class="text-sm font-semibold text-amber-600 dark:text-amber-300">
-                    Promoção venda: {formatCurrency(selectedProperty.promotion_price)}
-                  </p>
-                {/if}
-                {#if selectedProperty.promotional_rent_price != null && selectedProperty.promotional_rent_price > 0}
-                  <p class="text-sm font-semibold text-amber-600 dark:text-amber-300">
-                    Promoção aluguel: {formatCurrency(selectedProperty.promotional_rent_price)}
-                  </p>
-                {/if}
-              </div>
-            {/if}
-          </div>
+          <PropertyPricingSection
+            isEditMode={isEditMode}
+            selectedProperty={selectedProperty}
+            editableProperty={editableProperty}
+            bind:editPriceSaleDisplay
+            bind:editPriceRentDisplay
+            bind:editPromotionSalePercentageDisplay
+            bind:editPromotionRentPercentageDisplay
+            bind:editPromotionPriceSaleDisplay
+            bind:editPromotionPriceRentDisplay
+            {refreshPromotionPreviewDisplays}
+          />
 
               <PropertyManagementActionBar
                 isEditMode={isEditMode}

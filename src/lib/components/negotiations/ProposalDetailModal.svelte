@@ -44,6 +44,7 @@
   export let hasResponsiblesInconsistentState: (proposalId?: string | null) => boolean;
   export let hasResponsibleChanges: () => boolean;
   export let responsiblesBlockApproval: (proposal: NegotiationItem | null) => boolean;
+  export let openEditProposalModal: () => void;
 
   export let rejectReason = '';
   export let rejectSelected: () => void;
@@ -329,15 +330,25 @@
         </div>
       </div>
 
-      <div class="mt-5 flex flex-col gap-2 border-t border-gray-200 pt-4 dark:border-gray-700 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-        <p class="order-last text-left text-sm text-gray-500 dark:text-gray-400 sm:order-first sm:mr-auto sm:max-w-md">
-          {#if !selectedProposal.signedDocumentId || requiresSignedPdf()}
-            Anexe o PDF assinado para aprovar ou rejeitar esta proposta.
-          {:else if responsiblesBlockApproval(selectedProposal)}
-            Valide/corrija o carregamento dos responsáveis para aprovar. Rejeitar ainda pode ser usado.
+        <div class="mt-5 flex flex-col gap-2 border-t border-gray-200 pt-4 dark:border-gray-700 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <p class="order-last text-left text-sm text-gray-500 dark:text-gray-400 sm:order-first sm:mr-auto sm:max-w-md">
+            {#if !selectedProposal.signedDocumentId || requiresSignedPdf()}
+              Anexe o PDF assinado para aprovar ou rejeitar esta proposta.
+            {:else if responsiblesBlockApproval(selectedProposal)}
+              Valide/corrija o carregamento dos responsáveis para aprovar. Rejeitar ainda pode ser usado.
+            {/if}
+          </p>
+          <div class="flex flex-wrap items-center justify-end gap-2">
+          {#if selectedProposal.signedDocumentId == null}
+            <Button
+              variant="outline"
+              on:click={openEditProposalModal}
+              disabled={isApproveBusy()}
+              title="Editar valores e gerar nova minuta"
+            >
+              Editar Proposta
+            </Button>
           {/if}
-        </p>
-        <div class="flex flex-wrap items-center justify-end gap-2">
           <Button
             variant="destructive"
             className="bg-red-600 text-white hover:bg-red-700"

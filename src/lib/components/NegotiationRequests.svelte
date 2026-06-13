@@ -12,11 +12,14 @@
     extractSignedDocumentId,
     formatCurrency,
     formatDate,
+    formatCpf,
     getBrokerName,
     getStatusBadgeClass,
     getStatusLabel,
     isSignedProposal,
+    isValidCpf,
     normalizeErrorMessage,
+    normalizeCpfDigits,
     normalizeResponsibleOption,
     canSaveResponsiblesSelection as canSaveResponsiblesSelectionHelper,
     hasResponsiblesInconsistentState as hasResponsiblesInconsistentStateHelper,
@@ -64,6 +67,7 @@
     id: number;
     code?: string | null;
     title?: string | null;
+    propertyImageUrl?: string | null;
     price?: number | null;
     price_sale?: number | null;
     price_rent?: number | null;
@@ -119,6 +123,8 @@
   let previewImageAlt = 'Pré-visualização do imóvel';
   let showGenerateProposalModal = false;
   let generateProposalWasOpen = false;
+  let generateProposalMode: 'create' | 'edit' = 'create';
+  let editingProposalId: string | null = null;
   let generateProposalSearch = '';
   let generateProposalSearching = false;
   let generateProposalSubmitting = false;
@@ -128,10 +134,15 @@
   let proposalClientName = '';
   let proposalClientCpf = '';
   let proposalValidityDays = '10';
+  let proposalTotalValue = '';
   let proposalCash = '';
+  let proposalCashUnit: 'reais' | 'percent' = 'reais';
   let proposalTradeIn = '0';
+  let proposalTradeInUnit: 'reais' | 'percent' = 'reais';
   let proposalFinancing = '0';
+  let proposalFinancingUnit: 'reais' | 'percent' = 'reais';
   let proposalOthers = '0';
+  let proposalOthersUnit: 'reais' | 'percent' = 'reais';
   let proposalSignedFile: File | null = null;
   let proposalSignedInputKey = 0;
 
@@ -394,7 +405,30 @@
     return Number.isFinite(value) ? value.toFixed(2) : '0.00';
   }
 
+  function calculateProposalAmount(value: string, unit: 'reais' | 'percent', totalValue: number): number {
+    const parsed = parseProposalAmount(value);
+    if (!Number.isFinite(parsed)) return NaN;
+    if (unit === 'percent') {
+      if (!Number.isFinite(totalValue) || totalValue <= 0) return NaN;
+      return Number(((totalValue * parsed) / 100).toFixed(2));
+    }
+    return Number(parsed.toFixed(2));
+  }
+
+  function calculateValidityDaysFromProposal(proposal: NegotiationItem | null): string {
+    if (!proposal?.validityDate) return '10';
+    const validity = new Date(proposal.validityDate);
+    if (Number.isNaN(validity.getTime())) return '10';
+    const now = new Date();
+    const diff = validity.getTime() - now.getTime();
+    if (!Number.isFinite(diff) || diff <= 0) return '10';
+    const days = Math.max(1, Math.round(diff / (24 * 60 * 60 * 1000)));
+    return String(days);
+  }
+
   function resetGenerateProposalState() {
+    generateProposalMode = 'create';
+    editingProposalId = null;
     generateProposalSearch = '';
     generateProposalSearching = false;
     generateProposalSubmitting = false;
@@ -404,17 +438,62 @@
     proposalClientName = '';
     proposalClientCpf = '';
     proposalValidityDays = '10';
+    proposalTotalValue = '';
     proposalCash = '';
+    proposalCashUnit = 'reais';
     proposalTradeIn = '0';
+    proposalTradeInUnit = 'reais';
     proposalFinancing = '0';
+    proposalFinancingUnit = 'reais';
     proposalOthers = '0';
+    proposalOthersUnit = 'reais';
     proposalSignedFile = null;
     proposalSignedInputKey += 1;
   }
 
-  function openGenerateProposalModal() {
+  function fillGenerateProposalFromProperty(property: ProposalPropertyOption, mode: 'create' | 'edit' = 'create') {
+    selectedGenerateProperty = property;
+    const resolvedValue = resolveProposalPropertyValue(property);
+    proposalTotalValue = formatProposalMoneyInput(resolvedValue);
+    proposalCash = formatProposalMoneyInput(resolvedValue);
+    proposalCashUnit = 'reais';
+    proposalTradeIn = '0';
+    proposalTradeInUnit = 'reais';
+    proposalFinancing = '0';
+    proposalFinancingUnit = 'reais';
+    proposalOthers = '0';
+    proposalOthersUnit = 'reais';
+    generateProposalMode = mode;
+  }
+
+  function openGenerateProposalModal(propertyToEdit?: NegotiationItem | null) {
     resetGenerateProposalState();
+    if (propertyToEdit) {
+      generateProposalMode = 'edit';
+      editingProposalId = propertyToEdit.id;
+      selectedGenerateProperty = {
+        id: propertyToEdit.propertyId,
+        code: propertyToEdit.propertyCode ?? null,
+        title: propertyToEdit.propertyTitle ?? null,
+        price: propertyToEdit.value ?? null,
+        price_sale: propertyToEdit.value ?? null,
+        price_rent: propertyToEdit.value ?? null,
+      };
+      proposalClientName = readClientName(propertyToEdit);
+      proposalClientCpf = formatCpf(readClientCpf(propertyToEdit));
+      proposalValidityDays = calculateValidityDaysFromProposal(propertyToEdit);
+      proposalTotalValue = formatProposalMoneyInput(Number(propertyToEdit.value ?? 0));
+      proposalCash = formatProposalMoneyInput(Number(propertyToEdit.payment?.dinheiro ?? propertyToEdit.value ?? 0));
+      proposalTradeIn = formatProposalMoneyInput(Number(propertyToEdit.payment?.permuta ?? 0));
+      proposalFinancing = formatProposalMoneyInput(Number(propertyToEdit.payment?.financiamento ?? 0));
+      proposalOthers = formatProposalMoneyInput(Number(propertyToEdit.payment?.outros ?? 0));
+    }
     showGenerateProposalModal = true;
+  }
+
+  function openEditProposalModal() {
+    if (!selectedProposal) return;
+    openGenerateProposalModal(selectedProposal);
   }
 
   function closeGenerateProposalModal() {
@@ -462,12 +541,7 @@
   }
 
   function selectGenerateProperty(property: ProposalPropertyOption) {
-    selectedGenerateProperty = property;
-    const resolvedValue = resolveProposalPropertyValue(property);
-    proposalCash = formatProposalMoneyInput(resolvedValue);
-    proposalTradeIn = '0';
-    proposalFinancing = '0';
-    proposalOthers = '0';
+    fillGenerateProposalFromProperty(property, generateProposalMode);
     generateProposalError = '';
   }
 
@@ -502,16 +576,22 @@
     }
 
     const clientName = proposalClientName.trim();
-    const clientCpf = proposalClientCpf.trim();
+    const clientCpf = normalizeCpfDigits(proposalClientCpf);
     const validityDays = Number(proposalValidityDays);
-    const cash = parseProposalAmount(proposalCash);
-    const tradeIn = parseProposalAmount(proposalTradeIn);
-    const financing = parseProposalAmount(proposalFinancing);
-    const others = parseProposalAmount(proposalOthers);
+    const totalValue = parseProposalAmount(proposalTotalValue);
+    const cash = calculateProposalAmount(proposalCash, proposalCashUnit, totalValue);
+    const tradeIn = calculateProposalAmount(proposalTradeIn, proposalTradeInUnit, totalValue);
+    const financing = calculateProposalAmount(proposalFinancing, proposalFinancingUnit, totalValue);
+    const others = calculateProposalAmount(proposalOthers, proposalOthersUnit, totalValue);
     const paymentTotal = [cash, tradeIn, financing, others].reduce((sum, value) => sum + value, 0);
 
     if (!clientName || !clientCpf) {
       generateProposalError = 'Informe nome e CPF do proponente.';
+      return;
+    }
+
+    if (!isValidCpf(clientCpf)) {
+      generateProposalError = 'Informe um CPF válido.';
       return;
     }
 
@@ -520,41 +600,49 @@
       return;
     }
 
+    if (!Number.isFinite(totalValue) || totalValue < 1 || totalValue > 999_000_000_000) {
+      generateProposalError = 'Valor da proposta deve ficar entre R$ 1,00 e R$ 999.000.000.000,00.';
+      return;
+    }
+
     if (![cash, tradeIn, financing, others].every((value) => Number.isFinite(value))) {
       generateProposalError = 'Valores de pagamento invalidos.';
       return;
     }
 
-    const expectedValue = resolveProposalPropertyValue(selectedGenerateProperty);
-    if (Math.round(paymentTotal * 100) !== Math.round(expectedValue * 100)) {
-      generateProposalError = 'A soma dos pagamentos deve bater com o valor do imóvel.';
+    if (Math.round(paymentTotal * 100) !== Math.round(totalValue * 100)) {
+      generateProposalError = 'A soma dos pagamentos deve bater com o valor da proposta.';
       return;
     }
 
     generateProposalSubmitting = true;
     generateProposalError = '';
     try {
-      const response = await api.post<{
-        negotiationId?: string;
-        documentId?: number;
-      }>(
-        '/admin/negotiations/proposal',
-        {
-          propertyId: selectedGenerateProperty.id,
-          clientName,
-          clientCpf,
-          validadeDias: validityDays,
-          pagamento: {
-            dinheiro: cash,
-            permuta: tradeIn,
-            financiamento: financing,
-            outros: others,
-          },
-          idempotencyKey: crypto.randomUUID(),
-        }
-      );
+      const payload = {
+        propertyId: selectedGenerateProperty.id,
+        clientName,
+        clientCpf,
+        validadeDias: validityDays,
+        proposalValue: totalValue,
+        pagamento: {
+          dinheiro: cash,
+          permuta: tradeIn,
+          financiamento: financing,
+          outros: others,
+        },
+        idempotencyKey: crypto.randomUUID(),
+      };
+      const response = editingProposalId
+        ? await api.put<{
+            negotiationId?: string;
+            documentId?: number;
+          }>(`/negotiations/${editingProposalId}/draft`, payload)
+        : await api.post<{
+            negotiationId?: string;
+            documentId?: number;
+          }>('/admin/negotiations/proposal', payload);
 
-      const negotiationId = String(response.negotiationId ?? '').trim();
+      const negotiationId = String(response.negotiationId ?? editingProposalId ?? '').trim();
       const documentId = Number(response.documentId ?? 0);
       if (!negotiationId || !Number.isInteger(documentId) || documentId <= 0) {
         throw new Error('Resposta da geração sem identificadores válidos.');
@@ -577,7 +665,7 @@
         await uploadSignedProposalFromGenerateModal(negotiationId);
         toast.success('Proposta gerada e PDF assinado enviado.');
       } else {
-        toast.success('Proposta gerada com sucesso.');
+        toast.success(editingProposalId ? 'Proposta atualizada com sucesso.' : 'Proposta criada com sucesso.');
       }
       closeGenerateProposalModal();
     } catch (error) {
@@ -941,8 +1029,8 @@
       {/if}
       Atualizar
     </Button>
-    <Button variant="outline" on:click={openGenerateProposalModal} disabled={summaryLoading}>
-      Gerar proposta
+    <Button variant="outline" on:click={() => openGenerateProposalModal()} disabled={summaryLoading}>
+      Criar proposta
     </Button>
   </div>
 
@@ -1054,7 +1142,7 @@
                 {/if}
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                {resolveCreatedAt(item.topProposal) ? formatDate(resolveCreatedAt(item.topProposal)) : 'Sem data'}
+                {resolveCreatedAt(item) ? formatDate(resolveCreatedAt(item)) : 'Sem data'}
               </td>
               <td class="px-6 py-4 text-right">
                 <Button size="sm" variant="outline" on:click={() => openPropertyRequests(item)}>
@@ -1228,6 +1316,7 @@
     {hasResponsiblesInconsistentState}
     {hasResponsibleChanges}
     {responsiblesBlockApproval}
+    {openEditProposalModal}
     bind:rejectReason
     {rejectSelected}
     {approveSelected}
@@ -1236,9 +1325,9 @@
 <Dialog.Root bind:open={showGenerateProposalModal}>
   <Dialog.Content className="max-h-[90vh] max-w-3xl overflow-y-auto max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">
     <Dialog.Header>
-      <Dialog.Title>Gerar proposta</Dialog.Title>
+      <Dialog.Title>Gerar minuta</Dialog.Title>
       <Dialog.Description>
-        Busque o imóvel, informe os dados mínimos e gere a minuta em PDF.
+        Busque o imóvel, informe os dados e gere a minuta da proposta.
       </Dialog.Description>
     </Dialog.Header>
 
@@ -1280,11 +1369,22 @@
               }`}
               on:click={() => selectGenerateProperty(property)}
             >
-              <div class="font-semibold">
-                {property.code ? `${property.code}` : `#${property.id}`} - {property.title ?? 'Imóvel sem título'}
-              </div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">
-                Valor base: {formatCurrency(resolveProposalPropertyValue(property))}
+              <div class="flex items-center gap-3">
+                {#if property.propertyImageUrl}
+                  <img
+                    src={property.propertyImageUrl}
+                    alt={property.title ?? 'Imagem do imóvel'}
+                    class="h-14 w-14 rounded-md object-cover ring-1 ring-black/10"
+                  />
+                {/if}
+                <div class="min-w-0 text-left">
+                  <div class="font-semibold">
+                    {property.code ? `${property.code}` : `#${property.id}`} - {property.title ?? 'Imóvel sem título'}
+                  </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                    Valor do imóvel: {formatCurrency(resolveProposalPropertyValue(property))}
+                  </div>
+                </div>
               </div>
             </button>
           {/each}
@@ -1293,13 +1393,25 @@
 
       {#if selectedGenerateProperty}
         <div class="space-y-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
-          <div>
-            <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {selectedGenerateProperty.code ? `${selectedGenerateProperty.code}` : `#${selectedGenerateProperty.id}`}
-              - {selectedGenerateProperty.title ?? 'Imóvel sem título'}
-            </div>
-            <div class="text-xs text-gray-600 dark:text-gray-300">
-              Valor do imóvel: {formatCurrency(resolveProposalPropertyValue(selectedGenerateProperty))}
+          <div class="flex items-start gap-3">
+            {#if selectedGenerateProperty.propertyImageUrl}
+              <img
+                src={selectedGenerateProperty.propertyImageUrl}
+                alt={selectedGenerateProperty.title ?? 'Imagem do imóvel'}
+                class="h-20 w-20 rounded-lg object-cover ring-1 ring-black/10"
+              />
+            {/if}
+            <div>
+              <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {selectedGenerateProperty.code ? `${selectedGenerateProperty.code}` : `#${selectedGenerateProperty.id}`}
+                - {selectedGenerateProperty.title ?? 'Imóvel sem título'}
+              </div>
+              <div class="text-xs text-gray-600 dark:text-gray-300">
+                Valor do imóvel: {formatCurrency(resolveProposalPropertyValue(selectedGenerateProperty))}
+              </div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                A proposta pode ficar acima ou abaixo do valor do imóvel.
+              </div>
             </div>
           </div>
 
@@ -1319,6 +1431,10 @@
                 bind:value={proposalClientCpf}
                 inputmode="numeric"
                 placeholder="Somente números ou com máscara"
+                on:input={(event) => {
+                  const input = event.currentTarget as HTMLInputElement | null;
+                  proposalClientCpf = formatCpf(input?.value ?? '');
+                }}
               />
             </label>
             <label class="space-y-1">
@@ -1332,40 +1448,85 @@
               />
             </label>
             <label class="space-y-1">
-              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Dinheiro</span>
+              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Valor da proposta</span>
               <input
                 class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                bind:value={proposalCash}
+                bind:value={proposalTotalValue}
                 inputmode="decimal"
-                placeholder="0.00"
+                placeholder="0,00"
               />
+            </label>
+            <label class="space-y-1">
+              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Dinheiro</span>
+              <div class="grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  bind:value={proposalCash}
+                  inputmode="decimal"
+                  placeholder="0,00"
+                />
+                <select
+                  bind:value={proposalCashUnit}
+                  class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                >
+                  <option value="reais">R$</option>
+                  <option value="percent">%</option>
+                </select>
+              </div>
             </label>
             <label class="space-y-1">
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Permuta</span>
-              <input
-                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                bind:value={proposalTradeIn}
-                inputmode="decimal"
-                placeholder="0.00"
-              />
+              <div class="grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  bind:value={proposalTradeIn}
+                  inputmode="decimal"
+                  placeholder="0,00"
+                />
+                <select
+                  bind:value={proposalTradeInUnit}
+                  class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                >
+                  <option value="reais">R$</option>
+                  <option value="percent">%</option>
+                </select>
+              </div>
             </label>
             <label class="space-y-1">
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Financiamento</span>
-              <input
-                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                bind:value={proposalFinancing}
-                inputmode="decimal"
-                placeholder="0.00"
-              />
+              <div class="grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  bind:value={proposalFinancing}
+                  inputmode="decimal"
+                  placeholder="0,00"
+                />
+                <select
+                  bind:value={proposalFinancingUnit}
+                  class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                >
+                  <option value="reais">R$</option>
+                  <option value="percent">%</option>
+                </select>
+              </div>
             </label>
             <label class="space-y-1 md:col-span-2">
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Outros</span>
-              <input
-                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                bind:value={proposalOthers}
-                inputmode="decimal"
-                placeholder="0.00"
-              />
+              <div class="grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  bind:value={proposalOthers}
+                  inputmode="decimal"
+                  placeholder="0,00"
+                />
+                <select
+                  bind:value={proposalOthersUnit}
+                  class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                >
+                  <option value="reais">R$</option>
+                  <option value="percent">%</option>
+                </select>
+              </div>
             </label>
           </div>
 
@@ -1385,12 +1546,12 @@
               />
             {/key}
             <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              Se escolher um PDF assinado, ele será enviado logo após a geração.
+              Se escolher um PDF assinado, ele será enviado logo após a criação da proposta.
             </p>
           </div>
 
           <p class="text-xs text-gray-600 dark:text-gray-300">
-            A soma dos campos deve bater com o valor do imóvel para a minuta ser gerada.
+            A soma dos campos deve bater com o valor da proposta para a minuta ser gerada.
           </p>
         </div>
       {/if}
@@ -1407,7 +1568,7 @@
         {#if generateProposalSubmitting}
           <Loader2 class="mr-2 h-4 w-4 animate-spin" />
         {/if}
-        Gerar PDF
+        {generateProposalMode === 'edit' ? 'Salvar minuta' : 'Criar proposta'}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

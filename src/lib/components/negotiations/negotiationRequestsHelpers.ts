@@ -105,6 +105,37 @@ export function readClientCpf(item: NegotiationItem | null): string {
   return normalizeClient(item).cpf;
 }
 
+export function normalizeCpfDigits(value: string | null | undefined): string {
+  return String(value ?? '').replace(/\D/g, '').slice(0, 11);
+}
+
+export function formatCpf(value: string | null | undefined): string {
+  const digits = normalizeCpfDigits(value);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+export function isValidCpf(value: string | null | undefined): boolean {
+  const digits = normalizeCpfDigits(value);
+  if (digits.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(digits)) return false;
+
+  const calculateDigit = (base: string, factor: number): number => {
+    let sum = 0;
+    for (let index = 0; index < base.length; index += 1) {
+      sum += Number(base[index]) * (factor - index);
+    }
+    const remainder = (sum * 10) % 11;
+    return remainder === 10 ? 0 : remainder;
+  };
+
+  const firstDigit = calculateDigit(digits.slice(0, 9), 10);
+  const secondDigit = calculateDigit(digits.slice(0, 10), 11);
+  return firstDigit === Number(digits[9]) && secondDigit === Number(digits[10]);
+}
+
 export function getBrokerName(item: NegotiationItem): string {
   return item.brokerName ?? item.capturingBrokerName ?? '-';
 }

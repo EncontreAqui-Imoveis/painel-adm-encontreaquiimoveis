@@ -785,6 +785,44 @@ describe('PropertyManagement', () => {
     });
   });
 
+  it('usa área do terreno como métrica padrão ao filtrar faixa sem selecionar métrica', async () => {
+    const properties = [
+      makePropertyState({
+        id: 907,
+        title: 'Terreno hectare pequeno',
+        area_terreno_valor: 2,
+        area_terreno_m2: null,
+        area_terreno_unidade: 'hectare',
+      }),
+      makePropertyState({
+        id: 908,
+        title: 'Terreno hectare grande',
+        area_terreno_valor: 400,
+        area_terreno_m2: null,
+        area_terreno_unidade: 'hectare',
+      }),
+    ];
+
+    mockPropertyManagementRequests({
+      initialProperties: properties,
+    });
+
+    render(PropertyManagement);
+
+    await waitFor(() => expect(getRevisarButtons().length).toBe(4));
+    const filterUnit = screen.getByLabelText('Unidade') as HTMLSelectElement;
+    await fireEvent.change(filterUnit, { target: { value: 'hectare' } });
+    const minInput = screen.getByLabelText('Área mínima') as HTMLInputElement;
+    const maxInput = screen.getByLabelText('Área máxima') as HTMLInputElement;
+
+    await fireEvent.input(minInput, { target: { value: '1' } });
+    await fireEvent.input(maxInput, { target: { value: '300' } });
+
+    await waitFor(() => {
+      expect(getTablePropertyTitles()).toEqual(['Terreno hectare pequeno']);
+    });
+  });
+
   it('filtra faixa de área no filtro de alqueire com conversão de unidade', async () => {
     const properties = [
       makePropertyState({

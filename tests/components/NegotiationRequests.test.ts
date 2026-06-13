@@ -181,4 +181,107 @@ describe('NegotiationRequests', () => {
       expect(screen.queryByRole('button', { name: 'Excluir PDF' })).not.toBeInTheDocument();
     });
   });
+
+  it('abre a edição para proposta não assinada e mostra imagem nos resultados da criação', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.startsWith('/admin/negotiations/requests/summary?')) {
+        return {
+          data: [
+            {
+              propertyId: 12,
+              propertyCode: 'RV-012',
+              propertyTitle: 'Casa editável',
+              proposalCount: 1,
+              created_at: '2026-06-12T13:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint.startsWith('/admin/negotiations/requests/property/12?')) {
+        return {
+          data: [
+            {
+              id: 'neg-12',
+              status: 'PROPOSAL_UNSIGNED',
+              internalStatus: 'PROPOSAL_UNSIGNED',
+              propertyId: 12,
+              propertyCode: 'RV-012',
+              propertyTitle: 'Casa editável',
+              brokerName: 'Corretor 3',
+              clientName: 'João Cliente',
+              clientCpf: '52998224725',
+              value: 420000,
+              created_at: '2026-06-12T13:05:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint === '/admin/negotiations/neg-12/responsibles') {
+        return { data: [] };
+      }
+
+      if (endpoint.startsWith('/admin/properties-with-brokers?')) {
+        return {
+          data: [
+            {
+              id: 120,
+              code: 'IM-120',
+              title: 'Apartamento com imagem',
+              price: 120000,
+              propertyImageUrl: 'https://example.com/imovel.jpg',
+            },
+          ],
+        };
+      }
+
+      return { data: [] };
+    });
+
+    render(NegotiationRequests);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Ver propostas' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Ver detalhes' }));
+
+    expect(await screen.findByRole('button', { name: 'Editar Proposta' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar Proposta' }));
+    expect(await screen.findByRole('button', { name: 'Salvar minuta' })).toBeInTheDocument();
+  });
+
+  it('mostra imagem nos resultados da busca de imóvel para gerar proposta', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.startsWith('/admin/negotiations/requests/summary?')) {
+        return { data: [], total: 0 };
+      }
+
+      if (endpoint.startsWith('/admin/properties-with-brokers?')) {
+        return {
+          data: [
+            {
+              id: 120,
+              code: 'IM-120',
+              title: 'Apartamento com imagem',
+              price: 120000,
+              propertyImageUrl: 'https://example.com/imovel.jpg',
+            },
+          ],
+        };
+      }
+
+      return { data: [] };
+    });
+
+    render(NegotiationRequests);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Criar proposta' }));
+    const searchInput = await screen.findByLabelText('Buscar imóvel por código ou nome');
+    await fireEvent.input(searchInput, { target: { value: 'apartamento' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+
+    expect(await screen.findByAltText('Apartamento com imagem')).toBeInTheDocument();
+  });
 });
