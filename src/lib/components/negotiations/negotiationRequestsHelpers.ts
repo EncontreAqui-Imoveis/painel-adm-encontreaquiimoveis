@@ -20,9 +20,11 @@ export type NegotiationItem = {
   clientCpf?: string | null;
   value?: number | null;
   createdAt?: string | null;
+  created_at?: string | null;
   validityDate?: string | null;
   payment?: PaymentBreakdown | null;
   updatedAt?: string | null;
+  updated_at?: string | null;
   signedDocumentId?: number | null;
   signedDocumentFileName?: string | null;
   capturingBrokerId?: string | number | null;
@@ -157,6 +159,18 @@ export function formatDate(value?: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString('pt-BR');
+}
+
+export function resolveCreatedAt<
+  T extends {
+    createdAt?: string | null;
+    created_at?: string | null;
+    updatedAt?: string | null;
+    updated_at?: string | null;
+  },
+>(item?: T | null): string | null {
+  if (!item) return null;
+  return item.createdAt ?? item.created_at ?? item.updatedAt ?? item.updated_at ?? null;
 }
 
 export function paymentLines(payment?: PaymentBreakdown | null) {

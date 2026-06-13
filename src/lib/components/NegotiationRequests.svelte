@@ -24,6 +24,7 @@
     PROPOSAL_FILTERS,
     readClientCpf,
     readClientName,
+    resolveCreatedAt,
     responsibleSnapshot,
     responsiblesBlockApproval as responsiblesBlockApprovalHelper,
     selectedFilterStatus,
@@ -39,6 +40,9 @@
     value?: number | null;
     clientName?: string | null;
     createdAt?: string | null;
+    created_at?: string | null;
+    updatedAt?: string | null;
+    updated_at?: string | null;
   };
 
   type NegotiationSummaryItem = {
@@ -49,7 +53,9 @@
     propertyImageUrl?: string | null;
     proposalCount: number;
     createdAt?: string | null;
+    created_at?: string | null;
     updatedAt?: string | null;
+    updated_at?: string | null;
     topProposal?: TopProposal | null;
   };
 
@@ -801,14 +807,14 @@
                     {item.topProposal.clientName ?? '-'}
                   </div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">
-                    {formatCurrency(item.topProposal.value)} - {formatDate(item.topProposal.createdAt)}
+                    {formatCurrency(item.topProposal.value)} - {formatDate(resolveCreatedAt(item.topProposal))}
                   </div>
                 {:else}
                   -
                 {/if}
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                {item.createdAt ? formatDate(item.createdAt) : 'Sem data'}
+                {resolveCreatedAt(item.topProposal) ? formatDate(resolveCreatedAt(item.topProposal)) : 'Sem data'}
               </td>
               <td class="px-6 py-4 text-right">
                 <Button size="sm" variant="outline" on:click={() => openPropertyRequests(item)}>
@@ -910,7 +916,7 @@
                   <div>
                     <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Criado em</p>
                     <p class="text-sm text-gray-700 dark:text-gray-300">
-                      {item.createdAt ? formatDate(item.createdAt) : 'Sem data'}
+                      {resolveCreatedAt(item) ? formatDate(resolveCreatedAt(item)) : 'Sem data'}
                     </p>
                   </div>
                 </div>
