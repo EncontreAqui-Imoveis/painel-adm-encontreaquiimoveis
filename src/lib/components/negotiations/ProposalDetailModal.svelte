@@ -168,16 +168,18 @@
           </div>
 
           <div class="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              on:click={deleteSignedPdf}
-              disabled={deletingSignedPdf || uploadingSignedPdf || processingAction || selectedProposal.signedDocumentId == null}
-            >
-              {#if deletingSignedPdf}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-              {/if}
-              Excluir PDF
-            </Button>
+            {#if selectedProposal.signedDocumentId != null}
+              <Button
+                variant="outline"
+                on:click={deleteSignedPdf}
+                disabled={deletingSignedPdf || uploadingSignedPdf || processingAction}
+              >
+                {#if deletingSignedPdf}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                Excluir PDF
+              </Button>
+            {/if}
             <Button
               variant="outline"
               on:click={viewSignedPdf}

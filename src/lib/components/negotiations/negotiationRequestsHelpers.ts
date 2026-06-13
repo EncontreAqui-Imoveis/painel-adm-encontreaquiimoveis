@@ -19,6 +19,7 @@ export type NegotiationItem = {
   clientName?: string | null;
   clientCpf?: string | null;
   value?: number | null;
+  createdAt?: string | null;
   validityDate?: string | null;
   payment?: PaymentBreakdown | null;
   updatedAt?: string | null;

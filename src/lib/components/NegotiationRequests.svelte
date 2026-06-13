@@ -48,6 +48,7 @@
     propertyAddress?: string | null;
     propertyImageUrl?: string | null;
     proposalCount: number;
+    createdAt?: string | null;
     updatedAt?: string | null;
     topProposal?: TopProposal | null;
   };
@@ -735,7 +736,7 @@
             Melhor proposta
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Atualizado em
+            Criado em
           </th>
           <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Ação
@@ -807,7 +808,7 @@
                 {/if}
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                {formatDate(item.updatedAt)}
+                {item.createdAt ? formatDate(item.createdAt) : 'Sem data'}
               </td>
               <td class="px-6 py-4 text-right">
                 <Button size="sm" variant="outline" on:click={() => openPropertyRequests(item)}>
@@ -907,9 +908,9 @@
                     </p>
                   </div>
                   <div>
-                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Data</p>
+                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Criado em</p>
                     <p class="text-sm text-gray-700 dark:text-gray-300">
-                      {item.updatedAt ? formatDate(item.updatedAt) : 'Sem data'}
+                      {item.createdAt ? formatDate(item.createdAt) : 'Sem data'}
                     </p>
                   </div>
                 </div>

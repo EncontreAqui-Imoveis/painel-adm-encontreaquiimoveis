@@ -55,6 +55,7 @@ describe('NegotiationRequests', () => {
               propertyCode: 'RV-010',
               propertyTitle: 'Casa em negociação',
               proposalCount: 1,
+              createdAt: '2026-06-10T13:00:00.000Z',
             },
           ],
           total: 1,
@@ -74,6 +75,7 @@ describe('NegotiationRequests', () => {
               brokerName: 'Corretor 1',
               clientName: 'Maria Compradora',
               value: 350000,
+              createdAt: '2026-06-10T13:05:00.000Z',
               signedDocumentId: 99,
               signedDocumentFileName: 'proposta.pdf',
             },
@@ -95,6 +97,9 @@ describe('NegotiationRequests', () => {
 
     render(NegotiationRequests);
 
+    expect(await screen.findByText('Criado em')).toBeInTheDocument();
+    expect(await screen.findByText('10/06/2026')).toBeInTheDocument();
+
     await fireEvent.click(await screen.findByRole('button', { name: 'Ver propostas' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Ver detalhes' }));
 
@@ -114,6 +119,60 @@ describe('NegotiationRequests', () => {
         ([endpoint]) => endpoint === '/admin/negotiations/neg-10/responsibles'
       );
       expect(responsibleCalls.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it('esconde o botão de excluir PDF quando a proposta ainda não tem PDF assinado', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.startsWith('/admin/negotiations/requests/summary?')) {
+        return {
+          data: [
+            {
+              propertyId: 11,
+              propertyCode: 'RV-011',
+              propertyTitle: 'Casa sem PDF',
+              proposalCount: 1,
+              createdAt: '2026-06-11T13:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint.startsWith('/admin/negotiations/requests/property/11?')) {
+        return {
+          data: [
+            {
+              id: 'neg-11',
+              status: 'PROPOSAL_UNSIGNED',
+              internalStatus: 'PROPOSAL_UNSIGNED',
+              propertyId: 11,
+              propertyCode: 'RV-011',
+              propertyTitle: 'Casa sem PDF',
+              brokerName: 'Corretor 2',
+              clientName: 'João Comprador',
+              value: 250000,
+              createdAt: '2026-06-11T13:05:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint === '/admin/negotiations/neg-11/responsibles') {
+        return { data: [] };
+      }
+
+      return { data: [] };
+    });
+
+    render(NegotiationRequests);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Ver propostas' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Ver detalhes' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Excluir PDF' })).not.toBeInTheDocument();
     });
   });
 });
