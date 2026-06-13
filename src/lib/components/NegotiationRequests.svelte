@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { toast } from 'svelte-sonner';
   import { Loader2, X } from 'lucide-svelte';
+  import * as Dialog from '$lib/components/ui/dialog';
   import { api, apiClient } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
   import Pagination from '$lib/Pagination.svelte';
@@ -59,6 +60,17 @@
     topProposal?: TopProposal | null;
   };
 
+  type ProposalPropertyOption = {
+    id: number;
+    code?: string | null;
+    title?: string | null;
+    price?: number | null;
+    price_sale?: number | null;
+    price_rent?: number | null;
+    city?: string | null;
+    state?: string | null;
+  };
+
   let summaryItems: NegotiationSummaryItem[] = [];
   let summaryLoading = true;
   let hasMounted = false;
@@ -105,6 +117,23 @@
   let isImagePreviewOpen = false;
   let previewImageUrl: string | null = null;
   let previewImageAlt = 'Pré-visualização do imóvel';
+  let showGenerateProposalModal = false;
+  let generateProposalWasOpen = false;
+  let generateProposalSearch = '';
+  let generateProposalSearching = false;
+  let generateProposalSubmitting = false;
+  let generateProposalError = '';
+  let generateProposalResults: ProposalPropertyOption[] = [];
+  let selectedGenerateProperty: ProposalPropertyOption | null = null;
+  let proposalClientName = '';
+  let proposalClientCpf = '';
+  let proposalValidityDays = '10';
+  let proposalCash = '';
+  let proposalTradeIn = '0';
+  let proposalFinancing = '0';
+  let proposalOthers = '0';
+  let proposalSignedFile: File | null = null;
+  let proposalSignedInputKey = 0;
 
   function requestSummaryFetch(resetPage = false) {
     if (resetPage) summaryPage = 1;
@@ -350,6 +379,214 @@
     propertyPage = 1;
     propertyTotalItems = 0;
     propertyTotalPages = 1;
+  }
+
+  function resolveProposalPropertyValue(property: ProposalPropertyOption | null): number {
+    if (!property) return 0;
+    const sale = Number(property.price_sale ?? 0);
+    const rent = Number(property.price_rent ?? 0);
+    const fallback = Number(property.price ?? 0);
+    const resolved = sale > 0 ? sale : rent > 0 ? rent : fallback;
+    return Number.isFinite(resolved) && resolved > 0 ? resolved : 0;
+  }
+
+  function formatProposalMoneyInput(value: number): string {
+    return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+  }
+
+  function resetGenerateProposalState() {
+    generateProposalSearch = '';
+    generateProposalSearching = false;
+    generateProposalSubmitting = false;
+    generateProposalError = '';
+    generateProposalResults = [];
+    selectedGenerateProperty = null;
+    proposalClientName = '';
+    proposalClientCpf = '';
+    proposalValidityDays = '10';
+    proposalCash = '';
+    proposalTradeIn = '0';
+    proposalFinancing = '0';
+    proposalOthers = '0';
+    proposalSignedFile = null;
+    proposalSignedInputKey += 1;
+  }
+
+  function openGenerateProposalModal() {
+    resetGenerateProposalState();
+    showGenerateProposalModal = true;
+  }
+
+  function closeGenerateProposalModal() {
+    if (generateProposalSubmitting) return;
+    showGenerateProposalModal = false;
+  }
+
+  $: if (generateProposalWasOpen && !showGenerateProposalModal) {
+    resetGenerateProposalState();
+  }
+  $: generateProposalWasOpen = showGenerateProposalModal;
+
+  async function searchProposalProperties() {
+    const query = generateProposalSearch.trim();
+    if (query.length < 2) {
+      generateProposalResults = [];
+      selectedGenerateProperty = null;
+      return;
+    }
+
+    generateProposalSearching = true;
+    generateProposalError = '';
+    try {
+      const params = new URLSearchParams();
+      params.set('search', query);
+      params.set('page', '1');
+      params.set('limit', '10');
+      params.set('paginate', 'true');
+      const response = await api.get<{ data?: ProposalPropertyOption[] } | ProposalPropertyOption[]>(
+        `/admin/properties-with-brokers?${params.toString()}`
+      );
+      const raw = Array.isArray(response) ? response : response?.data;
+      generateProposalResults = Array.isArray(raw) ? raw : [];
+    } catch (error) {
+      console.error('Erro ao buscar imóveis para proposta:', error);
+      generateProposalResults = [];
+      generateProposalError = normalizeErrorMessage(
+        error,
+        'Não foi possível buscar imóveis para gerar proposta.'
+      );
+      toast.error(generateProposalError);
+    } finally {
+      generateProposalSearching = false;
+    }
+  }
+
+  function selectGenerateProperty(property: ProposalPropertyOption) {
+    selectedGenerateProperty = property;
+    const resolvedValue = resolveProposalPropertyValue(property);
+    proposalCash = formatProposalMoneyInput(resolvedValue);
+    proposalTradeIn = '0';
+    proposalFinancing = '0';
+    proposalOthers = '0';
+    generateProposalError = '';
+  }
+
+  function parseProposalAmount(value: string): number {
+    const normalized = String(value ?? '')
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/\./g, '')
+      .replace(',', '.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : NaN;
+  }
+
+  async function uploadSignedProposalFromGenerateModal(negotiationId: string) {
+    if (!proposalSignedFile) return false;
+    const formData = new FormData();
+    formData.append('file', proposalSignedFile);
+    await apiClient.post(
+      `/admin/negotiations/${negotiationId}/signed-proposal`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
+    return true;
+  }
+
+  async function submitGeneratedProposal() {
+    if (!selectedGenerateProperty) {
+      generateProposalError = 'Selecione um imóvel primeiro.';
+      return;
+    }
+
+    const clientName = proposalClientName.trim();
+    const clientCpf = proposalClientCpf.trim();
+    const validityDays = Number(proposalValidityDays);
+    const cash = parseProposalAmount(proposalCash);
+    const tradeIn = parseProposalAmount(proposalTradeIn);
+    const financing = parseProposalAmount(proposalFinancing);
+    const others = parseProposalAmount(proposalOthers);
+    const paymentTotal = [cash, tradeIn, financing, others].reduce((sum, value) => sum + value, 0);
+
+    if (!clientName || !clientCpf) {
+      generateProposalError = 'Informe nome e CPF do proponente.';
+      return;
+    }
+
+    if (!Number.isInteger(validityDays) || validityDays <= 0) {
+      generateProposalError = 'Validade deve ser um inteiro maior que zero.';
+      return;
+    }
+
+    if (![cash, tradeIn, financing, others].every((value) => Number.isFinite(value))) {
+      generateProposalError = 'Valores de pagamento invalidos.';
+      return;
+    }
+
+    const expectedValue = resolveProposalPropertyValue(selectedGenerateProperty);
+    if (Math.round(paymentTotal * 100) !== Math.round(expectedValue * 100)) {
+      generateProposalError = 'A soma dos pagamentos deve bater com o valor do imóvel.';
+      return;
+    }
+
+    generateProposalSubmitting = true;
+    generateProposalError = '';
+    try {
+      const response = await api.post<{
+        negotiationId?: string;
+        documentId?: number;
+      }>(
+        '/admin/negotiations/proposal',
+        {
+          propertyId: selectedGenerateProperty.id,
+          clientName,
+          clientCpf,
+          validadeDias: validityDays,
+          pagamento: {
+            dinheiro: cash,
+            permuta: tradeIn,
+            financiamento: financing,
+            outros: others,
+          },
+          idempotencyKey: crypto.randomUUID(),
+        }
+      );
+
+      const negotiationId = String(response.negotiationId ?? '').trim();
+      const documentId = Number(response.documentId ?? 0);
+      if (!negotiationId || !Number.isInteger(documentId) || documentId <= 0) {
+        throw new Error('Resposta da geração sem identificadores válidos.');
+      }
+
+      const pdfResponse = await apiClient.get(
+        `/negotiations/${negotiationId}/documents/${documentId}/download`,
+        {
+          responseType: 'blob',
+        }
+      );
+      const blob = pdfResponse.data instanceof Blob
+        ? pdfResponse.data
+        : new Blob([pdfResponse.data], { type: 'application/pdf' });
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+
+      if (proposalSignedFile) {
+        await uploadSignedProposalFromGenerateModal(negotiationId);
+        toast.success('Proposta gerada e PDF assinado enviado.');
+      } else {
+        toast.success('Proposta gerada com sucesso.');
+      }
+      closeGenerateProposalModal();
+    } catch (error) {
+      console.error('Erro ao gerar proposta:', error);
+      generateProposalError = normalizeErrorMessage(error, 'Não foi possível gerar a proposta.');
+      toast.error(generateProposalError);
+    } finally {
+      generateProposalSubmitting = false;
+    }
   }
 
   async function fetchSummary() {
@@ -704,6 +941,9 @@
       {/if}
       Atualizar
     </Button>
+    <Button variant="outline" on:click={openGenerateProposalModal} disabled={summaryLoading}>
+      Gerar proposta
+    </Button>
   </div>
 
   <div class="flex flex-wrap items-center gap-2">
@@ -992,6 +1232,186 @@
     {rejectSelected}
     {approveSelected}
   />
+
+<Dialog.Root bind:open={showGenerateProposalModal}>
+  <Dialog.Content className="max-h-[90vh] max-w-3xl overflow-y-auto max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">
+    <Dialog.Header>
+      <Dialog.Title>Gerar proposta</Dialog.Title>
+      <Dialog.Description>
+        Busque o imóvel, informe os dados mínimos e gere a minuta em PDF.
+      </Dialog.Description>
+    </Dialog.Header>
+
+    <div class="space-y-4 px-1 py-4">
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/60">
+        <label for="generate-proposal-search" class="mb-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
+          Buscar imóvel por código ou nome
+        </label>
+        <div class="flex gap-2">
+          <input
+            id="generate-proposal-search"
+            class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+            placeholder="Ex.: 000018 ou Letio"
+            bind:value={generateProposalSearch}
+            on:input={searchProposalProperties}
+          />
+          <Button variant="outline" on:click={searchProposalProperties} disabled={generateProposalSearching}>
+            {#if generateProposalSearching}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Buscar
+          </Button>
+        </div>
+        {#if generateProposalError}
+          <p class="mt-2 text-sm text-red-600 dark:text-red-300">{generateProposalError}</p>
+        {/if}
+      </div>
+
+      {#if generateProposalResults.length > 0}
+        <div class="space-y-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Resultados</p>
+          {#each generateProposalResults as property (property.id)}
+            <button
+              type="button"
+              class={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${
+                selectedGenerateProperty?.id === property.id
+                  ? 'border-amber-400 bg-amber-100 text-gray-900 dark:border-amber-500 dark:bg-amber-950/40 dark:text-gray-100'
+                  : 'border-gray-200 text-gray-900 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800'
+              }`}
+              on:click={() => selectGenerateProperty(property)}
+            >
+              <div class="font-semibold">
+                {property.code ? `${property.code}` : `#${property.id}`} - {property.title ?? 'Imóvel sem título'}
+              </div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                Valor base: {formatCurrency(resolveProposalPropertyValue(property))}
+              </div>
+            </button>
+          {/each}
+        </div>
+      {/if}
+
+      {#if selectedGenerateProperty}
+        <div class="space-y-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+          <div>
+            <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              {selectedGenerateProperty.code ? `${selectedGenerateProperty.code}` : `#${selectedGenerateProperty.id}`}
+              - {selectedGenerateProperty.title ?? 'Imóvel sem título'}
+            </div>
+            <div class="text-xs text-gray-600 dark:text-gray-300">
+              Valor do imóvel: {formatCurrency(resolveProposalPropertyValue(selectedGenerateProperty))}
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-2">
+            <label class="space-y-1">
+              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome do proponente</span>
+              <input
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                bind:value={proposalClientName}
+                placeholder="Nome completo"
+              />
+            </label>
+            <label class="space-y-1">
+              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CPF</span>
+              <input
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                bind:value={proposalClientCpf}
+                inputmode="numeric"
+                placeholder="Somente números ou com máscara"
+              />
+            </label>
+            <label class="space-y-1">
+              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Validade</span>
+              <input
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                bind:value={proposalValidityDays}
+                type="number"
+                min="1"
+                step="1"
+              />
+            </label>
+            <label class="space-y-1">
+              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Dinheiro</span>
+              <input
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                bind:value={proposalCash}
+                inputmode="decimal"
+                placeholder="0.00"
+              />
+            </label>
+            <label class="space-y-1">
+              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Permuta</span>
+              <input
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                bind:value={proposalTradeIn}
+                inputmode="decimal"
+                placeholder="0.00"
+              />
+            </label>
+            <label class="space-y-1">
+              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Financiamento</span>
+              <input
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                bind:value={proposalFinancing}
+                inputmode="decimal"
+                placeholder="0.00"
+              />
+            </label>
+            <label class="space-y-1 md:col-span-2">
+              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Outros</span>
+              <input
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                bind:value={proposalOthers}
+                inputmode="decimal"
+                placeholder="0.00"
+              />
+            </label>
+          </div>
+
+          <div class="rounded-md border border-dashed border-gray-300 bg-white p-3 dark:border-gray-700 dark:bg-gray-900/70">
+            <div class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+              PDF assinado opcional
+            </div>
+            {#key proposalSignedInputKey}
+              <input
+                type="file"
+                accept="application/pdf"
+                class="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-gray-900 hover:file:bg-gray-200 dark:text-gray-300 dark:file:bg-gray-800 dark:file:text-gray-100 dark:hover:file:bg-gray-700"
+                on:change={(event) => {
+                  const input = event.currentTarget as HTMLInputElement | null;
+                  proposalSignedFile = input?.files?.[0] ?? null;
+                }}
+              />
+            {/key}
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Se escolher um PDF assinado, ele será enviado logo após a geração.
+            </p>
+          </div>
+
+          <p class="text-xs text-gray-600 dark:text-gray-300">
+            A soma dos campos deve bater com o valor do imóvel para a minuta ser gerada.
+          </p>
+        </div>
+      {/if}
+    </div>
+
+    <Dialog.Footer className="flex gap-2">
+      <Button variant="outline" on:click={closeGenerateProposalModal} disabled={generateProposalSubmitting}>
+        Cancelar
+      </Button>
+      <Button
+        on:click={submitGeneratedProposal}
+        disabled={generateProposalSubmitting || !selectedGenerateProperty}
+      >
+        {#if generateProposalSubmitting}
+          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+        {/if}
+        Gerar PDF
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
 
 {#if isImagePreviewOpen && previewImageUrl}
   <div
