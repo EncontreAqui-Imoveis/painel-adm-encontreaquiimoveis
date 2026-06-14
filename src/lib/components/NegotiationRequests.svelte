@@ -1350,7 +1350,6 @@
     {hasResponsibleChanges}
     {responsiblesBlockApproval}
     {openEditProposalModal}
-    {openGenerateProposalModal}
     bind:proposalInlineEditMode
     bind:proposalClientName
     bind:proposalClientCpf

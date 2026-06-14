@@ -45,7 +45,6 @@
   export let hasResponsibleChanges: () => boolean;
   export let responsiblesBlockApproval: (proposal: NegotiationItem | null) => boolean;
   export let openEditProposalModal: () => void;
-  export let openGenerateProposalModal: (proposal?: NegotiationItem | null) => void;
   export let proposalInlineEditMode = false;
   export let proposalClientName = '';
   export let proposalClientCpf = '';
@@ -217,7 +216,7 @@
           <div class="mt-4 rounded-md border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
             <div class="mb-3 flex items-center justify-between gap-3">
               <div>
-                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Editar proposta</p>
+                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Gerar minuta</p>
                 <p class="text-sm text-gray-700 dark:text-gray-300">
                   Ajuste os campos permitidos sem sair deste modal.
                 </p>
@@ -507,14 +506,6 @@
             {/if}
           </p>
           <div class="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            on:click={() => openGenerateProposalModal(selectedProposal)}
-            disabled={isApproveBusy()}
-            title="Gerar ou regenerar minuta"
-          >
-            Gerar minuta
-          </Button>
           {#if selectedProposal.signedDocumentId == null && !proposalInlineEditMode}
             <Button
               variant="outline"
