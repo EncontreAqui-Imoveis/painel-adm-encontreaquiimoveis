@@ -885,7 +885,7 @@
         ? await api.put<{
             negotiationId?: string;
             documentId?: number;
-          }>(`/negotiations/${editingProposalId}/draft`, payload)
+          }>(`/admin/negotiations/${editingProposalId}/draft`, payload)
         : await api.post<{
             negotiationId?: string;
             documentId?: number;
