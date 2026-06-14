@@ -403,7 +403,7 @@
   }
 
   function formatProposalMoneyInput(value: number): string {
-    return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+    return formatProposalAmountInput(value);
   }
 
   function calculateProposalAmount(value: string, unit: 'reais' | 'percent', totalValue: number): number {
@@ -565,10 +565,86 @@
     const normalized = String(value ?? '')
       .trim()
       .replace(/\s+/g, '')
+      .replace(/[R$%]/g, '')
       .replace(/\./g, '')
       .replace(',', '.');
     const parsed = Number(normalized);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : NaN;
+  }
+
+  function formatProposalAmountInput(value: number): string {
+    if (!Number.isFinite(value)) return '';
+    return value.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  function formatProposalPercentInput(value: number): string {
+    return formatProposalAmountInput(Math.min(Math.max(value, 0), 100));
+  }
+
+  function readProposalPaymentValues(): Record<'dinheiro' | 'permuta' | 'financiamento' | 'outros', number> {
+    const totalValue = parseProposalAmount(proposalTotalValue);
+    return {
+      dinheiro: calculateProposalAmount(proposalCash, proposalCashUnit, totalValue),
+      permuta: calculateProposalAmount(proposalTradeIn, proposalTradeInUnit, totalValue),
+      financiamento: calculateProposalAmount(proposalFinancing, proposalFinancingUnit, totalValue),
+      outros: calculateProposalAmount(proposalOthers, proposalOthersUnit, totalValue),
+    };
+  }
+
+  function normalizeProposalFieldValue(
+    field: 'dinheiro' | 'permuta' | 'financiamento' | 'outros',
+    rawValue: string,
+    unit: 'reais' | 'percent'
+  ) {
+    const totalValue = parseProposalAmount(proposalTotalValue);
+    const parsed = parseProposalAmount(rawValue);
+    if (!Number.isFinite(parsed)) {
+      if (field === 'dinheiro') proposalCash = '';
+      if (field === 'permuta') proposalTradeIn = '';
+      if (field === 'financiamento') proposalFinancing = '';
+      if (field === 'outros') proposalOthers = '';
+      return;
+    }
+
+    const currentAmount =
+      unit === 'percent' ? Number(((totalValue * parsed) / 100).toFixed(2)) : Number(parsed.toFixed(2));
+    const paymentValues = readProposalPaymentValues();
+    const otherPaymentsSum = Object.entries(paymentValues).reduce((sum, [key, value]) => {
+      if (key === field) return sum;
+      return sum + value;
+    }, 0);
+    const maxAllowed = Math.max(totalValue - otherPaymentsSum, 0);
+    const normalizedAmount = Math.min(Math.max(currentAmount, 0), maxAllowed);
+    const displayValue =
+      unit === 'percent'
+        ? formatProposalPercentInput(totalValue > 0 ? (normalizedAmount / totalValue) * 100 : 0)
+        : formatProposalAmountInput(normalizedAmount);
+
+    if (field === 'dinheiro') proposalCash = displayValue;
+    if (field === 'permuta') proposalTradeIn = displayValue;
+    if (field === 'financiamento') proposalFinancing = displayValue;
+    if (field === 'outros') proposalOthers = displayValue;
+  }
+
+  function rebalanceProposalCashByTotal() {
+    const totalValue = parseProposalAmount(proposalTotalValue);
+    if (!Number.isFinite(totalValue)) return;
+    const paymentValues = readProposalPaymentValues();
+    const otherPaymentsSum = paymentValues.permuta + paymentValues.financiamento + paymentValues.outros;
+    const cashAmount = Math.max(totalValue - otherPaymentsSum, 0);
+    proposalCash =
+      proposalCashUnit === 'percent'
+        ? formatProposalPercentInput(totalValue > 0 ? (cashAmount / totalValue) * 100 : 0)
+        : formatProposalAmountInput(cashAmount);
+  }
+
+  function updateProposalTotalValue(rawValue: string) {
+    const parsed = parseProposalAmount(rawValue);
+    proposalTotalValue = Number.isFinite(parsed) ? formatProposalAmountInput(parsed) : '';
+    rebalanceProposalCashByTotal();
   }
 
   async function uploadSignedProposalFromGenerateModal(negotiationId: string) {
@@ -703,7 +779,6 @@
     } catch (error) {
       console.error('Erro ao gerar proposta:', error);
       generateProposalError = normalizeErrorMessage(error, 'Não foi possível gerar a proposta.');
-      toast.error(generateProposalError);
     } finally {
       generateProposalSubmitting = false;
     }
@@ -1364,6 +1439,8 @@
     bind:proposalOthers
     bind:proposalOthersUnit
     {formatCpf}
+    {normalizeProposalFieldValue}
+    {updateProposalTotalValue}
     {submitGeneratedProposal}
     {cancelProposalInlineEdit}
     bind:rejectReason
@@ -1400,7 +1477,7 @@
             Buscar
           </Button>
         </div>
-        {#if generateProposalError}
+        {#if generateProposalError && !selectedGenerateProperty}
           <p class="mt-2 text-sm text-red-600 dark:text-red-300">{generateProposalError}</p>
         {/if}
       </div>
@@ -1464,6 +1541,12 @@
             </div>
           </div>
 
+          {#if generateProposalError}
+            <p class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+              {generateProposalError}
+            </p>
+          {/if}
+
           <div class="grid gap-3 md:grid-cols-2">
             <label class="space-y-1">
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome do proponente</span>
@@ -1498,25 +1581,47 @@
             </label>
             <label class="space-y-1">
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Valor da proposta</span>
-              <input
-                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                bind:value={proposalTotalValue}
-                inputmode="decimal"
-                placeholder="0,00"
-              />
+              <div class="relative">
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  bind:value={proposalTotalValue}
+                  inputmode="decimal"
+                  placeholder="0,00"
+                  on:input={(event) => {
+                    const input = event.currentTarget as HTMLInputElement | null;
+                    updateProposalTotalValue(input?.value ?? '');
+                  }}
+                />
+                <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  R$
+                </span>
+              </div>
             </label>
             <label class="space-y-1">
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Dinheiro</span>
               <div class="grid grid-cols-[1fr_auto] gap-2">
-                <input
-                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                  bind:value={proposalCash}
-                  inputmode="decimal"
-                  placeholder="0,00"
-                />
+                <div class="relative">
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    bind:value={proposalCash}
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    on:input={(event) => {
+                      const input = event.currentTarget as HTMLInputElement | null;
+                      normalizeProposalFieldValue('dinheiro', input?.value ?? '', proposalCashUnit);
+                    }}
+                  />
+                  <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                    {proposalCashUnit === 'reais' ? 'R$' : '%'}
+                  </span>
+                </div>
                 <select
                   bind:value={proposalCashUnit}
                   class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  on:change={(event) => {
+                    const input = event.currentTarget as HTMLSelectElement | null;
+                    normalizeProposalFieldValue('dinheiro', proposalCash, (input?.value ?? 'reais') as 'reais' | 'percent');
+                  }}
                 >
                   <option value="reais">R$</option>
                   <option value="percent">%</option>
@@ -1526,15 +1631,28 @@
             <label class="space-y-1">
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Permuta</span>
               <div class="grid grid-cols-[1fr_auto] gap-2">
-                <input
-                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                  bind:value={proposalTradeIn}
-                  inputmode="decimal"
-                  placeholder="0,00"
-                />
+                <div class="relative">
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    bind:value={proposalTradeIn}
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    on:input={(event) => {
+                      const input = event.currentTarget as HTMLInputElement | null;
+                      normalizeProposalFieldValue('permuta', input?.value ?? '', proposalTradeInUnit);
+                    }}
+                  />
+                  <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                    {proposalTradeInUnit === 'reais' ? 'R$' : '%'}
+                  </span>
+                </div>
                 <select
                   bind:value={proposalTradeInUnit}
                   class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  on:change={(event) => {
+                    const input = event.currentTarget as HTMLSelectElement | null;
+                    normalizeProposalFieldValue('permuta', proposalTradeIn, (input?.value ?? 'reais') as 'reais' | 'percent');
+                  }}
                 >
                   <option value="reais">R$</option>
                   <option value="percent">%</option>
@@ -1544,15 +1662,28 @@
             <label class="space-y-1">
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Financiamento</span>
               <div class="grid grid-cols-[1fr_auto] gap-2">
-                <input
-                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                  bind:value={proposalFinancing}
-                  inputmode="decimal"
-                  placeholder="0,00"
-                />
+                <div class="relative">
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    bind:value={proposalFinancing}
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    on:input={(event) => {
+                      const input = event.currentTarget as HTMLInputElement | null;
+                      normalizeProposalFieldValue('financiamento', input?.value ?? '', proposalFinancingUnit);
+                    }}
+                  />
+                  <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                    {proposalFinancingUnit === 'reais' ? 'R$' : '%'}
+                  </span>
+                </div>
                 <select
                   bind:value={proposalFinancingUnit}
                   class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  on:change={(event) => {
+                    const input = event.currentTarget as HTMLSelectElement | null;
+                    normalizeProposalFieldValue('financiamento', proposalFinancing, (input?.value ?? 'reais') as 'reais' | 'percent');
+                  }}
                 >
                   <option value="reais">R$</option>
                   <option value="percent">%</option>
@@ -1562,15 +1693,28 @@
             <label class="space-y-1 md:col-span-2">
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Outros</span>
               <div class="grid grid-cols-[1fr_auto] gap-2">
-                <input
-                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                  bind:value={proposalOthers}
-                  inputmode="decimal"
-                  placeholder="0,00"
-                />
+                <div class="relative">
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    bind:value={proposalOthers}
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    on:input={(event) => {
+                      const input = event.currentTarget as HTMLInputElement | null;
+                      normalizeProposalFieldValue('outros', input?.value ?? '', proposalOthersUnit);
+                    }}
+                  />
+                  <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                    {proposalOthersUnit === 'reais' ? 'R$' : '%'}
+                  </span>
+                </div>
                 <select
                   bind:value={proposalOthersUnit}
                   class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  on:change={(event) => {
+                    const input = event.currentTarget as HTMLSelectElement | null;
+                    normalizeProposalFieldValue('outros', proposalOthers, (input?.value ?? 'reais') as 'reais' | 'percent');
+                  }}
                 >
                   <option value="reais">R$</option>
                   <option value="percent">%</option>

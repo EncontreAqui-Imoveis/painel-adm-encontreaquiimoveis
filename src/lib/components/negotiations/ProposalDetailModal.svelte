@@ -59,6 +59,12 @@
   export let proposalOthers = '';
   export let proposalOthersUnit: 'reais' | 'percent' = 'reais';
   export let formatCpf: (value: string | null | undefined) => string;
+  export let normalizeProposalFieldValue: (
+    field: 'dinheiro' | 'permuta' | 'financiamento' | 'outros',
+    rawValue: string,
+    unit: 'reais' | 'percent'
+  ) => void;
+  export let updateProposalTotalValue: (value: string) => void;
   export let submitGeneratedProposal: () => void | Promise<void>;
   export let cancelProposalInlineEdit: () => void;
   export let generateProposalSubmitting = false;
@@ -263,27 +269,49 @@
               </label>
               <label class="space-y-1">
                 <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Valor da proposta</span>
-                <input
-                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                  bind:value={proposalTotalValue}
-                  inputmode="decimal"
-                  placeholder="0,00"
-                  disabled={generateProposalSubmitting}
-                />
+                <div class="relative">
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    bind:value={proposalTotalValue}
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    on:input={(event) => {
+                      const input = event.currentTarget as HTMLInputElement | null;
+                      updateProposalTotalValue(input?.value ?? '');
+                    }}
+                    disabled={generateProposalSubmitting}
+                  />
+                  <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                    R$
+                  </span>
+                </div>
               </label>
               <label class="space-y-1">
                 <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Dinheiro</span>
                 <div class="grid grid-cols-[1fr_auto] gap-2">
-                  <input
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                    bind:value={proposalCash}
-                    inputmode="decimal"
-                    placeholder="0,00"
-                    disabled={generateProposalSubmitting}
-                  />
+                  <div class="relative">
+                    <input
+                      class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                      bind:value={proposalCash}
+                      inputmode="decimal"
+                      placeholder="0,00"
+                      on:input={(event) => {
+                        const input = event.currentTarget as HTMLInputElement | null;
+                        normalizeProposalFieldValue('dinheiro', input?.value ?? '', proposalCashUnit);
+                      }}
+                      disabled={generateProposalSubmitting}
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      {proposalCashUnit === 'reais' ? 'R$' : '%'}
+                    </span>
+                  </div>
                   <select
                     bind:value={proposalCashUnit}
                     class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    on:change={(event) => {
+                      const input = event.currentTarget as HTMLSelectElement | null;
+                      normalizeProposalFieldValue('dinheiro', proposalCash, (input?.value ?? 'reais') as 'reais' | 'percent');
+                    }}
                     disabled={generateProposalSubmitting}
                   >
                     <option value="reais">R$</option>
@@ -294,16 +322,29 @@
               <label class="space-y-1">
                 <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Permuta</span>
                 <div class="grid grid-cols-[1fr_auto] gap-2">
-                  <input
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                    bind:value={proposalTradeIn}
-                    inputmode="decimal"
-                    placeholder="0,00"
-                    disabled={generateProposalSubmitting}
-                  />
+                  <div class="relative">
+                    <input
+                      class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                      bind:value={proposalTradeIn}
+                      inputmode="decimal"
+                      placeholder="0,00"
+                      on:input={(event) => {
+                        const input = event.currentTarget as HTMLInputElement | null;
+                        normalizeProposalFieldValue('permuta', input?.value ?? '', proposalTradeInUnit);
+                      }}
+                      disabled={generateProposalSubmitting}
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      {proposalTradeInUnit === 'reais' ? 'R$' : '%'}
+                    </span>
+                  </div>
                   <select
                     bind:value={proposalTradeInUnit}
                     class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    on:change={(event) => {
+                      const input = event.currentTarget as HTMLSelectElement | null;
+                      normalizeProposalFieldValue('permuta', proposalTradeIn, (input?.value ?? 'reais') as 'reais' | 'percent');
+                    }}
                     disabled={generateProposalSubmitting}
                   >
                     <option value="reais">R$</option>
@@ -314,16 +355,29 @@
               <label class="space-y-1">
                 <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Financiamento</span>
                 <div class="grid grid-cols-[1fr_auto] gap-2">
-                  <input
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                    bind:value={proposalFinancing}
-                    inputmode="decimal"
-                    placeholder="0,00"
-                    disabled={generateProposalSubmitting}
-                  />
+                  <div class="relative">
+                    <input
+                      class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                      bind:value={proposalFinancing}
+                      inputmode="decimal"
+                      placeholder="0,00"
+                      on:input={(event) => {
+                        const input = event.currentTarget as HTMLInputElement | null;
+                        normalizeProposalFieldValue('financiamento', input?.value ?? '', proposalFinancingUnit);
+                      }}
+                      disabled={generateProposalSubmitting}
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      {proposalFinancingUnit === 'reais' ? 'R$' : '%'}
+                    </span>
+                  </div>
                   <select
                     bind:value={proposalFinancingUnit}
                     class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    on:change={(event) => {
+                      const input = event.currentTarget as HTMLSelectElement | null;
+                      normalizeProposalFieldValue('financiamento', proposalFinancing, (input?.value ?? 'reais') as 'reais' | 'percent');
+                    }}
                     disabled={generateProposalSubmitting}
                   >
                     <option value="reais">R$</option>
@@ -334,16 +388,29 @@
               <label class="space-y-1 md:col-span-2">
                 <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Outros</span>
                 <div class="grid grid-cols-[1fr_auto] gap-2">
-                  <input
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                    bind:value={proposalOthers}
-                    inputmode="decimal"
-                    placeholder="0,00"
-                    disabled={generateProposalSubmitting}
-                  />
+                  <div class="relative">
+                    <input
+                      class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                      bind:value={proposalOthers}
+                      inputmode="decimal"
+                      placeholder="0,00"
+                      on:input={(event) => {
+                        const input = event.currentTarget as HTMLInputElement | null;
+                        normalizeProposalFieldValue('outros', input?.value ?? '', proposalOthersUnit);
+                      }}
+                      disabled={generateProposalSubmitting}
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      {proposalOthersUnit === 'reais' ? 'R$' : '%'}
+                    </span>
+                  </div>
                   <select
                     bind:value={proposalOthersUnit}
                     class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    on:change={(event) => {
+                      const input = event.currentTarget as HTMLSelectElement | null;
+                      normalizeProposalFieldValue('outros', proposalOthers, (input?.value ?? 'reais') as 'reais' | 'percent');
+                    }}
                     disabled={generateProposalSubmitting}
                   >
                     <option value="reais">R$</option>
