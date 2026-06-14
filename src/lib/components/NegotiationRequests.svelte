@@ -124,6 +124,7 @@
   let showGenerateProposalModal = false;
   let generateProposalWasOpen = false;
   let generateProposalMode: 'create' | 'edit' = 'create';
+  let proposalInlineEditMode = false;
   let editingProposalId: string | null = null;
   let generateProposalSearch = '';
   let generateProposalSearching = false;
@@ -451,6 +452,27 @@
     proposalSignedInputKey += 1;
   }
 
+  function fillProposalFormFromNegotiation(proposal: NegotiationItem) {
+    generateProposalMode = 'edit';
+    editingProposalId = proposal.id;
+    selectedGenerateProperty = {
+      id: proposal.propertyId,
+      code: proposal.propertyCode ?? null,
+      title: proposal.propertyTitle ?? null,
+      price: proposal.value ?? null,
+      price_sale: proposal.value ?? null,
+      price_rent: proposal.value ?? null,
+    };
+    proposalClientName = readClientName(proposal);
+    proposalClientCpf = formatCpf(readClientCpf(proposal));
+    proposalValidityDays = calculateValidityDaysFromProposal(proposal);
+    proposalTotalValue = formatProposalMoneyInput(Number(proposal.value ?? 0));
+    proposalCash = formatProposalMoneyInput(Number(proposal.payment?.dinheiro ?? proposal.value ?? 0));
+    proposalTradeIn = formatProposalMoneyInput(Number(proposal.payment?.permuta ?? 0));
+    proposalFinancing = formatProposalMoneyInput(Number(proposal.payment?.financiamento ?? 0));
+    proposalOthers = formatProposalMoneyInput(Number(proposal.payment?.outros ?? 0));
+  }
+
   function fillGenerateProposalFromProperty(property: ProposalPropertyOption, mode: 'create' | 'edit' = 'create') {
     selectedGenerateProperty = property;
     const resolvedValue = resolveProposalPropertyValue(property);
@@ -469,31 +491,25 @@
   function openGenerateProposalModal(propertyToEdit?: NegotiationItem | null) {
     resetGenerateProposalState();
     if (propertyToEdit) {
-      generateProposalMode = 'edit';
-      editingProposalId = propertyToEdit.id;
-      selectedGenerateProperty = {
-        id: propertyToEdit.propertyId,
-        code: propertyToEdit.propertyCode ?? null,
-        title: propertyToEdit.propertyTitle ?? null,
-        price: propertyToEdit.value ?? null,
-        price_sale: propertyToEdit.value ?? null,
-        price_rent: propertyToEdit.value ?? null,
-      };
-      proposalClientName = readClientName(propertyToEdit);
-      proposalClientCpf = formatCpf(readClientCpf(propertyToEdit));
-      proposalValidityDays = calculateValidityDaysFromProposal(propertyToEdit);
-      proposalTotalValue = formatProposalMoneyInput(Number(propertyToEdit.value ?? 0));
-      proposalCash = formatProposalMoneyInput(Number(propertyToEdit.payment?.dinheiro ?? propertyToEdit.value ?? 0));
-      proposalTradeIn = formatProposalMoneyInput(Number(propertyToEdit.payment?.permuta ?? 0));
-      proposalFinancing = formatProposalMoneyInput(Number(propertyToEdit.payment?.financiamento ?? 0));
-      proposalOthers = formatProposalMoneyInput(Number(propertyToEdit.payment?.outros ?? 0));
+      fillProposalFormFromNegotiation(propertyToEdit);
     }
     showGenerateProposalModal = true;
   }
 
   function openEditProposalModal() {
     if (!selectedProposal) return;
-    openGenerateProposalModal(selectedProposal);
+    proposalInlineEditMode = true;
+    fillProposalFormFromNegotiation(selectedProposal);
+  }
+
+  function cancelProposalInlineEdit() {
+    proposalInlineEditMode = false;
+    generateProposalError = '';
+    if (selectedProposal) {
+      fillProposalFormFromNegotiation(selectedProposal);
+    } else {
+      resetGenerateProposalState();
+    }
   }
 
   function closeGenerateProposalModal() {
@@ -667,6 +683,22 @@
       } else {
         toast.success(editingProposalId ? 'Proposta atualizada com sucesso.' : 'Proposta criada com sucesso.');
       }
+      if (proposalInlineEditMode && selectedProposal) {
+        selectedProposal = {
+          ...selectedProposal,
+          value: totalValue,
+          validityDate: new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000).toISOString(),
+          payment: {
+            dinheiro: cash,
+            permuta: tradeIn,
+            financiamento: financing,
+            outros: others,
+          },
+          clientName,
+          clientCpf,
+        };
+        proposalInlineEditMode = false;
+      }
       closeGenerateProposalModal();
     } catch (error) {
       console.error('Erro ao gerar proposta:', error);
@@ -753,6 +785,7 @@
     if (isApproveBusy() && !force) return;
     showDetailModal = false;
     selectedProposal = null;
+    proposalInlineEditMode = false;
     resetDetailState();
   }
 
@@ -1317,6 +1350,23 @@
     {hasResponsibleChanges}
     {responsiblesBlockApproval}
     {openEditProposalModal}
+    {openGenerateProposalModal}
+    bind:proposalInlineEditMode
+    bind:proposalClientName
+    bind:proposalClientCpf
+    bind:proposalValidityDays
+    bind:proposalTotalValue
+    bind:proposalCash
+    bind:proposalCashUnit
+    bind:proposalTradeIn
+    bind:proposalTradeInUnit
+    bind:proposalFinancing
+    bind:proposalFinancingUnit
+    bind:proposalOthers
+    bind:proposalOthersUnit
+    {formatCpf}
+    {submitGeneratedProposal}
+    {cancelProposalInlineEdit}
     bind:rejectReason
     {rejectSelected}
     {approveSelected}

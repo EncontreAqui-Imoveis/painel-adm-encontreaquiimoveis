@@ -247,9 +247,11 @@ describe('NegotiationRequests', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Ver detalhes' }));
 
     expect(await screen.findByRole('button', { name: 'Editar Proposta' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Gerar minuta' })).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Editar Proposta' }));
-    expect(await screen.findByRole('button', { name: 'Salvar minuta' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Salvar alterações' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Editar Proposta' })).not.toBeInTheDocument();
   });
 
   it('mostra imagem nos resultados da busca de imóvel para gerar proposta', async () => {

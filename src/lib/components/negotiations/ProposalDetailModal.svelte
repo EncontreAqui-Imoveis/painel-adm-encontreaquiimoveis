@@ -45,6 +45,25 @@
   export let hasResponsibleChanges: () => boolean;
   export let responsiblesBlockApproval: (proposal: NegotiationItem | null) => boolean;
   export let openEditProposalModal: () => void;
+  export let openGenerateProposalModal: (proposal?: NegotiationItem | null) => void;
+  export let proposalInlineEditMode = false;
+  export let proposalClientName = '';
+  export let proposalClientCpf = '';
+  export let proposalValidityDays = '10';
+  export let proposalTotalValue = '';
+  export let proposalCash = '';
+  export let proposalCashUnit: 'reais' | 'percent' = 'reais';
+  export let proposalTradeIn = '';
+  export let proposalTradeInUnit: 'reais' | 'percent' = 'reais';
+  export let proposalFinancing = '';
+  export let proposalFinancingUnit: 'reais' | 'percent' = 'reais';
+  export let proposalOthers = '';
+  export let proposalOthersUnit: 'reais' | 'percent' = 'reais';
+  export let formatCpf: (value: string | null | undefined) => string;
+  export let submitGeneratedProposal: () => void | Promise<void>;
+  export let cancelProposalInlineEdit: () => void;
+  export let generateProposalSubmitting = false;
+  export let generateProposalError = '';
 
   export let rejectReason = '';
   export let rejectSelected: () => void;
@@ -194,6 +213,155 @@
           </div>
         </div>
 
+        {#if proposalInlineEditMode}
+          <div class="mt-4 rounded-md border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+            <div class="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Editar proposta</p>
+                <p class="text-sm text-gray-700 dark:text-gray-300">
+                  Ajuste os campos permitidos sem sair deste modal.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" on:click={cancelProposalInlineEdit} disabled={generateProposalSubmitting}>
+                Cancelar edição
+              </Button>
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-2">
+              <label class="space-y-1">
+                <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome do proponente</span>
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  bind:value={proposalClientName}
+                  placeholder="Nome completo"
+                  disabled={generateProposalSubmitting}
+                />
+              </label>
+              <label class="space-y-1">
+                <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CPF</span>
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  bind:value={proposalClientCpf}
+                  inputmode="numeric"
+                  placeholder="Somente números ou com máscara"
+                  on:input={(event) => {
+                    const input = event.currentTarget as HTMLInputElement | null;
+                    proposalClientCpf = formatCpf(input?.value ?? '');
+                  }}
+                  disabled={generateProposalSubmitting}
+                />
+              </label>
+              <label class="space-y-1">
+                <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Validade</span>
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  bind:value={proposalValidityDays}
+                  type="number"
+                  min="1"
+                  step="1"
+                  disabled={generateProposalSubmitting}
+                />
+              </label>
+              <label class="space-y-1">
+                <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Valor da proposta</span>
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  bind:value={proposalTotalValue}
+                  inputmode="decimal"
+                  placeholder="0,00"
+                  disabled={generateProposalSubmitting}
+                />
+              </label>
+              <label class="space-y-1">
+                <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Dinheiro</span>
+                <div class="grid grid-cols-[1fr_auto] gap-2">
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    bind:value={proposalCash}
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    disabled={generateProposalSubmitting}
+                  />
+                  <select
+                    bind:value={proposalCashUnit}
+                    class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    disabled={generateProposalSubmitting}
+                  >
+                    <option value="reais">R$</option>
+                    <option value="percent">%</option>
+                  </select>
+                </div>
+              </label>
+              <label class="space-y-1">
+                <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Permuta</span>
+                <div class="grid grid-cols-[1fr_auto] gap-2">
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    bind:value={proposalTradeIn}
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    disabled={generateProposalSubmitting}
+                  />
+                  <select
+                    bind:value={proposalTradeInUnit}
+                    class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    disabled={generateProposalSubmitting}
+                  >
+                    <option value="reais">R$</option>
+                    <option value="percent">%</option>
+                  </select>
+                </div>
+              </label>
+              <label class="space-y-1">
+                <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Financiamento</span>
+                <div class="grid grid-cols-[1fr_auto] gap-2">
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    bind:value={proposalFinancing}
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    disabled={generateProposalSubmitting}
+                  />
+                  <select
+                    bind:value={proposalFinancingUnit}
+                    class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    disabled={generateProposalSubmitting}
+                  >
+                    <option value="reais">R$</option>
+                    <option value="percent">%</option>
+                  </select>
+                </div>
+              </label>
+              <label class="space-y-1 md:col-span-2">
+                <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Outros</span>
+                <div class="grid grid-cols-[1fr_auto] gap-2">
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    bind:value={proposalOthers}
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    disabled={generateProposalSubmitting}
+                  />
+                  <select
+                    bind:value={proposalOthersUnit}
+                    class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    disabled={generateProposalSubmitting}
+                  >
+                    <option value="reais">R$</option>
+                    <option value="percent">%</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+
+            {#if generateProposalError}
+              <p class="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+                {generateProposalError}
+              </p>
+            {/if}
+          </div>
+        {/if}
+
         <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
           <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
             Responsável por acompanhar o processo
@@ -339,7 +507,15 @@
             {/if}
           </p>
           <div class="flex flex-wrap items-center justify-end gap-2">
-          {#if selectedProposal.signedDocumentId == null}
+          <Button
+            variant="outline"
+            on:click={() => openGenerateProposalModal(selectedProposal)}
+            disabled={isApproveBusy()}
+            title="Gerar ou regenerar minuta"
+          >
+            Gerar minuta
+          </Button>
+          {#if selectedProposal.signedDocumentId == null && !proposalInlineEditMode}
             <Button
               variant="outline"
               on:click={openEditProposalModal}
@@ -347,6 +523,25 @@
               title="Editar valores e gerar nova minuta"
             >
               Editar Proposta
+            </Button>
+          {/if}
+          {#if proposalInlineEditMode}
+            <Button
+              variant="outline"
+              on:click={cancelProposalInlineEdit}
+              disabled={generateProposalSubmitting}
+            >
+              Cancelar edição
+            </Button>
+            <Button
+              className="bg-amber-500 text-black hover:bg-amber-400"
+              on:click={submitGeneratedProposal}
+              disabled={generateProposalSubmitting || !selectedProposal}
+            >
+              {#if generateProposalSubmitting}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Salvar alterações
             </Button>
           {/if}
           <Button
