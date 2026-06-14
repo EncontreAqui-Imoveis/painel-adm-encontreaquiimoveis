@@ -604,6 +604,10 @@
     return formatProposalAmountInput(Math.min(Math.max(value, 0), 100));
   }
 
+  function normalizeProposalValidityInput(value: string): string {
+    return String(value ?? '').replace(/[^\d]/g, '');
+  }
+
   function sanitizeProposalAmountInput(value: string): string {
     const stripped = String(value ?? '')
       .replace(/[R$\s%]/g, '')
@@ -615,8 +619,15 @@
     return safeFraction ? `${safeWhole || '0'},${safeFraction}` : safeWhole;
   }
 
-  function editableProposalAmountInput(value: string): string {
-    return sanitizeProposalAmountInput(value);
+  function normalizeProposalAmountDraftInput(value: string, unit: 'reais' | 'percent'): string {
+    const digits = String(value ?? '').replace(/\D/g, '');
+    if (!digits) return '';
+
+    const parsed = Number(digits) / 100;
+    if (!Number.isFinite(parsed)) return '';
+
+    const nextValue = unit === 'percent' ? Math.min(Math.max(parsed, 0), 100) : Math.max(parsed, 0);
+    return formatProposalAmountInput(nextValue);
   }
 
   function readProposalPaymentValues(): Record<'dinheiro' | 'permuta' | 'financiamento' | 'outros', number> {
@@ -638,7 +649,7 @@
     rawValue: string,
     unit: 'reais' | 'percent'
   ) {
-    const displayValue = sanitizeProposalAmountInput(rawValue);
+    const displayValue = normalizeProposalAmountDraftInput(rawValue, unit);
     if (field === 'dinheiro') proposalCashInput = displayValue;
     if (field === 'permuta') proposalTradeInInput = displayValue;
     if (field === 'financiamento') proposalFinancingInput = displayValue;
@@ -659,7 +670,7 @@
   }
 
   function updateProposalTotalValue(rawValue: string) {
-    proposalTotalValueInput = sanitizeProposalAmountInput(rawValue);
+    proposalTotalValueInput = normalizeProposalAmountDraftInput(rawValue, 'reais');
   }
 
   function commitProposalTotalValue() {
@@ -737,23 +748,7 @@
   }
 
   function prepareProposalFieldEditing(field: 'total' | 'dinheiro' | 'permuta' | 'financiamento' | 'outros') {
-    if (field === 'total') {
-      proposalTotalValueInput = editableProposalAmountInput(proposalTotalValueInput || proposalTotalValue);
-      return;
-    }
-    if (field === 'dinheiro') {
-      proposalCashInput = editableProposalAmountInput(proposalCashInput || proposalCash);
-      return;
-    }
-    if (field === 'permuta') {
-      proposalTradeInInput = editableProposalAmountInput(proposalTradeInInput || proposalTradeIn);
-      return;
-    }
-    if (field === 'financiamento') {
-      proposalFinancingInput = editableProposalAmountInput(proposalFinancingInput || proposalFinancing);
-      return;
-    }
-    proposalOthersInput = editableProposalAmountInput(proposalOthersInput || proposalOthers);
+    void field;
   }
 
   function switchProposalFieldUnit(
@@ -1739,10 +1734,14 @@
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Validade</span>
               <input
                 class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                bind:value={proposalValidityDays}
-                type="number"
-                min="1"
-                step="1"
+                value={proposalValidityDays}
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                on:input={(event) => {
+                  const input = event.currentTarget as HTMLInputElement | null;
+                  proposalValidityDays = normalizeProposalValidityInput(input?.value ?? '');
+                }}
               />
             </label>
             <label class="space-y-1">

@@ -272,10 +272,14 @@
                 <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Validade</span>
                 <input
                   class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                  bind:value={proposalValidityDays}
-                  type="number"
-                  min="1"
-                  step="1"
+                  value={proposalValidityDays}
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  on:input={(event) => {
+                    const input = event.currentTarget as HTMLInputElement | null;
+                    proposalValidityDays = String(input?.value ?? '').replace(/[^\d]/g, '');
+                  }}
                   disabled={generateProposalSubmitting}
                 />
               </label>
@@ -617,17 +621,17 @@
             >
               Cancelar edição
             </Button>
-            <Button
-              className="bg-amber-500 text-black hover:bg-amber-400"
-              on:click={submitGeneratedProposal}
-              disabled={generateProposalSubmitting || !selectedProposal}
-            >
-              {#if generateProposalSubmitting}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-              {/if}
-              Salvar alterações
-            </Button>
-          {/if}
+              <Button
+                className="bg-amber-500 text-black hover:bg-amber-400"
+                on:click={submitGeneratedProposal}
+                disabled={generateProposalSubmitting || !selectedProposal}
+              >
+                {#if generateProposalSubmitting}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                Gerar minuta
+              </Button>
+            {/if}
           <Button
             variant="destructive"
             className="bg-red-600 text-white hover:bg-red-700"
