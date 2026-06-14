@@ -136,13 +136,18 @@
   let proposalClientCpf = '';
   let proposalValidityDays = '10';
   let proposalTotalValue = '';
+  let proposalTotalValueInput = '';
   let proposalCash = '';
+  let proposalCashInput = '';
   let proposalCashUnit: 'reais' | 'percent' = 'reais';
   let proposalTradeIn = '0';
+  let proposalTradeInInput = '0';
   let proposalTradeInUnit: 'reais' | 'percent' = 'reais';
   let proposalFinancing = '0';
+  let proposalFinancingInput = '0';
   let proposalFinancingUnit: 'reais' | 'percent' = 'reais';
   let proposalOthers = '0';
+  let proposalOthersInput = '0';
   let proposalOthersUnit: 'reais' | 'percent' = 'reais';
   let proposalSignedFile: File | null = null;
   let proposalSignedInputKey = 0;
@@ -440,13 +445,18 @@
     proposalClientCpf = '';
     proposalValidityDays = '10';
     proposalTotalValue = '';
+    proposalTotalValueInput = '';
     proposalCash = '';
+    proposalCashInput = '';
     proposalCashUnit = 'reais';
     proposalTradeIn = '0';
+    proposalTradeInInput = '0';
     proposalTradeInUnit = 'reais';
     proposalFinancing = '0';
+    proposalFinancingInput = '0';
     proposalFinancingUnit = 'reais';
     proposalOthers = '0';
+    proposalOthersInput = '0';
     proposalOthersUnit = 'reais';
     proposalSignedFile = null;
     proposalSignedInputKey += 1;
@@ -467,23 +477,33 @@
     proposalClientCpf = formatCpf(readClientCpf(proposal));
     proposalValidityDays = calculateValidityDaysFromProposal(proposal);
     proposalTotalValue = formatProposalMoneyInput(Number(proposal.value ?? 0));
+    proposalTotalValueInput = proposalTotalValue;
     proposalCash = formatProposalMoneyInput(Number(proposal.payment?.dinheiro ?? proposal.value ?? 0));
+    proposalCashInput = proposalCash;
     proposalTradeIn = formatProposalMoneyInput(Number(proposal.payment?.permuta ?? 0));
+    proposalTradeInInput = proposalTradeIn;
     proposalFinancing = formatProposalMoneyInput(Number(proposal.payment?.financiamento ?? 0));
+    proposalFinancingInput = proposalFinancing;
     proposalOthers = formatProposalMoneyInput(Number(proposal.payment?.outros ?? 0));
+    proposalOthersInput = proposalOthers;
   }
 
   function fillGenerateProposalFromProperty(property: ProposalPropertyOption, mode: 'create' | 'edit' = 'create') {
     selectedGenerateProperty = property;
     const resolvedValue = resolveProposalPropertyValue(property);
     proposalTotalValue = formatProposalMoneyInput(resolvedValue);
+    proposalTotalValueInput = proposalTotalValue;
     proposalCash = formatProposalMoneyInput(resolvedValue);
+    proposalCashInput = proposalCash;
     proposalCashUnit = 'reais';
     proposalTradeIn = '0';
+    proposalTradeInInput = '0';
     proposalTradeInUnit = 'reais';
     proposalFinancing = '0';
+    proposalFinancingInput = '0';
     proposalFinancingUnit = 'reais';
     proposalOthers = '0';
+    proposalOthersInput = '0';
     proposalOthersUnit = 'reais';
     generateProposalMode = mode;
   }
@@ -584,13 +604,32 @@
     return formatProposalAmountInput(Math.min(Math.max(value, 0), 100));
   }
 
+  function sanitizeProposalAmountInput(value: string): string {
+    const stripped = String(value ?? '')
+      .replace(/[R$\s%]/g, '')
+      .replace(/\./g, '');
+    const [whole = '', fraction = ''] = stripped.split(',');
+    const safeWhole = whole.replace(/[^\d]/g, '');
+    const safeFraction = fraction.replace(/[^\d]/g, '').slice(0, 2);
+    if (!safeWhole && !safeFraction) return '';
+    return safeFraction ? `${safeWhole || '0'},${safeFraction}` : safeWhole;
+  }
+
+  function editableProposalAmountInput(value: string): string {
+    return sanitizeProposalAmountInput(value);
+  }
+
   function readProposalPaymentValues(): Record<'dinheiro' | 'permuta' | 'financiamento' | 'outros', number> {
-    const totalValue = parseProposalAmount(proposalTotalValue);
+    const totalValue = parseProposalAmount(proposalTotalValueInput || proposalTotalValue);
     return {
-      dinheiro: calculateProposalAmount(proposalCash, proposalCashUnit, totalValue),
-      permuta: calculateProposalAmount(proposalTradeIn, proposalTradeInUnit, totalValue),
-      financiamento: calculateProposalAmount(proposalFinancing, proposalFinancingUnit, totalValue),
-      outros: calculateProposalAmount(proposalOthers, proposalOthersUnit, totalValue),
+      dinheiro: calculateProposalAmount(proposalCashInput || proposalCash, proposalCashUnit, totalValue),
+      permuta: calculateProposalAmount(proposalTradeInInput || proposalTradeIn, proposalTradeInUnit, totalValue),
+      financiamento: calculateProposalAmount(
+        proposalFinancingInput || proposalFinancing,
+        proposalFinancingUnit,
+        totalValue
+      ),
+      outros: calculateProposalAmount(proposalOthersInput || proposalOthers, proposalOthersUnit, totalValue),
     };
   }
 
@@ -599,38 +638,15 @@
     rawValue: string,
     unit: 'reais' | 'percent'
   ) {
-    const totalValue = parseProposalAmount(proposalTotalValue);
-    const parsed = parseProposalAmount(rawValue);
-    if (!Number.isFinite(parsed)) {
-      if (field === 'dinheiro') proposalCash = '';
-      if (field === 'permuta') proposalTradeIn = '';
-      if (field === 'financiamento') proposalFinancing = '';
-      if (field === 'outros') proposalOthers = '';
-      return;
-    }
-
-    const currentAmount =
-      unit === 'percent' ? Number(((totalValue * parsed) / 100).toFixed(2)) : Number(parsed.toFixed(2));
-    const paymentValues = readProposalPaymentValues();
-    const otherPaymentsSum = Object.entries(paymentValues).reduce((sum, [key, value]) => {
-      if (key === field) return sum;
-      return sum + value;
-    }, 0);
-    const maxAllowed = Math.max(totalValue - otherPaymentsSum, 0);
-    const normalizedAmount = Math.min(Math.max(currentAmount, 0), maxAllowed);
-    const displayValue =
-      unit === 'percent'
-        ? formatProposalPercentInput(totalValue > 0 ? (normalizedAmount / totalValue) * 100 : 0)
-        : formatProposalAmountInput(normalizedAmount);
-
-    if (field === 'dinheiro') proposalCash = displayValue;
-    if (field === 'permuta') proposalTradeIn = displayValue;
-    if (field === 'financiamento') proposalFinancing = displayValue;
-    if (field === 'outros') proposalOthers = displayValue;
+    const displayValue = sanitizeProposalAmountInput(rawValue);
+    if (field === 'dinheiro') proposalCashInput = displayValue;
+    if (field === 'permuta') proposalTradeInInput = displayValue;
+    if (field === 'financiamento') proposalFinancingInput = displayValue;
+    if (field === 'outros') proposalOthersInput = displayValue;
   }
 
   function rebalanceProposalCashByTotal() {
-    const totalValue = parseProposalAmount(proposalTotalValue);
+    const totalValue = parseProposalAmount(proposalTotalValueInput || proposalTotalValue);
     if (!Number.isFinite(totalValue)) return;
     const paymentValues = readProposalPaymentValues();
     const otherPaymentsSum = paymentValues.permuta + paymentValues.financiamento + paymentValues.outros;
@@ -639,12 +655,157 @@
       proposalCashUnit === 'percent'
         ? formatProposalPercentInput(totalValue > 0 ? (cashAmount / totalValue) * 100 : 0)
         : formatProposalAmountInput(cashAmount);
+    proposalCashInput = proposalCash;
   }
 
   function updateProposalTotalValue(rawValue: string) {
-    const parsed = parseProposalAmount(rawValue);
+    proposalTotalValueInput = sanitizeProposalAmountInput(rawValue);
+  }
+
+  function commitProposalTotalValue() {
+    const parsed = parseProposalAmount(proposalTotalValueInput || proposalTotalValue);
     proposalTotalValue = Number.isFinite(parsed) ? formatProposalAmountInput(parsed) : '';
+    proposalTotalValueInput = proposalTotalValue;
     rebalanceProposalCashByTotal();
+  }
+
+  function commitProposalField(
+    field: 'dinheiro' | 'permuta' | 'financiamento' | 'outros',
+    unit: 'reais' | 'percent'
+  ) {
+    const rawValue =
+      field === 'dinheiro'
+        ? proposalCashInput
+        : field === 'permuta'
+          ? proposalTradeInInput
+          : field === 'financiamento'
+            ? proposalFinancingInput
+            : proposalOthersInput;
+    const totalValue = parseProposalAmount(proposalTotalValueInput || proposalTotalValue);
+    const parsed = parseProposalAmount(rawValue);
+    if (!Number.isFinite(parsed)) {
+      if (field === 'dinheiro') {
+        proposalCash = '';
+        proposalCashInput = '';
+      }
+      if (field === 'permuta') {
+        proposalTradeIn = '';
+        proposalTradeInInput = '';
+      }
+      if (field === 'financiamento') {
+        proposalFinancing = '';
+        proposalFinancingInput = '';
+      }
+      if (field === 'outros') {
+        proposalOthers = '';
+        proposalOthersInput = '';
+      }
+      return;
+    }
+
+    const currentAmount =
+      unit === 'percent' ? Number(((totalValue * parsed) / 100).toFixed(2)) : Number(parsed.toFixed(2));
+    const formatted =
+      unit === 'percent'
+        ? formatProposalPercentInput(totalValue > 0 ? (currentAmount / totalValue) * 100 : 0)
+        : formatProposalAmountInput(currentAmount);
+
+    if (field === 'dinheiro') {
+      proposalCash = formatted;
+      proposalCashInput = formatted;
+    }
+    if (field === 'permuta') {
+      proposalTradeIn = formatted;
+      proposalTradeInInput = formatted;
+    }
+    if (field === 'financiamento') {
+      proposalFinancing = formatted;
+      proposalFinancingInput = formatted;
+    }
+    if (field === 'outros') {
+      proposalOthers = formatted;
+      proposalOthersInput = formatted;
+    }
+  }
+
+  function commitAllProposalFields() {
+    commitProposalTotalValue();
+    commitProposalField('dinheiro', proposalCashUnit);
+    commitProposalField('permuta', proposalTradeInUnit);
+    commitProposalField('financiamento', proposalFinancingUnit);
+    commitProposalField('outros', proposalOthersUnit);
+  }
+
+  function prepareProposalFieldEditing(field: 'total' | 'dinheiro' | 'permuta' | 'financiamento' | 'outros') {
+    if (field === 'total') {
+      proposalTotalValueInput = editableProposalAmountInput(proposalTotalValueInput || proposalTotalValue);
+      return;
+    }
+    if (field === 'dinheiro') {
+      proposalCashInput = editableProposalAmountInput(proposalCashInput || proposalCash);
+      return;
+    }
+    if (field === 'permuta') {
+      proposalTradeInInput = editableProposalAmountInput(proposalTradeInInput || proposalTradeIn);
+      return;
+    }
+    if (field === 'financiamento') {
+      proposalFinancingInput = editableProposalAmountInput(proposalFinancingInput || proposalFinancing);
+      return;
+    }
+    proposalOthersInput = editableProposalAmountInput(proposalOthersInput || proposalOthers);
+  }
+
+  function switchProposalFieldUnit(
+    field: 'dinheiro' | 'permuta' | 'financiamento' | 'outros',
+    nextUnit: 'reais' | 'percent'
+  ) {
+    const totalValue = parseProposalAmount(proposalTotalValueInput || proposalTotalValue);
+    const currentUnit =
+      field === 'dinheiro'
+        ? proposalCashUnit
+        : field === 'permuta'
+          ? proposalTradeInUnit
+          : field === 'financiamento'
+            ? proposalFinancingUnit
+            : proposalOthersUnit;
+    if (currentUnit === nextUnit) return;
+
+    const currentRaw =
+      field === 'dinheiro'
+        ? proposalCashInput || proposalCash
+        : field === 'permuta'
+          ? proposalTradeInInput || proposalTradeIn
+          : field === 'financiamento'
+            ? proposalFinancingInput || proposalFinancing
+            : proposalOthersInput || proposalOthers;
+    const amount = calculateProposalAmount(currentRaw, currentUnit, totalValue);
+    const converted =
+      nextUnit === 'percent'
+        ? formatProposalPercentInput(totalValue > 0 ? (amount / totalValue) * 100 : 0)
+        : formatProposalAmountInput(amount);
+
+    if (field === 'dinheiro') proposalCashUnit = nextUnit;
+    if (field === 'permuta') proposalTradeInUnit = nextUnit;
+    if (field === 'financiamento') proposalFinancingUnit = nextUnit;
+    if (field === 'outros') proposalOthersUnit = nextUnit;
+
+    if (field === 'dinheiro') {
+      proposalCash = converted;
+      proposalCashInput = converted;
+    }
+    if (field === 'permuta') {
+      proposalTradeIn = converted;
+      proposalTradeInInput = converted;
+    }
+    if (field === 'financiamento') {
+      proposalFinancing = converted;
+      proposalFinancingInput = converted;
+    }
+    if (field === 'outros') {
+      proposalOthers = converted;
+      proposalOthersInput = converted;
+    }
   }
 
   async function uploadSignedProposalFromGenerateModal(negotiationId: string) {
@@ -667,6 +828,7 @@
       return;
     }
 
+    commitAllProposalFields();
     const clientName = proposalClientName.trim();
     const clientCpf = normalizeCpfDigits(proposalClientCpf);
     const validityDays = Number(proposalValidityDays);
@@ -1429,18 +1591,22 @@
     bind:proposalClientName
     bind:proposalClientCpf
     bind:proposalValidityDays
-    bind:proposalTotalValue
-    bind:proposalCash
+    bind:proposalTotalValueInput
+    bind:proposalCashInput
     bind:proposalCashUnit
-    bind:proposalTradeIn
+    bind:proposalTradeInInput
     bind:proposalTradeInUnit
-    bind:proposalFinancing
+    bind:proposalFinancingInput
     bind:proposalFinancingUnit
-    bind:proposalOthers
+    bind:proposalOthersInput
     bind:proposalOthersUnit
     {formatCpf}
     {normalizeProposalFieldValue}
     {updateProposalTotalValue}
+    {prepareProposalFieldEditing}
+    {commitProposalTotalValue}
+    {commitProposalField}
+    {switchProposalFieldUnit}
     {submitGeneratedProposal}
     {cancelProposalInlineEdit}
     bind:rejectReason
@@ -1584,13 +1750,15 @@
               <div class="relative">
                 <input
                   class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                  bind:value={proposalTotalValue}
+                  value={proposalTotalValueInput}
                   inputmode="decimal"
                   placeholder="0,00"
+                  on:focus={() => prepareProposalFieldEditing('total')}
                   on:input={(event) => {
                     const input = event.currentTarget as HTMLInputElement | null;
                     updateProposalTotalValue(input?.value ?? '');
                   }}
+                  on:blur={commitProposalTotalValue}
                 />
                 <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
                   R$
@@ -1603,26 +1771,28 @@
                 <div class="relative">
                   <input
                     class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                    bind:value={proposalCash}
+                    value={proposalCashInput}
                     inputmode="decimal"
                     placeholder="0,00"
+                    on:focus={() => prepareProposalFieldEditing('dinheiro')}
                     on:input={(event) => {
                       const input = event.currentTarget as HTMLInputElement | null;
                       normalizeProposalFieldValue('dinheiro', input?.value ?? '', proposalCashUnit);
                     }}
+                    on:blur={() => commitProposalField('dinheiro', proposalCashUnit)}
                   />
                   <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
                     {proposalCashUnit === 'reais' ? 'R$' : '%'}
                   </span>
                 </div>
-                <select
-                  bind:value={proposalCashUnit}
-                  class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                  on:change={(event) => {
-                    const input = event.currentTarget as HTMLSelectElement | null;
-                    normalizeProposalFieldValue('dinheiro', proposalCash, (input?.value ?? 'reais') as 'reais' | 'percent');
-                  }}
-                >
+                  <select
+                    value={proposalCashUnit}
+                    class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    on:change={(event) => {
+                      const input = event.currentTarget as HTMLSelectElement | null;
+                      switchProposalFieldUnit('dinheiro', (input?.value ?? 'reais') as 'reais' | 'percent');
+                    }}
+                  >
                   <option value="reais">R$</option>
                   <option value="percent">%</option>
                 </select>
@@ -1634,24 +1804,26 @@
                 <div class="relative">
                   <input
                     class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                    bind:value={proposalTradeIn}
+                    value={proposalTradeInInput}
                     inputmode="decimal"
                     placeholder="0,00"
+                    on:focus={() => prepareProposalFieldEditing('permuta')}
                     on:input={(event) => {
                       const input = event.currentTarget as HTMLInputElement | null;
                       normalizeProposalFieldValue('permuta', input?.value ?? '', proposalTradeInUnit);
                     }}
+                    on:blur={() => commitProposalField('permuta', proposalTradeInUnit)}
                   />
                   <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
                     {proposalTradeInUnit === 'reais' ? 'R$' : '%'}
                   </span>
                 </div>
                 <select
-                  bind:value={proposalTradeInUnit}
+                  value={proposalTradeInUnit}
                   class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
                   on:change={(event) => {
                     const input = event.currentTarget as HTMLSelectElement | null;
-                    normalizeProposalFieldValue('permuta', proposalTradeIn, (input?.value ?? 'reais') as 'reais' | 'percent');
+                    switchProposalFieldUnit('permuta', (input?.value ?? 'reais') as 'reais' | 'percent');
                   }}
                 >
                   <option value="reais">R$</option>
@@ -1665,24 +1837,26 @@
                 <div class="relative">
                   <input
                     class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                    bind:value={proposalFinancing}
+                    value={proposalFinancingInput}
                     inputmode="decimal"
                     placeholder="0,00"
+                    on:focus={() => prepareProposalFieldEditing('financiamento')}
                     on:input={(event) => {
                       const input = event.currentTarget as HTMLInputElement | null;
                       normalizeProposalFieldValue('financiamento', input?.value ?? '', proposalFinancingUnit);
                     }}
+                    on:blur={() => commitProposalField('financiamento', proposalFinancingUnit)}
                   />
                   <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
                     {proposalFinancingUnit === 'reais' ? 'R$' : '%'}
                   </span>
                 </div>
                 <select
-                  bind:value={proposalFinancingUnit}
+                  value={proposalFinancingUnit}
                   class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
                   on:change={(event) => {
                     const input = event.currentTarget as HTMLSelectElement | null;
-                    normalizeProposalFieldValue('financiamento', proposalFinancing, (input?.value ?? 'reais') as 'reais' | 'percent');
+                    switchProposalFieldUnit('financiamento', (input?.value ?? 'reais') as 'reais' | 'percent');
                   }}
                 >
                   <option value="reais">R$</option>
@@ -1696,24 +1870,26 @@
                 <div class="relative">
                   <input
                     class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-14 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
-                    bind:value={proposalOthers}
+                    value={proposalOthersInput}
                     inputmode="decimal"
                     placeholder="0,00"
+                    on:focus={() => prepareProposalFieldEditing('outros')}
                     on:input={(event) => {
                       const input = event.currentTarget as HTMLInputElement | null;
                       normalizeProposalFieldValue('outros', input?.value ?? '', proposalOthersUnit);
                     }}
+                    on:blur={() => commitProposalField('outros', proposalOthersUnit)}
                   />
                   <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400">
                     {proposalOthersUnit === 'reais' ? 'R$' : '%'}
                   </span>
                 </div>
                 <select
-                  bind:value={proposalOthersUnit}
+                  value={proposalOthersUnit}
                   class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
                   on:change={(event) => {
                     const input = event.currentTarget as HTMLSelectElement | null;
-                    normalizeProposalFieldValue('outros', proposalOthers, (input?.value ?? 'reais') as 'reais' | 'percent');
+                    switchProposalFieldUnit('outros', (input?.value ?? 'reais') as 'reais' | 'percent');
                   }}
                 >
                   <option value="reais">R$</option>
@@ -1722,6 +1898,10 @@
               </div>
             </label>
           </div>
+
+          <p class="text-xs text-gray-600 dark:text-gray-300">
+            Clique no campo para editar; a formatação final volta ao sair do campo.
+          </p>
 
           <div class="rounded-md border border-dashed border-gray-300 bg-white p-3 dark:border-gray-700 dark:bg-gray-900/70">
             <div class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
