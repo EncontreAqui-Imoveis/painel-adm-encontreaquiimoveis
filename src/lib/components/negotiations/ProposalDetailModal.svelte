@@ -78,9 +78,13 @@
     nextUnit: 'reais' | 'percent'
   ) => void;
   export let submitGeneratedProposal: () => void | Promise<void>;
+  export let saveProposalInlineDraft: () => void | Promise<void>;
   export let cancelProposalInlineEdit: () => void;
   export let generateProposalSubmitting = false;
   export let generateProposalError = '';
+  export let draftPdfDisplayName: () => string;
+  export let viewDraftPdf: () => void;
+  export let deleteDraftPdf: () => void;
 
   export let rejectReason = '';
   export let rejectSelected: () => void;
@@ -230,13 +234,54 @@
           </div>
         </div>
 
+        <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
+          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Minuta</p>
+          <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+            {#if selectedProposal.draftDocumentId != null}
+              Minuta gerada e pronta para download.
+            {:else}
+              Nenhuma minuta gerada ainda.
+            {/if}
+          </p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {draftPdfDisplayName()}
+          </p>
+
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            {#if selectedProposal.draftDocumentId != null}
+              <Button variant="outline" on:click={viewDraftPdf} disabled={generateProposalSubmitting}>
+                Visualizar minuta
+              </Button>
+              <Button
+                variant="outline"
+                on:click={deleteDraftPdf}
+                disabled={generateProposalSubmitting || deletingSignedPdf || uploadingSignedPdf || processingAction}
+              >
+                Excluir minuta
+              </Button>
+            {/if}
+            {#if proposalInlineEditMode}
+              <Button
+                className="bg-amber-500 text-black hover:bg-amber-400"
+                on:click={submitGeneratedProposal}
+                disabled={generateProposalSubmitting || !selectedProposal}
+              >
+                {#if generateProposalSubmitting}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                {selectedProposal.draftDocumentId != null ? 'Refazer minuta' : 'Gerar minuta'}
+              </Button>
+            {/if}
+          </div>
+        </div>
+
         {#if proposalInlineEditMode}
           <div class="mt-4 rounded-md border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
             <div class="mb-3 flex items-center justify-between gap-3">
               <div>
-                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Gerar minuta</p>
+                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Editar dados da proposta</p>
                 <p class="text-sm text-gray-700 dark:text-gray-300">
-                  Ajuste os campos permitidos sem sair deste modal.
+                  Ajuste os campos permitidos sem sair deste modal. A minuta usa estes dados.
                 </p>
               </div>
               <Button variant="outline" size="sm" on:click={cancelProposalInlineEdit} disabled={generateProposalSubmitting}>
@@ -455,6 +500,19 @@
                 {generateProposalError}
               </p>
             {/if}
+
+            <div class="mt-4 flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                on:click={saveProposalInlineDraft}
+                disabled={generateProposalSubmitting || !selectedProposal}
+              >
+                {#if generateProposalSubmitting}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                Salvar alterações
+              </Button>
+            </div>
           </div>
         {/if}
 
@@ -621,17 +679,7 @@
             >
               Cancelar edição
             </Button>
-              <Button
-                className="bg-amber-500 text-black hover:bg-amber-400"
-                on:click={submitGeneratedProposal}
-                disabled={generateProposalSubmitting || !selectedProposal}
-              >
-                {#if generateProposalSubmitting}
-                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                {/if}
-                Gerar minuta
-              </Button>
-            {/if}
+          {/if}
           <Button
             variant="destructive"
             className="bg-red-600 text-white hover:bg-red-700"

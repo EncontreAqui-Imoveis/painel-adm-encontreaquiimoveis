@@ -27,6 +27,8 @@ export type NegotiationItem = {
   updated_at?: string | null;
   signedDocumentId?: number | null;
   signedDocumentFileName?: string | null;
+  draftDocumentId?: number | null;
+  draftDocumentFileName?: string | null;
   capturingBrokerId?: string | number | null;
   sellingBrokerId?: string | number | null;
 };

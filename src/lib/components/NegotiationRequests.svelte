@@ -75,6 +75,21 @@
     state?: string | null;
   };
 
+  type ProposalSubmissionPayload = {
+    propertyId: number | undefined;
+    clientName: string;
+    clientCpf: string;
+    validadeDias: number;
+    proposalValue: number;
+    pagamento: {
+      dinheiro: number;
+      permuta: number;
+      financiamento: number;
+      outros: number;
+    };
+    idempotencyKey: string;
+  };
+
   let summaryItems: NegotiationSummaryItem[] = [];
   let summaryLoading = true;
   let hasMounted = false;
@@ -201,6 +216,13 @@
     if (persistedName) return persistedName;
     if (selectedProposal?.signedDocumentId != null) return 'proposta_assinada.pdf';
     return 'Envie sua proposta assinada';
+  }
+
+  function draftPdfDisplayName(): string {
+    const persistedName = selectedProposal?.draftDocumentFileName?.trim();
+    if (persistedName) return persistedName;
+    if (selectedProposal?.draftDocumentId != null) return 'proposta_minuta.pdf';
+    return 'Nenhuma minuta gerada';
   }
 
   function clearSignedPdfSelection() {
@@ -747,6 +769,108 @@
     commitProposalField('outros', proposalOthersUnit);
   }
 
+  function collectProposalSubmissionData() {
+    commitAllProposalFields();
+    const clientName = proposalClientName.trim();
+    const clientCpf = normalizeCpfDigits(proposalClientCpf);
+    const validityDays = Number(proposalValidityDays);
+    const totalValue = parseProposalAmount(proposalTotalValue);
+    const cash = calculateProposalAmount(proposalCash, proposalCashUnit, totalValue);
+    const tradeIn = calculateProposalAmount(proposalTradeIn, proposalTradeInUnit, totalValue);
+    const financing = calculateProposalAmount(proposalFinancing, proposalFinancingUnit, totalValue);
+    const others = calculateProposalAmount(proposalOthers, proposalOthersUnit, totalValue);
+    const paymentTotal = [cash, tradeIn, financing, others].reduce((sum, value) => sum + value, 0);
+
+    if (!clientName || !clientCpf) {
+      generateProposalError = 'Informe nome e CPF do proponente.';
+      return null;
+    }
+
+    if (!isValidCpf(clientCpf)) {
+      generateProposalError = 'Informe um CPF válido.';
+      return null;
+    }
+
+    if (!Number.isInteger(validityDays) || validityDays <= 0) {
+      generateProposalError = 'Validade deve ser um inteiro maior que zero.';
+      return null;
+    }
+
+    if (!Number.isFinite(totalValue) || totalValue < 1 || totalValue > 999_000_000_000) {
+      generateProposalError = 'Valor da proposta deve ficar entre R$ 1,00 e R$ 999.000.000.000,00.';
+      return null;
+    }
+
+    if (![cash, tradeIn, financing, others].every((value) => Number.isFinite(value))) {
+      generateProposalError = 'Valores de pagamento invalidos.';
+      return null;
+    }
+
+    if (Math.round(paymentTotal * 100) !== Math.round(totalValue * 100)) {
+      generateProposalError = 'A soma dos pagamentos deve bater com o valor da proposta.';
+      return null;
+    }
+
+    return {
+      clientName,
+      clientCpf,
+      validityDays,
+      totalValue,
+      cash,
+      tradeIn,
+      financing,
+      others,
+      payload: {
+        propertyId: selectedGenerateProperty?.id,
+        clientName,
+        clientCpf,
+        validadeDias: validityDays,
+        proposalValue: totalValue,
+        pagamento: {
+          dinheiro: cash,
+          permuta: tradeIn,
+          financiamento: financing,
+          outros: others,
+        },
+        idempotencyKey: crypto.randomUUID(),
+      },
+    };
+  }
+
+  function syncProposalStateFromSubmission(
+    proposalId: string,
+    submission: {
+      clientName: string;
+      clientCpf: string;
+      validityDays: number;
+      totalValue: number;
+      cash: number;
+      tradeIn: number;
+      financing: number;
+      others: number;
+    }
+  ) {
+    syncProposalInState(proposalId, {
+      clientName: submission.clientName,
+      clientCpf: submission.clientCpf,
+      value: submission.totalValue,
+      validityDate: new Date(Date.now() + submission.validityDays * 24 * 60 * 60 * 1000).toISOString(),
+      payment: {
+        dinheiro: submission.cash,
+        permuta: submission.tradeIn,
+        financiamento: submission.financing,
+        outros: submission.others,
+      },
+    });
+  }
+
+  async function persistProposalDraft(
+    proposalId: string,
+    payload: ProposalSubmissionPayload
+  ) {
+    await api.put(`/admin/negotiations/${proposalId}/draft`, payload);
+  }
+
   function prepareProposalFieldEditing(field: 'total' | 'dinheiro' | 'permuta' | 'financiamento' | 'outros') {
     void field;
   }
@@ -817,79 +941,84 @@
     return true;
   }
 
-  async function submitGeneratedProposal() {
-    if (!selectedGenerateProperty) {
-      generateProposalError = 'Selecione um imóvel primeiro.';
+  async function saveProposalInlineDraft() {
+    if (!selectedProposal || !editingProposalId) {
+      generateProposalError = 'Selecione uma proposta para editar.';
       return;
     }
 
-    commitAllProposalFields();
-    const clientName = proposalClientName.trim();
-    const clientCpf = normalizeCpfDigits(proposalClientCpf);
-    const validityDays = Number(proposalValidityDays);
-    const totalValue = parseProposalAmount(proposalTotalValue);
-    const cash = calculateProposalAmount(proposalCash, proposalCashUnit, totalValue);
-    const tradeIn = calculateProposalAmount(proposalTradeIn, proposalTradeInUnit, totalValue);
-    const financing = calculateProposalAmount(proposalFinancing, proposalFinancingUnit, totalValue);
-    const others = calculateProposalAmount(proposalOthers, proposalOthersUnit, totalValue);
-    const paymentTotal = [cash, tradeIn, financing, others].reduce((sum, value) => sum + value, 0);
-
-    if (!clientName || !clientCpf) {
-      generateProposalError = 'Informe nome e CPF do proponente.';
-      return;
-    }
-
-    if (!isValidCpf(clientCpf)) {
-      generateProposalError = 'Informe um CPF válido.';
-      return;
-    }
-
-    if (!Number.isInteger(validityDays) || validityDays <= 0) {
-      generateProposalError = 'Validade deve ser um inteiro maior que zero.';
-      return;
-    }
-
-    if (!Number.isFinite(totalValue) || totalValue < 1 || totalValue > 999_000_000_000) {
-      generateProposalError = 'Valor da proposta deve ficar entre R$ 1,00 e R$ 999.000.000.000,00.';
-      return;
-    }
-
-    if (![cash, tradeIn, financing, others].every((value) => Number.isFinite(value))) {
-      generateProposalError = 'Valores de pagamento invalidos.';
-      return;
-    }
-
-    if (Math.round(paymentTotal * 100) !== Math.round(totalValue * 100)) {
-      generateProposalError = 'A soma dos pagamentos deve bater com o valor da proposta.';
-      return;
-    }
+    const submission = collectProposalSubmissionData();
+    if (!submission) return;
 
     generateProposalSubmitting = true;
     generateProposalError = '';
     try {
+      await persistProposalDraft(editingProposalId, submission.payload);
+      syncProposalStateFromSubmission(editingProposalId, submission);
+      toast.success('Dados da proposta salvos.');
+    } catch (error) {
+      console.error('Erro ao salvar proposta:', error);
+      generateProposalError = normalizeErrorMessage(error, 'Não foi possível salvar a proposta.');
+    } finally {
+      generateProposalSubmitting = false;
+    }
+  }
+
+  async function submitGeneratedProposal() {
+    const submission = collectProposalSubmissionData();
+    if (!submission) return;
+
+    generateProposalSubmitting = true;
+    generateProposalError = '';
+    try {
+      if (proposalInlineEditMode && selectedProposal && editingProposalId) {
+        await persistProposalDraft(editingProposalId, submission.payload);
+        const response = await api.post<{
+          negotiationId?: string;
+          documentId?: number;
+        }>(`/admin/negotiations/${editingProposalId}/minuta`, {});
+        const negotiationId = String(response.negotiationId ?? editingProposalId ?? '').trim();
+        const documentId = Number(response.documentId ?? 0);
+        if (!negotiationId || !Number.isInteger(documentId) || documentId <= 0) {
+          throw new Error('Resposta da geração sem identificadores válidos.');
+        }
+
+        const pdfResponse = await apiClient.get(
+          `/admin/negotiations/${negotiationId}/minuta/download`,
+          {
+            responseType: 'blob',
+          }
+        );
+        const blob = pdfResponse.data instanceof Blob
+          ? pdfResponse.data
+          : new Blob([pdfResponse.data], { type: 'application/pdf' });
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, '_blank', 'noopener,noreferrer');
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+
+        toast.success('Minuta gerada com sucesso.');
+        syncProposalStateFromSubmission(editingProposalId, submission);
+        syncProposalInState(editingProposalId, {
+          draftDocumentId: documentId,
+          draftDocumentFileName: 'proposta_minuta.pdf',
+        });
+        proposalInlineEditMode = false;
+        return;
+      }
+
+      if (!selectedGenerateProperty) {
+        generateProposalError = 'Selecione um imóvel primeiro.';
+        return;
+      }
+
       const payload = {
-        propertyId: selectedGenerateProperty.id,
-        clientName,
-        clientCpf,
-        validadeDias: validityDays,
-        proposalValue: totalValue,
-        pagamento: {
-          dinheiro: cash,
-          permuta: tradeIn,
-          financiamento: financing,
-          outros: others,
-        },
+        ...submission.payload,
         idempotencyKey: crypto.randomUUID(),
       };
-      const response = editingProposalId
-        ? await api.put<{
-            negotiationId?: string;
-            documentId?: number;
-          }>(`/admin/negotiations/${editingProposalId}/draft`, payload)
-        : await api.post<{
-            negotiationId?: string;
-            documentId?: number;
-          }>('/admin/negotiations/proposal', payload);
+      const response = await api.post<{
+          negotiationId?: string;
+          documentId?: number;
+        }>('/admin/negotiations/proposal', payload);
 
       const negotiationId = String(response.negotiationId ?? editingProposalId ?? '').trim();
       const documentId = Number(response.documentId ?? 0);
@@ -916,26 +1045,60 @@
       } else {
         toast.success(editingProposalId ? 'Proposta atualizada com sucesso.' : 'Proposta criada com sucesso.');
       }
-      if (proposalInlineEditMode && selectedProposal) {
-        selectedProposal = {
-          ...selectedProposal,
-          value: totalValue,
-          validityDate: new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000).toISOString(),
-          payment: {
-            dinheiro: cash,
-            permuta: tradeIn,
-            financiamento: financing,
-            outros: others,
-          },
-          clientName,
-          clientCpf,
-        };
-        proposalInlineEditMode = false;
-      }
       closeGenerateProposalModal();
     } catch (error) {
       console.error('Erro ao gerar proposta:', error);
       generateProposalError = normalizeErrorMessage(error, 'Não foi possível gerar a proposta.');
+    } finally {
+      generateProposalSubmitting = false;
+    }
+  }
+
+  async function viewDraftPdf() {
+    if (!selectedProposal?.id || selectedProposal.draftDocumentId == null) {
+      toast.error('Nenhuma minuta disponível para visualização.');
+      return;
+    }
+
+    try {
+      const pdfResponse = await apiClient.get(
+        `/admin/negotiations/${selectedProposal.id}/minuta/download`,
+        {
+          responseType: 'blob',
+        }
+      );
+      const blob = pdfResponse.data instanceof Blob
+        ? pdfResponse.data
+        : new Blob([pdfResponse.data], { type: 'application/pdf' });
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (error) {
+      console.error('Erro ao abrir minuta:', error);
+      toast.error(normalizeErrorMessage(error, 'Não foi possível abrir a minuta.'));
+    }
+  }
+
+  async function deleteDraftPdf() {
+    if (!selectedProposal?.id || selectedProposal.draftDocumentId == null) {
+      toast.error('Não há minuta para excluir.');
+      return;
+    }
+
+    const confirmed = window.confirm('Confirma excluir a minuta desta proposta?');
+    if (!confirmed) return;
+
+    generateProposalSubmitting = true;
+    try {
+      await api.delete(`/admin/negotiations/${selectedProposal.id}/minuta`);
+      syncProposalInState(selectedProposal.id, {
+        draftDocumentId: null,
+        draftDocumentFileName: null,
+      });
+      toast.success('Minuta excluída com sucesso.');
+    } catch (error) {
+      console.error('Erro ao excluir minuta:', error);
+      toast.error(normalizeErrorMessage(error, 'Não foi possível excluir a minuta.'));
     } finally {
       generateProposalSubmitting = false;
     }
@@ -1553,6 +1716,7 @@
     {readClientCpf}
     {paymentLines}
     {signedPdfDisplayName}
+    {draftPdfDisplayName}
     {requiresSignedPdf}
     {uploadingSignedPdf}
     {deletingSignedPdf}
@@ -1603,7 +1767,10 @@
     {commitProposalField}
     {switchProposalFieldUnit}
     {submitGeneratedProposal}
+    {saveProposalInlineDraft}
     {cancelProposalInlineEdit}
+    {viewDraftPdf}
+    {deleteDraftPdf}
     bind:rejectReason
     {rejectSelected}
     {approveSelected}
@@ -1612,9 +1779,9 @@
 <Dialog.Root bind:open={showGenerateProposalModal}>
   <Dialog.Content className="max-h-[90vh] max-w-3xl overflow-y-auto max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">
     <Dialog.Header>
-      <Dialog.Title>Gerar minuta</Dialog.Title>
+      <Dialog.Title>{generateProposalMode === 'edit' ? 'Editar proposta' : 'Criar proposta'}</Dialog.Title>
       <Dialog.Description>
-        Busque o imóvel, informe os dados e gere a minuta da proposta.
+        Busque o imóvel, ajuste os dados e gere ou refaça a minuta da proposta.
       </Dialog.Description>
     </Dialog.Header>
 
@@ -1645,7 +1812,7 @@
 
       {#if generateProposalResults.length > 0}
         <div class="space-y-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Resultados</p>
+          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Resultados do imóvel</p>
           {#each generateProposalResults as property (property.id)}
             <button
               type="button"
@@ -1940,7 +2107,7 @@
         {#if generateProposalSubmitting}
           <Loader2 class="mr-2 h-4 w-4 animate-spin" />
         {/if}
-        {generateProposalMode === 'edit' ? 'Salvar minuta' : 'Criar proposta'}
+        {generateProposalMode === 'edit' ? 'Refazer minuta' : 'Criar proposta'}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>
