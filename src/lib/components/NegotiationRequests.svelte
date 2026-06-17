@@ -837,31 +837,12 @@
     };
   }
 
-  function syncProposalStateFromSubmission(
-    proposalId: string,
-    submission: {
-      clientName: string;
-      clientCpf: string;
-      validityDays: number;
-      totalValue: number;
-      cash: number;
-      tradeIn: number;
-      financing: number;
-      others: number;
+  async function refreshSelectedProposalFromServer(proposalId: string, propertyId: number) {
+    await fetchPropertyRequests(propertyId);
+    const refreshed = propertyRequests.find((item) => item.id === proposalId);
+    if (refreshed) {
+      selectedProposal = { ...refreshed };
     }
-  ) {
-    syncProposalInState(proposalId, {
-      clientName: submission.clientName,
-      clientCpf: submission.clientCpf,
-      value: submission.totalValue,
-      validityDate: new Date(Date.now() + submission.validityDays * 24 * 60 * 60 * 1000).toISOString(),
-      payment: {
-        dinheiro: submission.cash,
-        permuta: submission.tradeIn,
-        financiamento: submission.financing,
-        outros: submission.others,
-      },
-    });
   }
 
   async function persistProposalDraft(
@@ -954,7 +935,7 @@
     generateProposalError = '';
     try {
       await persistProposalDraft(editingProposalId, submission.payload);
-      syncProposalStateFromSubmission(editingProposalId, submission);
+      await refreshSelectedProposalFromServer(editingProposalId, selectedProposal.propertyId);
       toast.success('Dados da proposta salvos.');
     } catch (error) {
       console.error('Erro ao salvar proposta:', error);
@@ -997,11 +978,7 @@
         setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 
         toast.success('Minuta gerada com sucesso.');
-        syncProposalStateFromSubmission(editingProposalId, submission);
-        syncProposalInState(editingProposalId, {
-          draftDocumentId: documentId,
-          draftDocumentFileName: 'proposta_minuta.pdf',
-        });
+        await refreshSelectedProposalFromServer(editingProposalId, selectedProposal.propertyId);
         proposalInlineEditMode = false;
         return;
       }
