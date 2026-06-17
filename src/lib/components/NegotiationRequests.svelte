@@ -922,29 +922,6 @@
     return true;
   }
 
-  async function saveProposalInlineDraft() {
-    if (!selectedProposal || !editingProposalId) {
-      generateProposalError = 'Selecione uma proposta para editar.';
-      return;
-    }
-
-    const submission = collectProposalSubmissionData();
-    if (!submission) return;
-
-    generateProposalSubmitting = true;
-    generateProposalError = '';
-    try {
-      await persistProposalDraft(editingProposalId, submission.payload);
-      await refreshSelectedProposalFromServer(editingProposalId, selectedProposal.propertyId);
-      toast.success('Dados da proposta salvos.');
-    } catch (error) {
-      console.error('Erro ao salvar proposta:', error);
-      generateProposalError = normalizeErrorMessage(error, 'Não foi possível salvar a proposta.');
-    } finally {
-      generateProposalSubmitting = false;
-    }
-  }
-
   async function submitGeneratedProposal() {
     const submission = collectProposalSubmissionData();
     if (!submission) return;
@@ -1744,7 +1721,6 @@
     {commitProposalField}
     {switchProposalFieldUnit}
     {submitGeneratedProposal}
-    {saveProposalInlineDraft}
     {cancelProposalInlineEdit}
     {viewDraftPdf}
     {deleteDraftPdf}

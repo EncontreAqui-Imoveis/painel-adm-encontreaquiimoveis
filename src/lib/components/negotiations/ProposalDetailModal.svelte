@@ -78,7 +78,6 @@
     nextUnit: 'reais' | 'percent'
   ) => void;
   export let submitGeneratedProposal: () => void | Promise<void>;
-  export let saveProposalInlineDraft: () => void | Promise<void>;
   export let cancelProposalInlineEdit: () => void;
   export let generateProposalSubmitting = false;
   export let generateProposalError = '';
@@ -504,13 +503,13 @@
             <div class="mt-4 flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
-                on:click={saveProposalInlineDraft}
+                on:click={submitGeneratedProposal}
                 disabled={generateProposalSubmitting || !selectedProposal}
               >
                 {#if generateProposalSubmitting}
                   <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                 {/if}
-                Salvar alterações
+                {selectedProposal.draftDocumentId != null ? 'Refazer minuta' : 'Gerar minuta'}
               </Button>
             </div>
           </div>
