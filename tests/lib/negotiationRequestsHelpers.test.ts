@@ -3,6 +3,7 @@ import {
   canSaveResponsiblesSelection,
   hasResponsiblesInconsistentState,
   hasResponsibleChanges,
+  hasSignedProposalDocument,
   responsibleSnapshot,
   responsiblesBlockApproval,
   type NegotiationItem,
@@ -35,6 +36,16 @@ describe('negotiationRequestsHelpers responsible flow', () => {
     ).toBe(false);
     expect(hasResponsibleChanges(selected, state, 'neg-1')).toBe(false);
     expect(hasResponsibleChanges([{ id: 3, name: 'C' }], state, 'neg-1')).toBe(true);
+  });
+
+  it('prefers the explicit signed proposal flag over the legacy document id', () => {
+    const proposal = {
+      id: 'neg-2',
+      signedDocumentId: null,
+      hasSignedProposalDocument: true,
+    } as NegotiationItem;
+
+    expect(hasSignedProposalDocument(proposal)).toBe(true);
   });
 
   it('keeps save eligibility tied to a consistent selection state', () => {

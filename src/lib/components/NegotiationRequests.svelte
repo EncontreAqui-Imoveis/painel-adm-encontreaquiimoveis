@@ -32,6 +32,7 @@
     responsibleSnapshot,
     responsiblesBlockApproval as responsiblesBlockApprovalHelper,
     selectedFilterStatus,
+    hasSignedProposalDocument,
     type NegotiationItem,
     type PaginatedResponse,
     type ProposalFilterKey,
@@ -207,14 +208,15 @@
   }
 
   function requiresSignedPdf() {
-    return selectedProposal?.signedDocumentId == null;
+    return !hasSignedProposalDocument(selectedProposal);
   }
 
   function signedPdfDisplayName(): string {
     if (selectedSignedPdfFile?.name) return selectedSignedPdfFile.name;
     const persistedName = selectedProposal?.signedDocumentFileName?.trim();
     if (persistedName) return persistedName;
-    if (selectedProposal?.signedDocumentId != null) return 'proposta_assinada.pdf';
+    if (hasSignedProposalDocument(selectedProposal)) return 'proposta_assinada.pdf';
+    if (isSignedProposal(selectedProposal)) return 'PDF assinado ausente';
     return 'Envie sua proposta assinada';
   }
 
@@ -1164,7 +1166,7 @@
   }
 
   async function viewSignedPdf() {
-    if (!selectedProposal?.signedDocumentId) {
+    if (!hasSignedProposalDocument(selectedProposal) || selectedProposal?.signedDocumentId == null) {
       toast.error('Nenhum PDF assinado anexado para visualização.');
       return;
     }
@@ -1214,7 +1216,7 @@
       return;
     }
 
-    const hadSignedPdf = selectedProposal.signedDocumentId != null;
+    const hadSignedPdf = hasSignedProposalDocument(selectedProposal);
     const uploadedFileName = selectedSignedPdfFile.name;
     uploadingSignedPdf = true;
     try {
@@ -1238,6 +1240,7 @@
       syncProposalInState(selectedProposal.id, {
         signedDocumentId: nextSignedDocumentId,
         signedDocumentFileName: nextSignedDocumentFileName,
+        hasSignedProposalDocument: true,
       });
       clearSignedPdfSelection();
       toast.success(
@@ -1254,7 +1257,7 @@
   }
 
   async function deleteSignedPdf() {
-    if (!selectedProposal?.signedDocumentId) {
+    if (!hasSignedProposalDocument(selectedProposal)) {
       toast.error('Não há PDF assinado para excluir.');
       return;
     }
@@ -1265,7 +1268,11 @@
     deletingSignedPdf = true;
     try {
       await api.delete(`/admin/negotiations/${selectedProposal.id}/signed-proposal`);
-      syncProposalInState(selectedProposal.id, { signedDocumentId: null, signedDocumentFileName: null });
+      syncProposalInState(selectedProposal.id, {
+        signedDocumentId: null,
+        signedDocumentFileName: null,
+        hasSignedProposalDocument: false,
+      });
       clearSignedPdfSelection();
       toast.success('PDF assinado excluído com sucesso.');
     } catch (error) {
@@ -1699,6 +1706,7 @@
     {hasResponsiblesInconsistentState}
     {hasResponsibleChanges}
     {responsiblesBlockApproval}
+    {hasSignedProposalDocument}
     {openEditProposalModal}
     bind:proposalInlineEditMode
     bind:proposalClientName

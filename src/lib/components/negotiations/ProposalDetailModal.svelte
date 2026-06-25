@@ -88,6 +88,7 @@
   export let rejectReason = '';
   export let rejectSelected: () => void;
   export let approveSelected: () => void;
+  export let hasSignedProposalDocument: (proposal: NegotiationItem | null) => boolean;
 
   let signedPdfFileInput: HTMLInputElement | null = null;
 </script>
@@ -153,15 +154,19 @@
         <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
           <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">PDF assinado</p>
           <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
-            {#if selectedProposal.signedDocumentId != null}
+            {#if hasSignedProposalDocument(selectedProposal)}
               PDF assinado anexado.
+            {:else if selectedProposal.status?.toUpperCase?.() === 'PROPOSAL_SIGNED' || selectedProposal.internalStatus?.toUpperCase?.() === 'PROPOSAL_SIGNED'}
+              PDF assinado ausente.
             {:else}
               Nenhum PDF assinado anexado.
             {/if}
           </p>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {#if selectedProposal.signedDocumentId != null}
+            {#if hasSignedProposalDocument(selectedProposal)}
               Você pode visualizar, excluir ou substituir.
+            {:else if selectedProposal.status?.toUpperCase?.() === 'PROPOSAL_SIGNED' || selectedProposal.internalStatus?.toUpperCase?.() === 'PROPOSAL_SIGNED'}
+              Reenvie o PDF para manter a proposta assinada ativa.
             {:else}
               Envie um PDF assinado para habilitar a aprovação.
             {/if}
@@ -199,7 +204,7 @@
                 {#if uploadingSignedPdf}
                   <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                 {/if}
-                {selectedProposal?.signedDocumentId != null ? 'Substituir PDF' : 'Enviar PDF'}
+                {hasSignedProposalDocument(selectedProposal) ? 'Substituir PDF' : 'Enviar PDF'}
               </Button>
             </div>
             {#if uploadingSignedPdf}
@@ -208,7 +213,7 @@
           </div>
 
           <div class="mt-3 flex flex-wrap items-center gap-2">
-            {#if selectedProposal.signedDocumentId != null}
+            {#if hasSignedProposalDocument(selectedProposal)}
               <Button
                 variant="outline"
                 on:click={deleteSignedPdf}
@@ -223,7 +228,7 @@
             <Button
               variant="outline"
               on:click={viewSignedPdf}
-              disabled={viewingPdf || uploadingSignedPdf || deletingSignedPdf || selectedProposal.signedDocumentId == null}
+              disabled={viewingPdf || uploadingSignedPdf || deletingSignedPdf || !hasSignedProposalDocument(selectedProposal)}
             >
               {#if viewingPdf}
                 <Loader2 class="mr-2 h-4 w-4 animate-spin" />
@@ -653,14 +658,16 @@
 
         <div class="mt-5 flex flex-col gap-2 border-t border-gray-200 pt-4 dark:border-gray-700 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <p class="order-last text-left text-sm text-gray-500 dark:text-gray-400 sm:order-first sm:mr-auto sm:max-w-md">
-            {#if !selectedProposal.signedDocumentId || requiresSignedPdf()}
+            {#if !hasSignedProposalDocument(selectedProposal) && (selectedProposal.status?.toUpperCase?.() === 'PROPOSAL_SIGNED' || selectedProposal.internalStatus?.toUpperCase?.() === 'PROPOSAL_SIGNED')}
+              O PDF foi removido. Reenvie para manter a proposta assinada ativa.
+            {:else if !hasSignedProposalDocument(selectedProposal) || requiresSignedPdf()}
               Anexe o PDF assinado para aprovar ou rejeitar esta proposta.
             {:else if responsiblesBlockApproval(selectedProposal)}
               Valide/corrija o carregamento dos responsáveis para aprovar. Rejeitar ainda pode ser usado.
             {/if}
           </p>
           <div class="flex flex-wrap items-center justify-end gap-2">
-          {#if selectedProposal.signedDocumentId == null && !proposalInlineEditMode}
+          {#if !proposalInlineEditMode && !hasSignedProposalDocument(selectedProposal)}
             <Button
               variant="outline"
               on:click={openEditProposalModal}
@@ -683,8 +690,8 @@
             variant="destructive"
             className="bg-red-600 text-white hover:bg-red-700"
             on:click={rejectSelected}
-            disabled={isApproveBusy() || !selectedProposal.signedDocumentId || requiresSignedPdf()}
-            title={!selectedProposal.signedDocumentId || requiresSignedPdf() ? 'Exija PDF assinado anexado' : 'Rejeitar proposta com motivo abaixo'}
+            disabled={isApproveBusy() || !hasSignedProposalDocument(selectedProposal) || requiresSignedPdf()}
+            title={!hasSignedProposalDocument(selectedProposal) || requiresSignedPdf() ? 'Exija PDF assinado anexado' : 'Rejeitar proposta com motivo abaixo'}
           >
             {#if processingAction}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
@@ -695,7 +702,7 @@
             variant="outline"
             className="bg-green-600 text-white hover:bg-green-700"
             on:click={approveSelected}
-            disabled={isApproveBusy() || requiresSignedPdf() || hasResponsiblesInconsistentState(selectedProposal?.id ?? null) || responsiblesBlockApproval(selectedProposal) || !selectedProposal.signedDocumentId}
+            disabled={isApproveBusy() || requiresSignedPdf() || hasResponsiblesInconsistentState(selectedProposal?.id ?? null) || responsiblesBlockApproval(selectedProposal) || !hasSignedProposalDocument(selectedProposal)}
             title={requiresSignedPdf() ? 'Anexe o PDF assinado' : hasResponsiblesInconsistentState(selectedProposal?.id ?? null) || responsiblesBlockApproval(selectedProposal) ? 'Corrija responsáveis' : 'Aprovar e seguir para contratos'}
           >
             {#if processingAction || savingResponsibles}

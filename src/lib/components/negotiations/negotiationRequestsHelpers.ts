@@ -27,6 +27,7 @@ export type NegotiationItem = {
   updated_at?: string | null;
   signedDocumentId?: number | null;
   signedDocumentFileName?: string | null;
+  hasSignedProposalDocument?: boolean | null;
   draftDocumentId?: number | null;
   draftDocumentFileName?: string | null;
   capturingBrokerId?: string | number | null;
@@ -241,6 +242,14 @@ export function isSignedProposal(item: NegotiationItem | null): boolean {
   if (item.signedDocumentId != null) return true;
   const value = String(item?.status ?? item?.internalStatus ?? '').trim().toUpperCase();
   return value === 'PROPOSAL_SIGNED';
+}
+
+export function hasSignedProposalDocument(item: NegotiationItem | null): boolean {
+  if (!item) return false;
+  if (typeof item.hasSignedProposalDocument === 'boolean') {
+    return item.hasSignedProposalDocument;
+  }
+  return item.signedDocumentId != null;
 }
 
 export function selectedFilterStatus(filterKey: ProposalFilterKey): string {

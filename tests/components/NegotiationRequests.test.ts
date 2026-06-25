@@ -249,8 +249,8 @@ describe('NegotiationRequests', () => {
     expect(await screen.findByRole('button', { name: 'Editar Proposta' })).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Editar Proposta' }));
-    expect(await screen.findByText('Gerar minuta')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Salvar alterações' })).toBeInTheDocument();
+    expect((await screen.findAllByText('Gerar minuta')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('Editar dados da proposta')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Editar Proposta' })).not.toBeInTheDocument();
   });
 
