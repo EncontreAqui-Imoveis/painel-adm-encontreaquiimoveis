@@ -115,6 +115,8 @@ describe('ContractsModule', () => {
           },
           buyer_client_name: 'Cliente Comprador',
           buyerClientName: 'Cliente Comprador',
+          clientName: 'Cliente Comprador',
+          clientCpf: '11122233344',
           sellerApprovalStatus: 'APPROVED_WITH_RES',
           buyerApprovalStatus: 'PENDING',
           sellerApprovalReason: {

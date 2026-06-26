@@ -184,6 +184,7 @@ export function getBuyerDisplayName(contract: ContractItem | null | undefined): 
   const directName = String(
     contract.buyerClientName ??
       contract.buyer_client_name ??
+      contract.clientName ??
       (contract as unknown as Record<string, unknown>).client_name ??
       (contract as unknown as Record<string, unknown>).clientName ??
       (contract as unknown as Record<string, unknown>).buyerName ??
