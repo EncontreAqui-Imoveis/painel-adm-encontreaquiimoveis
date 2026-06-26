@@ -43,7 +43,6 @@
   export let saveResponsiblesSelection: (proposalId: string, silent?: boolean) => void | Promise<boolean>;
   export let hasResponsiblesInconsistentState: (proposalId?: string | null) => boolean;
   export let hasResponsibleChanges: () => boolean;
-  export let responsiblesBlockApproval: (proposal: NegotiationItem | null) => boolean;
   export let openEditProposalModal: () => void;
   export let proposalInlineEditMode = false;
   export let proposalClientName = '';
@@ -662,8 +661,6 @@
               O PDF foi removido. Reenvie para manter a proposta assinada ativa.
             {:else if !hasSignedProposalDocument(selectedProposal) || requiresSignedPdf()}
               Anexe o PDF assinado para aprovar ou rejeitar esta proposta.
-            {:else if responsiblesBlockApproval(selectedProposal)}
-              Valide/corrija o carregamento dos responsáveis para aprovar. Rejeitar ainda pode ser usado.
             {/if}
           </p>
           <div class="flex flex-wrap items-center justify-end gap-2">
@@ -702,8 +699,8 @@
             variant="outline"
             className="bg-green-600 text-white hover:bg-green-700"
             on:click={approveSelected}
-            disabled={isApproveBusy() || requiresSignedPdf() || hasResponsiblesInconsistentState(selectedProposal?.id ?? null) || responsiblesBlockApproval(selectedProposal) || !hasSignedProposalDocument(selectedProposal)}
-            title={requiresSignedPdf() ? 'Anexe o PDF assinado' : hasResponsiblesInconsistentState(selectedProposal?.id ?? null) || responsiblesBlockApproval(selectedProposal) ? 'Corrija responsáveis' : 'Aprovar e seguir para contratos'}
+            disabled={isApproveBusy() || requiresSignedPdf() || !hasSignedProposalDocument(selectedProposal)}
+            title={requiresSignedPdf() ? 'Anexe o PDF assinado' : 'Aprovar e seguir para contratos'}
           >
             {#if processingAction || savingResponsibles}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" />

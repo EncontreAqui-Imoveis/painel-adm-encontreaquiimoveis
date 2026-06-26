@@ -30,7 +30,6 @@
     readClientName,
     resolveCreatedAt,
     responsibleSnapshot,
-    responsiblesBlockApproval as responsiblesBlockApprovalHelper,
     selectedFilterStatus,
     hasSignedProposalDocument,
     type NegotiationItem,
@@ -193,10 +192,6 @@
 
   function hasResponsiblesInconsistentState(proposalId?: string | null): boolean {
     return hasResponsiblesInconsistentStateHelper(proposalId, currentResponsibleSelectionState());
-  }
-
-  function responsiblesBlockApproval(proposal: NegotiationItem | null): boolean {
-    return responsiblesBlockApprovalHelper(proposal, currentResponsibleSelectionState());
   }
 
   function hasResponsibleChanges(): boolean {
@@ -1257,6 +1252,8 @@
   }
 
   async function deleteSignedPdf() {
+    if (!selectedProposal) return;
+    const proposal = selectedProposal;
     if (!hasSignedProposalDocument(selectedProposal)) {
       toast.error('Não há PDF assinado para excluir.');
       return;
@@ -1267,8 +1264,8 @@
 
     deletingSignedPdf = true;
     try {
-      await api.delete(`/admin/negotiations/${selectedProposal.id}/signed-proposal`);
-      syncProposalInState(selectedProposal.id, {
+      await api.delete(`/admin/negotiations/${proposal.id}/signed-proposal`);
+      syncProposalInState(proposal.id, {
         signedDocumentId: null,
         signedDocumentFileName: null,
         hasSignedProposalDocument: false,
@@ -1285,7 +1282,8 @@
 
   async function approveSelected() {
     if (!selectedProposal) return;
-    if (!isSignedProposal(selectedProposal)) {
+    const proposal = selectedProposal;
+    if (!isSignedProposal(proposal)) {
       toast.error('A aprovação está disponível apenas para propostas assinadas.');
       return;
     }
@@ -1298,23 +1296,11 @@
     );
     if (!confirmed) return;
 
-    const proposalId = selectedProposal.id;
-    if (responsiblesBlockApproval(selectedProposal)) {
-      const message = 'Não foi possível validar os responsáveis. Recarregue e tente novamente.';
-      responsibleError = message;
-      toast.error(message);
-      return;
-    }
-    if (hasResponsibleChanges()) {
-      const responsiblesSaved = await saveResponsiblesSelection(proposalId, true);
-      if (!responsiblesSaved) return;
-    }
-
     processingAction = true;
     try {
-      await api.put(`/admin/negotiations/${proposalId}/approve`, {});
+      await api.put(`/admin/negotiations/${proposal.id}/approve`, {});
       toast.success('Proposta aprovada com sucesso.');
-      propertyRequests = propertyRequests.filter((item) => item.id !== proposalId);
+      propertyRequests = propertyRequests.filter((item) => item.id !== proposal.id);
       closeDetailModal(true);
       requestSummaryFetch();
       requestPropertyFetch();
@@ -1705,7 +1691,6 @@
     {saveResponsiblesSelection}
     {hasResponsiblesInconsistentState}
     {hasResponsibleChanges}
-    {responsiblesBlockApproval}
     {hasSignedProposalDocument}
     {openEditProposalModal}
     bind:proposalInlineEditMode
