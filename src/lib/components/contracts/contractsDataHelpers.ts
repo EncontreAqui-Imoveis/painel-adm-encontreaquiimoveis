@@ -244,9 +244,50 @@ export function getBuyerDisplayName(contract: ContractItem | null | undefined): 
   return '-';
 }
 
+export function getOwnerDisplayName(contract: ContractItem | null | undefined): string {
+  if (!contract) return '-';
+
+  const directName = String(
+    contract.ownerName ??
+      contract.propertyOwnerName ??
+      (contract.ownerInfo && typeof contract.ownerInfo === 'object'
+        ? (contract.ownerInfo as Record<string, unknown>).nome ??
+          (contract.ownerInfo as Record<string, unknown>).name ??
+          (contract.ownerInfo as Record<string, unknown>).fullName ??
+          (contract.ownerInfo as Record<string, unknown>).full_name
+        : '') ??
+      (contract as unknown as Record<string, unknown>).owner_name ??
+      (contract as unknown as Record<string, unknown>).property_owner_name ??
+      ''
+  ).trim();
+
+  if (directName.length > 0) {
+    return directName;
+  }
+
+  const sellerInfo = contract.sellerInfo ?? null;
+  const fromInfo = getRecordValueRaw(sellerInfo, [
+    'nome',
+    'nome_completo',
+    'nomeCompleto',
+    'owner_name',
+    'ownerName',
+    'seller_name',
+    'sellerName',
+    'name',
+    'full_name',
+    'fullName',
+  ]);
+  if (fromInfo.length > 0) {
+    return fromInfo;
+  }
+
+  return contract.capturingBrokerName ?? '-';
+}
+
 export function getContractPartySummary(contract: ContractItem | null | undefined): string {
-  if (!contract) return 'Captador: - · Comprador: -';
-  return `Captador: ${contract.capturingBrokerName ?? '-'} · Comprador: ${getBuyerDisplayName(contract)}`;
+  if (!contract) return 'Anunciante: - · Comprador: -';
+  return `Anunciante: ${getOwnerDisplayName(contract)} · Comprador: ${getBuyerDisplayName(contract)}`;
 }
 
 export function formatDocumentPreviewName(doc: ContractDocument | null | undefined): string {

@@ -34,6 +34,8 @@ export type ContractItem = {
   sellingBrokerId?: number | null;
   capturingBrokerName?: string | null;
   sellingBrokerName?: string | null;
+  ownerName?: string | null;
+  propertyOwnerName?: string | null;
   buyerClientName?: string | null;
   buyer_client_name?: string | null;
   clientName?: string | null;

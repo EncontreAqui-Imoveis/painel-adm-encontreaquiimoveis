@@ -100,6 +100,7 @@
     formatPhoneMaskBr,
     getBuyerDisplayName,
     getContractPartySummary,
+    getOwnerDisplayName,
     getRecordValueRaw,
     hasRecordValue,
     maritalStatusOptions,
@@ -1644,8 +1645,8 @@
           </div>
           <dl class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
             <div class="flex items-center justify-between gap-3">
-              <dt>Captador</dt>
-              <dd class="text-right">{item.capturingBrokerName ?? '-'}</dd>
+              <dt>Anunciante</dt>
+              <dd class="text-right">{getOwnerDisplayName(item)}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
               <dt>Comprador</dt>
@@ -1689,7 +1690,7 @@
             Imóvel (ID / código)
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Captador
+            Anunciante
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Comprador
@@ -1761,7 +1762,7 @@
                 {/if}
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                {item.capturingBrokerName ?? '-'}
+                {getOwnerDisplayName(item)}
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                 {getBuyerDisplayName(item)}
