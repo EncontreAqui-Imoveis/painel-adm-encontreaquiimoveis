@@ -256,7 +256,10 @@ export function listMissingRecordFields(
 }
 
 export function listMissingSellerInfo(contract: ContractItem): string[] {
-  return listMissingRecordFields(contract.sellerInfo ?? null, sellerRequiredInfoFields);
+  return listMissingRecordFields(
+    contract.ownerInfo ?? contract.sellerInfo ?? null,
+    sellerRequiredInfoFields
+  );
 }
 
 export function listMissingBuyerInfo(contract: ContractItem): string[] {

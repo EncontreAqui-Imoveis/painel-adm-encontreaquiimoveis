@@ -16,6 +16,7 @@ export type NegotiationItem = {
   brokerName?: string | null;
   capturingBrokerName?: string | null;
   sellingBrokerName?: string | null;
+  propertyOwnerName?: string | null;
   clientName?: string | null;
   clientCpf?: string | null;
   value?: number | null;
@@ -140,7 +141,11 @@ export function isValidCpf(value: string | null | undefined): boolean {
 }
 
 export function getBrokerName(item: NegotiationItem): string {
-  return item.brokerName ?? item.capturingBrokerName ?? '-';
+  return item.capturingBrokerName ?? '-';
+}
+
+export function getPropertyOwnerName(item: NegotiationItem): string {
+  return item.propertyOwnerName ?? item.capturingBrokerName ?? '-';
 }
 
 export function getStatusLabel(status?: string, internalStatus?: string): string {

@@ -38,6 +38,7 @@ export type ContractItem = {
   buyer_client_name?: string | null;
   clientName?: string | null;
   clientCpf?: string | null;
+  ownerInfo?: Record<string, unknown> | null;
   sellerInfo?: Record<string, unknown> | null;
   buyerInfo?: Record<string, unknown> | null;
   sellerApprovalStatus?: ContractApprovalStatus | null;

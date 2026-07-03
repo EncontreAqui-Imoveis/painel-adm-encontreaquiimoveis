@@ -229,7 +229,7 @@
   };
 
   let savingPartyData = false;
-  let sellerInfoForm = {
+  let ownerInfoForm = {
     estadoCivil: '',
     profissao: '',
     email: '',
@@ -832,12 +832,13 @@
 
   function hydratePartyInfoFormsFromSelected() {
     if (!selected) return;
-    sellerInfoForm = {
-      estadoCivil: getRecordValueRaw(selected.sellerInfo, ['estado_civil', 'estadoCivil']),
-      profissao: getRecordValueRaw(selected.sellerInfo, ['profissao']),
-      email: getRecordValueRaw(selected.sellerInfo, ['email']),
-      telefone: formatPhoneMaskBr(getRecordValueRaw(selected.sellerInfo, ['telefone', 'phone'])),
-      dadosBancarios: getRecordValueRaw(selected.sellerInfo, ['dados_bancarios', 'dadosBancarios']),
+    const ownerInfo = selected.ownerInfo ?? selected.sellerInfo;
+    ownerInfoForm = {
+      estadoCivil: getRecordValueRaw(ownerInfo, ['estado_civil', 'estadoCivil']),
+      profissao: getRecordValueRaw(ownerInfo, ['profissao']),
+      email: getRecordValueRaw(ownerInfo, ['email']),
+      telefone: formatPhoneMaskBr(getRecordValueRaw(ownerInfo, ['telefone', 'phone'])),
+      dadosBancarios: getRecordValueRaw(ownerInfo, ['dados_bancarios', 'dadosBancarios']),
     };
     buyerInfoForm = {
       estadoCivil: getRecordValueRaw(selected.buyerInfo, ['estado_civil', 'estadoCivil']),
@@ -853,7 +854,7 @@
     savingPartyData = true;
     try {
       await saveContractPartyInfo(selected.id, {
-        sellerInfo: buildSellerInfoPayload(selected.sellerInfo, sellerInfoForm),
+        ownerInfo: buildSellerInfoPayload(selected.ownerInfo ?? selected.sellerInfo, ownerInfoForm),
         buyerInfo: buildBuyerInfoPayload(selected.buyerInfo, buyerInfoForm),
       });
       toast.success('Dados do captador e do comprador salvos.');
@@ -1908,12 +1909,12 @@
               {/if}
               <div class="mt-3 space-y-3 text-sm">
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-estado-civil"
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-estado-civil"
                     >Estado civil</label
                   >
                   <select
-                    id="seller-estado-civil"
-                    bind:value={sellerInfoForm.estadoCivil}
+                    id="owner-estado-civil"
+                    bind:value={ownerInfoForm.estadoCivil}
                     disabled={savingPartyData}
                     class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
                   >
@@ -1923,46 +1924,46 @@
                   </select>
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-profissao"
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-profissao"
                     >Profissão</label
                   >
-                  <LabeledTextInput id="seller-profissao" bind:value={sellerInfoForm.profissao} disabled={savingPartyData} />
+                  <LabeledTextInput id="owner-profissao" bind:value={ownerInfoForm.profissao} disabled={savingPartyData} />
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-email"
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-email"
                     >E-mail</label
                   >
                   <LabeledTextInput
-                    id="seller-email"
+                    id="owner-email"
                     type="text"
-                    bind:value={sellerInfoForm.email}
+                    bind:value={ownerInfoForm.email}
                     disabled={savingPartyData}
                   />
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-telefone"
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-telefone"
                     >Telefone</label
                   >
                   <input
-                    id="seller-telefone"
-                    value={sellerInfoForm.telefone}
+                    id="owner-telefone"
+                    value={ownerInfoForm.telefone}
                     disabled={savingPartyData}
                     inputmode="numeric"
                     placeholder="(00) 00000-0000"
                     class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
                     on:input={(event) => {
                       const target = event.currentTarget as HTMLInputElement;
-                      sellerInfoForm = { ...sellerInfoForm, telefone: formatPhoneMaskBr(target.value) };
+                      ownerInfoForm = { ...ownerInfoForm, telefone: formatPhoneMaskBr(target.value) };
                     }}
                   />
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="seller-banco"
+                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-banco"
                     >Dados bancários</label
                   >
                   <textarea
-                    id="seller-banco"
-                    bind:value={sellerInfoForm.dadosBancarios}
+                    id="owner-banco"
+                    bind:value={ownerInfoForm.dadosBancarios}
                     disabled={savingPartyData}
                     rows="3"
                     class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"

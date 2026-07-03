@@ -13,7 +13,7 @@
     formatCurrency,
     formatDate,
     formatCpf,
-    getBrokerName,
+    getPropertyOwnerName,
     getStatusBadgeClass,
     getStatusLabel,
     isSignedProposal,
@@ -1603,8 +1603,8 @@
                     <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(item)}</p>
                   </div>
                   <div>
-                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Captador</p>
-                    <p class="text-sm text-gray-700 dark:text-gray-300">{getBrokerName(item)}</p>
+                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Anunciante</p>
+                    <p class="text-sm text-gray-700 dark:text-gray-300">{getPropertyOwnerName(item)}</p>
                   </div>
                   <div>
                     <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Valor</p>
