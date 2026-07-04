@@ -1,4 +1,4 @@
-import { onlyDigits, parseCurrency } from '$lib/components/create-property-helpers';
+import { parseCurrency } from '$lib/components/create-property-helpers';
 
 export type FinalizeFieldMode = 'amount' | 'percentage';
 export type FinalizeCommissionField = 'comissaoCaptador' | 'comissaoVendedor' | 'taxaPlataforma';
@@ -15,8 +15,6 @@ export type FinalizeFieldModeState = Record<FinalizeCommissionField, FinalizeFie
 export type PartyInfoFormState = {
   estadoCivil: string;
   profissao: string;
-  email: string;
-  telefone: string;
   dadosBancarios?: string;
   garantiaLocacao?: string;
 };
@@ -24,11 +22,6 @@ export type PartyInfoFormState = {
 function trimInfoValue(raw: string): string | null {
   const value = raw.trim();
   return value.length ? value : null;
-}
-
-function normalizePhoneForPayload(raw: string): string | null {
-  const digits = onlyDigits(raw).slice(0, 11);
-  return digits.length ? digits : null;
 }
 
 function parseMoney(value: string): number | null {
@@ -98,13 +91,12 @@ export function buildSellerInfoPayload(
     selectedSellerInfo && typeof selectedSellerInfo === 'object'
       ? { ...(selectedSellerInfo as Record<string, unknown>) }
       : {};
+  const { email: _email, telefone: _telefone, phone: _phone, ...rest } = previous;
 
   return {
-    ...previous,
+    ...rest,
     estado_civil: trimInfoValue(form.estadoCivil),
     profissao: trimInfoValue(form.profissao),
-    email: trimInfoValue(form.email),
-    telefone: normalizePhoneForPayload(form.telefone),
     dados_bancarios: trimInfoValue(form.dadosBancarios ?? ''),
   };
 }
@@ -117,13 +109,12 @@ export function buildBuyerInfoPayload(
     selectedBuyerInfo && typeof selectedBuyerInfo === 'object'
       ? { ...(selectedBuyerInfo as Record<string, unknown>) }
       : {};
+  const { email: _email, telefone: _telefone, phone: _phone, ...rest } = previous;
 
   return {
-    ...previous,
+    ...rest,
     estado_civil: trimInfoValue(form.estadoCivil),
     profissao: trimInfoValue(form.profissao),
-    email: trimInfoValue(form.email),
-    telefone: normalizePhoneForPayload(form.telefone),
     garantia_locacao: trimInfoValue(form.garantiaLocacao ?? ''),
   };
 }

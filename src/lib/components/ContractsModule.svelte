@@ -21,7 +21,6 @@
   import type { Component } from 'svelte';
   import {
     formatCurrencyInput,
-    formatPhoneBr,
     onlyDigits,
     parseCurrency,
   } from '$lib/components/create-property-helpers';
@@ -91,13 +90,10 @@
     type MatrixRequirement,
     type MatrixRow,
     type MatrixSide,
-    type RequiredFieldDescriptor,
     buyerRentalRequiredInfoFields,
-    buyerRequiredInfoFields,
     contractScopedDocumentTypes,
     documentTypeLabels,
     formatDocumentPreviewName,
-    formatPhoneMaskBr,
     getBuyerDisplayName,
     getContractPartySummary,
     getOwnerDisplayName,
@@ -109,7 +105,6 @@
     outroMatrixSlotTypes,
     rentRequiredDocTypes,
     saleRequiredDocTypes,
-    sellerRequiredInfoFields,
     signedReviewDocTypes,
   } from '$lib/components/contracts/contractsDataHelpers';
   import {
@@ -233,15 +228,11 @@
   let ownerInfoForm = {
     estadoCivil: '',
     profissao: '',
-    email: '',
-    telefone: '',
     dadosBancarios: '',
   };
   let buyerInfoForm = {
     estadoCivil: '',
     profissao: '',
-    email: '',
-    telefone: '',
     garantiaLocacao: '',
   };
 
@@ -837,15 +828,11 @@
     ownerInfoForm = {
       estadoCivil: getRecordValueRaw(ownerInfo, ['estado_civil', 'estadoCivil']),
       profissao: getRecordValueRaw(ownerInfo, ['profissao']),
-      email: getRecordValueRaw(ownerInfo, ['email']),
-      telefone: formatPhoneMaskBr(getRecordValueRaw(ownerInfo, ['telefone', 'phone'])),
       dadosBancarios: getRecordValueRaw(ownerInfo, ['dados_bancarios', 'dadosBancarios']),
     };
     buyerInfoForm = {
       estadoCivil: getRecordValueRaw(selected.buyerInfo, ['estado_civil', 'estadoCivil']),
       profissao: getRecordValueRaw(selected.buyerInfo, ['profissao']),
-      email: getRecordValueRaw(selected.buyerInfo, ['email']),
-      telefone: formatPhoneMaskBr(getRecordValueRaw(selected.buyerInfo, ['telefone', 'phone'])),
       garantiaLocacao: getRecordValueRaw(selected.buyerInfo, ['garantia_locacao', 'garantiaLocacao']),
     };
   }
@@ -1931,34 +1918,6 @@
                   <LabeledTextInput id="owner-profissao" bind:value={ownerInfoForm.profissao} disabled={savingPartyData} />
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-email"
-                    >E-mail</label
-                  >
-                  <LabeledTextInput
-                    id="owner-email"
-                    type="text"
-                    bind:value={ownerInfoForm.email}
-                    disabled={savingPartyData}
-                  />
-                </div>
-                <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-telefone"
-                    >Telefone</label
-                  >
-                  <input
-                    id="owner-telefone"
-                    value={ownerInfoForm.telefone}
-                    disabled={savingPartyData}
-                    inputmode="numeric"
-                    placeholder="(00) 00000-0000"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
-                    on:input={(event) => {
-                      const target = event.currentTarget as HTMLInputElement;
-                      ownerInfoForm = { ...ownerInfoForm, telefone: formatPhoneMaskBr(target.value) };
-                    }}
-                  />
-                </div>
-                <div>
                   <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-banco"
                     >Dados bancários</label
                   >
@@ -2011,29 +1970,6 @@
                     >Profissão</label
                   >
                   <LabeledTextInput id="buyer-profissao" bind:value={buyerInfoForm.profissao} disabled={savingPartyData} />
-                </div>
-                <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-email"
-                    >E-mail</label
-                  >
-                  <LabeledTextInput id="buyer-email" bind:value={buyerInfoForm.email} disabled={savingPartyData} />
-                </div>
-                <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-telefone"
-                    >Telefone</label
-                  >
-                  <input
-                    id="buyer-telefone"
-                    value={buyerInfoForm.telefone}
-                    disabled={savingPartyData}
-                    inputmode="numeric"
-                    placeholder="(00) 00000-0000"
-                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"
-                    on:input={(event) => {
-                      const target = event.currentTarget as HTMLInputElement;
-                      buyerInfoForm = { ...buyerInfoForm, telefone: formatPhoneMaskBr(target.value) };
-                    }}
-                  />
                 </div>
                 <div>
                   <label

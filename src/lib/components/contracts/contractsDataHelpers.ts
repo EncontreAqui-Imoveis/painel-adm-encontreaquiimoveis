@@ -73,16 +73,12 @@ export const rentRequiredDocTypes = [
 export const sellerRequiredInfoFields: RequiredFieldDescriptor[] = [
   { keys: ['estado_civil', 'estadoCivil'], label: 'Estado Civil' },
   { keys: ['profissao'], label: 'Profissão' },
-  { keys: ['email'], label: 'E-mail' },
-  { keys: ['telefone', 'phone'], label: 'Telefone' },
   { keys: ['dados_bancarios', 'dadosBancarios'], label: 'Dados Bancários' },
 ];
 
 export const buyerRequiredInfoFields: RequiredFieldDescriptor[] = [
   { keys: ['estado_civil', 'estadoCivil'], label: 'Estado Civil' },
   { keys: ['profissao'], label: 'Profissão' },
-  { keys: ['email'], label: 'E-mail' },
-  { keys: ['telefone', 'phone'], label: 'Telefone' },
 ];
 
 export const buyerRentalRequiredInfoFields: RequiredFieldDescriptor[] = [

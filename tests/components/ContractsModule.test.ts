@@ -176,7 +176,7 @@ describe('ContractsModule', () => {
     expect(screen.getByText('Casa Contrato')).toBeInTheDocument();
     expect(screen.getByText('Em análise')).toBeInTheDocument();
     expect(screen.getByAltText('Foto do imóvel Casa Contrato')).toBeInTheDocument();
-    expect(screen.getAllByText('Captador').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Captador/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
     expect(screen.getByText('Cliente Comprador')).toBeInTheDocument();
     const openReviewButton = await screen.findByRole('button', {
@@ -187,11 +187,6 @@ describe('ContractsModule', () => {
     expect(screen.getByRole('button', { name: 'danfe (peças).pdf' })).toBeInTheDocument();
     expect(await screen.findByText('Dados Captador')).toBeInTheDocument();
     expect(screen.getByText('2 responsáveis designados')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('captador@test.com')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('(62) 99999-8888')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('vendedor@test.com')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('(62) 99999-7777')).toBeInTheDocument();
-
     const downloadButtons = screen.getAllByRole('button', { name: 'Baixar' });
     expect(downloadButtons.length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(5);
@@ -579,15 +574,15 @@ describe('ContractsModule', () => {
 
     expect(await screen.findByText('Aprovação bloqueada.')).toBeInTheDocument();
     expect(
-      screen.getByText((content) => content.startsWith('Captador sem:'))
+      screen.getByText((content) => content.startsWith('Anunciante sem:'))
     ).toBeInTheDocument();
     expect(
       screen.getByText((content) => content.startsWith('Documentos faltando:'))
     ).toBeInTheDocument();
 
     const approveButtons = [
-      screen.getByRole('button', { name: /Aprovar\s*captador/i }),
-      screen.getByRole('button', { name: /Aprovar\s*comprador/i }),
+      screen.getByRole('button', { name: /^Aprovaranunciante$/i }),
+      screen.getByRole('button', { name: /^Aprovarcomprador$/i }),
     ];
     for (const button of approveButtons) {
       expect(button).toBeDisabled();
@@ -595,8 +590,8 @@ describe('ContractsModule', () => {
     }
 
     const approveWithRemarksButtons = [
-      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*captador/i }),
-      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*comprador/i }),
+      screen.getByRole('button', { name: /^Aprovar c\/ ressalvasanunciante$/i }),
+      screen.getByRole('button', { name: /^Aprovar c\/ ressalvascomprador$/i }),
     ];
     for (const button of approveWithRemarksButtons) {
       expect(button).toBeEnabled();
@@ -672,16 +667,16 @@ describe('ContractsModule', () => {
     expect(screen.queryByText('Aprovação bloqueada.')).not.toBeInTheDocument();
 
     const approveButtons = [
-      screen.getByRole('button', { name: /Aprovar\s*captador/i }),
-      screen.getByRole('button', { name: /Aprovar\s*comprador/i }),
+      screen.getByRole('button', { name: /^Aprovaranunciante$/i }),
+      screen.getByRole('button', { name: /^Aprovarcomprador$/i }),
     ];
     for (const button of approveButtons) {
       expect(button).toBeEnabled();
     }
 
     const approveWithRemarksButtons = [
-      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*captador/i }),
-      screen.getByRole('button', { name: /Aprovar c\/ ressalvas\s*comprador/i }),
+      screen.getByRole('button', { name: /^Aprovar c\/ ressalvasanunciante$/i }),
+      screen.getByRole('button', { name: /^Aprovar c\/ ressalvascomprador$/i }),
     ];
     for (const button of approveWithRemarksButtons) {
       expect(button).toBeEnabled();
@@ -826,7 +821,7 @@ describe('ContractsModule', () => {
     expect(await screen.findByText('Documentos do contrato')).toBeInTheDocument();
     expect(screen.getByText('identidade_captador.pdf')).toBeInTheDocument();
     expect(screen.getByText('endereco_vendedor.pdf')).toBeInTheDocument();
-    expect(screen.getAllByText('Captador').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Captador/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Visualizar' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Baixar' }).length).toBeGreaterThan(0);
@@ -1973,13 +1968,13 @@ describe('ContractsModule', () => {
     expect(
       screen.getByText(
         (content) =>
-          content.includes('Documento de Identidade (Captador): pendente')
+          content.includes('Documento de Identidade (Anunciante): pendente')
       )
     ).toBeInTheDocument();
 
     const approveButtons = [
-      screen.getByRole('button', { name: /Aprovar\s*captador/i }),
-      screen.getByRole('button', { name: /Aprovar\s*comprador/i }),
+      screen.getByRole('button', { name: /^Aprovaranunciante$/i }),
+      screen.getByRole('button', { name: /^Aprovarcomprador$/i }),
     ];
     for (const button of approveButtons) {
       expect(button).toBeDisabled();
@@ -2043,7 +2038,7 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(openReviewButton);
 
-    const approveButton = screen.getByRole('button', { name: /Aprovar\s*captador/i });
+    const approveButton = screen.getByRole('button', { name: /^Aprovaranunciante$/i });
     await fireEvent.click(approveButton);
 
     await waitFor(() => {
@@ -2171,7 +2166,7 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(openReviewButton);
 
-    const approveButton = screen.getByRole('button', { name: /Aprovar\s*captador/i });
+    const approveButton = screen.getByRole('button', { name: /^Aprovaranunciante$/i });
     await fireEvent.click(approveButton);
 
     await waitFor(() => {
@@ -2188,8 +2183,8 @@ describe('ContractsModule', () => {
     expect(screen.getByText('Dados Captador')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Rejeitar' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Reiniciar' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Aprovar\s*captador/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Aprovar c\/ ressalvas\s*captador/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Aprovaranunciante$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Aprovar c\/ ressalvasanunciante$/i })).not.toBeInTheDocument();
   });
 
   it('bloqueia aprovação com ressalvas quando o motivo é curto demais', async () => {
@@ -2229,7 +2224,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(openReviewButton);
 
     const approveWithRemarksButton = screen.getByRole('button', {
-      name: /Aprovar c\/ ressalvas\s*captador/i,
+      name: /^Aprovar c\/ ressalvasanunciante$/i,
     });
     await fireEvent.click(approveWithRemarksButton);
 
