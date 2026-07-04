@@ -290,7 +290,7 @@ export function listMissingRequiredDocuments(contract: ContractItem): string[] {
     const sellerDoc = getDocumentForMatrixCell(contract, row.documentType, 'seller');
     const buyerDoc = getDocumentForMatrixCell(contract, row.documentType, 'buyer');
     if (row.documentType !== 'outro' && row.sellerRequired && sellerDoc == null) {
-      missing.push(`${documentLabel(row.documentType)} (Captador)`);
+      missing.push(`${documentLabel(row.documentType)} (Anunciante)`);
     }
     if (row.documentType !== 'outro' && row.buyerRequired && buyerDoc == null) {
       missing.push(`${documentLabel(row.documentType)} (Comprador)`);
@@ -315,7 +315,7 @@ export function listBlockingDocumentStatuses(contract: ContractItem): string[] {
       }
 
       const side = getDocumentSide(doc);
-      const sideLabel = side === 'seller' ? ' (Captador)' : side === 'buyer' ? ' (Comprador)' : '';
+      const sideLabel = side === 'seller' ? ' (Anunciante)' : side === 'buyer' ? ' (Comprador)' : '';
       const label = documentLabel(doc.documentType) + sideLabel;
       return `${label}: ${status === 'REJECTED' ? 'rejeitado' : 'pendente'}`;
     })
@@ -337,7 +337,7 @@ export function computeApprovalLockReasons(
   const blockingDocuments = listBlockingDocumentStatuses(contract);
 
   if (missingSellerInfo.length > 0) {
-    reasons.push(`Captador sem: ${missingSellerInfo.join(', ')}`);
+    reasons.push(`Anunciante sem: ${missingSellerInfo.join(', ')}`);
   }
 
   if (missingBuyerInfo.length > 0) {

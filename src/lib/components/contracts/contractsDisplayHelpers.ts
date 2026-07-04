@@ -106,7 +106,7 @@ function normalizePossiblyMojibakeText(value: string): string {
 
 export function documentSideLabel(doc?: ContractDocument | null): string {
   const side = String(doc?.side ?? '').trim().toLowerCase();
-  if (side === 'seller') return 'Captador';
+  if (side === 'seller') return 'Anunciante';
   if (side === 'buyer') return 'Comprador';
   return '';
 }

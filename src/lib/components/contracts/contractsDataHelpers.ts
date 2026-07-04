@@ -282,7 +282,7 @@ export function getOwnerDisplayName(contract: ContractItem | null | undefined): 
     return fromInfo;
   }
 
-  return contract.capturingBrokerName ?? '-';
+  return '-';
 }
 
 export function getContractPartySummary(contract: ContractItem | null | undefined): string {
