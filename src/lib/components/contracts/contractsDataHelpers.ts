@@ -240,6 +240,53 @@ export function getBuyerDisplayName(contract: ContractItem | null | undefined): 
   return '-';
 }
 
+function getOptionalNumericField(
+  contract: ContractItem | null | undefined,
+  keys: string[]
+): number | null {
+  if (!contract) return null;
+
+  for (const key of keys) {
+    const raw = (contract as unknown as Record<string, unknown>)[key];
+    if (raw == null || raw === '') {
+      continue;
+    }
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+export function getContractOwnerId(contract: ContractItem | null | undefined): number | null {
+  return getOptionalNumericField(contract, [
+    'ownerId',
+    'propertyOwnerId',
+    'property_owner_id',
+    'owner_id',
+  ]);
+}
+
+export function getContractBuyerClientId(
+  contract: ContractItem | null | undefined
+): number | null {
+  return getOptionalNumericField(contract, [
+    'buyerClientId',
+    'buyer_client_id',
+  ]);
+}
+
+export function getContractSellerClientId(
+  contract: ContractItem | null | undefined
+): number | null {
+  return getOptionalNumericField(contract, [
+    'sellerClientId',
+    'seller_client_id',
+  ]);
+}
+
 export function getOwnerDisplayName(contract: ContractItem | null | undefined): string {
   if (!contract) return '-';
 
