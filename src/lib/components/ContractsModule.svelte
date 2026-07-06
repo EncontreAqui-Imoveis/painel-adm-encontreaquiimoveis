@@ -2188,7 +2188,7 @@
               <div class="text-sm text-gray-700 dark:text-gray-200">
                 <div class="flex items-center justify-between gap-3">
                   <label for="finalize-comissao-vendedor" class="font-medium">
-                    Comissão complementar
+                    Comissão do vendedor
                   </label>
                   <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-slate-200 p-1 dark:border-gray-700 dark:bg-slate-800">
                     <button
@@ -2198,7 +2198,7 @@
                           ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
                           : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
-                      aria-label="Comissão complementar em valor real"
+                      aria-label="Comissão do vendedor em valor real"
                       aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'amount'}
                       on:click={() => setFinalizeFieldMode('comissaoVendedor', 'amount')}
                     >
@@ -2211,7 +2211,7 @@
                           ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
                           : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
-                      aria-label="Comissão complementar em percentual"
+                      aria-label="Comissão do vendedor em percentual"
                       aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'percentage'}
                       on:click={() => setFinalizeFieldMode('comissaoVendedor', 'percentage')}
                     >

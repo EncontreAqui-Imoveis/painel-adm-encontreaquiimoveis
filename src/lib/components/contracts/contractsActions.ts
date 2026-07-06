@@ -36,9 +36,7 @@ export async function uploadMatrixDocument(
   form.append('documentCategory', documentCategory);
   form.append('side', context.side);
   form.append('file', file);
-  await apiClient.post(`/contracts/${contractId}/documents`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  await apiClient.post(`/contracts/${contractId}/documents`, form);
 }
 
 export async function deleteContractDocument(contractId: string, documentId: number): Promise<void> {
@@ -60,9 +58,7 @@ export async function uploadSignedDocument(
   const form = new FormData();
   form.append('documentType', documentType);
   form.append('file', file);
-  await apiClient.post(`/admin/contracts/${contractId}/signed-docs`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  await apiClient.post(`/admin/contracts/${contractId}/signed-docs`, form);
 }
 
 export async function uploadFinalizedContractDocument(
@@ -77,9 +73,7 @@ export async function uploadFinalizedContractDocument(
     form.append('side', side);
   }
   form.append('file', file);
-  await apiClient.post(`/admin/contracts/${contractId}/finalized-docs`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  await apiClient.post(`/admin/contracts/${contractId}/finalized-docs`, form);
 }
 
 export async function submitContractDraft(
@@ -94,9 +88,7 @@ export async function submitContractDraft(
   if (reuseCurrentDraft) {
     form.append('reuseCurrentDraft', 'true');
   }
-  await apiClient.post(`/admin/contracts/${contractId}/draft`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  await apiClient.post(`/admin/contracts/${contractId}/draft`, form);
 }
 
 export async function finalizeContract(
