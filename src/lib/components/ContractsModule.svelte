@@ -1000,6 +1000,13 @@
     }
   }
 
+  function triggerSignedPicker() {
+    if (signedUploadInputEl) {
+      signedUploadInputEl.value = '';
+      signedUploadInputEl.click();
+    }
+  }
+
   function handleSignedFileChange(event: Event) {
     const target = event.target as HTMLInputElement;
     selectedSignedFile = target.files?.[0] ?? null;
@@ -2354,13 +2361,13 @@
                 <Button
                   size="sm"
                   variant="outline"
-                  on:click={uploadSignedDocsByAdmin}
-                  disabled={uploadingSignedDoc || !selectedSignedFile}
+                  on:click={selectedSignedFile ? uploadSignedDocsByAdmin : triggerSignedPicker}
+                  disabled={uploadingSignedDoc}
                 >
                   {#if uploadingSignedDoc}
                     <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                   {/if}
-                  Anexar documento físico
+                  {selectedSignedFile ? 'Anexar documento físico' : 'Selecionar PDF'}
                 </Button>
               </div>
             </div>
@@ -2551,6 +2558,7 @@
           deleteFinalizedDocument={deleteFinalizedDocument}
           downloadAllDocuments={downloadAllDocuments}
           uploadFinalizedDocument={uploadFinalizedDocument}
+          triggerSignedFilePicker={triggerSignedPicker}
           handleSignedFileChange={handleSignedFileChange}
           cancelSignedDocumentReplacement={cancelSignedDocumentReplacement}
           closeModal={closeModal}

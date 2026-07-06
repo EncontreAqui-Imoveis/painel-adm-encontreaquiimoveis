@@ -28,6 +28,7 @@
   export let deleteFinalizedDocument: (doc: ContractDocument) => void | Promise<void> = () => {};
   export let downloadAllDocuments: (contract: ContractItem) => void | Promise<void> = () => {};
   export let uploadFinalizedDocument: () => void | Promise<void> = () => {};
+  export let triggerSignedFilePicker: () => void = () => {};
   export let handleSignedFileChange: (event: Event) => void = () => {};
   export let cancelSignedDocumentReplacement: () => void = () => {};
   export let closeModal: () => void = () => {};
@@ -186,13 +187,13 @@
     <div class="mt-3 flex justify-end">
       <Button
         className="bg-blue-600 text-white hover:bg-blue-700"
-        on:click={uploadFinalizedDocument}
-        disabled={uploadingSignedDoc || !selectedSignedFile}
+        on:click={selectedSignedFile ? uploadFinalizedDocument : triggerSignedFilePicker}
+        disabled={uploadingSignedDoc}
       >
         {#if uploadingSignedDoc}
           <Loader2 class="mr-2 h-4 w-4 animate-spin" />
         {/if}
-        Adicionar documento
+        {selectedSignedFile ? 'Adicionar documento' : 'Selecionar PDF'}
       </Button>
     </div>
   </div>

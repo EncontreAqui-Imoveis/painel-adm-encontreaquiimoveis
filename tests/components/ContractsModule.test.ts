@@ -746,7 +746,7 @@ describe('ContractsModule', () => {
     expect(screen.getByText('Formulário de Comissões').compareDocumentPosition(
       screen.getByText('Documentos para conferência')
     ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Anexar documento físico' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Selecionar PDF' })).toBeInTheDocument();
   });
 
   it('envia o anexo de documento assinado em AWAITING_SIGNATURES', async () => {
@@ -790,9 +790,13 @@ describe('ContractsModule', () => {
     apiClientPostMock.mockResolvedValue({ data: {} });
 
     render(ContractsModule);
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Aguardando Assinaturas' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Finalizar Venda/Locação' }));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Selecionar PDF' }));
+    expect(clickSpy).toHaveBeenCalled();
 
     const signedFileInput = screen.getByLabelText('Arquivo') as HTMLInputElement;
     const signedPdf = new File(['%PDF-1.4 signed document%'], 'contrato_assinado.pdf', {
@@ -817,6 +821,7 @@ describe('ContractsModule', () => {
     expect(form.get('documentType')).toBe('contrato_assinado');
     expect(form.get('file')).toBeInstanceOf(File);
     expect((form.get('file') as File).name).toBe('contrato_assinado.pdf');
+    clickSpy.mockRestore();
   });
 
   it('lista todos os documentos existentes no modal de minuta em IN_DRAFT', async () => {
