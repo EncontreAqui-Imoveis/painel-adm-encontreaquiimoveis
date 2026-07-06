@@ -111,14 +111,33 @@ export function documentSideLabel(doc?: ContractDocument | null): string {
   return '';
 }
 
+export function truncateFileName(name: string, maxLen = 15): string {
+  const trimmed = String(name ?? '').trim();
+  if (trimmed.length <= maxLen) return trimmed;
+
+  const lastDotIndex = trimmed.lastIndexOf('.');
+  if (lastDotIndex === -1 || lastDotIndex === 0) {
+    return trimmed.slice(0, maxLen) + '...';
+  }
+
+  const baseName = trimmed.slice(0, lastDotIndex);
+  const extension = trimmed.slice(lastDotIndex);
+
+  if (baseName.length <= maxLen) {
+    return trimmed;
+  }
+
+  return baseName.slice(0, maxLen) + '...' + extension;
+}
+
 export function documentFileName(doc?: ContractDocument | null): string {
   const original = normalizePossiblyMojibakeText(String(doc?.originalFileName ?? ''));
   if (original.length > 0) {
-    return original;
+    return truncateFileName(original, 15);
   }
   const type = String(doc?.documentType ?? '').trim();
   if (type.length > 0) {
-    return `${type}.pdf`;
+    return truncateFileName(`${type}.pdf`, 15);
   }
   return 'documento.pdf';
 }

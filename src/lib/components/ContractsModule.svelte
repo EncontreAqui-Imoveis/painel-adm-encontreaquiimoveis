@@ -524,7 +524,7 @@
       return [
         {
           key: 'seller',
-          label: 'Captador',
+          label: 'Vendedor',
           status: contract.sellerApprovalStatus,
           reason: readReasonText(contract.sellerApprovalReason),
         },
@@ -534,7 +534,7 @@
     return [
       {
         key: 'seller',
-        label: 'Captador',
+        label: 'Vendedor',
         status: contract.sellerApprovalStatus,
         reason: readReasonText(contract.sellerApprovalReason),
       },
@@ -845,7 +845,7 @@
         ownerInfo: buildSellerInfoPayload(selected.ownerInfo ?? selected.sellerInfo, ownerInfoForm),
         buyerInfo: buildBuyerInfoPayload(selected.buyerInfo, buyerInfoForm),
       });
-      toast.success('Dados do captador e do comprador salvos.');
+      toast.success('Dados do vendedor e do comprador salvos.');
       await reloadSelectedContract(selected.id);
     } catch (error) {
       console.error('Erro ao salvar dados do contrato:', error);
@@ -893,11 +893,15 @@
     savingPartyData = false;
     hydrateFinalizeForm(item);
     hydratePartyInfoFormsFromSelected();
-    if (shouldHydrateContractDetails(item)) {
-      void reloadSelectedContract(item.id).catch((error) => {
+    void reloadSelectedContract(item.id)
+      .then(() => {
+        if (selected) {
+          syncSelectedContractInList(selected);
+        }
+      })
+      .catch((error) => {
         console.error('Falha ao carregar detalhes completos do contrato:', error);
       });
-    }
   }
 
   function closeModal(force = false) {
@@ -1256,7 +1260,7 @@
       finalizedDocumentRequiresSide(signedDocType) &&
       !selectedSignedDocSide
     ) {
-      toast.error('Selecione se o documento pertence ao Captador ou ao Comprador.');
+      toast.error('Selecione se o documento pertence ao Vendedor ou ao Comprador.');
       return;
     }
 
@@ -1880,7 +1884,7 @@
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <div class="flex items-center justify-between gap-2">
                 <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                  Dados Captador
+                  Dados Vendedor
                 </p>
                 <span
                   class={`rounded-full px-2 py-1 text-xs font-semibold ${approvalBadgeClass(
@@ -1993,7 +1997,7 @@
               {#if savingPartyData}
                 <Loader2 class="mr-2 h-4 w-4 animate-spin" />
               {/if}
-              Salvar dados captador e comprador
+              Salvar dados vendedor e comprador
             </Button>
           </div>
 
@@ -2271,7 +2275,7 @@
                     bind:value={selectedSignedDocSide}
                     class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                   >
-                    <option value="seller">Captador</option>
+                    <option value="seller">Vendedor</option>
                     <option value="buyer">Comprador</option>
                   </select>
                 </label>
@@ -2407,7 +2411,7 @@
                       </div>
                       <button
                         type="button"
-                        class="mt-1 block truncate text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
+                        class="mt-1 block text-left text-xs text-gray-500 hover:underline dark:text-gray-400 break-words whitespace-normal"
                         on:click={() => selected && openDocumentPreview(doc, selected)}
                       >
                         {documentFileName(doc)}

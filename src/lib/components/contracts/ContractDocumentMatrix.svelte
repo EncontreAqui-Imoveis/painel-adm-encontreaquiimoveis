@@ -66,7 +66,7 @@
                         <div class="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
-                            class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
+                            class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100 break-words whitespace-normal"
                             on:click={() => onOpenPreview(sellerDoc)}
                           >
                             {documentFileName(sellerDoc)}
@@ -140,7 +140,7 @@
                         <div class="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
-                            class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100"
+                            class="text-left font-medium text-gray-900 hover:underline dark:text-gray-100 break-words whitespace-normal"
                             on:click={() => onOpenPreview(buyerDoc)}
                           >
                             {documentFileName(buyerDoc)}

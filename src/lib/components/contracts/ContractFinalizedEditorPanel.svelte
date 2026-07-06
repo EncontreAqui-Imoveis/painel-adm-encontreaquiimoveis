@@ -86,7 +86,7 @@
               </div>
               <button
                 type="button"
-                class="mt-1 block truncate text-left text-xs text-gray-500 hover:underline dark:text-gray-400"
+                class="mt-1 block text-left text-xs text-gray-500 hover:underline dark:text-gray-400 break-words whitespace-normal"
                 on:click={() => contract && openDocumentPreview(doc, contract)}
               >
                 {documentFileName(doc)}
