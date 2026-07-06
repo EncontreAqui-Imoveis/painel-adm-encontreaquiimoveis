@@ -19,11 +19,6 @@
   import { Input } from '$lib/components/ui/input';
   import type { InputProps } from '$lib/components/ui/input/input-props';
   import type { Component } from 'svelte';
-  import {
-    formatCurrencyInput,
-    onlyDigits,
-    parseCurrency,
-  } from '$lib/components/create-property-helpers';
   import Pagination from '$lib/Pagination.svelte';
   import ContractDocumentPreview from '$lib/components/contracts/ContractDocumentPreview.svelte';
   import ContractDocumentMatrix from '$lib/components/contracts/ContractDocumentMatrix.svelte';
@@ -80,8 +75,10 @@
     buildBuyerInfoPayload,
     buildSellerInfoPayload,
     hasExactSaleSplit,
+    formatManualDecimalDisplay,
     resolveApiErrorMessage,
     resolveFinalizeCommissionAmounts,
+    sanitizeManualDecimalInput,
     type FinalizeCommissionField,
     type FinalizeFieldMode,
   } from '$lib/components/contracts/contractsFormHelpers';
@@ -577,19 +574,13 @@
     if (value == null) return '';
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return '';
-    return formatCurrencyInput(String(Math.round(parsed * 100)));
+    return formatManualDecimalDisplay(parsed);
   }
 
   function formatFinalizeMoneyInput(raw: string): string {
-    const digits = onlyDigits(raw).slice(0, 8);
-    if (!digits) return '';
-    const normalized = Number(digits) / 100;
-    if (!Number.isFinite(normalized)) return '';
-    return normalized.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+    return sanitizeManualDecimalInput(raw, {
+      maxFractionDigits: 2,
+      maxIntegerDigits: 12,
     });
   }
 
@@ -609,38 +600,38 @@
   }
 
   function parseMoney(value: string): number | null {
-    const parsed = parseCurrency(value);
-    if (parsed == null || !Number.isFinite(parsed)) return null;
+    const normalized = sanitizeManualDecimalInput(value, {
+      maxFractionDigits: 2,
+      maxIntegerDigits: 12,
+    });
+    if (!normalized) return null;
+    const parsed = Number(normalized.replace(',', '.').replace(/,$/, ''));
+    if (!Number.isFinite(parsed) || parsed < 0) return null;
     return Number(parsed.toFixed(2));
   }
 
   function sanitizePercentageInput(raw: string): string {
-    const normalized = String(raw ?? '').replace(/[^\d.,]/g, '').replace(/\./g, ',');
-    const [integerPart, ...rest] = normalized.split(',');
-    const integer = integerPart.replace(/^0+(?=\d)/, '').slice(0, 3);
-    const decimal = rest.join('').replace(/\D/g, '').slice(0, 1);
-    if (!integer && !decimal) {
-      return '';
-    }
-    const composed = decimal ? `${integer || '0'},${decimal}` : integer || '0';
-    const parsed = Number(composed.replace(',', '.'));
-    if (!Number.isFinite(parsed)) {
-      return '';
-    }
-    const bounded = Math.min(100, Math.max(0, parsed));
-    return formatPercentageValue(bounded);
+    return sanitizeManualDecimalInput(raw, {
+      maxFractionDigits: 2,
+      maxIntegerDigits: 3,
+      maxValue: 100,
+    });
   }
 
   function parsePercentage(value: string): number | null {
-    const normalized = String(value ?? '').replace('%', '').replace(',', '.').trim();
+    const normalized = sanitizeManualDecimalInput(value, {
+      maxFractionDigits: 2,
+      maxIntegerDigits: 3,
+      maxValue: 100,
+    });
     if (!normalized) return null;
-    const parsed = Number(normalized);
+    const parsed = Number(normalized.replace(',', '.').replace(/,$/, ''));
     if (!Number.isFinite(parsed) || parsed < 0) return null;
-    return Number(Math.min(100, parsed).toFixed(1));
+    return Number(Math.min(100, parsed).toFixed(2));
   }
 
   function formatPercentageValue(value: number): string {
-    return Number(value).toFixed(1).replace('.', ',');
+    return Number(value).toFixed(2).replace('.', ',');
   }
 
   function convertAmountFieldToPercentage(
@@ -650,7 +641,7 @@
     if (saleValue == null || saleValue <= 0) return '';
     const amount = parseMoney(rawAmount);
     if (amount == null) return '';
-    const percentage = Number(((amount / saleValue) * 100).toFixed(1));
+    const percentage = Number(((amount / saleValue) * 100).toFixed(2));
     return formatPercentageValue(percentage);
   }
 
@@ -662,7 +653,7 @@
     const percentage = parsePercentage(rawPercentage);
     if (percentage == null) return '';
     const amount = Number(((saleValue * percentage) / 100).toFixed(2));
-    return formatCurrencyInput(String(Math.round(amount * 100)));
+    return formatManualDecimalDisplay(amount);
   }
 
   function handleFinalizeMoneyInput(
@@ -693,31 +684,6 @@
 
   function setFinalizeFieldMode(field: FinalizeCommissionField, mode: FinalizeFieldMode): void {
     if (getFinalizeFieldMode(field) === mode) return;
-
-    const currentValue = String(finalizeForm[field] ?? '').trim();
-    if (!currentValue) {
-      finalizeFieldModes = {
-        ...finalizeFieldModes,
-        [field]: mode,
-      };
-      return;
-    }
-
-    const saleValue = parseMoney(finalizeForm.valorVenda);
-    if (saleValue == null || saleValue <= 0) {
-      toast.error('Preencha o valor de venda/locação antes de converter a comissão.');
-      return;
-    }
-
-    const nextValue =
-      mode === 'percentage'
-        ? convertAmountFieldToPercentage(currentValue, saleValue)
-        : convertPercentageFieldToAmount(currentValue, saleValue);
-
-    finalizeForm = {
-      ...finalizeForm,
-      [field]: nextValue,
-    };
     finalizeFieldModes = {
       ...finalizeFieldModes,
       [field]: mode,
@@ -2145,51 +2111,44 @@
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
                 />
               </label>
-                  <div class="text-sm text-gray-700 dark:text-gray-200">
-                    <div class="flex items-center justify-between gap-3">
-                      <label for="finalize-comissao-captador" class="font-medium">
-                        Comissão Captador
-                      </label>
-                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-slate-200 p-1 dark:border-gray-700 dark:bg-slate-800">
-                    <button
-                      type="button"
-                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
+              <div class="text-sm text-gray-700 dark:text-gray-200">
+                <div class="flex items-center justify-between gap-3">
+                  <label for="finalize-comissao-captador" class="font-medium">
+                    Comissão Captador
+                  </label>
+                  <button
+                    type="button"
+                    class={`inline-flex min-w-[4.5rem] items-center justify-center rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      getFinalizeFieldMode('comissaoCaptador') === 'percentage'
+                        ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                    aria-label="Alternar modo da comissão captador"
+                    aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'percentage'}
+                    on:click={() =>
+                      setFinalizeFieldMode(
+                        'comissaoCaptador',
                         getFinalizeFieldMode('comissaoCaptador') === 'amount'
-                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
-                      }`}
-                      aria-label="Comissão Captador em valor real"
-                      aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'amount'}
-                      on:click={() => setFinalizeFieldMode('comissaoCaptador', 'amount')}
-                    >
-                      R$
-                    </button>
-                    <button
-                      type="button"
-                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
-                        getFinalizeFieldMode('comissaoCaptador') === 'percentage'
-                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
-                      }`}
-                      aria-label="Comissão Captador em percentual"
-                      aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'percentage'}
-                      on:click={() => setFinalizeFieldMode('comissaoCaptador', 'percentage')}
-                    >
-                      %
-                    </button>
-                  </div>
+                          ? 'percentage'
+                          : 'amount'
+                      )
+                    }
+                  >
+                    {getFinalizeFieldMode('comissaoCaptador') === 'amount' ? 'R$' : '%'}
+                  </button>
                 </div>
                 <input
                   id="finalize-comissao-captador"
                   type="text"
                   inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? 5 : 13}
+                  maxlength={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? 6 : 18}
+                  placeholder={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? '0,00' : '0,00'}
                   value={finalizeForm.comissaoCaptador}
                   on:input={(event) =>
                     getFinalizeFieldMode('comissaoCaptador') === 'amount'
                       ? handleFinalizeMoneyInput('comissaoCaptador', event)
                       : handleFinalizePercentageInput('comissaoCaptador', event)}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
+                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
                 />
               </div>
               <div class="text-sm text-gray-700 dark:text-gray-200">
@@ -2197,46 +2156,39 @@
                   <label for="finalize-comissao-vendedor" class="font-medium">
                     Comissão do vendedor
                   </label>
-                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-slate-200 p-1 dark:border-gray-700 dark:bg-slate-800">
-                    <button
-                      type="button"
-                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  <button
+                    type="button"
+                    class={`inline-flex min-w-[4.5rem] items-center justify-center rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      getFinalizeFieldMode('comissaoVendedor') === 'percentage'
+                        ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                    aria-label="Alternar modo da comissão do vendedor"
+                    aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'percentage'}
+                    on:click={() =>
+                      setFinalizeFieldMode(
+                        'comissaoVendedor',
                         getFinalizeFieldMode('comissaoVendedor') === 'amount'
-                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
-                      }`}
-                      aria-label="Comissão do vendedor em valor real"
-                      aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'amount'}
-                      on:click={() => setFinalizeFieldMode('comissaoVendedor', 'amount')}
-                    >
-                      R$
-                    </button>
-                    <button
-                      type="button"
-                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
-                        getFinalizeFieldMode('comissaoVendedor') === 'percentage'
-                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
-                      }`}
-                      aria-label="Comissão do vendedor em percentual"
-                      aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'percentage'}
-                      on:click={() => setFinalizeFieldMode('comissaoVendedor', 'percentage')}
-                    >
-                      %
-                    </button>
-                  </div>
+                          ? 'percentage'
+                          : 'amount'
+                      )
+                    }
+                  >
+                    {getFinalizeFieldMode('comissaoVendedor') === 'amount' ? 'R$' : '%'}
+                  </button>
                 </div>
                 <input
                   id="finalize-comissao-vendedor"
                   type="text"
                   inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? 5 : 13}
+                  maxlength={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? 6 : 18}
+                  placeholder={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? '0,00' : '0,00'}
                   value={finalizeForm.comissaoVendedor}
                   on:input={(event) =>
                     getFinalizeFieldMode('comissaoVendedor') === 'amount'
                       ? handleFinalizeMoneyInput('comissaoVendedor', event)
                       : handleFinalizePercentageInput('comissaoVendedor', event)}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
+                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
                 />
               </div>
               <div class="text-sm text-gray-700 dark:text-gray-200">
@@ -2244,46 +2196,39 @@
                   <label for="finalize-taxa-plataforma" class="font-medium">
                     Taxa Encontre Aqui
                   </label>
-                  <div class="grid min-w-[6.5rem] grid-cols-2 overflow-hidden rounded-full border border-gray-200 bg-slate-200 p-1 dark:border-gray-700 dark:bg-slate-800">
-                    <button
-                      type="button"
-                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  <button
+                    type="button"
+                    class={`inline-flex min-w-[4.5rem] items-center justify-center rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      getFinalizeFieldMode('taxaPlataforma') === 'percentage'
+                        ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                    aria-label="Alternar modo da taxa da plataforma"
+                    aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'percentage'}
+                    on:click={() =>
+                      setFinalizeFieldMode(
+                        'taxaPlataforma',
                         getFinalizeFieldMode('taxaPlataforma') === 'amount'
-                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
-                      }`}
-                      aria-label="Taxa Encontre Aqui em valor real"
-                      aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'amount'}
-                      on:click={() => setFinalizeFieldMode('taxaPlataforma', 'amount')}
-                    >
-                      R$
-                    </button>
-                    <button
-                      type="button"
-                      class={`w-full rounded-full px-3 py-1 text-xs font-semibold transition ${
-                        getFinalizeFieldMode('taxaPlataforma') === 'percentage'
-                          ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                          : 'bg-transparent text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'
-                      }`}
-                      aria-label="Taxa Encontre Aqui em percentual"
-                      aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'percentage'}
-                      on:click={() => setFinalizeFieldMode('taxaPlataforma', 'percentage')}
-                    >
-                      %
-                    </button>
-                  </div>
+                          ? 'percentage'
+                          : 'amount'
+                      )
+                    }
+                  >
+                    {getFinalizeFieldMode('taxaPlataforma') === 'amount' ? 'R$' : '%'}
+                  </button>
                 </div>
                 <input
                   id="finalize-taxa-plataforma"
                   type="text"
                   inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? 5 : 13}
+                  maxlength={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? 6 : 18}
+                  placeholder={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? '0,00' : '0,00'}
                   value={finalizeForm.taxaPlataforma}
                   on:input={(event) =>
                     getFinalizeFieldMode('taxaPlataforma') === 'amount'
                       ? handleFinalizeMoneyInput('taxaPlataforma', event)
                       : handleFinalizePercentageInput('taxaPlataforma', event)}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
+                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
                 />
               </div>
             </div>

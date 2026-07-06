@@ -1426,15 +1426,15 @@ describe('ContractsModule', () => {
     const vendedorInput = screen.getByLabelText('Comissão do vendedor') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
 
-    await fireEvent.input(valorInput, { target: { value: '123456' } });
-    await fireEvent.input(captadorInput, { target: { value: '50000' } });
-    await fireEvent.input(vendedorInput, { target: { value: '50000' } });
-    await fireEvent.input(taxaInput, { target: { value: '23456' } });
+    await fireEvent.input(valorInput, { target: { value: '1234,56' } });
+    await fireEvent.input(captadorInput, { target: { value: '500,00' } });
+    await fireEvent.input(vendedorInput, { target: { value: '500,00' } });
+    await fireEvent.input(taxaInput, { target: { value: '234,56' } });
 
-    expect(valorInput.value).toContain('1.234,56');
-    expect(captadorInput.value).toContain('500,00');
-    expect(vendedorInput.value).toContain('500,00');
-    expect(taxaInput.value).toContain('234,56');
+    expect(valorInput.value).toBe('1234,56');
+    expect(captadorInput.value).toBe('500,00');
+    expect(vendedorInput.value).toBe('500,00');
+    expect(taxaInput.value).toBe('234,56');
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',
@@ -1453,7 +1453,7 @@ describe('ContractsModule', () => {
     });
   });
 
-  it('permite escolher percentual e converte as comissões para valor real no payload', async () => {
+  it('limita percentual em 100 e bloqueia a finalização quando a soma passa de 100%', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_SIGNATURES')) {
         return {
@@ -1508,28 +1508,34 @@ describe('ContractsModule', () => {
     await tick();
 
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Comissão Captador em percentual' })
+      screen.getByRole('button', { name: 'Alternar modo da comissão captador' })
     );
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Comissão do vendedor em percentual' })
+      screen.getByRole('button', { name: 'Alternar modo da comissão do vendedor' })
     );
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Taxa Encontre Aqui em percentual' })
+      screen.getByRole('button', { name: 'Alternar modo da taxa da plataforma' })
     );
     await tick();
+
+    const captadorModeButton = screen.getByRole('button', {
+      name: 'Alternar modo da comissão captador',
+    });
+    expect(captadorModeButton).toHaveTextContent('%');
+    expect(captadorModeButton).toHaveClass('bg-emerald-500');
 
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
     const captadorInput = (await screen.findByLabelText('Comissão Captador')) as HTMLInputElement;
     const vendedorInput = (await screen.findByLabelText('Comissão do vendedor')) as HTMLInputElement;
     const taxaInput = (await screen.findByLabelText('Taxa Encontre Aqui')) as HTMLInputElement;
-    await fireEvent.input(valorInput, { target: { value: '100000' } });
+    await fireEvent.input(valorInput, { target: { value: '1000,00' } });
     await fireEvent.input(captadorInput, { target: { value: '50' } });
     await fireEvent.input(vendedorInput, { target: { value: '250' } });
     await fireEvent.input(taxaInput, { target: { value: '25' } });
 
-    expect(captadorInput.value).toBe('50,0');
-    expect(vendedorInput.value).toBe('100,0');
-    expect(taxaInput.value).toBe('25,0');
+    expect(captadorInput.value).toBe('50');
+    expect(vendedorInput.value).toBe('100,00');
+    expect(taxaInput.value).toBe('25');
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',
@@ -1597,13 +1603,13 @@ describe('ContractsModule', () => {
     await tick();
 
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Comissão Captador em percentual' })
+      screen.getByRole('button', { name: 'Alternar modo da comissão captador' })
     );
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Comissão do vendedor em percentual' })
+      screen.getByRole('button', { name: 'Alternar modo da comissão do vendedor' })
     );
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Taxa Encontre Aqui em percentual' })
+      screen.getByRole('button', { name: 'Alternar modo da taxa da plataforma' })
     );
     await tick();
 
@@ -1612,7 +1618,7 @@ describe('ContractsModule', () => {
     const vendedorInput = (await screen.findByLabelText('Comissão do vendedor')) as HTMLInputElement;
     const taxaInput = (await screen.findByLabelText('Taxa Encontre Aqui')) as HTMLInputElement;
 
-    await fireEvent.input(valorInput, { target: { value: '100000' } });
+    await fireEvent.input(valorInput, { target: { value: '1000,00' } });
     await fireEvent.input(captadorInput, { target: { value: '50' } });
     await fireEvent.input(vendedorInput, { target: { value: '25' } });
     await fireEvent.input(taxaInput, { target: { value: '25' } });
@@ -1689,7 +1695,7 @@ describe('ContractsModule', () => {
     await tick();
 
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Comissão Captador em percentual' })
+      screen.getByRole('button', { name: 'Alternar modo da comissão captador' })
     );
     await tick();
 
@@ -1698,10 +1704,10 @@ describe('ContractsModule', () => {
     const vendedorInput = screen.getByLabelText('Comissão do vendedor') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
 
-    await fireEvent.input(valorInput, { target: { value: '100000' } });
+    await fireEvent.input(valorInput, { target: { value: '1000,00' } });
     await fireEvent.input(captadorInput, { target: { value: '50' } });
-    await fireEvent.input(vendedorInput, { target: { value: '25000' } });
-    await fireEvent.input(taxaInput, { target: { value: '25000' } });
+    await fireEvent.input(vendedorInput, { target: { value: '250,00' } });
+    await fireEvent.input(taxaInput, { target: { value: '250,00' } });
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',
@@ -1786,10 +1792,10 @@ describe('ContractsModule', () => {
     const vendedorInput = screen.getByLabelText('Comissão do vendedor') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
 
-    await fireEvent.input(valorInput, { target: { value: '100000' } });
-    await fireEvent.input(captadorInput, { target: { value: '50000' } });
-    await fireEvent.input(vendedorInput, { target: { value: '30000' } });
-    await fireEvent.input(taxaInput, { target: { value: '20000' } });
+    await fireEvent.input(valorInput, { target: { value: '1000,00' } });
+    await fireEvent.input(captadorInput, { target: { value: '50' } });
+    await fireEvent.input(vendedorInput, { target: { value: '30' } });
+    await fireEvent.input(taxaInput, { target: { value: '20' } });
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',

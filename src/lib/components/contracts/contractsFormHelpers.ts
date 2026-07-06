@@ -1,5 +1,3 @@
-import { parseCurrency } from '$lib/components/create-property-helpers';
-
 export type FinalizeFieldMode = 'amount' | 'percentage';
 export type FinalizeCommissionField = 'comissaoCaptador' | 'comissaoVendedor' | 'taxaPlataforma';
 
@@ -24,25 +22,66 @@ function trimInfoValue(raw: string): string | null {
   return value.length ? value : null;
 }
 
-function parseMoney(value: string): number | null {
-  const parsed = parseCurrency(value);
-  if (parsed == null || !Number.isFinite(parsed)) return null;
-  return Number(parsed.toFixed(2));
+export function formatManualDecimalDisplay(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) {
+    return '';
+  }
+  return Number(value).toFixed(2).replace('.', ',');
 }
 
-function sanitizePercentageInput(raw: string): string {
-  const normalized = String(raw ?? '').replace('%', '').replace(',', '.').trim();
-  if (!normalized) return '';
-  const numeric = Number(normalized);
-  if (!Number.isFinite(numeric)) return '';
-  return String(numeric);
+export function sanitizeManualDecimalInput(
+  raw: string,
+  options: {
+    maxFractionDigits?: number;
+    maxIntegerDigits?: number;
+    maxValue?: number;
+  } = {}
+): string {
+  const { maxFractionDigits = 2, maxIntegerDigits, maxValue } = options;
+  const cleaned = String(raw ?? '').replace('%', '').replace(/\s+/g, '');
+  const lastSeparatorIndex = Math.max(cleaned.lastIndexOf(','), cleaned.lastIndexOf('.'));
+  const hasSeparator = lastSeparatorIndex >= 0;
+  const integerPartRaw = hasSeparator ? cleaned.slice(0, lastSeparatorIndex) : cleaned;
+  const fractionPartRaw = hasSeparator ? cleaned.slice(lastSeparatorIndex + 1) : '';
+
+  let integerPart = integerPartRaw.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+  if (typeof maxIntegerDigits === 'number') {
+    integerPart = integerPart.slice(0, maxIntegerDigits);
+  }
+
+  const decimalPart = fractionPartRaw.replace(/\D/g, '').slice(0, maxFractionDigits);
+  if (!integerPart && !decimalPart) {
+    return '';
+  }
+
+  const hasTrailingSeparator = hasSeparator && /[.,]$/.test(cleaned) && decimalPart.length === 0;
+  let formatted = hasSeparator ? `${integerPart || '0'},${decimalPart}` : integerPart || '0';
+  if (hasTrailingSeparator) {
+    formatted = `${integerPart || '0'},`;
+  }
+
+  if (typeof maxValue === 'number') {
+    const normalizedValue = Number(
+      hasSeparator ? `${integerPart || '0'}.${decimalPart || '0'}` : integerPart || '0'
+    );
+    if (Number.isFinite(normalizedValue) && normalizedValue > maxValue) {
+      return maxValue.toFixed(maxFractionDigits).replace('.', ',');
+    }
+  }
+
+  return formatted;
 }
 
-function parsePercentage(value: string): number | null {
-  const sanitized = sanitizePercentageInput(value);
+function parseManualDecimal(value: string, maxValue?: number): number | null {
+  const sanitized = sanitizeManualDecimalInput(value, {
+    maxFractionDigits: 2,
+    maxValue,
+  });
   if (!sanitized) return null;
-  const parsed = Number(sanitized);
-  return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : null;
+  const parsed = Number(sanitized.replace(',', '.').replace(/,$/, ''));
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  const bounded = typeof maxValue === 'number' ? Math.min(maxValue, parsed) : parsed;
+  return Number(bounded.toFixed(2));
 }
 
 export function resolveApiErrorMessage(error: unknown, fallback: string): string {
@@ -117,6 +156,18 @@ export function buildBuyerInfoPayload(
     profissao: trimInfoValue(form.profissao),
     garantia_locacao: trimInfoValue(form.garantiaLocacao ?? ''),
   };
+}
+
+function parseMoney(value: string): number | null {
+  return parseManualDecimal(value);
+}
+
+function parsePercentage(value: string): number | null {
+  return parseManualDecimal(value, 100);
+}
+
+function formatPercentageValue(value: number): string {
+  return Number(value).toFixed(2).replace('.', ',');
 }
 
 function convertAmountFieldToPercentage(rawValue: string, saleValue: number): number | null {
