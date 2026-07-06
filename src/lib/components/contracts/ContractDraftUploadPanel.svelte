@@ -26,6 +26,7 @@
   export let viewDocument: (doc: ContractDocument, contract: ContractItem) => void = () => {};
   export let deleteDraftDocument: (doc: ContractDocument) => Promise<void> | void = () => {};
   export let handleDraftFileChange: (event: Event) => void = () => {};
+  export let draftUploadInputEl: HTMLInputElement | null = null;
 </script>
 
 <div class="space-y-4">
@@ -120,6 +121,7 @@
     <div class="mt-4 flex flex-wrap items-center gap-3">
       <input
         id="draft-pdf"
+        bind:this={draftUploadInputEl}
         type="file"
         accept="application/pdf,.pdf"
         on:change={handleDraftFileChange}

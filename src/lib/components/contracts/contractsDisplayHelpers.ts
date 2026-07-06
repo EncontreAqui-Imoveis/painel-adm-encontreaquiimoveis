@@ -106,7 +106,7 @@ function normalizePossiblyMojibakeText(value: string): string {
 
 export function documentSideLabel(doc?: ContractDocument | null): string {
   const side = String(doc?.side ?? '').trim().toLowerCase();
-  if (side === 'seller') return 'Anunciante';
+  if (side === 'seller') return 'Vendedor';
   if (side === 'buyer') return 'Comprador';
   return '';
 }
@@ -127,7 +127,7 @@ export function truncateFileName(name: string, maxLen = 15): string {
     return trimmed;
   }
 
-  return baseName.slice(0, maxLen) + '...' + extension;
+  return baseName.slice(0, maxLen) + '...' + extension.slice(1);
 }
 
 export function documentFileName(doc?: ContractDocument | null): string {

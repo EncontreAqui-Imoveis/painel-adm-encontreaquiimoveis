@@ -236,6 +236,14 @@
     garantiaLocacao: '',
   };
 
+  $: signedProposalDoc = selected != null && Array.isArray(selected.documents)
+    ? selected.documents.find(
+        (doc) =>
+          String(doc.documentType ?? '').trim().toLowerCase() === 'contrato_assinado' &&
+          !doc.metadata?.contractId
+      ) ?? null
+    : null;
+
   function lockViewportGestureScroll() {
     if (typeof document === 'undefined') return;
     if (viewportScrollLockCount === 0) {
@@ -1850,6 +1858,48 @@
       </div>
 
       <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6">
+        {#if signedProposalDoc}
+          <div class="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex items-center gap-2">
+                <FileText class="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    Proposta Assinada (PDF)
+                  </p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 break-all">
+                    {signedProposalDoc.originalFileName || 'proposta_assinada.pdf'}
+                  </p>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  on:click={() => selected && openDocumentPreview(signedProposalDoc, selected)}
+                >
+                  <Eye class="mr-2 h-4 w-4" />
+                  Visualizar na Web
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  on:click={() => {
+                    if (signedProposalDoc.downloadUrl) {
+                      window.open(signedProposalDoc.downloadUrl, '_blank');
+                    } else {
+                      toast.error('URL de download não disponível.');
+                    }
+                  }}
+                >
+                  <Download class="mr-2 h-4 w-4" />
+                  Baixar PDF
+                </Button>
+              </div>
+            </div>
+          </div>
+        {/if}
+
         {#if modalMode !== 'review_docs' && getApprovalRemarkSummaries(selected).length > 0}
           <div class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
           <p class="text-xs font-semibold uppercase text-amber-800 dark:text-amber-300">
@@ -2069,6 +2119,7 @@
           viewDocument={(doc, contract) => viewDocument(doc, contract)}
           deleteDraftDocument={(doc) => deleteDraftDocument(doc)}
           handleDraftFileChange={handleDraftFileChange}
+          bind:draftUploadInputEl={draftUploadInputEl}
         />
         {:else if modalMode === 'finalize'}
         <div class="space-y-4">

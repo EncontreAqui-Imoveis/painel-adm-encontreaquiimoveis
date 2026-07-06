@@ -176,7 +176,7 @@ describe('ContractsModule', () => {
     expect(screen.getByText('Casa Contrato')).toBeInTheDocument();
     expect(screen.getByText('Em análise')).toBeInTheDocument();
     expect(screen.getByAltText('Foto do imóvel Casa Contrato')).toBeInTheDocument();
-    expect(screen.getAllByText(/Captador/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Vendedor/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
     expect(screen.getByText('Cliente Comprador')).toBeInTheDocument();
     const openReviewButton = await screen.findByRole('button', {
@@ -185,7 +185,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(openReviewButton);
 
     expect(screen.getByRole('button', { name: 'danfe (peças).pdf' })).toBeInTheDocument();
-    expect(await screen.findByText('Dados Captador')).toBeInTheDocument();
+    expect(await screen.findByText('Dados Vendedor')).toBeInTheDocument();
     expect(screen.getByText('2 responsáveis designados')).toBeInTheDocument();
     const downloadButtons = screen.getAllByRole('button', { name: 'Baixar' });
     expect(downloadButtons.length).toBeGreaterThan(0);
@@ -772,7 +772,7 @@ describe('ContractsModule', () => {
                   documentType: 'doc_identidade',
                   side: 'seller',
                   status: 'APPROVED',
-                  originalFileName: 'identidade_captador.pdf',
+                  originalFileName: 'identidade_vendedor.pdf',
                   downloadUrl: '/negotiations/neg-test-draft-1/documents/6011/download',
                   createdAt: '2026-03-01T10:00:00.000Z',
                 },
@@ -791,6 +791,44 @@ describe('ContractsModule', () => {
             },
           ],
           total: 1,
+        };
+      }
+
+      if (endpoint === '/contracts/contract-test-draft-1') {
+        return {
+          contract: {
+            id: 'contract-test-draft-1',
+            status: 'IN_DRAFT',
+            negotiationId: 'neg-test-draft-1',
+            propertyId: 601,
+            propertyCode: 'RV-601',
+            propertyTitle: 'Casa Minuta',
+            propertyPurpose: 'Venda',
+            capturingBrokerId: 30001,
+            sellingBrokerId: 30002,
+            capturingBrokerName: 'Captador',
+            sellingBrokerName: 'Vendedor',
+          },
+          documents: [
+            {
+              id: 6011,
+              documentType: 'doc_identidade',
+              side: 'seller',
+              status: 'APPROVED',
+              originalFileName: 'identidade_vendedor.pdf',
+              downloadUrl: '/negotiations/neg-test-draft-1/documents/6011/download',
+              createdAt: '2026-03-01T10:00:00.000Z',
+            },
+            {
+              id: 6012,
+              documentType: 'comprovante_endereco',
+              side: 'buyer',
+              status: 'APPROVED',
+              originalFileName: 'endereco_vendedor.pdf',
+              downloadUrl: '/negotiations/neg-test-draft-1/documents/6012/download',
+              createdAt: '2026-03-01T11:00:00.000Z',
+            },
+          ],
         };
       }
 
@@ -819,9 +857,9 @@ describe('ContractsModule', () => {
     await fireEvent.click(openDraftButton);
 
     expect(await screen.findByText('Documentos do contrato')).toBeInTheDocument();
-    expect(screen.getByText('identidade_captador.pdf')).toBeInTheDocument();
-    expect(screen.getByText('endereco_vendedor.pdf')).toBeInTheDocument();
-    expect(screen.getAllByText(/Captador/i).length).toBeGreaterThan(0);
+    expect(screen.getByText('identidade_vend...pdf')).toBeInTheDocument();
+    expect(screen.getByText('endereco_vended...pdf')).toBeInTheDocument();
+    expect(screen.getAllByText(/Vendedor/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Visualizar' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Baixar' }).length).toBeGreaterThan(0);
@@ -1114,6 +1152,62 @@ describe('ContractsModule', () => {
         };
       }
 
+      if (endpoint === '/contracts/contract-test-sign-1') {
+        return {
+          contract: {
+            id: 'contract-test-sign-1',
+            status: 'AWAITING_SIGNATURES',
+            negotiationId: 'neg-test-sign-1',
+            propertyId: 602,
+            propertyCode: 'RV-602',
+            propertyTitle: 'Casa Assinaturas',
+            propertyPurpose: 'Venda',
+            capturingBrokerId: 30001,
+            sellingBrokerId: 30002,
+            capturingBrokerName: 'Captador',
+            sellingBrokerName: 'Vendedor',
+          },
+          documents: [
+            {
+              id: 6021,
+              documentType: 'doc_identidade',
+              side: 'seller',
+              status: 'APPROVED',
+              originalFileName: 'identidade_captador.pdf',
+              downloadUrl: '/negotiations/neg-test-sign-1/documents/6021/download',
+              metadata: { contractId: 'contract-test-sign-1' },
+              createdAt: '2026-03-01T09:00:00.000Z',
+            },
+            {
+              id: 6022,
+              documentType: 'doc_identidade',
+              side: 'buyer',
+              status: 'APPROVED',
+              originalFileName: 'identidade_vendedor.pdf',
+              downloadUrl: '/negotiations/neg-test-sign-1/documents/6022/download',
+              metadata: { contractId: 'contract-test-sign-1' },
+              createdAt: '2026-03-01T09:10:00.000Z',
+            },
+            {
+              id: 6023,
+              documentType: 'contrato_minuta',
+              originalFileName: 'contrato_minuta.pdf',
+              downloadUrl: '/negotiations/neg-test-sign-1/documents/6023/download',
+              metadata: { contractId: 'contract-test-sign-1' },
+              createdAt: '2026-03-02T08:00:00.000Z',
+            },
+            {
+              id: 6024,
+              documentType: 'contrato_assinado',
+              originalFileName: 'contrato_assinado.pdf',
+              downloadUrl: '/negotiations/neg-test-sign-1/documents/6024/download',
+              metadata: { contractId: 'contract-test-sign-1' },
+              createdAt: '2026-03-02T10:00:00.000Z',
+            },
+          ],
+        };
+      }
+
       return {
         data: [],
         total: 0,
@@ -1141,8 +1235,8 @@ describe('ContractsModule', () => {
     expect(await screen.findByText('Documentos para conferência')).toBeInTheDocument();
     expect(await screen.findByText('Todos os documentos do contrato')).toBeInTheDocument();
     expect(screen.getByText('contrato_minuta.pdf')).toBeInTheDocument();
-    expect(screen.getByText('identidade_captador.pdf')).toBeInTheDocument();
-    expect(screen.getByText('identidade_vendedor.pdf')).toBeInTheDocument();
+    expect(screen.getByText('identidade_capt...pdf')).toBeInTheDocument();
+    expect(screen.getByText('identidade_vend...pdf')).toBeInTheDocument();
     expect(screen.getByText('Contrato (Minuta)')).toBeInTheDocument();
   });
 
@@ -1762,7 +1856,7 @@ describe('ContractsModule', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Finalizados' }));
 
-    expect(await screen.findByText('Captador com ressalvas')).toBeInTheDocument();
+    expect(await screen.findByText('Vendedor com ressalvas')).toBeInTheDocument();
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
 
@@ -1867,7 +1961,16 @@ describe('ContractsModule', () => {
             capturingBrokerName: 'Captador',
             sellingBrokerName: 'Vendedor',
           },
-          documents: [],
+          documents: [
+            {
+              id: 7031,
+              documentType: 'contrato_assinado',
+              originalFileName: 'contrato_assinado.pdf',
+              metadata: { contractId: 'contract-final-3' },
+              downloadUrl: '/negotiations/neg-final-3/documents/7031/download',
+              createdAt: '2026-03-03T10:00:00.000Z',
+            },
+          ],
         };
       }
 
@@ -1881,7 +1984,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Finalizados' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
 
-    expect(await screen.findByText('contrato_assinado.pdf')).toBeInTheDocument();
+    expect(await screen.findByText('contrato_assina...pdf')).toBeInTheDocument();
 
     const deleteButtons = screen.getAllByRole('button', { name: 'Excluir' });
     await fireEvent.click(deleteButtons[1]);
@@ -2055,8 +2158,8 @@ describe('ContractsModule', () => {
       'Avaliação registrada com sucesso.'
     );
   });
-
   it('mantém o modal aberto e troca os botões quando apenas um lado é avaliado', async () => {
+    let side1Calls = 0;
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
         return {
@@ -2111,6 +2214,7 @@ describe('ContractsModule', () => {
       }
 
       if (endpoint === '/contracts/contract-test-side-1') {
+        side1Calls++;
         return {
           contract: {
             id: 'contract-test-side-1',
@@ -2139,7 +2243,7 @@ describe('ContractsModule', () => {
               telefone: '62999997777',
             },
             buyerClientName: 'Cliente Comprador',
-            sellerApprovalStatus: 'APPROVED',
+            sellerApprovalStatus: side1Calls > 1 ? 'APPROVED' : 'PENDING',
             buyerApprovalStatus: 'PENDING',
             approvalProgress: {
               status: 'IN_PROGRESS',
@@ -2180,7 +2284,7 @@ describe('ContractsModule', () => {
       );
     });
 
-    expect(screen.getByText('Dados Captador')).toBeInTheDocument();
+    expect(screen.getByText('Dados Vendedor')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Rejeitar' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Reiniciar' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Aprovaranunciante$/i })).not.toBeInTheDocument();
