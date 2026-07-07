@@ -397,23 +397,12 @@
       return;
     }
 
-    const viewer = window.open('', '_blank');
-    if (!viewer) {
-      toast.error('Não foi possível abrir a visualização do PDF.');
-      return;
-    }
-
-    viewer.document.write(
-      '<!doctype html><html><head><title>Carregando PDF...</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;">Carregando PDF...</body></html>'
-    );
-
     try {
       const response = await downloadContractDocumentByUrl(doc.downloadUrl);
       const objectUrl = URL.createObjectURL(response.blob);
-      viewer.location.href = objectUrl;
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
       setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     } catch (error) {
-      viewer.close();
       console.error('Erro ao abrir proposta assinada no visualizador nativo:', error);
       toast.error('Não foi possível abrir a proposta assinada.');
     }

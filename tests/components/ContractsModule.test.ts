@@ -1387,12 +1387,7 @@ describe('ContractsModule', () => {
     const createObjectUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:signed-proposal');
     const revokeObjectUrlSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     const anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    const fakeViewer = {
-      document: { write: vi.fn() },
-      location: { href: '' },
-      close: vi.fn(),
-    } as unknown as Window;
-    const windowOpenSpy = vi.spyOn(window, 'open').mockReturnValue(fakeViewer);
+    const windowOpenSpy = vi.spyOn(window, 'open').mockReturnValue({} as Window);
 
     render(ContractsModule);
 
@@ -1404,9 +1399,11 @@ describe('ContractsModule', () => {
 
     await fireEvent.click(viewButton);
     await waitFor(() => {
-      expect(windowOpenSpy).toHaveBeenCalledWith('', '_blank');
-      expect(fakeViewer.location.href).toBe('blob:signed-proposal');
-      expect(fakeViewer.document.write).toHaveBeenCalled();
+      expect(windowOpenSpy).toHaveBeenCalledWith(
+        'blob:signed-proposal',
+        '_blank',
+        'noopener,noreferrer'
+      );
     });
 
     await fireEvent.click(downloadButton);
