@@ -108,6 +108,9 @@
   let propertyItemsPerPage = 10;
   let propertyTotalItems = 0;
   let propertyTotalPages = 1;
+  let propertyBulkDeleteMode = false;
+  let selectedPropertyIdsToDelete: string[] = [];
+  let deletingSelectedProposals = false;
 
   let processingAction = false;
   let selectedProposal: NegotiationItem | null = null;
@@ -225,6 +228,36 @@
   function clearSignedPdfSelection() {
     selectedSignedPdfFile = null;
     signedPdfInputRenderKey += 1;
+  }
+
+  function canDeleteUnsignedProposal(item: NegotiationItem | null): boolean {
+    if (!item) return false;
+    return !isSignedProposal(item) && !hasSignedProposalDocument(item);
+  }
+
+  function resetPropertyBulkDeleteState() {
+    propertyBulkDeleteMode = false;
+    selectedPropertyIdsToDelete = [];
+  }
+
+  function isProposalSelectedForDeletion(proposalId: string): boolean {
+    return selectedPropertyIdsToDelete.includes(proposalId);
+  }
+
+  function toggleProposalDeletionSelection(proposalId: string, checked: boolean) {
+    if (checked) {
+      if (!selectedPropertyIdsToDelete.includes(proposalId)) {
+        selectedPropertyIdsToDelete = [...selectedPropertyIdsToDelete, proposalId];
+      }
+      return;
+    }
+    selectedPropertyIdsToDelete = selectedPropertyIdsToDelete.filter((item) => item !== proposalId);
+  }
+
+  function togglePropertyBulkDeleteMode() {
+    if (selectedProposalFilter !== 'received') return;
+    propertyBulkDeleteMode = !propertyBulkDeleteMode;
+    selectedPropertyIdsToDelete = [];
   }
 
   /** Elegível para aprovar/rejeitar: PDF assinado anexado OU status já assinado (backend às vezes mantém outro status). */
@@ -415,6 +448,7 @@
     propertyPage = 1;
     propertyTotalItems = 0;
     propertyTotalPages = 1;
+    resetPropertyBulkDeleteState();
   }
 
   function resolveProposalPropertyValue(property: ProposalPropertyOption | null): number {
@@ -1055,6 +1089,42 @@
     }
   }
 
+  async function deleteSelectedUnsignedProposals() {
+    const deletableProposals = propertyRequests.filter(
+      (item) => selectedPropertyIdsToDelete.includes(item.id) && canDeleteUnsignedProposal(item)
+    );
+    if (deletableProposals.length === 0) {
+      toast.error('Selecione ao menos uma proposta sem assinatura para excluir.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Confirma excluir ${deletableProposals.length} proposta${deletableProposals.length === 1 ? '' : 's'} sem assinatura?`
+    );
+    if (!confirmed) return;
+
+    deletingSelectedProposals = true;
+    try {
+      await Promise.all(deletableProposals.map((proposal) => api.delete(`/negotiations/${proposal.id}`)));
+      toast.success(
+        deletableProposals.length === 1
+          ? 'Proposta excluída com sucesso.'
+          : `${deletableProposals.length} propostas excluídas com sucesso.`
+      );
+      resetPropertyBulkDeleteState();
+      propertyRequests = propertyRequests.filter(
+        (item) => !deletableProposals.some((proposal) => proposal.id === item.id)
+      );
+      requestSummaryFetch();
+      requestPropertyFetch();
+    } catch (error) {
+      console.error('Erro ao excluir propostas sem assinatura:', error);
+      toast.error(normalizeErrorMessage(error, 'Não foi possível excluir as propostas selecionadas.'));
+    } finally {
+      deletingSelectedProposals = false;
+    }
+  }
+
   async function fetchSummary() {
     summaryLoading = true;
     try {
@@ -1117,6 +1187,7 @@
     selectedProperty = item;
     showPropertyModal = true;
     propertyPage = 1;
+    resetPropertyBulkDeleteState();
     requestPropertyFetch(true);
   }
 
@@ -1136,7 +1207,7 @@
   }
 
   function closePropertyModal() {
-    if (processingAction) return;
+    if (processingAction || deletingSelectedProposals) return;
     clearPropertyModalState();
   }
 
@@ -1385,6 +1456,20 @@
     propertyRefreshKey;
     fetchPropertyRequests(selectedProperty.propertyId);
   }
+
+  $: if (!showPropertyModal || selectedProposalFilter !== 'received' || !propertyBulkDeleteMode) {
+    if (propertyBulkDeleteMode && selectedProposalFilter !== 'received') {
+      resetPropertyBulkDeleteState();
+    }
+  } else {
+    const validProposalIds = new Set(
+      propertyRequests.filter((item) => canDeleteUnsignedProposal(item)).map((item) => item.id)
+    );
+    const nextSelectedIds = selectedPropertyIdsToDelete.filter((id) => validProposalIds.has(id));
+    if (nextSelectedIds.length !== selectedPropertyIdsToDelete.length) {
+      selectedPropertyIdsToDelete = nextSelectedIds;
+    }
+  }
 </script>
 
 <svelte:options runes={false} />
@@ -1395,7 +1480,7 @@
     <div>
       <h2 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Solicitação de Propostas</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400">
-        Acompanhe propostas enviadas, assinadas e recusadas por imóvel.
+        Acompanhe propostas recebidas, assinadas e recusadas por imóvel.
       </p>
     </div>
     <Button variant="outline" on:click={() => requestSummaryFetch()} disabled={summaryLoading}>
@@ -1572,11 +1657,22 @@
             {/if}
             Atualizar
           </Button>
+          {#if selectedProposalFilter === 'received'}
+            <Button variant="outline" size="sm" on:click={togglePropertyBulkDeleteMode} disabled={propertyLoading || deletingSelectedProposals}>
+              {propertyBulkDeleteMode ? 'Cancelar edição' : 'Editar'}
+            </Button>
+          {/if}
           <Button variant="outline" size="sm" title="Fechar modal" className="px-2" on:click={closePropertyModal}>
             <X class="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      {#if propertyBulkDeleteMode}
+        <div class="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+          Selecione apenas propostas sem assinatura para excluir.
+        </div>
+      {/if}
 
       <div class="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
         {#if propertyLoading}
@@ -1592,7 +1688,22 @@
             <div class="rounded-md border border-gray-200 p-4 dark:border-gray-700">
               <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div class="grid flex-1 gap-2 sm:grid-cols-2">
-                  <div class="sm:col-span-2">
+                  <div class="sm:col-span-2 flex flex-wrap items-center gap-3">
+                    {#if propertyBulkDeleteMode && canDeleteUnsignedProposal(item)}
+                      <label class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        <input
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          aria-label={`Selecionar proposta de ${readClientName(item)}`}
+                          checked={isProposalSelectedForDeletion(item.id)}
+                          on:change={(event) => {
+                            const target = event.currentTarget as HTMLInputElement;
+                            toggleProposalDeletionSelection(item.id, target.checked);
+                          }}
+                        />
+                        Selecionar
+                      </label>
+                    {/if}
                     <span class={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusBadgeClass(item.status, item.internalStatus)}`}>
                       {getStatusLabel(item.status, item.internalStatus)}
                     </span>
@@ -1643,8 +1754,20 @@
         />
       </div>
 
-      <div class="mt-5 flex justify-end">
-        <Button variant="outline" on:click={closePropertyModal} disabled={processingAction}>
+      <div class="mt-5 flex flex-wrap justify-end gap-2">
+        {#if propertyBulkDeleteMode && selectedPropertyIdsToDelete.length > 0}
+          <Button
+            variant="destructive"
+            on:click={deleteSelectedUnsignedProposals}
+            disabled={deletingSelectedProposals || propertyLoading}
+          >
+            {#if deletingSelectedProposals}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Excluir selecionadas ({selectedPropertyIdsToDelete.length})
+          </Button>
+        {/if}
+        <Button variant="outline" on:click={closePropertyModal} disabled={processingAction || deletingSelectedProposals}>
           Fechar
         </Button>
       </div>

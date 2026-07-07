@@ -139,4 +139,20 @@ describe('PropertyArchive', () => {
       'Imóvel disponibilizado novamente com sucesso.'
     );
   });
+
+  it('abre o modal de filtros e aplica busca no arquivo', async () => {
+    render(PropertyArchive);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const searchInput = screen.getByLabelText('Busca');
+    await fireEvent.input(searchInput, { target: { value: 'Casa' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
+
+    await waitFor(() => {
+      const archiveCalls = apiGetMock.mock.calls
+        .map((call) => call[0] as string)
+        .filter((url) => url.startsWith('/admin/properties/archive?'));
+      expect(archiveCalls.some((url) => url.includes('search=Casa'))).toBe(true);
+    });
+  });
 });

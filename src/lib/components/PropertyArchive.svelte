@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { Loader2 } from 'lucide-svelte';
   import { toast } from 'svelte-sonner';
+  import * as Dialog from '$lib/components/ui/dialog';
   import { api } from '$lib/apiClient';
   import { Button } from '$lib/components/ui/button';
   import Pagination from '$lib/Pagination.svelte';
@@ -39,6 +40,8 @@
   let searchDraft = '';
   /** Filtro exclusivo: vendidos ou alugados (padrão: vendidos). */
   let archiveKind: ArchiveStatus = 'sold';
+  let archiveKindDraft: ArchiveStatus = 'sold';
+  let isFiltersModalOpen = false;
   let isRelisting = false;
   let isMobileLayout = false;
   let selected: ArchiveItem | null = null;
@@ -68,6 +71,27 @@
     previewImageUrl = url;
     previewImageAlt = alt;
     isImagePreviewOpen = true;
+  }
+
+  function openFiltersModal() {
+    archiveKindDraft = archiveKind;
+    searchDraft = search;
+    isFiltersModalOpen = true;
+  }
+
+  function applyArchiveFilters() {
+    archiveKind = archiveKindDraft;
+    search = searchDraft.trim();
+    isFiltersModalOpen = false;
+    requestFetch(true);
+  }
+
+  function resetArchiveFilters() {
+    archiveKindDraft = 'sold';
+    archiveKind = 'sold';
+    searchDraft = '';
+    search = '';
+    requestFetch(true);
   }
 
   function closeImagePreview() {
@@ -234,21 +258,11 @@
       </p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <input
-        type="text"
-        bind:value={searchDraft}
-        maxlength="120"
-        placeholder="Buscar por código, título ou corretor"
-        class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-      />
       <Button
         variant="outline"
-        on:click={() => {
-          search = searchDraft.trim();
-          requestFetch(true);
-        }}
+        on:click={openFiltersModal}
       >
-        Buscar
+        Filtros
       </Button>
       <Button variant="outline" on:click={() => requestFetch()} disabled={isLoading}>
         {#if isLoading}
@@ -258,6 +272,69 @@
       </Button>
     </div>
   </div>
+
+  <Dialog.Root bind:open={isFiltersModalOpen}>
+    <Dialog.Content className="max-w-xl max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">
+      <Dialog.Header>
+        <Dialog.Title>Filtros</Dialog.Title>
+        <Dialog.Description>
+          Filtre o arquivo por texto e pelo tipo de imóvel finalizado.
+        </Dialog.Description>
+      </Dialog.Header>
+
+      <div class="space-y-4 px-1 py-4">
+        <div class="grid gap-2">
+          <label for="archive-search" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Busca
+          </label>
+          <input
+            id="archive-search"
+            type="text"
+            bind:value={searchDraft}
+            maxlength="120"
+            placeholder="Buscar por código, título ou corretor"
+            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+          />
+        </div>
+
+        <div class="grid gap-2">
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de arquivo</p>
+          <div class="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              className={archiveKindDraft === 'sold'
+                ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}
+              on:click={() => (archiveKindDraft = 'sold')}
+            >
+              Vendidos
+            </Button>
+            <Button
+              variant="outline"
+              className={archiveKindDraft === 'rented'
+                ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}
+              on:click={() => (archiveKindDraft = 'rented')}
+            >
+              Alugados
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <Dialog.Footer className="flex flex-wrap gap-2">
+        <Button variant="outline" on:click={resetArchiveFilters}>
+          Limpar
+        </Button>
+        <Button variant="outline" on:click={() => (isFiltersModalOpen = false)}>
+          Cancelar
+        </Button>
+        <Button on:click={applyArchiveFilters}>
+          Aplicar
+        </Button>
+      </Dialog.Footer>
+    </Dialog.Content>
+  </Dialog.Root>
 
   {#if isMobileLayout}
   <div class="space-y-3">

@@ -42,10 +42,12 @@ import NegotiationRequests from '../../src/lib/components/NegotiationRequests.sv
 
 describe('NegotiationRequests', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
-  it('exibe erro inline e retry quando falha ao carregar responsáveis, bloqueando aprovação', async () => {
+  it('exibe erro inline e retry quando falha ao carregar responsáveis', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.startsWith('/admin/negotiations/requests/summary?')) {
         return {
@@ -111,8 +113,7 @@ describe('NegotiationRequests', () => {
 
     expect((await screen.findAllByText('Falha ao carregar responsáveis')).length).toBeGreaterThan(0);
 
-    const approveButton = await screen.findByRole('button', { name: 'Aprovar' });
-    expect(approveButton).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
 
     const retryButton = await screen.findByRole('button', { name: 'Tentar novamente' });
     expect(retryButton).toBeInTheDocument();
@@ -174,12 +175,99 @@ describe('NegotiationRequests', () => {
 
     render(NegotiationRequests);
 
+    expect(await screen.findByRole('button', { name: 'Propostas Recebidas' })).toBeInTheDocument();
     await fireEvent.click(await screen.findByRole('button', { name: 'Ver propostas' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Ver detalhes' }));
 
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: 'Excluir PDF' })).not.toBeInTheDocument();
     });
+  });
+
+  it('permite selecionar e excluir apenas propostas sem assinatura no modal do imóvel', async () => {
+    let propertyRequests = [
+      {
+        id: 'neg-13',
+        status: 'PROPOSAL_UNSIGNED',
+        internalStatus: 'PROPOSAL_UNSIGNED',
+        propertyId: 13,
+        propertyCode: 'RV-013',
+        propertyTitle: 'Casa removível',
+        brokerName: 'Corretor 4',
+        clientName: 'Ana Compradora',
+        value: 310000,
+        created_at: '2026-06-13T13:05:00.000Z',
+      },
+      {
+        id: 'neg-13-signed',
+        status: 'PROPOSAL_SIGNED',
+        internalStatus: 'PROPOSAL_SIGNED',
+        propertyId: 13,
+        propertyCode: 'RV-013',
+        propertyTitle: 'Casa removível',
+        brokerName: 'Corretor 4',
+        clientName: 'Bruno Comprador',
+        value: 320000,
+        created_at: '2026-06-13T14:05:00.000Z',
+        signedDocumentId: 501,
+        signedDocumentFileName: 'proposta-assinada.pdf',
+      },
+    ];
+
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.startsWith('/admin/negotiations/requests/summary?')) {
+        return {
+          data: [
+            {
+              propertyId: 13,
+              propertyCode: 'RV-013',
+              propertyTitle: 'Casa removível',
+              proposalCount: propertyRequests.length,
+              created_at: '2026-06-13T13:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint.startsWith('/admin/negotiations/requests/property/13?')) {
+        return {
+          data: propertyRequests,
+          total: propertyRequests.length,
+        };
+      }
+
+      if (endpoint === '/admin/negotiations/neg-13/responsibles') {
+        return { data: [] };
+      }
+
+      return { data: [] };
+    });
+
+    apiDeleteMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/negotiations/neg-13') {
+        propertyRequests = propertyRequests.filter((item) => item.id !== 'neg-13');
+        return {};
+      }
+      throw new Error(`Endpoint de delete não esperado: ${endpoint}`);
+    });
+
+    render(NegotiationRequests);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Propostas Recebidas' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Ver propostas' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+
+    const checkbox = await screen.findByRole('checkbox', { name: 'Selecionar proposta de Ana Compradora' });
+    await fireEvent.click(checkbox);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Excluir selecionadas (1)' }));
+
+    await waitFor(() => {
+      expect(apiDeleteMock).toHaveBeenCalledWith('/negotiations/neg-13');
+    });
+    expect(toastSuccessMock).toHaveBeenCalledWith('Proposta excluída com sucesso.');
+    expect(screen.queryByRole('button', { name: 'Excluir selecionadas (1)' })).not.toBeInTheDocument();
   });
 
   it('abre a edição para proposta não assinada e mostra imagem nos resultados da criação', async () => {

@@ -242,6 +242,7 @@ function parseNullableNumber(value: unknown): number | null {
   let totalPagesForDisplay = 1;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let isModalOpen = false;
+  let isFiltersModalOpen = false;
   let selectedProperty: PropertyDetails | null = null;
   let isDetailLoading = false;
   let isProcessing = false;
@@ -2182,18 +2183,25 @@ function parseNullableNumber(value: unknown): number | null {
 </script>
 
 <div class="space-y-4">
-  {#if isReviewOnly}
-    <section class="rounded-2xl border border-green-200/70 bg-gradient-to-r from-green-50 via-white to-emerald-50 p-6 shadow-sm dark:border-green-800/60 dark:from-green-900/30 dark:via-gray-900 dark:to-emerald-900/20">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div class="space-y-2">
-          <span class="inline-flex items-center gap-2 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 dark:bg-green-900/60 dark:text-green-100">
-            Fila de revisão
-          </span>
-          <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Solicitações de imóveis</h1>
-          <p class="text-sm text-gray-600 dark:text-gray-300">
-            Revise informações, avalie fotos e aprove ou rejeite. Apenas pendentes aparecem aqui.
-          </p>
-        </div>
+  <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="space-y-2">
+      {#if isReviewOnly}
+        <span class="inline-flex items-center gap-2 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 dark:bg-green-900/60 dark:text-green-100">
+          Fila de revisão
+        </span>
+        <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Solicitações de imóveis</h1>
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+          Revise informações, avalie fotos e aprove ou rejeite. Apenas pendentes aparecem aqui.
+        </p>
+      {:else}
+        <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Gerenciamento de Imóveis</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          Consulte os imóveis cadastrados e use o modal para ajustar os filtros.
+        </p>
+      {/if}
+    </div>
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+      {#if isReviewOnly}
         <div class="grid gap-2 sm:grid-cols-2">
           <div class="rounded-lg border border-green-100 bg-white/80 px-4 py-2 text-sm text-gray-700 shadow-sm dark:border-green-900/60 dark:bg-gray-900/70 dark:text-gray-200">
             Pendentes: {isLoading ? '...' : totalItems}
@@ -2202,366 +2210,83 @@ function parseNullableNumber(value: unknown): number | null {
             Filtro: pendente de aprovação • {reviewPropertyRequestTypeLabel(reviewRequestType)}
           </div>
         </div>
-      </div>
-      <div class="mt-4 flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          className="flex items-center gap-2 border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30"
-          on:click={handleRefresh}
-          disabled={isLoading}
-        >
-          {#if isLoading}
-            <Loader2 class="h-4 w-4 animate-spin" />
-          {/if}
-          Atualizar fila
-        </Button>
-        <Button
-          variant="outline"
-          className="border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30"
-          on:click={sortByCreatedDesc}
-          disabled={isLoading}
-        >
-          Mais recentes
-        </Button>
-        <Button
-          variant="outline"
-          className="border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30"
-          on:click={sortAlphabetical}
-          disabled={isLoading}
-        >
-          Ordenar A-Z
-        </Button>
-        <Button
-          variant="outline"
-          className={reviewRequestType === 'all'
-            ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
-            : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
-          on:click={() => setReviewRequestType('all')}
-          disabled={isLoading}
-        >
-          Todas
-        </Button>
-        <Button
-          variant="outline"
-          className={reviewRequestType === 'creation'
-            ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
-            : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
-          on:click={() => setReviewRequestType('creation')}
-          disabled={isLoading}
-        >
-          Criação
-        </Button>
-        <Button
-          variant="outline"
-          className={reviewRequestType === 'edit'
-            ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
-            : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
-          on:click={() => setReviewRequestType('edit')}
-          disabled={isLoading}
-        >
-          Edição
-        </Button>
-      </div>
-    </section>
-  {:else}
-    <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Gerenciamento de Imóveis</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400">
-          Consulte os imóveis cadastrados e utilize filtros rápidos para priorizar as análises.
-        </p>
-      </div>
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+      {/if}
+      <div class="flex flex-wrap items-center gap-2">
         <Button
           variant="outline"
           className="flex items-center gap-2"
-          on:click={handleRefresh}
+          on:click={() => (isFiltersModalOpen = true)}
           disabled={isLoading}
         >
-          {#if isLoading}
-            <Loader2 class="h-4 w-4 animate-spin" />
-          {/if}
-          Recarregar
+          Filtros
         </Button>
-        <Button variant="outline" on:click={sortAlphabetical} disabled={isLoading}>
-          Ordenar A-Z
-        </Button>
-        <Button variant="outline" on:click={sortByCreatedDesc} disabled={isLoading}>
-          Mais recentes
-        </Button>
-        <Button variant="outline" on:click={handleExport}>
-
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="mr-2 h-4 w-4"
-            aria-hidden="true"
+        {#if isReviewOnly}
+          <Button
+            variant="outline"
+            className="flex items-center gap-2 border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30"
+            on:click={handleRefresh}
+            disabled={isLoading}
           >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Exportar Imóveis (CSV)
-        </Button>
-      </div>
-    </header>
-  {/if}
+            {#if isLoading}
+              <Loader2 class="h-4 w-4 animate-spin" />
+            {/if}
+            Atualizar fila
+          </Button>
+          <Button
+            variant="outline"
+            className="border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30"
+            on:click={sortByCreatedDesc}
+            disabled={isLoading}
+          >
+            Mais recentes
+          </Button>
+          <Button
+            variant="outline"
+            className="border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30"
+            on:click={sortAlphabetical}
+            disabled={isLoading}
+          >
+            Ordenar A-Z
+          </Button>
+        {:else}
+          <Button variant="outline" on:click={handleRefresh} disabled={isLoading}>
+            {#if isLoading}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+            {/if}
+            Recarregar
+          </Button>
+          <Button variant="outline" on:click={sortAlphabetical} disabled={isLoading}>
+            Ordenar A-Z
+          </Button>
+          <Button variant="outline" on:click={sortByCreatedDesc} disabled={isLoading}>
+            Mais recentes
+          </Button>
+          <Button variant="outline" on:click={handleExport}>
 
-  {#if isReviewOnly}
-    <div class="rounded-xl border border-green-100 bg-white/80 p-4 shadow-sm dark:border-green-900/50 dark:bg-gray-900/70">
-      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <Input
-          className="w-full md:w-96"
-          type="search"
-          placeholder="Buscar por título, cidade, ID..."
-          bind:value={filters.search}
-          oninput={onSearchInput}
-          onkeydown={handleKeydown}
-          onkeyup={handleKeyup}
-        />
-        <div class="text-xs text-green-700 dark:text-green-200">
-          Dica: clique em Revisar para ver os detalhes completos.
-        </div>
-      </div>
-      <div class="mt-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-        <label for="property-items-per-page-review" class="font-medium">Mostrar</label>
-        <select
-          id="property-items-per-page-review"
-          bind:value={itemsPerPage}
-          on:change={() => {
-            currentPage = 1;
-            if (!isClientSideFiltering) requestFetch(true);
-          }}
-          class="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-        >
-          <option value={10}>10</option>
-          <option value={20}>20</option>
-          <option value={50}>50</option>
-          <option value={100}>100</option>
-        </select>
-        <span>entradas</span>
-      </div>
-      <div class="mt-3 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <div class="relative">
-          <Select.Root bind:value={filters.city} on:valueChange={onFilterChange}>
-            <Select.Trigger>
-              <Select.Value placeholder="Filtrar por cidade" />
-            </Select.Trigger>
-            <Select.Content>
-              <Select.Item value="all">Todas as cidades</Select.Item>
-              {#each cities as city (city)}
-                <Select.Item value={city}>{city}</Select.Item>
-              {/each}
-            </Select.Content>
-          </Select.Root>
-        </div>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="mr-2 h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Exportar Imóveis (CSV)
+          </Button>
+        {/if}
       </div>
     </div>
-  {:else}
-    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div class="flex flex-wrap gap-2">
-        <button
-          type="button"
-          on:click={() => {
-            filters.purpose = 'all';
-            requestFetch(true);
-          }}
-          class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-            filters.purpose === 'all'
-              ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
-        >
-          Todos
-        </button>
-        <button
-          type="button"
-          on:click={() => {
-            filters.purpose = 'Venda';
-            requestFetch(true);
-          }}
-          class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-            filters.purpose === 'Venda'
-              ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
-        >
-          Venda
-        </button>
-        <button
-          type="button"
-          on:click={() => {
-            filters.purpose = 'Aluguel';
-            requestFetch(true);
-          }}
-          class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-            filters.purpose === 'Aluguel'
-              ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
-        >
-          Aluguel
-        </button>
-      </div>
-      <Input
-        className="w-full md:w-80"
-        type="search"
-        placeholder="Buscar por título, cidade, ID..."
-        bind:value={filters.search}
-        oninput={onSearchInput}
-        onkeydown={handleKeydown}
-        onkeyup={handleKeyup}
-      />
-    </div>
-    <div class="mt-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-      <label for="property-items-per-page" class="font-medium">Mostrar</label>
-      <select
-        id="property-items-per-page"
-        bind:value={itemsPerPage}
-        on:change={() => {
-          currentPage = 1;
-          if (!isClientSideFiltering) requestFetch(true);
-        }}
-        class="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-      >
-        <option value={10}>10</option>
-        <option value={20}>20</option>
-        <option value={50}>50</option>
-        <option value={100}>100</option>
-      </select>
-      <span>entradas</span>
-    </div>
-    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <div class="relative">
-        <Select.Root bind:value={filters.city} on:valueChange={onFilterChange}>
-          <Select.Trigger>
-            <Select.Value placeholder="Filtrar por cidade" />
-          </Select.Trigger>
-          <Select.Content>
-            <Select.Item value="all">Todas as cidades</Select.Item>
-            {#each cities as city (city)}
-              <Select.Item value={city}>{city}</Select.Item>
-            {/each}
-          </Select.Content>
-        </Select.Root>
-      </div>
-    </div>
-  {/if}
+  </header>
 
-  <div class="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-    <div class="flex flex-wrap items-start gap-3">
-      <div class="grid gap-2">
-        <label for="area-filter-metric" class="text-sm font-medium text-gray-700 dark:text-gray-300">Área para filtro</label>
-        <select
-          id="area-filter-metric"
-          bind:value={areaFilterMetric}
-          on:change={resetLocalPage}
-          class="w-64 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        >
-          <option value="none">Sem filtro de área</option>
-          <option value="area_construida_valor">Área construída</option>
-          <option value="area_terreno_valor">Área do terreno</option>
-        </select>
-      </div>
-      <div class="grid gap-2">
-        <label for="area-filter-min" class="text-sm font-medium text-gray-700 dark:text-gray-300">Área mínima</label>
-        <input
-          id="area-filter-min"
-          class="w-36 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          bind:value={areaFilterMin}
-          inputmode="decimal"
-          placeholder="ex: 500"
-          on:input={handleAreaRangeInput}
-        />
-      </div>
-      <div class="grid gap-2">
-        <label for="area-filter-max" class="text-sm font-medium text-gray-700 dark:text-gray-300">Área máxima</label>
-        <input
-          id="area-filter-max"
-          class="w-36 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          bind:value={areaFilterMax}
-          inputmode="decimal"
-          placeholder="ex: 2000"
-          on:input={handleAreaRangeInput}
-        />
-      </div>
-      <div class="grid gap-2">
-        <label for="area-filter-unit" class="text-sm font-medium text-gray-700 dark:text-gray-300">Unidade</label>
-        <select
-          id="area-filter-unit"
-          bind:value={areaFilterUnit}
-          on:change={handleAreaUnitChange}
-          class="w-40 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        >
-          {#each areaUnitOptions as option}
-            <option value={option.value}>{option.label}</option>
-          {/each}
-        </select>
-      </div>
-    </div>
-
-    <div class="flex flex-wrap items-start gap-3">
-      <div class="grid gap-2">
-        <label for="area-sort-metric" class="text-sm font-medium text-gray-700 dark:text-gray-300">Ordenar área por</label>
-        <select
-          id="area-sort-metric"
-          bind:value={areaSortMetric}
-          on:change={resetLocalPage}
-          class="w-56 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        >
-          <option value="none">Sem ordenação por área</option>
-          <option value="area_construida_valor">Área construída</option>
-          <option value="area_terreno_valor">Área do terreno</option>
-        </select>
-      </div>
-      <div class="grid gap-2">
-        <label for="area-sort-direction" class="text-sm font-medium text-gray-700 dark:text-gray-300">Ordem</label>
-        <select
-          id="area-sort-direction"
-          bind:value={areaSortDirection}
-          on:change={handleAreaSortDirectionChange}
-          class="w-36 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        >
-          <option value="desc">Maior para menor</option>
-          <option value="asc">Menor para maior</option>
-        </select>
-      </div>
-      <button
-        type="button"
-        class="mt-6 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-        on:click={clearLocalFilters}
-      >
-        Limpar filtros locais
-      </button>
-    </div>
-
-    <div>
-      <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Comodidades</p>
-      <div class="mt-2 grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-        {#each propertyAmenityOptions as amenity (amenity)}
-          <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-            <input
-              type="checkbox"
-              aria-label={amenity}
-              checked={isFilterAmenityChecked(amenity)}
-              on:change={(event) => {
-                const target = event.currentTarget as HTMLInputElement;
-                updateAmenityFilter(amenity, target.checked);
-              }}
-            />
-            {amenity}
-          </label>
-        {/each}
-      </div>
-    </div>
-  </div>
   {#if isLoading}
     <div class="flex h-48 items-center justify-center rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
       <div class="flex items-center gap-3 text-gray-600 dark:text-gray-300">
@@ -2598,6 +2323,344 @@ function parseNullableNumber(value: unknown): number | null {
     </div>
   {/if}
 </div>
+
+<Dialog.Root bind:open={isFiltersModalOpen}>
+  <Dialog.Content className="max-h-[90vh] overflow-y-auto max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">
+    <Dialog.Header>
+      <Dialog.Title>Filtros</Dialog.Title>
+      <Dialog.Description>
+        {#if isReviewOnly}
+          Filtre a fila de revisão sem poluir a tela principal.
+        {:else}
+          Ajuste os filtros de imóveis por busca, cidade, área e comodidades.
+        {/if}
+      </Dialog.Description>
+    </Dialog.Header>
+
+    <div class="space-y-5 px-1 py-4">
+      {#if isReviewOnly}
+        <div class="space-y-4 rounded-xl border border-green-100 bg-green-50/50 p-4 dark:border-green-900/50 dark:bg-green-950/20">
+          <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+            <Input
+              className="w-full"
+              type="search"
+              placeholder="Buscar por título, cidade, ID..."
+              bind:value={filters.search}
+              oninput={onSearchInput}
+              onkeydown={handleKeydown}
+              onkeyup={handleKeyup}
+            />
+            <div class="text-xs text-green-700 dark:text-green-200">
+              Dica: clique em Revisar para ver os detalhes completos.
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <label for="property-items-per-page-review" class="font-medium text-sm text-gray-700 dark:text-gray-300">Mostrar</label>
+            <select
+              id="property-items-per-page-review"
+              bind:value={itemsPerPage}
+              on:change={() => {
+                currentPage = 1;
+                if (!isClientSideFiltering) requestFetch(true);
+              }}
+              class="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span class="text-sm text-gray-600 dark:text-gray-300">entradas</span>
+          </div>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de solicitação</span>
+              <div class="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  className={reviewRequestType === 'all'
+                    ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+                    : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
+                  on:click={() => setReviewRequestType('all')}
+                  disabled={isLoading}
+                >
+                  Todas
+                </Button>
+                <Button
+                  variant="outline"
+                  className={reviewRequestType === 'creation'
+                    ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+                    : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
+                  on:click={() => setReviewRequestType('creation')}
+                  disabled={isLoading}
+                >
+                  Criação
+                </Button>
+                <Button
+                  variant="outline"
+                  className={reviewRequestType === 'edit'
+                    ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+                    : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
+                  on:click={() => setReviewRequestType('edit')}
+                  disabled={isLoading}
+                >
+                  Edição
+                </Button>
+              </div>
+            </div>
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Cidade</span>
+              <div class="relative">
+                <Select.Root bind:value={filters.city} on:valueChange={onFilterChange}>
+                  <Select.Trigger>
+                    <Select.Value placeholder="Filtrar por cidade" />
+                  </Select.Trigger>
+                  <Select.Content>
+                    <Select.Item value="all">Todas as cidades</Select.Item>
+                    {#each cities as city (city)}
+                      <Select.Item value={city}>{city}</Select.Item>
+                    {/each}
+                  </Select.Content>
+                </Select.Root>
+              </div>
+            </div>
+          </div>
+        </div>
+      {:else}
+        <div class="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+          <div class="grid gap-3 md:grid-cols-3">
+            <div class="grid gap-2 md:col-span-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Busca</span>
+              <Input
+                className="w-full"
+                type="search"
+                placeholder="Buscar por título, cidade, ID..."
+                bind:value={filters.search}
+                oninput={onSearchInput}
+                onkeydown={handleKeydown}
+                onkeyup={handleKeyup}
+              />
+            </div>
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Itens por página</span>
+              <select
+                id="property-items-per-page"
+                bind:value={itemsPerPage}
+                on:change={() => {
+                  currentPage = 1;
+                  if (!isClientSideFiltering) requestFetch(true);
+                }}
+                class="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-3">
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Tipo</span>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  on:click={() => {
+                    filters.purpose = 'all';
+                    requestFetch(true);
+                  }}
+                  class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    filters.purpose === 'all'
+                      ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  on:click={() => {
+                    filters.purpose = 'Venda';
+                    requestFetch(true);
+                  }}
+                  class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    filters.purpose === 'Venda'
+                      ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  Venda
+                </button>
+                <button
+                  type="button"
+                  on:click={() => {
+                    filters.purpose = 'Aluguel';
+                    requestFetch(true);
+                  }}
+                  class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    filters.purpose === 'Aluguel'
+                      ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  Aluguel
+                </button>
+              </div>
+            </div>
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Cidade</span>
+              <Select.Root bind:value={filters.city} on:valueChange={onFilterChange}>
+                <Select.Trigger>
+                  <Select.Value placeholder="Filtrar por cidade" />
+                </Select.Trigger>
+                <Select.Content>
+                  <Select.Item value="all">Todas as cidades</Select.Item>
+                  {#each cities as city (city)}
+                    <Select.Item value={city}>{city}</Select.Item>
+                  {/each}
+                </Select.Content>
+              </Select.Root>
+            </div>
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Ordenação rápida</span>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  on:click={sortAlphabetical}
+                  class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                  A-Z
+                </button>
+                <button
+                  type="button"
+                  on:click={sortByCreatedDesc}
+                  class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                >
+                  Recentes
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Área para filtro</span>
+              <select
+                id="area-filter-metric"
+                bind:value={areaFilterMetric}
+                on:change={resetLocalPage}
+                class="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              >
+                <option value="none">Sem filtro de área</option>
+                <option value="area_construida_valor">Área construída</option>
+                <option value="area_terreno_valor">Área do terreno</option>
+              </select>
+            </div>
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Unidade</span>
+              <select
+                id="area-filter-unit"
+                bind:value={areaFilterUnit}
+                on:change={handleAreaUnitChange}
+                class="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              >
+                {#each areaUnitOptions as option}
+                  <option value={option.value}>{option.label}</option>
+                {/each}
+              </select>
+            </div>
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Área mínima</span>
+              <input
+                id="area-filter-min"
+                class="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                bind:value={areaFilterMin}
+                inputmode="decimal"
+                placeholder="ex: 500"
+                on:input={handleAreaRangeInput}
+              />
+            </div>
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Área máxima</span>
+              <input
+                id="area-filter-max"
+                class="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                bind:value={areaFilterMax}
+                inputmode="decimal"
+                placeholder="ex: 2000"
+                on:input={handleAreaRangeInput}
+              />
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Ordenar área por</span>
+              <select
+                id="area-sort-metric"
+                bind:value={areaSortMetric}
+                on:change={resetLocalPage}
+                class="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              >
+                <option value="none">Sem ordenação por área</option>
+                <option value="area_construida_valor">Área construída</option>
+                <option value="area_terreno_valor">Área do terreno</option>
+              </select>
+            </div>
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Ordem</span>
+              <select
+                id="area-sort-direction"
+                bind:value={areaSortDirection}
+                on:change={handleAreaSortDirectionChange}
+                class="w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              >
+                <option value="desc">Maior para menor</option>
+                <option value="asc">Menor para maior</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Comodidades</p>
+            <div class="mt-2 grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+              {#each propertyAmenityOptions as amenity (amenity)}
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    aria-label={amenity}
+                    checked={isFilterAmenityChecked(amenity)}
+                    on:change={(event) => {
+                      const target = event.currentTarget as HTMLInputElement;
+                      updateAmenityFilter(amenity, target.checked);
+                    }}
+                  />
+                  {amenity}
+                </label>
+              {/each}
+            </div>
+          </div>
+
+          <div class="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              on:click={clearLocalFilters}
+            >
+              Limpar filtros locais
+            </Button>
+          </div>
+        </div>
+      {/if}
+    </div>
+
+    <Dialog.Footer className="px-1 pb-1">
+      <Button variant="outline" on:click={() => (isFiltersModalOpen = false)}>
+        Fechar
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
 
 <Dialog.Root bind:open={isModalOpen}>
   <Dialog.Content className="max-h-[85vh] overflow-y-auto overflow-x-hidden max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-6">

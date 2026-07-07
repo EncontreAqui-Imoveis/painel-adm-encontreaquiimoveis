@@ -48,10 +48,10 @@ export type ResponsibleSelectionState = {
   snapshot: string;
 };
 
-export type ProposalFilterKey = 'sent' | 'signed' | 'refused';
+export type ProposalFilterKey = 'received' | 'signed' | 'refused';
 
 export const PROPOSAL_FILTERS: Array<{ key: ProposalFilterKey; label: string; status: string }> = [
-  { key: 'sent', label: 'Propostas Enviadas', status: 'PROPOSAL_UNSIGNED' },
+  { key: 'received', label: 'Propostas Recebidas', status: 'PROPOSAL_UNSIGNED' },
   { key: 'signed', label: 'Propostas Assinadas', status: 'PROPOSAL_SIGNED' },
   { key: 'refused', label: 'Propostas Recusadas', status: 'REFUSED' },
 ];
@@ -151,7 +151,7 @@ export function getPropertyOwnerName(item: NegotiationItem): string {
 export function getStatusLabel(status?: string, internalStatus?: string): string {
   const value = String(status ?? internalStatus ?? '').trim().toUpperCase();
   if (!value) return '-';
-  if (value === 'PROPOSAL_UNSIGNED') return 'Proposta enviada';
+  if (value === 'PROPOSAL_UNSIGNED') return 'Proposta recebida';
   if (value === 'PROPOSAL_SIGNED') return 'Proposta assinada';
   if (value === 'REFUSED') return 'Recusada';
   if (value === 'UNDER_REVIEW' || value === 'DOCUMENTATION_PHASE') return 'Em análise';

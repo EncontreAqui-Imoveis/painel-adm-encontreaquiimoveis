@@ -615,7 +615,9 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(4));
-    const wifiFilter = screen.getByRole('checkbox', { name: 'Wi-Fi' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const filtersDialog = await screen.findByRole('dialog');
+    const wifiFilter = within(filtersDialog).getByRole('checkbox', { name: 'Wi-Fi' });
     await fireEvent.click(wifiFilter);
 
     await waitFor(() => {
@@ -650,8 +652,10 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(6));
-    const wifiFilter = screen.getByRole('checkbox', { name: 'Wi-Fi' });
-    const poolFilter = screen.getByRole('checkbox', { name: 'Piscina' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const filtersDialog = await screen.findByRole('dialog');
+    const wifiFilter = within(filtersDialog).getByRole('checkbox', { name: 'Wi-Fi' });
+    const poolFilter = within(filtersDialog).getByRole('checkbox', { name: 'Piscina' });
     await fireEvent.click(wifiFilter);
     await fireEvent.click(poolFilter);
 
@@ -682,7 +686,9 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(4));
-    const wifiFilter = screen.getByRole('checkbox', { name: 'Wi-Fi' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const filtersDialog = await screen.findByRole('dialog');
+    const wifiFilter = within(filtersDialog).getByRole('checkbox', { name: 'Wi-Fi' });
     await fireEvent.click(wifiFilter);
 
     await waitFor(() => {
@@ -723,10 +729,14 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(6));
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
 
-    const areaSortMetric = screen.getByLabelText('Ordenar área por');
+    const dialog = await screen.findByRole('dialog');
+    const areaSortMetric = dialog.querySelector('#area-sort-metric') as HTMLSelectElement;
+    expect(areaSortMetric).toBeTruthy();
     await fireEvent.change(areaSortMetric, { target: { value: 'area_terreno_valor' } });
-    const areaSortDirection = screen.getByLabelText('Ordem');
+    const areaSortDirection = dialog.querySelector('#area-sort-direction') as HTMLSelectElement;
+    expect(areaSortDirection).toBeTruthy();
     await fireEvent.change(areaSortDirection, { target: { value: 'desc' } });
 
     await waitFor(() => {
@@ -770,12 +780,18 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(6));
-    const filterMetric = screen.getByLabelText('Área para filtro');
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const dialog = await screen.findByRole('dialog');
+    const filterMetric = dialog.querySelector('#area-filter-metric') as HTMLSelectElement;
+    expect(filterMetric).toBeTruthy();
     await fireEvent.change(filterMetric, { target: { value: 'area_terreno_valor' } });
-    const filterUnit = screen.getByLabelText('Unidade') as HTMLSelectElement;
+    const filterUnit = dialog.querySelector('#area-filter-unit') as HTMLSelectElement;
+    expect(filterUnit).toBeTruthy();
     await fireEvent.change(filterUnit, { target: { value: 'hectare' } });
-    const minInput = screen.getByLabelText('Área mínima') as HTMLInputElement;
-    const maxInput = screen.getByLabelText('Área máxima') as HTMLInputElement;
+    const minInput = dialog.querySelector('#area-filter-min') as HTMLInputElement;
+    const maxInput = dialog.querySelector('#area-filter-max') as HTMLInputElement;
+    expect(minInput).toBeTruthy();
+    expect(maxInput).toBeTruthy();
 
     await fireEvent.input(minInput, { target: { value: '1' } });
     await fireEvent.input(maxInput, { target: { value: '2' } });
@@ -810,10 +826,15 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(4));
-    const filterUnit = screen.getByLabelText('Unidade') as HTMLSelectElement;
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const dialog = await screen.findByRole('dialog');
+    const filterUnit = dialog.querySelector('#area-filter-unit') as HTMLSelectElement;
+    expect(filterUnit).toBeTruthy();
     await fireEvent.change(filterUnit, { target: { value: 'hectare' } });
-    const minInput = screen.getByLabelText('Área mínima') as HTMLInputElement;
-    const maxInput = screen.getByLabelText('Área máxima') as HTMLInputElement;
+    const minInput = dialog.querySelector('#area-filter-min') as HTMLInputElement;
+    const maxInput = dialog.querySelector('#area-filter-max') as HTMLInputElement;
+    expect(minInput).toBeTruthy();
+    expect(maxInput).toBeTruthy();
 
     await fireEvent.input(minInput, { target: { value: '1' } });
     await fireEvent.input(maxInput, { target: { value: '300' } });
@@ -855,12 +876,18 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(6));
-    const filterMetric = screen.getByLabelText('Área para filtro');
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const dialog = await screen.findByRole('dialog');
+    const filterMetric = dialog.querySelector('#area-filter-metric') as HTMLSelectElement;
+    expect(filterMetric).toBeTruthy();
     await fireEvent.change(filterMetric, { target: { value: 'area_terreno_valor' } });
-    const filterUnit = screen.getByLabelText('Unidade') as HTMLSelectElement;
+    const filterUnit = dialog.querySelector('#area-filter-unit') as HTMLSelectElement;
+    expect(filterUnit).toBeTruthy();
     await fireEvent.change(filterUnit, { target: { value: 'alqueire' } });
-    const minInput = screen.getByLabelText('Área mínima') as HTMLInputElement;
-    const maxInput = screen.getByLabelText('Área máxima') as HTMLInputElement;
+    const minInput = dialog.querySelector('#area-filter-min') as HTMLInputElement;
+    const maxInput = dialog.querySelector('#area-filter-max') as HTMLInputElement;
+    expect(minInput).toBeTruthy();
+    expect(maxInput).toBeTruthy();
 
     await fireEvent.input(minInput, { target: { value: '1' } });
     await fireEvent.input(maxInput, { target: { value: '2.5' } });
@@ -902,9 +929,13 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(6));
-    const areaSortMetric = screen.getByLabelText('Ordenar área por');
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const filtersDialog = await screen.findByRole('dialog');
+    const areaSortMetric = filtersDialog.querySelector('#area-sort-metric') as HTMLSelectElement;
+    expect(areaSortMetric).toBeTruthy();
     await fireEvent.change(areaSortMetric, { target: { value: 'area_terreno_valor' } });
-    const areaSortDirection = screen.getByLabelText('Ordem');
+    const areaSortDirection = filtersDialog.querySelector('#area-sort-direction') as HTMLSelectElement;
+    expect(areaSortDirection).toBeTruthy();
     await fireEvent.change(areaSortDirection, { target: { value: 'desc' } });
 
     await waitFor(() => {
@@ -915,10 +946,11 @@ describe('PropertyManagement', () => {
       ]);
     });
 
+    await fireEvent.click(within(filtersDialog).getByRole('button', { name: 'Fechar' }));
     await fireEvent.click(getRevisarButtons()[0]);
-    const dialog = await screen.findByRole('dialog');
-    expect(findListItemByLabel(dialog, 'Área do terreno')).toHaveTextContent('2 ha');
-    await fireEvent.click(within(dialog).getByRole('button', { name: 'Sair' }));
+    const detailDialog = await screen.findByRole('dialog');
+    expect(findListItemByLabel(detailDialog, 'Área do terreno')).toHaveTextContent('2 ha');
+    await fireEvent.click(within(detailDialog).getByRole('button', { name: 'Sair' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
@@ -954,13 +986,18 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(6));
-
-    const filterMetric = screen.getByLabelText('Área para filtro');
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const dialog = await screen.findByRole('dialog');
+    const filterMetric = dialog.querySelector('#area-filter-metric') as HTMLSelectElement;
+    expect(filterMetric).toBeTruthy();
     await fireEvent.change(filterMetric, { target: { value: 'area_terreno_valor' } });
-    const filterUnit = screen.getByLabelText('Unidade') as HTMLSelectElement;
+    const filterUnit = dialog.querySelector('#area-filter-unit') as HTMLSelectElement;
+    expect(filterUnit).toBeTruthy();
     await fireEvent.change(filterUnit, { target: { value: 'm2' } });
-    const minInput = screen.getByLabelText('Área mínima') as HTMLInputElement;
-    const maxInput = screen.getByLabelText('Área máxima') as HTMLInputElement;
+    const minInput = dialog.querySelector('#area-filter-min') as HTMLInputElement;
+    const maxInput = dialog.querySelector('#area-filter-max') as HTMLInputElement;
+    expect(minInput).toBeTruthy();
+    expect(maxInput).toBeTruthy();
     expect((filterMetric as HTMLSelectElement).value).toBe('area_terreno_valor');
     expect(filterUnit.value).toBe('m2');
     await fireEvent.input(minInput, { target: { value: '900' } });
@@ -1005,12 +1042,18 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(6));
-    const filterMetric = screen.getByLabelText('Área para filtro');
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const dialog = await screen.findByRole('dialog');
+    const filterMetric = dialog.querySelector('#area-filter-metric') as HTMLSelectElement;
+    expect(filterMetric).toBeTruthy();
     await fireEvent.change(filterMetric, { target: { value: 'area_terreno_valor' } });
-    const filterUnit = screen.getByLabelText('Unidade') as HTMLSelectElement;
+    const filterUnit = dialog.querySelector('#area-filter-unit') as HTMLSelectElement;
+    expect(filterUnit).toBeTruthy();
     await fireEvent.change(filterUnit, { target: { value: 'm2' } });
-    const minInput = screen.getByLabelText('Área mínima') as HTMLInputElement;
-    const maxInput = screen.getByLabelText('Área máxima') as HTMLInputElement;
+    const minInput = dialog.querySelector('#area-filter-min') as HTMLInputElement;
+    const maxInput = dialog.querySelector('#area-filter-max') as HTMLInputElement;
+    expect(minInput).toBeTruthy();
+    expect(maxInput).toBeTruthy();
     expect((filterMetric as HTMLSelectElement).value).toBe('area_terreno_valor');
     expect(filterUnit.value).toBe('m2');
     await fireEvent.input(minInput, { target: { value: '6000' } });
@@ -1042,6 +1085,7 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(4));
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Venda' }));
 
     await waitFor(() => {
@@ -1050,6 +1094,7 @@ describe('PropertyManagement', () => {
       expect(secondCall).toContain('status=approved');
     });
 
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
     const searchInput = screen.getByPlaceholderText('Buscar por título, cidade, ID...');
     await fireEvent.input(searchInput, { target: { value: 'Casa' } });
 
@@ -1061,7 +1106,8 @@ describe('PropertyManagement', () => {
       expect(searchCall).toContain('status=approved');
     });
 
-    const wifiFilter = screen.getByRole('checkbox', { name: 'Wi-Fi' });
+    const dialog = await screen.findByRole('dialog');
+    const wifiFilter = within(dialog).getByRole('checkbox', { name: 'Wi-Fi' });
     await fireEvent.click(wifiFilter);
     await waitFor(() => {
       expect(getTablePropertyTitles()).toEqual(['Casa com Wi-Fi']);
@@ -1101,6 +1147,7 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(4));
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
 
     const citySelect = screen.getByRole('button', { name: 'Filtrar por cidade' });
     await fireEvent.click(citySelect);
@@ -1137,7 +1184,9 @@ describe('PropertyManagement', () => {
     render(PropertyManagement);
 
     await waitFor(() => expect(getRevisarButtons().length).toBe(6));
-    const wifiFilter = screen.getByRole('checkbox', { name: 'Wi-Fi' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
+    const dialog = await screen.findByRole('dialog');
+    const wifiFilter = within(dialog).getByRole('checkbox', { name: 'Wi-Fi' });
     await fireEvent.click(wifiFilter);
 
     await waitFor(() => {
