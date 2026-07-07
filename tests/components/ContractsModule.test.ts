@@ -1453,6 +1453,78 @@ describe('ContractsModule', () => {
     });
   });
 
+  it('permite editar os nomes do captador e do vendedor na visualização do VGV', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_SIGNATURES')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-sign-name-1',
+              status: 'AWAITING_SIGNATURES',
+              negotiationId: 'neg-test-sign-name-1',
+              propertyId: 603,
+              propertyCode: 'RV-603',
+              propertyTitle: 'Casa Nomes',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador Original',
+              sellingBrokerName: 'Vendedor Original',
+              documents: [
+                {
+                  id: 6031,
+                  documentType: 'contrato_assinado',
+                  originalFileName: 'contrato_assinado.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-name-1/documents/6031/download',
+                  createdAt: '2026-03-02T10:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-02T11:00:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+    apiPostMock.mockResolvedValue({});
+
+    render(ContractsModule);
+
+    const signaturesTab = await screen.findByRole('button', {
+      name: 'Aguardando Assinaturas',
+    });
+    await fireEvent.click(signaturesTab);
+
+    const openFinalizeButton = await screen.findByRole('button', {
+      name: 'Finalizar Venda/Locação',
+    });
+    await fireEvent.click(openFinalizeButton);
+
+    const captadorNomeInput = (await screen.findByLabelText('Nome do captador')) as HTMLInputElement;
+    const vendedorNomeInput = (await screen.findByLabelText('Nome do vendedor')) as HTMLInputElement;
+
+    expect(captadorNomeInput.value).toBe('Captador Original');
+    expect(vendedorNomeInput.value).toBe('Vendedor Original');
+    expect(screen.getByText('Captador:')).toBeInTheDocument();
+    expect(screen.getByText('Vendedor:')).toBeInTheDocument();
+    expect(screen.getByText('Captador Original')).toBeInTheDocument();
+    expect(screen.getByText('Vendedor Original')).toBeInTheDocument();
+
+    await fireEvent.input(captadorNomeInput, { target: { value: 'Captador Editado' } });
+    await fireEvent.input(vendedorNomeInput, { target: { value: 'Vendedor Editado' } });
+
+    expect(captadorNomeInput.value).toBe('Captador Editado');
+    expect(vendedorNomeInput.value).toBe('Vendedor Editado');
+    expect(screen.getByText('Captador Editado')).toBeInTheDocument();
+    expect(screen.getByText('Vendedor Editado')).toBeInTheDocument();
+  });
+
   it('limita percentual em 100 e bloqueia a finalização quando a soma passa de 100%', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_SIGNATURES')) {

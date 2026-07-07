@@ -220,6 +220,10 @@
     comissaoVendedor: '',
     taxaPlataforma: '',
   };
+  let finalizePeopleForm = {
+    nomeCaptador: '',
+    nomeVendedor: '',
+  };
 
   let savingPartyData = false;
   let ownerInfoForm = {
@@ -596,6 +600,10 @@
       comissaoCaptador: readCommissionValue(data, 'comissaoCaptador'),
       comissaoVendedor: readCommissionValue(data, 'comissaoVendedor'),
       taxaPlataforma: readCommissionValue(data, 'taxaPlataforma'),
+    };
+    finalizePeopleForm = {
+      nomeCaptador: String(contract?.capturingBrokerName ?? '').trim(),
+      nomeVendedor: String(contract?.sellingBrokerName ?? '').trim(),
     };
   }
 
@@ -2100,6 +2108,39 @@
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
               Formulário de Comissões
             </p>
+            <div class="mt-3 grid gap-3 md:grid-cols-2">
+              <label class="text-sm text-gray-700 dark:text-gray-200">
+                Nome do captador
+                <input
+                  type="text"
+                  bind:value={finalizePeopleForm.nomeCaptador}
+                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                />
+              </label>
+              <label class="text-sm text-gray-700 dark:text-gray-200">
+                Nome do vendedor
+                <input
+                  type="text"
+                  bind:value={finalizePeopleForm.nomeVendedor}
+                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                />
+              </label>
+            </div>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Campos somente para conferência visual nesta etapa.
+            </p>
+            <div class="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+              <div class="flex flex-wrap gap-x-4 gap-y-1">
+                <p>
+                  <span class="font-semibold">Captador:</span>
+                  {finalizePeopleForm.nomeCaptador || '-'}
+                </p>
+                <p>
+                  <span class="font-semibold">Vendedor:</span>
+                  {finalizePeopleForm.nomeVendedor || '-'}
+                </p>
+              </div>
+            </div>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
               <label class="text-sm text-gray-700 dark:text-gray-200">
                 Valor de Venda/Locação (R$)
