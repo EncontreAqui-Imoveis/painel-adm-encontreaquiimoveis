@@ -65,6 +65,7 @@
     getApprovalProgressToneClass,
     getSideApprovalUiState,
     hasDocumentReviewStatus,
+    isRejectedContract,
     previousStageLabel,
     normalizeDocumentStatus,
     statusLabel,
@@ -814,7 +815,7 @@
     isLoading = true;
     try {
       const response = await listContracts<ContractItem>(activeTab, currentPage, itemsPerPage);
-      items = response.items;
+      items = response.items.filter((item) => !isRejectedContract(item));
       totalItems = response.total;
       totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
       if (currentPage > totalPages) {

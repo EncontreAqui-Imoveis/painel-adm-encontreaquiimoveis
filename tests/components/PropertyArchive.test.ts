@@ -35,6 +35,25 @@ describe('PropertyArchive', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.startsWith('/admin/properties/archive')) {
+        const url = new URL(endpoint, 'https://painelweb.local');
+        const status = url.searchParams.get('status') ?? 'sold';
+
+        if (status === 'rented') {
+          return {
+            data: [
+              {
+                id: 11,
+                code: 'RV-011',
+                title: 'Apartamento Alugado',
+                brokerName: 'Corretor 2',
+                status: 'rented',
+                transactionDate: '2026-03-02T10:00:00.000Z',
+              },
+            ],
+            total: 1,
+          };
+        }
+
         return {
           data: [
             {
@@ -45,16 +64,8 @@ describe('PropertyArchive', () => {
               status: 'sold',
               transactionDate: '2026-03-01T10:00:00.000Z',
             },
-            {
-              id: 11,
-              code: 'RV-011',
-              title: 'Apartamento Alugado',
-              brokerName: 'Corretor 2',
-              status: 'rented',
-              transactionDate: '2026-03-02T10:00:00.000Z',
-            },
           ],
-          total: 2,
+          total: 1,
         };
       }
 
@@ -97,12 +108,24 @@ describe('PropertyArchive', () => {
     });
   });
 
-  it('remove os filtros Vendidos e Alugados do cabeçalho', async () => {
+  it('exibe botões de vendidos e alugados no topo e alterna a listagem', async () => {
     render(PropertyArchive);
 
     expect(await screen.findByText('Casa Vendida')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Vendidos' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Alugados' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Vendidos' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Alugados' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Alugados' }));
+
+    await waitFor(() => {
+      expect(
+        apiGetMock.mock.calls
+          .map((call) => call[0] as string)
+          .some((url) => url.includes('/admin/properties/archive?') && url.includes('status=rented'))
+      ).toBe(true);
+    });
+
+    expect(await screen.findByText('Apartamento Alugado')).toBeInTheDocument();
   });
 
   it('exibe ações visíveis e permite revisar imóvel finalizado', async () => {
@@ -127,7 +150,8 @@ describe('PropertyArchive', () => {
 
     render(PropertyArchive);
 
-    await screen.findAllByText('Apartamento Alugado');
+    await fireEvent.click(screen.getByRole('button', { name: 'Alugados' }));
+    await screen.findByText('Apartamento Alugado');
     const relistButtons = screen.getAllByRole('button', { name: 'Voltar para Disponível' });
     await fireEvent.click(relistButtons[relistButtons.length - 1]);
     await fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));

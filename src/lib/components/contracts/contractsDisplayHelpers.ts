@@ -247,6 +247,19 @@ export function getApprovalProgressLabel(contract: ContractItem | null | undefin
   return 'Pendente';
 }
 
+export function isRejectedContract(contract: ContractItem | null | undefined): boolean {
+  if (!contract) return false;
+
+  const backendStatus = String(contract.approvalProgress?.status ?? '').trim().toUpperCase();
+  const backendLabel = String(contract.approvalProgress?.label ?? '').trim().toLowerCase();
+  const sellerStatus = String(contract.sellerApprovalStatus ?? '').trim().toUpperCase();
+  const buyerStatus = String(contract.buyerApprovalStatus ?? '').trim().toUpperCase();
+
+  if (backendStatus === 'REJECTED') return true;
+  if (backendLabel === 'rejeitado') return true;
+  return sellerStatus === 'REJECTED' || buyerStatus === 'REJECTED';
+}
+
 export function getApprovalProgressToneClass(contract: ContractItem | null | undefined): string {
   const backendStatus = String(contract?.approvalProgress?.status ?? '').trim().toUpperCase();
   const sellerStatus = String(contract?.sellerApprovalStatus ?? '').trim().toUpperCase();

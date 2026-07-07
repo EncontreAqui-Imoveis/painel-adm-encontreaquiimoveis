@@ -40,7 +40,6 @@
   let searchDraft = '';
   /** Filtro exclusivo: vendidos ou alugados (padrão: vendidos). */
   let archiveKind: ArchiveStatus = 'sold';
-  let archiveKindDraft: ArchiveStatus = 'sold';
   let isFiltersModalOpen = false;
   let isRelisting = false;
   let isMobileLayout = false;
@@ -74,23 +73,25 @@
   }
 
   function openFiltersModal() {
-    archiveKindDraft = archiveKind;
     searchDraft = search;
     isFiltersModalOpen = true;
   }
 
   function applyArchiveFilters() {
-    archiveKind = archiveKindDraft;
     search = searchDraft.trim();
     isFiltersModalOpen = false;
     requestFetch(true);
   }
 
   function resetArchiveFilters() {
-    archiveKindDraft = 'sold';
-    archiveKind = 'sold';
     searchDraft = '';
     search = '';
+    requestFetch(true);
+  }
+
+  function selectArchiveKind(kind: ArchiveStatus) {
+    if (archiveKind === kind) return;
+    archiveKind = kind;
     requestFetch(true);
   }
 
@@ -256,6 +257,28 @@
       <p class="text-sm text-gray-500 dark:text-gray-400">
         Histórico de imóveis finalizados. Você pode rever e devolver imóveis para disponível quando necessário.
       </p>
+      <div class="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          className={archiveKind === 'sold'
+            ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+            : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}
+          aria-pressed={archiveKind === 'sold'}
+          on:click={() => selectArchiveKind('sold')}
+        >
+          Vendidos
+        </Button>
+        <Button
+          variant="outline"
+          className={archiveKind === 'rented'
+            ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
+            : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}
+          aria-pressed={archiveKind === 'rented'}
+          on:click={() => selectArchiveKind('rented')}
+        >
+          Alugados
+        </Button>
+      </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
       <Button
@@ -278,7 +301,7 @@
       <Dialog.Header>
         <Dialog.Title>Filtros</Dialog.Title>
         <Dialog.Description>
-          Filtre o arquivo por texto e pelo tipo de imóvel finalizado.
+          Filtre o arquivo por texto.
         </Dialog.Description>
       </Dialog.Header>
 
@@ -297,29 +320,6 @@
           />
         </div>
 
-        <div class="grid gap-2">
-          <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de arquivo</p>
-          <div class="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              className={archiveKindDraft === 'sold'
-                ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}
-              on:click={() => (archiveKindDraft = 'sold')}
-            >
-              Vendidos
-            </Button>
-            <Button
-              variant="outline"
-              className={archiveKindDraft === 'rented'
-                ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}
-              on:click={() => (archiveKindDraft = 'rented')}
-            >
-              Alugados
-            </Button>
-          </div>
-        </div>
       </div>
 
       <Dialog.Footer className="flex flex-wrap gap-2">

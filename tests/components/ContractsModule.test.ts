@@ -153,8 +153,31 @@ describe('ContractsModule', () => {
           createdAt: '2026-03-02T09:00:00.000Z',
           updatedAt: '2026-03-02T09:05:00.000Z',
         },
+        {
+          id: 'contract-admin-rejected-1',
+          status: 'AWAITING_DOCS',
+          negotiationId: 'neg-admin-rejected-1',
+          propertyId: 901,
+          propertyCode: 'RV-901',
+          propertyTitle: 'Casa Rejeitada',
+          propertyImageUrl: 'https://cdn.example.com/property-901.jpg',
+          propertyPurpose: 'Venda',
+          capturingBrokerId: 30001,
+          sellingBrokerId: 30002,
+          capturingBrokerName: 'Captador',
+          sellingBrokerName: 'Vendedor',
+          sellerApprovalStatus: 'REJECTED',
+          buyerApprovalStatus: 'PENDING',
+          approvalProgress: {
+            status: 'REJECTED',
+            label: 'Rejeitado',
+          },
+          documents: [],
+          createdAt: '2026-03-02T09:00:00.000Z',
+          updatedAt: '2026-03-02T09:05:00.000Z',
+        },
       ],
-      total: 1,
+      total: 2,
       page: 1,
       limit: 20,
     });
@@ -174,6 +197,7 @@ describe('ContractsModule', () => {
       await screen.findByText((content) => content.includes('RV-900'))
     ).toBeInTheDocument();
     expect(screen.getByText('Casa Contrato')).toBeInTheDocument();
+    expect(screen.queryByText('Casa Rejeitada')).not.toBeInTheDocument();
     expect(screen.getByText('Em análise')).toBeInTheDocument();
     expect(screen.getByAltText('Foto do imóvel Casa Contrato')).toBeInTheDocument();
     expect(screen.getAllByText(/Vendedor/i).length).toBeGreaterThan(0);
