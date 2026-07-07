@@ -1315,6 +1315,119 @@ describe('ContractsModule', () => {
     expect(screen.getByText('Contrato (Minuta)')).toBeInTheDocument();
   });
 
+  it('abre a proposta assinada no visualizador nativo e baixa o PDF de fato', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_SIGNATURES')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-sign-view-1',
+              status: 'AWAITING_SIGNATURES',
+              negotiationId: 'neg-test-sign-view-1',
+              propertyId: 614,
+              propertyCode: 'RV-614',
+              propertyTitle: 'Casa Proposta Assinada',
+              propertyPurpose: 'Venda',
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              documents: [
+                {
+                  id: 6141,
+                  documentType: 'contrato_assinado',
+                  originalFileName: 'proposta_04e4c102-32dd-4b9f-ac80-b46eb5c666a0.pdf',
+                  downloadUrl: '/negotiations/neg-test-sign-view-1/documents/6141/download',
+                  createdAt: '2026-03-02T10:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-01T10:00:00.000Z',
+              updatedAt: '2026-03-02T10:30:00.000Z',
+            },
+          ],
+          total: 1,
+        };
+      }
+
+      if (endpoint === '/contracts/contract-test-sign-view-1') {
+        return {
+          contract: {
+            id: 'contract-test-sign-view-1',
+            status: 'AWAITING_SIGNATURES',
+            negotiationId: 'neg-test-sign-view-1',
+            propertyId: 614,
+            propertyCode: 'RV-614',
+            propertyTitle: 'Casa Proposta Assinada',
+            propertyPurpose: 'Venda',
+            capturingBrokerName: 'Captador',
+            sellingBrokerName: 'Vendedor',
+          },
+          documents: [
+            {
+              id: 6141,
+              documentType: 'contrato_assinado',
+              originalFileName: 'proposta_04e4c102-32dd-4b9f-ac80-b46eb5c666a0.pdf',
+              downloadUrl: '/negotiations/neg-test-sign-view-1/documents/6141/download',
+              createdAt: '2026-03-02T10:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      return {
+        data: [],
+        total: 0,
+      };
+    });
+    apiClientGetMock.mockResolvedValue({
+      data: new Blob(['%PDF-1.4 test signed proposal%'], { type: 'application/pdf' }),
+      headers: {
+        'content-disposition':
+          'attachment; filename="proposta_04e4c102-32dd-4b9f-ac80-b46eb5c666a0.pdf"',
+      },
+    });
+    const createObjectUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:signed-proposal');
+    const revokeObjectUrlSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const fakeViewer = {
+      document: { write: vi.fn() },
+      location: { href: '' },
+      close: vi.fn(),
+    } as unknown as Window;
+    const windowOpenSpy = vi.spyOn(window, 'open').mockReturnValue(fakeViewer);
+
+    render(ContractsModule);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Aguardando Assinaturas' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Finalizar Venda/Locação' }));
+
+    const viewButton = await screen.findByRole('button', { name: 'Visualizar na Web' });
+    const downloadButton = screen.getByRole('button', { name: 'Baixar PDF' });
+
+    await fireEvent.click(viewButton);
+    await waitFor(() => {
+      expect(windowOpenSpy).toHaveBeenCalledWith('', '_blank');
+      expect(fakeViewer.location.href).toBe('blob:signed-proposal');
+      expect(fakeViewer.document.write).toHaveBeenCalled();
+    });
+
+    await fireEvent.click(downloadButton);
+    await waitFor(() => {
+      expect(apiClientGetMock).toHaveBeenCalledWith(
+        '/negotiations/neg-test-sign-view-1/documents/6141/download',
+        { responseType: 'blob' }
+      );
+      expect(anchorClickSpy).toHaveBeenCalled();
+    });
+
+    expect(windowOpenSpy).toHaveBeenCalledTimes(1);
+    expect(createObjectUrlSpy).toHaveBeenCalledTimes(2);
+    expect(revokeObjectUrlSpy).toHaveBeenCalledTimes(0);
+
+    windowOpenSpy.mockRestore();
+    anchorClickSpy.mockRestore();
+    createObjectUrlSpy.mockRestore();
+    revokeObjectUrlSpy.mockRestore();
+  });
+
   it('permite voltar de AWAITING_SIGNATURES para a etapa anterior pelo modal', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_SIGNATURES')) {

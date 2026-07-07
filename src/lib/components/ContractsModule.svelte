@@ -391,6 +391,60 @@
     }
   }
 
+  async function openSignedProposalInNativeViewer(doc: ContractDocument) {
+    if (!doc.downloadUrl) {
+      toast.error('Documento sem URL de visualização.');
+      return;
+    }
+
+    const viewer = window.open('', '_blank');
+    if (!viewer) {
+      toast.error('Não foi possível abrir a visualização do PDF.');
+      return;
+    }
+
+    viewer.document.write(
+      '<!doctype html><html><head><title>Carregando PDF...</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;">Carregando PDF...</body></html>'
+    );
+
+    try {
+      const response = await downloadContractDocumentByUrl(doc.downloadUrl);
+      const objectUrl = URL.createObjectURL(response.blob);
+      viewer.location.href = objectUrl;
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (error) {
+      viewer.close();
+      console.error('Erro ao abrir proposta assinada no visualizador nativo:', error);
+      toast.error('Não foi possível abrir a proposta assinada.');
+    }
+  }
+
+  async function downloadSignedProposalPdf(doc: ContractDocument) {
+    if (!doc.downloadUrl) {
+      toast.error('URL de download não disponível.');
+      return;
+    }
+
+    try {
+      const response = await downloadContractDocumentByUrl(doc.downloadUrl);
+      const fallbackName =
+        normalizePossiblyMojibakeText(doc.originalFileName ?? '') || 'proposta_assinada.pdf';
+      const downloadName = normalizePossiblyMojibakeText(response.downloadName || fallbackName);
+      const objectUrl = URL.createObjectURL(response.blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = downloadName;
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 15_000);
+    } catch (error) {
+      console.error('Erro ao baixar proposta assinada:', error);
+      toast.error('Não foi possível baixar a proposta assinada.');
+    }
+  }
+
   function downloadPreviewDocument() {
     const downloadSource = documentPreviewObjectUrl || documentPreviewSourceUrl;
     if (!downloadSource) return;
@@ -1857,7 +1911,7 @@
                 <Button
                   size="sm"
                   variant="outline"
-                  on:click={() => selected && openDocumentPreview(signedProposalDoc, selected)}
+                  on:click={() => openSignedProposalInNativeViewer(signedProposalDoc)}
                 >
                   <Eye class="mr-2 h-4 w-4" />
                   Visualizar na Web
@@ -1865,13 +1919,7 @@
                 <Button
                   size="sm"
                   variant="outline"
-                  on:click={() => {
-                    if (signedProposalDoc.downloadUrl) {
-                      window.open(signedProposalDoc.downloadUrl, '_blank');
-                    } else {
-                      toast.error('URL de download não disponível.');
-                    }
-                  }}
+                  on:click={() => downloadSignedProposalPdf(signedProposalDoc)}
                 >
                   <Download class="mr-2 h-4 w-4" />
                   Baixar PDF
