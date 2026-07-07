@@ -52,6 +52,8 @@ describe('CommissionsModule', () => {
           propertyTitle: 'Casa Centro',
           propertyCode: 'RV-900',
           propertyPurpose: 'Venda',
+          capturingBrokerName: 'Captador Original',
+          sellingBrokerName: 'Vendedor Original',
           finalizedAt: '2026-03-09T12:00:00.000Z',
           commissionData: {
             valorVenda: 100000,
@@ -80,11 +82,15 @@ describe('CommissionsModule', () => {
     await screen.findAllByText(/Casa Centro/);
     await fireEvent.click(screen.getAllByRole('button', { name: 'Editar' })[0]);
 
+    const captadorNomeInput = screen.getByLabelText('Nome do captador') as HTMLInputElement;
+    const vendedorNomeInput = screen.getByLabelText('Nome do vendedor') as HTMLInputElement;
     const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
     const vendedorInput = screen.getByLabelText('Comissão Complementar') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
 
+    await fireEvent.input(captadorNomeInput, { target: { value: 'Captador Manual' } });
+    await fireEvent.input(vendedorNomeInput, { target: { value: 'Vendedor Manual' } });
     await fireEvent.input(valorInput, { target: { value: '100000' } });
     await fireEvent.input(captadorInput, { target: { value: '40000' } });
     await fireEvent.input(vendedorInput, { target: { value: '30000' } });

@@ -40,13 +40,14 @@
     propertyCode?: string | null;
     propertyPurpose?: string | null;
     capturingBrokerName?: string | null;
+    sellingBrokerName?: string | null;
     finalizedAt?: string | null;
     signedProposalDocumentId?: number | string | null;
     signedProposalDocumentSource?: 'negotiation_documents' | null;
     commissionData: {
       valorVenda: number;
       comissaoCaptador: number;
-    comissaoVendedor: number;
+      comissaoVendedor: number;
       taxaPlataforma: number;
     };
   };
@@ -97,6 +98,8 @@
     comissaoVendedor: '',
     taxaPlataforma: '',
   };
+  let editableCaptadorName = '';
+  let editableVendedorName = '';
   let summary: CommissionsSummary = {
     totalVGV: 0,
     totalCaptadores: 0,
@@ -137,6 +140,10 @@
 
   function propertyLabel(item: CommissionsTransaction): string {
     return resolveCommissionPropertyLabel(item);
+  }
+
+  function normalizeDisplayName(value: string | null | undefined): string {
+    return String(value ?? '').trim();
   }
 
   function resolveApiErrorMessage(error: unknown, fallback: string): string {
@@ -286,12 +293,16 @@
       comissaoVendedor: readCommissionValue(item.commissionData?.comissaoVendedor),
       taxaPlataforma: readCommissionValue(item.commissionData?.taxaPlataforma),
     };
+    editableCaptadorName = normalizeDisplayName(item.capturingBrokerName);
+    editableVendedorName = normalizeDisplayName(item.sellingBrokerName);
   }
 
   function closeEditModal() {
     if (savingCommissionData || deletingCommissionData) return;
     editModalOpen = false;
     selectedTransaction = null;
+    editableCaptadorName = '';
+    editableVendedorName = '';
   }
 
   async function saveCommissionData() {
@@ -424,11 +435,16 @@
       transactions = list.map((item) => {
         const record = item as CommissionsTransaction & {
           signed_proposal_document_id?: number | string | null;
+          selling_broker_name?: string | null;
+          capturing_broker_name?: string | null;
         };
         return {
           ...record,
           signedProposalDocumentId:
             record.signedProposalDocumentId ?? record.signed_proposal_document_id ?? null,
+          capturingBrokerName:
+            record.capturingBrokerName ?? record.capturing_broker_name ?? null,
+          sellingBrokerName: record.sellingBrokerName ?? record.selling_broker_name ?? null,
         };
       });
     } catch (fetchError) {
@@ -560,6 +576,9 @@
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <p class="text-base font-semibold text-gray-900 dark:text-gray-100">{propertyLabel(item)}</p>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Captador: {item.capturingBrokerName ?? '-'} · Vendedor: {item.sellingBrokerName ?? '-'}
+              </p>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Finalizado em {formatDate(item.finalizedAt)}
               </p>
@@ -660,7 +679,13 @@
                 {formatDate(item.finalizedAt)}
               </td>
               <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                {propertyLabel(item)}
+                <div class="font-medium">{propertyLabel(item)}</div>
+                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Captador: {item.capturingBrokerName ?? '-'}
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  Vendedor: {item.sellingBrokerName ?? '-'}
+                </div>
               </td>
               <td class="px-6 py-4 text-right text-sm text-gray-700 dark:text-gray-300">
                 {formatCurrency(toNumber(item.commissionData?.valorVenda))}
@@ -738,6 +763,39 @@
       </div>
 
       <div class="space-y-4">
+        <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                Pessoas do VGV
+              </span>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Campos apenas visuais nesta tela.
+              </p>
+            </div>
+          </div>
+          <div class="mt-3 grid gap-3 md:grid-cols-2">
+            <label class="text-sm text-gray-700 dark:text-gray-200">
+              Nome do captador
+              <input
+                type="text"
+                bind:value={editableCaptadorName}
+                placeholder="Nome do captador"
+                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+              />
+            </label>
+            <label class="text-sm text-gray-700 dark:text-gray-200">
+              Nome do vendedor
+              <input
+                type="text"
+                bind:value={editableVendedorName}
+                placeholder="Nome do vendedor"
+                class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+              />
+            </label>
+          </div>
+        </div>
+
         <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
