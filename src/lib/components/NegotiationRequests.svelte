@@ -13,7 +13,7 @@
     formatCurrency,
     formatDate,
     formatCpf,
-    getPropertyOwnerName,
+    getAdvertiserName,
     getStatusBadgeClass,
     getStatusLabel,
     isSignedProposal,
@@ -73,7 +73,22 @@
     price_rent?: number | null;
     city?: string | null;
     state?: string | null;
+    brokerName?: string | null;
+    broker_name?: string | null;
+    ownerName?: string | null;
+    owner_name?: string | null;
   };
+
+  function getProposalAdvertiserName(property: ProposalPropertyOption | null | undefined): string {
+    if (!property) return '-';
+    return (
+      property.brokerName ??
+      property.broker_name ??
+      property.ownerName ??
+      property.owner_name ??
+      '-'
+    );
+  }
 
   type ProposalSubmissionPayload = {
     propertyId: number | undefined;
@@ -525,6 +540,8 @@
       price: proposal.value ?? null,
       price_sale: proposal.value ?? null,
       price_rent: proposal.value ?? null,
+      brokerName: proposal.brokerName ?? proposal.capturingBrokerName ?? null,
+      ownerName: proposal.propertyOwnerName ?? null,
     };
     proposalClientName = readClientName(proposal);
     proposalClientCpf = formatCpf(readClientCpf(proposal));
@@ -1715,7 +1732,7 @@
                   </div>
                   <div>
                     <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Anunciante</p>
-                    <p class="text-sm text-gray-700 dark:text-gray-300">{getPropertyOwnerName(item)}</p>
+                    <p class="text-sm text-gray-700 dark:text-gray-300">{getAdvertiserName(item)}</p>
                   </div>
                   <div>
                     <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Valor</p>
@@ -1907,6 +1924,9 @@
                   <div class="text-xs text-gray-500 dark:text-gray-400">
                     Valor do imóvel: {formatCurrency(resolveProposalPropertyValue(property))}
                   </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                    Anunciante: {getProposalAdvertiserName(property)}
+                  </div>
                 </div>
               </div>
             </button>
@@ -1931,6 +1951,9 @@
               </div>
               <div class="text-xs text-gray-600 dark:text-gray-300">
                 Valor do imóvel: {formatCurrency(resolveProposalPropertyValue(selectedGenerateProperty))}
+              </div>
+              <div class="text-xs text-gray-600 dark:text-gray-300">
+                Anunciante: {getProposalAdvertiserName(selectedGenerateProperty)}
               </div>
               <div class="text-xs text-gray-500 dark:text-gray-400">
                 A proposta pode ficar acima ou abaixo do valor do imóvel.

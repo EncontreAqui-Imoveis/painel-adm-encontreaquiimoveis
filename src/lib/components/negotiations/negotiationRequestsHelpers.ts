@@ -14,6 +14,7 @@ export type NegotiationItem = {
   propertyTitle?: string | null;
   propertyAddress?: string | null;
   brokerName?: string | null;
+  broker_name?: string | null;
   capturingBrokerName?: string | null;
   sellingBrokerName?: string | null;
   propertyOwnerName?: string | null;
@@ -144,8 +145,18 @@ export function getBrokerName(item: NegotiationItem): string {
   return item.capturingBrokerName ?? '-';
 }
 
+export function getAdvertiserName(item: NegotiationItem): string {
+  return (
+    item.brokerName ??
+    item.broker_name ??
+    item.capturingBrokerName ??
+    item.propertyOwnerName ??
+    '-'
+  );
+}
+
 export function getPropertyOwnerName(item: NegotiationItem): string {
-  return item.propertyOwnerName ?? item.capturingBrokerName ?? '-';
+  return getAdvertiserName(item);
 }
 
 export function getStatusLabel(status?: string, internalStatus?: string): string {

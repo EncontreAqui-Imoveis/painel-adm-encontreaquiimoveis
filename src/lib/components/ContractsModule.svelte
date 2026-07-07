@@ -399,8 +399,19 @@
 
     try {
       const response = await downloadContractDocumentByUrl(doc.downloadUrl);
-      const objectUrl = URL.createObjectURL(response.blob);
-      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      const pdfBlob =
+        response.blob.type === 'application/pdf'
+          ? response.blob
+          : new Blob([response.blob], { type: 'application/pdf' });
+      const objectUrl = URL.createObjectURL(pdfBlob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     } catch (error) {
       console.error('Erro ao abrir proposta assinada no visualizador nativo:', error);

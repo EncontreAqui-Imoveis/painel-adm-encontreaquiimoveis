@@ -1399,11 +1399,7 @@ describe('ContractsModule', () => {
 
     await fireEvent.click(viewButton);
     await waitFor(() => {
-      expect(windowOpenSpy).toHaveBeenCalledWith(
-        'blob:signed-proposal',
-        '_blank',
-        'noopener,noreferrer'
-      );
+      expect(anchorClickSpy).toHaveBeenCalledTimes(1);
     });
 
     await fireEvent.click(downloadButton);
@@ -1412,10 +1408,10 @@ describe('ContractsModule', () => {
         '/negotiations/neg-test-sign-view-1/documents/6141/download',
         { responseType: 'blob' }
       );
-      expect(anchorClickSpy).toHaveBeenCalled();
+      expect(anchorClickSpy).toHaveBeenCalledTimes(2);
     });
 
-    expect(windowOpenSpy).toHaveBeenCalledTimes(1);
+    expect(windowOpenSpy).not.toHaveBeenCalled();
     expect(createObjectUrlSpy).toHaveBeenCalledTimes(2);
     expect(revokeObjectUrlSpy).toHaveBeenCalledTimes(0);
 

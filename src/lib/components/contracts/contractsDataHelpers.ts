@@ -287,11 +287,12 @@ export function getContractSellerClientId(
   ]);
 }
 
-export function getOwnerDisplayName(contract: ContractItem | null | undefined): string {
+export function getAdvertiserDisplayName(contract: ContractItem | null | undefined): string {
   if (!contract) return '-';
 
   const directName = String(
-    contract.ownerName ??
+    contract.capturingBrokerName ??
+      contract.ownerName ??
       contract.propertyOwnerName ??
       (contract.ownerInfo && typeof contract.ownerInfo === 'object'
         ? (contract.ownerInfo as Record<string, unknown>).nome ??
@@ -328,9 +329,13 @@ export function getOwnerDisplayName(contract: ContractItem | null | undefined): 
   return '-';
 }
 
+export function getOwnerDisplayName(contract: ContractItem | null | undefined): string {
+  return getAdvertiserDisplayName(contract);
+}
+
 export function getContractPartySummary(contract: ContractItem | null | undefined): string {
   if (!contract) return 'Anunciante: - · Comprador: -';
-  return `Anunciante: ${getOwnerDisplayName(contract)} · Comprador: ${getBuyerDisplayName(contract)}`;
+  return `Anunciante: ${getAdvertiserDisplayName(contract)} · Comprador: ${getBuyerDisplayName(contract)}`;
 }
 
 export function formatDocumentPreviewName(doc: ContractDocument | null | undefined): string {

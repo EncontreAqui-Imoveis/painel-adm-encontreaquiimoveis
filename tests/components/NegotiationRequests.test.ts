@@ -80,6 +80,7 @@ describe('NegotiationRequests', () => {
               propertyId: 10,
               propertyCode: 'RV-010',
               propertyTitle: 'Casa em negociação',
+              propertyOwnerName: 'Proprietário Indevido',
               brokerName: 'Corretor 1',
               clientName: 'Maria Compradora',
               value: 350000,
@@ -111,6 +112,8 @@ describe('NegotiationRequests', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Ver propostas' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Ver detalhes' }));
 
+    expect(await screen.findByText('Corretor 1')).toBeInTheDocument();
+    expect(screen.queryByText('Proprietário Indevido')).not.toBeInTheDocument();
     expect((await screen.findAllByText('Falha ao carregar responsáveis')).length).toBeGreaterThan(0);
 
     expect(await screen.findByRole('button', { name: 'Aprovar' })).toBeInTheDocument();
@@ -321,6 +324,8 @@ describe('NegotiationRequests', () => {
               title: 'Apartamento com imagem',
               price: 120000,
               propertyImageUrl: 'https://example.com/imovel.jpg',
+              broker_name: 'Corretor da Lista',
+              owner_name: 'Proprietário da Lista',
             },
           ],
         };
@@ -357,6 +362,8 @@ describe('NegotiationRequests', () => {
               title: 'Apartamento com imagem',
               price: 120000,
               propertyImageUrl: 'https://example.com/imovel.jpg',
+              broker_name: 'Corretor da Lista',
+              owner_name: 'Proprietário da Lista',
             },
           ],
         };
@@ -373,5 +380,9 @@ describe('NegotiationRequests', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
 
     expect(await screen.findByAltText('Apartamento com imagem')).toBeInTheDocument();
+    await fireEvent.click(
+      screen.getByRole('button', { name: /IM-120 - Apartamento com imagem/ })
+    );
+    expect(await screen.findAllByText('Anunciante: Corretor da Lista')).toHaveLength(2);
   });
 });
