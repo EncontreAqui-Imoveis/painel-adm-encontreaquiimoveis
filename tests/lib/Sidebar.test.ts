@@ -34,6 +34,7 @@ describe('Sidebar', () => {
       pendingCounts: {
         propertyRequests: 0,
         brokerRequests: 0,
+        proposalRequests: 0,
       },
     });
 
@@ -58,6 +59,7 @@ describe('Sidebar', () => {
       pendingCounts: {
         propertyRequests: 0,
         brokerRequests: 0,
+        proposalRequests: 0,
       },
     });
 
@@ -83,6 +85,7 @@ describe('Sidebar', () => {
       pendingCounts: {
         propertyRequests: 0,
         brokerRequests: 0,
+        proposalRequests: 0,
       },
     });
 
@@ -103,6 +106,7 @@ describe('Sidebar', () => {
       pendingCounts: {
         propertyRequests: 0,
         brokerRequests: 0,
+        proposalRequests: 0,
       },
     });
 
@@ -131,6 +135,7 @@ describe('Sidebar', () => {
       pendingCounts: {
         propertyRequests: 0,
         brokerRequests: 0,
+        proposalRequests: 0,
       },
     });
 
@@ -141,5 +146,20 @@ describe('Sidebar', () => {
 
     await fireEvent.click(soldMenuItem);
     expect(onNavigate).toHaveBeenCalledWith('sold_properties', undefined);
+  });
+
+  it('mostra badge para propostas assinadas dentro de Verificação', async () => {
+    render(Sidebar, {
+      isOpen: true,
+      activeView: 'dashboard',
+      onNavigate: vi.fn(),
+      pendingCounts: {
+        propertyRequests: 0,
+        brokerRequests: 0,
+        proposalRequests: 2,
+      },
+    });
+
+    expect(screen.getByRole('button', { name: /^Verificação/ })).toHaveTextContent('2');
   });
 });

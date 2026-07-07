@@ -81,10 +81,12 @@
     type PendingCounts = {
         propertyRequests: number;
         brokerRequests: number;
+        proposalRequests: number;
     };
     let pendingCounts: PendingCounts = {
         propertyRequests: 0,
         brokerRequests: 0,
+        proposalRequests: 0,
     };
     let pendingCountsInterval: ReturnType<typeof setInterval> | null = null;
     let pendingCountsRequestInFlight = false;
@@ -724,7 +726,7 @@
             return;
         }
         if (!hasSessionToken()) {
-            pendingCounts = { propertyRequests: 0, brokerRequests: 0 };
+            pendingCounts = { propertyRequests: 0, brokerRequests: 0, proposalRequests: 0 };
             clearSessionToken();
             return;
         }
@@ -744,7 +746,7 @@
         }
 
         try {
-            const [creationRequests, editRequests, brokerRequests] = await Promise.all([
+            const [creationRequests, editRequests, brokerRequests, proposalRequests] = await Promise.all([
                 fetchCount(
                     "/admin/properties-with-brokers?status=pending_approval&limit=1&page=1",
                 ),
@@ -754,17 +756,22 @@
                 fetchCount(
                     "/admin/brokers?status=pending_verification&limit=1&page=1",
                 ),
+                fetchCount(
+                    "/admin/negotiations/requests/summary?status=PROPOSAL_SIGNED&limit=1&page=1",
+                ),
             ]);
             if (
                 creationRequests === null ||
                 editRequests === null ||
-                brokerRequests === null
+                brokerRequests === null ||
+                proposalRequests === null
             ) {
                 return;
             }
             pendingCounts = {
                 propertyRequests: creationRequests + editRequests,
                 brokerRequests,
+                proposalRequests,
             };
         } catch (error) {
             console.error("Erro ao buscar contagem de solicitacoes:", error);

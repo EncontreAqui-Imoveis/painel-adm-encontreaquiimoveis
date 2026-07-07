@@ -31,6 +31,7 @@
   export let pendingCounts: {
     propertyRequests: number;
     brokerRequests: number;
+    proposalRequests?: number;
   } = { propertyRequests: 0, brokerRequests: 0 };
   export let announcementsBadge = 0;
 
@@ -493,9 +494,9 @@
           <span class="truncate">Verificação</span>
         </span>
         <span class="flex items-center gap-2">
-          {#if !openGroups.verificacao && (pendingCounts.propertyRequests + pendingCounts.brokerRequests) > 0}
+          {#if !openGroups.verificacao && (pendingCounts.propertyRequests + pendingCounts.brokerRequests + (pendingCounts.proposalRequests ?? 0)) > 0}
             <span class="inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white">
-              {pendingCounts.propertyRequests + pendingCounts.brokerRequests}
+              {pendingCounts.propertyRequests + pendingCounts.brokerRequests + (pendingCounts.proposalRequests ?? 0)}
             </span>
           {/if}
           <ChevronDown class={`h-4 w-4 transition-transform ${openGroups.verificacao ? 'rotate-180' : ''}`} />
@@ -521,6 +522,12 @@
                   class="ml-auto mt-0.5 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
                 >
                   {pendingCounts.propertyRequests}
+                </span>
+              {:else if item.view === 'negotiation_requests' && (pendingCounts.proposalRequests ?? 0) > 0}
+                <span
+                  class="ml-auto mt-0.5 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
+                >
+                  {pendingCounts.proposalRequests}
                 </span>
               {/if}
             </button>

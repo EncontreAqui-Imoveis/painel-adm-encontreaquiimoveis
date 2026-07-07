@@ -263,7 +263,6 @@
           className={archiveKind === 'sold'
             ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
             : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}
-          aria-pressed={archiveKind === 'sold'}
           on:click={() => selectArchiveKind('sold')}
         >
           Vendidos
@@ -273,7 +272,6 @@
           className={archiveKind === 'rented'
             ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
             : 'border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800'}
-          aria-pressed={archiveKind === 'rented'}
           on:click={() => selectArchiveKind('rented')}
         >
           Alugados
