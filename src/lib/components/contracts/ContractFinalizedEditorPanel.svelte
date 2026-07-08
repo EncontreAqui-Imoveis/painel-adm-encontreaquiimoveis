@@ -32,8 +32,7 @@
   export let handleSignedFileChange: (event: Event) => void = () => {};
   export let cancelSignedDocumentReplacement: () => void = () => {};
   export let closeModal: () => void = () => {};
-  export let reopenFinalizedContract: () => void | Promise<void> = () => {};
-  export let deleteFinalizedContract: (contract: ContractItem) => void | Promise<void> = () => {};
+  export let releaseFinalizedContract: () => void | Promise<void> = () => {};
   export let openDocumentPreview: (doc: ContractDocument, contract: ContractItem) => void = () => {};
   export let viewDocument: (doc: ContractDocument, contract: ContractItem) => void = () => {};
 </script>
@@ -208,23 +207,13 @@
     </Button>
     <Button
       variant="outline"
-      on:click={reopenFinalizedContract}
+      on:click={releaseFinalizedContract}
       disabled={reopeningContract || deletingContract || uploadingSignedDoc}
     >
       {#if reopeningContract}
         <Loader2 class="mr-2 h-4 w-4 animate-spin" />
       {/if}
-      Voltar pra Disponível
-    </Button>
-    <Button
-      variant="destructive"
-      on:click={() => contract && deleteFinalizedContract(contract)}
-      disabled={reopeningContract || deletingContract || uploadingSignedDoc}
-    >
-      {#if deletingContract}
-        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-      {/if}
-      Excluir
+      Liberar imóvel e excluir contrato
     </Button>
   </div>
 </div>

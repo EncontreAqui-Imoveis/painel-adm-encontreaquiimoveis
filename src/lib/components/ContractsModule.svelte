@@ -1434,21 +1434,21 @@
     }
   }
 
-  async function reopenFinalizedContract() {
+  async function releaseFinalizedContract() {
     if (!selected) return;
     const confirmed = window.confirm(
-      'Tem certeza que deseja voltar este contrato para disponível? O contrato atual será excluído e o imóvel será liberado imediatamente.'
+      'Tem certeza que deseja excluir este contrato e liberar o imóvel imediatamente?'
     );
     if (!confirmed) return;
 
     reopeningContract = true;
     try {
       await deleteFinalizedContractById(selected.id);
-      toast.success('Contrato excluído e imóvel liberado para disponível.');
+      toast.success('Contrato excluído e imóvel liberado.');
       closeModal(true);
       refresh();
     } catch (error) {
-      console.error('Erro ao voltar contrato para disponível:', error);
+      console.error('Erro ao excluir contrato e liberar imóvel:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível liberar o imóvel.'));
     } finally {
       reopeningContract = false;
@@ -2596,8 +2596,7 @@
           handleSignedFileChange={handleSignedFileChange}
           cancelSignedDocumentReplacement={cancelSignedDocumentReplacement}
           closeModal={closeModal}
-          reopenFinalizedContract={reopenFinalizedContract}
-          deleteFinalizedContract={deleteFinalizedContract}
+          releaseFinalizedContract={releaseFinalizedContract}
           openDocumentPreview={(doc, contract) => openDocumentPreview(doc, contract)}
           viewDocument={(doc, contract) => viewDocument(doc, contract)}
         />
