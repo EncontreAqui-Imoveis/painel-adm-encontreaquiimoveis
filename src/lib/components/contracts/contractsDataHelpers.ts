@@ -24,6 +24,7 @@ export const documentTypeLabels: Record<string, string> = {
   comprovante_endereco: 'Comprovante de Endereço',
   certidao_casamento_nascimento: 'Certidão de Casamento/Nascimento',
   certidao_inteiro_teor: 'Certidão de Inteiro Teor',
+  certidao_inteiro_teor_escritura: 'Certidão de Inteiro Teor/Escritura',
   certidao_onus_acoes: 'Certidão de Ônus/Ações',
   comprovante_renda: 'Comprovante de Renda',
   contrato_minuta: 'Contrato (Minuta)',
@@ -52,6 +53,7 @@ export const contractScopedDocumentTypes = new Set([
   'comprovante_pagamento',
   'boleto_vistoria',
   'outro',
+  'certidao_inteiro_teor_escritura',
   ...outroMatrixSlotTypes,
 ]);
 
@@ -68,6 +70,7 @@ export const rentRequiredDocTypes = [
   'comprovante_endereco',
   'certidao_casamento_nascimento',
   'comprovante_renda',
+  'certidao_inteiro_teor_escritura',
 ];
 
 export const sellerRequiredInfoFields: RequiredFieldDescriptor[] = [
@@ -101,6 +104,7 @@ export const matrixDocumentSortOrder = [
   'comprovante_endereco',
   'certidao_casamento_nascimento',
   'certidao_inteiro_teor',
+  'certidao_inteiro_teor_escritura',
   'certidao_onus_acoes',
   'comprovante_renda',
   'outro',

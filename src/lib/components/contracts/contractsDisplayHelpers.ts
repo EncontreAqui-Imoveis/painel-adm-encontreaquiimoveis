@@ -14,6 +14,7 @@ export const documentTypeLabels: Record<string, string> = {
   comprovante_endereco: 'Comprovante de Endereço',
   certidao_casamento_nascimento: 'Certidão de Casamento/Nascimento',
   certidao_inteiro_teor: 'Certidão de Inteiro Teor',
+  certidao_inteiro_teor_escritura: 'Certidão de Inteiro Teor/Escritura',
   certidao_onus_acoes: 'Certidão de Ônus/Ações',
   comprovante_renda: 'Comprovante de Renda',
   contrato_minuta: 'Contrato (Minuta)',

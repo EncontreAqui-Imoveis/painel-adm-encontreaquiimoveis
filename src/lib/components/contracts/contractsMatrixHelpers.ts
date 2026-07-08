@@ -89,6 +89,8 @@ export function normalizeMatrixDocumentType(value: unknown): string {
 export function readRawMatrixRequirements(contract: ContractItem): MatrixRequirement[] {
   const raw = contract.documentRequirements;
   const entries: MatrixRequirement[] = [];
+  const purpose = String(contract.propertyPurpose ?? '').trim().toLowerCase();
+  const isRentalOnly = purpose.includes('alug') && !purpose.includes('venda');
 
   const categoryToDocumentTypes = (category: string): string[] => {
     switch (category.trim().toLowerCase()) {
@@ -105,7 +107,9 @@ export function readRawMatrixRequirements(contract: ContractItem): MatrixRequire
       case 'dados_bancarios':
         return ['outro'];
       case 'docs_imovel':
-        return ['certidao_inteiro_teor', 'certidao_onus_acoes'];
+        return isRentalOnly
+          ? ['certidao_inteiro_teor_escritura']
+          : ['certidao_inteiro_teor', 'certidao_onus_acoes'];
       default:
         return [];
     }
@@ -445,7 +449,11 @@ export function resolveMatrixUploadCategory(
   if (normalizedType === 'comprovante_endereco') return 'comprovante_endereco';
   if (normalizedType === 'certidao_casamento_nascimento') return 'estado_civil';
   if (normalizedType === 'comprovante_renda') return 'comprovante_renda';
-  if (normalizedType === 'certidao_inteiro_teor' || normalizedType === 'certidao_onus_acoes') {
+  if (
+    normalizedType === 'certidao_inteiro_teor' ||
+    normalizedType === 'certidao_onus_acoes' ||
+    normalizedType === 'certidao_inteiro_teor_escritura'
+  ) {
     return 'docs_imovel';
   }
   if (normalizedType === 'dados_bancarios') return 'dados_bancarios';
