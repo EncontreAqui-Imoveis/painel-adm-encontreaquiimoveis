@@ -39,7 +39,6 @@
     downloadContractDocumentsZip,
     evaluateContractSide as evaluateContractSideRequest,
     finalizeContract,
-    reopenFinalizedContractById,
     submitContractDraft,
     transitionContractById,
     uploadFinalizedContractDocument,
@@ -1438,19 +1437,19 @@
   async function reopenFinalizedContract() {
     if (!selected) return;
     const confirmed = window.confirm(
-      'Tem certeza que deseja reiniciar este contrato? Ele voltará para a aba de documentos pendentes e removerá todos os documentos vinculados.'
+      'Tem certeza que deseja voltar este contrato para disponível? O contrato atual será excluído e o imóvel será liberado imediatamente.'
     );
     if (!confirmed) return;
 
     reopeningContract = true;
     try {
-      const response = await reopenFinalizedContractById(selected.id);
-      toast.success(String(response?.message ?? response?.data?.message ?? '').trim() || 'Contrato reiniciado com sucesso.');
+      await deleteFinalizedContractById(selected.id);
+      toast.success('Contrato excluído e imóvel liberado para disponível.');
       closeModal(true);
       refresh();
     } catch (error) {
-      console.error('Erro ao reiniciar contrato finalizado:', error);
-      toast.error(resolveApiErrorMessage(error, 'Não foi possível reiniciar o contrato.'));
+      console.error('Erro ao voltar contrato para disponível:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível liberar o imóvel.'));
     } finally {
       reopeningContract = false;
     }

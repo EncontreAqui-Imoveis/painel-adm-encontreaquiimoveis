@@ -214,7 +214,7 @@
       {#if reopeningContract}
         <Loader2 class="mr-2 h-4 w-4 animate-spin" />
       {/if}
-      Reiniciar Contrato
+      Voltar pra Disponível
     </Button>
     <Button
       variant="destructive"
