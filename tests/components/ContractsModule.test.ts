@@ -85,101 +85,179 @@ describe('ContractsModule', () => {
   });
 
   it('consome o payload realista do backend em /admin/contracts sem adaptadores extras', async () => {
-    apiGetMock.mockResolvedValue({
-      data: [
-        {
-          id: 'contract-admin-1',
-          status: 'AWAITING_DOCS',
-          negotiationId: 'neg-admin-1',
-          propertyId: 900,
-          propertyCode: 'RV-900',
-          propertyTitle: 'Casa Contrato',
-          propertyImageUrl: 'https://cdn.example.com/property-900.jpg',
-          propertyPurpose: 'Venda',
-          capturingBrokerId: 30001,
-          sellingBrokerId: 30002,
-          capturingBrokerName: 'Captador',
-          sellingBrokerName: 'Vendedor',
-          sellerInfo: {
-            estado_civil: 'Casado',
-            profissao: 'Corretor',
-            email: 'captador@test.com',
-            telefone: '62999998888',
-            dados_bancarios: 'Banco XPTO',
-          },
-          buyerInfo: {
-            estado_civil: 'Solteiro',
-            profissao: 'Analista',
-            email: 'vendedor@test.com',
-            telefone: '62999997777',
-          },
-          buyer_client_name: 'Cliente Comprador',
-          buyerClientName: 'Cliente Comprador',
-          clientName: 'Cliente Comprador',
-          clientCpf: '11122233344',
-          sellerApprovalStatus: 'APPROVED_WITH_RES',
-          buyerApprovalStatus: 'PENDING',
-          sellerApprovalReason: {
-            reason: 'Documento legível.',
-          },
-          buyerApprovalReason: {},
-          commissionData: {},
-          workflowMetadata: {
-            signatureMethod: 'online',
-          },
-          responsibleUserIds: [30003, 30005],
-          agencyName: 'Encontre Aqui',
-          agencyAddress: 'Rua Central, 100',
-          documents: [
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
+        return {
+          data: [
             {
-              id: 501,
-              type: 'other',
-              documentType: 'doc_identidade',
-              side: 'seller',
-              originalFileName: 'danfe (peÃ§as).pdf',
-              downloadUrl: '/negotiations/neg-admin-1/documents/501/download',
-              createdAt: '2026-03-02T09:02:00.000Z',
+              id: 'contract-admin-1',
+              status: 'AWAITING_DOCS',
+              negotiationId: 'neg-admin-1',
+              propertyId: 900,
+              propertyCode: 'RV-900',
+              propertyTitle: 'Casa Contrato',
+              propertyImageUrl: 'https://cdn.example.com/property-900.jpg',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              sellerInfo: {
+                estado_civil: 'Casado',
+                profissao: 'Corretor',
+                email: 'captador@test.com',
+                telefone: '62999998888',
+                dados_bancarios: 'Banco XPTO',
+              },
+              buyerInfo: {
+                estado_civil: 'Solteiro',
+                profissao: 'Analista',
+                email: 'vendedor@test.com',
+                telefone: '62999997777',
+              },
+              buyer_client_name: 'Cliente Comprador',
+              buyerClientName: 'Cliente Comprador',
+              clientName: 'Cliente Comprador',
+              clientCpf: '11122233344',
+              sellerApprovalStatus: 'APPROVED_WITH_RES',
+              buyerApprovalStatus: 'PENDING',
+              sellerApprovalReason: {
+                reason: 'Documento legível.',
+              },
+              buyerApprovalReason: {},
+              commissionData: {},
+              workflowMetadata: {
+                signatureMethod: 'online',
+              },
+              responsibleUserIds: [30003, 30005],
+              agencyName: 'Encontre Aqui',
+              agencyAddress: 'Rua Central, 100',
+              documents: [
+                {
+                  id: 501,
+                  type: 'other',
+                  documentType: 'doc_identidade',
+                  side: 'seller',
+                  originalFileName: 'danfe (peÃ§as).pdf',
+                  downloadUrl: '/negotiations/neg-admin-1/documents/501/download',
+                  createdAt: '2026-03-02T09:02:00.000Z',
+                },
+                {
+                  id: 502,
+                  type: 'other',
+                  documentType: 'doc_identidade',
+                  side: 'buyer',
+                  originalFileName: 'identidade_comprador.pdf',
+                  downloadUrl: '/negotiations/neg-admin-1/documents/502/download',
+                  createdAt: '2026-03-02T09:03:00.000Z',
+                },
+              ],
+              createdAt: '2026-03-02T09:00:00.000Z',
+              updatedAt: '2026-03-02T09:05:00.000Z',
             },
             {
-              id: 502,
-              type: 'other',
-              documentType: 'doc_identidade',
-              side: 'buyer',
-              originalFileName: 'identidade_comprador.pdf',
-              downloadUrl: '/negotiations/neg-admin-1/documents/502/download',
-              createdAt: '2026-03-02T09:03:00.000Z',
+              id: 'contract-admin-rejected-1',
+              status: 'AWAITING_DOCS',
+              negotiationId: 'neg-admin-rejected-1',
+              propertyId: 901,
+              propertyCode: 'RV-901',
+              propertyTitle: 'Casa Rejeitada',
+              propertyImageUrl: 'https://cdn.example.com/property-901.jpg',
+              propertyPurpose: 'Venda',
+              capturingBrokerId: 30001,
+              sellingBrokerId: 30002,
+              capturingBrokerName: 'Captador',
+              sellingBrokerName: 'Vendedor',
+              sellerApprovalStatus: 'REJECTED',
+              buyerApprovalStatus: 'PENDING',
+              approvalProgress: {
+                status: 'REJECTED',
+                label: 'Rejeitado',
+              },
+              documents: [],
+              createdAt: '2026-03-02T09:00:00.000Z',
+              updatedAt: '2026-03-02T09:05:00.000Z',
             },
           ],
-          createdAt: '2026-03-02T09:00:00.000Z',
-          updatedAt: '2026-03-02T09:05:00.000Z',
-        },
-        {
-          id: 'contract-admin-rejected-1',
-          status: 'AWAITING_DOCS',
-          negotiationId: 'neg-admin-rejected-1',
-          propertyId: 901,
-          propertyCode: 'RV-901',
-          propertyTitle: 'Casa Rejeitada',
-          propertyImageUrl: 'https://cdn.example.com/property-901.jpg',
-          propertyPurpose: 'Venda',
-          capturingBrokerId: 30001,
-          sellingBrokerId: 30002,
-          capturingBrokerName: 'Captador',
-          sellingBrokerName: 'Vendedor',
-          sellerApprovalStatus: 'REJECTED',
-          buyerApprovalStatus: 'PENDING',
-          approvalProgress: {
-            status: 'REJECTED',
-            label: 'Rejeitado',
+          total: 2,
+          page: 1,
+          limit: 20,
+        };
+      }
+
+      if (endpoint === '/contracts/contract-admin-1') {
+        return {
+          contract: {
+            id: 'contract-admin-1',
+            status: 'AWAITING_DOCS',
+            negotiationId: 'neg-admin-1',
+            propertyId: 900,
+            propertyCode: 'RV-900',
+            propertyTitle: 'Casa Contrato',
+            propertyImageUrl: 'https://cdn.example.com/property-900.jpg',
+            propertyPurpose: 'Venda',
+            capturingBrokerId: 30001,
+            sellingBrokerId: 30002,
+            capturingBrokerName: 'Captador',
+            sellingBrokerName: 'Vendedor',
+            sellerInfo: {
+              estado_civil: 'Casado',
+              profissao: 'Corretor',
+              email: 'captador@test.com',
+              telefone: '62999998888',
+              dados_bancarios: 'Banco XPTO',
+            },
+            buyerInfo: {
+              estado_civil: 'Solteiro',
+              profissao: 'Analista',
+              email: 'vendedor@test.com',
+              telefone: '62999997777',
+            },
+            buyer_client_name: 'Cliente Comprador',
+            buyerClientName: 'Cliente Comprador',
+            clientName: 'Cliente Comprador',
+            clientCpf: '11122233344',
+            sellerApprovalStatus: 'APPROVED_WITH_RES',
+            buyerApprovalStatus: 'PENDING',
+            sellerApprovalReason: {
+              reason: 'Documento legível.',
+            },
+            buyerApprovalReason: {},
+            commissionData: {},
+            workflowMetadata: {
+              signatureMethod: 'online',
+            },
+            responsibleUserIds: [30003, 30005],
+            agencyName: 'Encontre Aqui',
+            agencyAddress: 'Rua Central, 100',
+            documents: [
+              {
+                id: 501,
+                type: 'other',
+                documentType: 'doc_identidade',
+                side: 'seller',
+                originalFileName: 'danfe (peÃ§as).pdf',
+                downloadUrl: '/negotiations/neg-admin-1/documents/501/download',
+                createdAt: '2026-03-02T09:02:00.000Z',
+              },
+              {
+                id: 502,
+                type: 'other',
+                documentType: 'doc_identidade',
+                side: 'buyer',
+                originalFileName: 'identidade_comprador.pdf',
+                downloadUrl: '/negotiations/neg-admin-1/documents/502/download',
+                createdAt: '2026-03-02T09:03:00.000Z',
+              },
+            ],
+            createdAt: '2026-03-02T09:00:00.000Z',
+            updatedAt: '2026-03-02T09:05:00.000Z',
           },
           documents: [],
-          createdAt: '2026-03-02T09:00:00.000Z',
-          updatedAt: '2026-03-02T09:05:00.000Z',
-        },
-      ],
-      total: 2,
-      page: 1,
-      limit: 20,
+        };
+      }
+
+      return { data: [], total: 0 };
     });
     apiClientGetMock.mockImplementation(async (endpoint: string) => {
       if (String(endpoint).includes('/download')) {
@@ -188,8 +266,9 @@ describe('ContractsModule', () => {
           headers: { 'content-type': 'application/pdf' },
         };
       }
-      return { data: null, headers: {} };
+      return { data: [], total: 0 };
     });
+    apiPutMock.mockResolvedValue({ data: { message: 'Documento aprovado com sucesso.' } });
 
     render(ContractsModule);
 
@@ -214,6 +293,12 @@ describe('ContractsModule', () => {
     const downloadButtons = screen.getAllByRole('button', { name: 'Baixar' });
     expect(downloadButtons.length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(5);
+    expect(screen.getAllByRole('button', { name: 'Aprovar documento' }).length).toBeGreaterThan(0);
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Aprovar documento' })[0]);
+    expect(apiPutMock).toHaveBeenCalledWith(
+      '/admin/contracts/contract-admin-1/documents/501/review',
+      { status: 'APPROVED' }
+    );
 
     pdfGetDocumentMock.mockReturnValue({
       promise: Promise.resolve({

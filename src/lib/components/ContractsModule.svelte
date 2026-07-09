@@ -39,6 +39,7 @@
     downloadContractDocumentsZip,
     evaluateContractSide as evaluateContractSideRequest,
     finalizeContract,
+    reviewContractDocument,
     submitContractDraft,
     transitionContractById,
     uploadFinalizedContractDocument,
@@ -173,6 +174,7 @@
     | null = null;
   let matrixUploadingCounts: Record<string, number> = {};
   let matrixDeletingDocumentId: number | null = null;
+  let reviewingDocumentId: number | null = null;
   let documentPreviewOpen = false;
   let documentPreviewLoading = false;
   let documentPreviewError = '';
@@ -1012,6 +1014,42 @@
       toast.error('Não foi possível registrar a avaliação.');
     } finally {
       evaluatingSide = null;
+    }
+  }
+
+  async function reviewMatrixDocument(doc: ContractDocument, status: 'APPROVED' | 'REJECTED') {
+    if (!selected) return;
+
+    let reason = '';
+    if (status === 'REJECTED') {
+      const value = window.prompt('Informe o motivo da rejeição:', '');
+      if (value == null) {
+        return;
+      }
+      reason = value.trim();
+      if (reason.length < 3) {
+        toast.error('Motivo deve ter ao menos 3 caracteres.');
+        return;
+      }
+    }
+
+    reviewingDocumentId = doc.id;
+    try {
+      await reviewContractDocument(selected.id, doc.id, status, reason || undefined);
+      toast.success(
+        status === 'REJECTED'
+          ? 'Documento rejeitado com sucesso.'
+          : 'Documento aprovado com sucesso.'
+      );
+      await reloadSelectedContract(selected.id);
+      if (selected) {
+        syncSelectedContractInList(selected);
+      }
+    } catch (error) {
+      console.error('Erro ao revisar documento individual:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível revisar o documento.'));
+    } finally {
+      reviewingDocumentId = null;
     }
   }
 
@@ -2085,11 +2123,14 @@
             rows={contractMatrixRows}
             documentLabel={documentLabel}
             documentFileName={documentFileName}
+            documentStatusLabel={documentStatusLabel}
+            documentStatusClass={documentStatusClass}
             isMatrixUploading={isMatrixUploading}
             matrixCellUploadLabel={matrixCellUploadLabel}
             canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
             downloadingDocumentId={downloadingDocumentId}
             matrixDeletingDocumentId={matrixDeletingDocumentId}
+            reviewDocumentId={reviewingDocumentId}
             onOpenPreview={(doc) => selected && openDocumentPreview(doc, selected)}
             onDownload={(doc) => selected && viewDocument(doc, selected)}
             onReplace={(documentType, side, existingDocumentType) => {
@@ -2097,6 +2138,7 @@
             }}
             onDelete={deleteMatrixDocument}
             onUpload={triggerMatrixUpload}
+            onReview={(doc, status) => reviewMatrixDocument(doc, status)}
           />
 
           <ContractApprovalActions

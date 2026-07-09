@@ -136,6 +136,18 @@ export async function evaluateContractSide(
   return readPayload<{ movedToDraft?: boolean }>(response);
 }
 
+export async function reviewContractDocument(
+  contractId: string,
+  documentId: number,
+  status: 'APPROVED' | 'REJECTED' | 'APPROVED_WITH_RES' | 'PENDING',
+  reason?: string
+): Promise<void> {
+  await api.put(`/admin/contracts/${contractId}/documents/${documentId}/review`, {
+    status,
+    ...(reason ? { reason } : {}),
+  });
+}
+
 export async function downloadContractDocumentsZip(contractId: string): Promise<Blob> {
   const response = await apiClient.get(`/admin/contracts/${contractId}/documents.zip`, {
     responseType: 'blob',

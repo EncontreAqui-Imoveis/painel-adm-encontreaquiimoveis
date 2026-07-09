@@ -20,11 +20,15 @@
   ) => boolean = () => false;
   export let downloadingDocumentId: number | null = null;
   export let matrixDeletingDocumentId: number | null = null;
+  export let reviewDocumentId: number | null = null;
   export let onOpenPreview: (doc: ContractMatrixRowView['sellerDocs'][number]) => void = () => {};
   export let onDownload: (doc: ContractMatrixRowView['sellerDocs'][number]) => void = () => {};
   export let onReplace: (documentType: string, side: 'seller' | 'buyer', existingDocumentType?: string | null) => void = () => {};
   export let onDelete: (doc: ContractMatrixRowView['sellerDocs'][number]) => void = () => {};
   export let onUpload: (documentType: string, side: 'seller' | 'buyer') => void = () => {};
+  export let documentStatusLabel: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => '';
+  export let documentStatusClass: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => '';
+  export let onReview: (doc: ContractMatrixRowView['sellerDocs'][number], status: 'APPROVED' | 'REJECTED') => void = () => {};
 </script>
 
 <div id="contract-doc-matrix" class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
@@ -71,6 +75,11 @@
                           >
                             {documentFileName(sellerDoc)}
                           </button>
+                          {#if documentStatusLabel(sellerDoc)}
+                            <span class={`rounded-full px-2 py-1 text-[11px] font-semibold ${documentStatusClass(sellerDoc)}`}>
+                              {documentStatusLabel(sellerDoc)}
+                            </span>
+                          {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
                           <Button size="sm" variant="outline" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
@@ -95,6 +104,25 @@
                               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                             {/if}
                             Excluir
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
+                            on:click={() => onReview(sellerDoc, 'APPROVED')}
+                            disabled={reviewDocumentId === sellerDoc.id}
+                          >
+                            {#if reviewDocumentId === sellerDoc.id}
+                              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                            {/if}
+                            Aprovar<span class="sr-only"> documento</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            on:click={() => onReview(sellerDoc, 'REJECTED')}
+                            disabled={reviewDocumentId === sellerDoc.id}
+                          >
+                            Rejeitar<span class="sr-only"> documento</span>
                           </Button>
                         </div>
                       </div>
@@ -145,6 +173,11 @@
                           >
                             {documentFileName(buyerDoc)}
                           </button>
+                          {#if documentStatusLabel(buyerDoc)}
+                            <span class={`rounded-full px-2 py-1 text-[11px] font-semibold ${documentStatusClass(buyerDoc)}`}>
+                              {documentStatusLabel(buyerDoc)}
+                            </span>
+                          {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
                           <Button size="sm" variant="outline" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
@@ -169,6 +202,25 @@
                               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                             {/if}
                             Excluir
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
+                            on:click={() => onReview(buyerDoc, 'APPROVED')}
+                            disabled={reviewDocumentId === buyerDoc.id}
+                          >
+                            {#if reviewDocumentId === buyerDoc.id}
+                              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                            {/if}
+                            Aprovar<span class="sr-only"> documento</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            on:click={() => onReview(buyerDoc, 'REJECTED')}
+                            disabled={reviewDocumentId === buyerDoc.id}
+                          >
+                            Rejeitar<span class="sr-only"> documento</span>
                           </Button>
                         </div>
                       </div>
