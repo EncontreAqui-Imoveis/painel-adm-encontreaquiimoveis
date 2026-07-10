@@ -40,7 +40,7 @@
       <thead>
         <tr class="border-b border-gray-200 dark:border-gray-700">
           <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Documento</th>
-          <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Anunciante</th>
+          <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Vendedor</th>
           <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Comprador</th>
         </tr>
       </thead>

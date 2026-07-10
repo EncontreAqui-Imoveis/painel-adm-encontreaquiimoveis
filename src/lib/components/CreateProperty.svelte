@@ -149,15 +149,22 @@
   const SALE_PRICE_MAX_LENGTH = getPropertyPriceInputMaxLength(SALE_PROPERTY_PRICE_MAX);
   const RENT_PRICE_MAX_LENGTH = getPropertyPriceInputMaxLength(RENT_PROPERTY_PRICE_MAX);
 
-  const cityCache: Record<string, string[]> = {};
+  type LocationPage<T> = { data?: T[] };
+  type LocationCity = { id: number; name: string; state?: string | null };
+  type LocationNeighborhood = { id: number; cityId?: number; city_id?: number; name: string };
+  const cityCache: Record<string, LocationCity[]> = {};
   const bairroCache: Record<string, string[]> = {};
+  const cityIdsByName: Record<string, number> = {};
   let cities: string[] = [];
   let bairros: string[] = [];
   let citiesLoading = false;
   let bairrosLoading = false;
   let bairrosError: string | null = null;
   let citiesError: string | null = null;
+  let selectedCityId: number | null = null;
   let lastBairroLookupCity = '';
+  let citySearchTimer: ReturnType<typeof setTimeout> | null = null;
+  let bairroSearchTimer: ReturnType<typeof setTimeout> | null = null;
   let cepLookupError: string | null = null;
   let lastCepLookup = '';
   const optionalBairroPropertyTypes = new Set(['Área rural', 'Chácara', 'Rancho']);
@@ -285,29 +292,40 @@
   }
 
   async function fetchCitiesForState(uf: string) {
-    if (!uf) {
-      cities = [];
-      return;
-    }
-    if (cityCache[uf]) {
-      cities = cityCache[uf];
+    selectedCityId = null;
+    city = '';
+    bairro = '';
+    bairros = [];
+    lastBairroLookupCity = '';
+    await fetchCitiesBySearch('');
+  }
+
+  async function fetchCitiesBySearch(searchTerm: string) {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    if (cityCache[normalizedSearch]) {
+      cities = cityCache[normalizedSearch].map((item) => item.name);
       return;
     }
     citiesLoading = true;
     citiesError = null;
     try {
-      const response = await fetch(
-        `https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`
+      const payload = await api.get<LocationPage<LocationCity> | LocationCity[]>(
+        `/locations/cities?search=${encodeURIComponent(normalizedSearch)}&limit=15`
       );
-      if (!response.ok) throw new Error('Falha ao carregar cidades.');
-      const payload = await response.json();
-      const names = Array.isArray(payload)
-        ? payload.map((item) => String(item?.nome ?? '')).filter(Boolean)
-        : [];
-      cities = names.sort((a, b) => a.localeCompare(b, 'pt-BR'));
-      cityCache[uf] = cities;
+      const records = Array.isArray(payload) ? payload : payload?.data ?? [];
+      cityCache[normalizedSearch] = records;
+      for (const item of records) {
+        cityIdsByName[item.name.trim().toLowerCase()] = Number(item.id);
+      }
+      cities = records.map((item) => item.name);
+      const currentCity = city.trim().toLowerCase();
+      const matchingCity = records.find((item) => item.name.trim().toLowerCase() === currentCity);
+      if (matchingCity) {
+        selectedCityId = Number(matchingCity.id);
+        scheduleBairroSearch('');
+      }
     } catch (error) {
-      console.error('Erro ao carregar cidades:', error);
+      console.error('Erro ao carregar cidades do catálogo:', error);
       citiesError = 'Não foi possível carregar cidades.';
       cities = [];
     } finally {
@@ -315,14 +333,20 @@
     }
   }
 
-  async function fetchBairrosForCity(cityName: string) {
+  async function fetchBairrosForCity(cityName: string, searchTerm = '') {
     const normalizedCity = cityName.trim();
     if (!normalizedCity) {
       bairros = [];
       bairrosError = null;
       return;
     }
-    const cacheKey = `${state}:${normalizedCity.toLowerCase()}`;
+    const cityId = cityIdsByName[normalizedCity.toLowerCase()];
+    if (!cityId) {
+      bairros = [];
+      return;
+    }
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const cacheKey = `${cityId}:${normalizedSearch}`;
     if (bairroCache[cacheKey]) {
       bairros = bairroCache[cacheKey];
       bairrosError = null;
@@ -331,14 +355,11 @@
     bairrosLoading = true;
     bairrosError = null;
     try {
-      const payload = await api.get<Array<{ bairro?: string; city?: string }>>(
-        `/properties/bairros?city=${encodeURIComponent(normalizedCity)}`
+      const payload = await api.get<LocationPage<LocationNeighborhood> | LocationNeighborhood[]>(
+        `/locations/neighborhoods?cityId=${cityId}&search=${encodeURIComponent(normalizedSearch)}&limit=15`
       );
-      const names = Array.isArray(payload)
-        ? payload
-            .map((item) => String(item?.bairro ?? '').trim())
-            .filter((item) => item.length > 0)
-        : [];
+      const records = Array.isArray(payload) ? payload : payload?.data ?? [];
+      const names = records.map((item) => String(item.name ?? '').trim()).filter(Boolean);
       bairros = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'pt-BR'));
       bairroCache[cacheKey] = bairros;
     } catch (error) {
@@ -348,6 +369,22 @@
     } finally {
       bairrosLoading = false;
     }
+  }
+
+  function scheduleCitySearch(searchTerm: string) {
+    const normalizedCity = searchTerm.trim().toLowerCase();
+    selectedCityId = cityIdsByName[normalizedCity] ?? null;
+    bairro = '';
+    bairros = [];
+    bairrosError = null;
+    lastBairroLookupCity = '';
+    if (citySearchTimer) clearTimeout(citySearchTimer);
+    citySearchTimer = setTimeout(() => void fetchCitiesBySearch(searchTerm), 300);
+  }
+
+  function scheduleBairroSearch(searchTerm: string) {
+    if (bairroSearchTimer) clearTimeout(bairroSearchTimer);
+    bairroSearchTimer = setTimeout(() => void fetchBairrosForCity(city, searchTerm), 300);
   }
 
   async function lookupCep(value: string) {
@@ -1026,8 +1063,10 @@
     const normalizedCity = city.trim().toLowerCase();
     if (normalizedCity.length > 0 && normalizedCity !== lastBairroLookupCity) {
       lastBairroLookupCity = normalizedCity;
-      fetchBairrosForCity(city);
+      if (selectedCityId) scheduleBairroSearch('');
     } else if (normalizedCity.length === 0) {
+      selectedCityId = null;
+      bairro = '';
       lastBairroLookupCity = '';
       bairros = [];
       bairrosError = null;
@@ -1042,6 +1081,8 @@
     if (brokerSearchTimer) {
       clearTimeout(brokerSearchTimer);
     }
+    if (citySearchTimer) clearTimeout(citySearchTimer);
+    if (bairroSearchTimer) clearTimeout(bairroSearchTimer);
     revokeImagePreviews();
     revokeVideoPreview();
   });
@@ -1122,8 +1163,11 @@
       {bairros}
       bind:bairrosLoading
       bind:bairrosError
+      bairroDisabled={!selectedCityId}
       bind:cepLookupError
       onStateChange={fetchCitiesForState}
+      onCityInput={scheduleCitySearch}
+      onBairroInput={scheduleBairroSearch}
       onCepLookup={lookupCep}
     />
 

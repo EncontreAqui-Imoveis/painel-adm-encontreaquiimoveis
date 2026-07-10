@@ -236,11 +236,12 @@
     <textarea
       id="create-property-description"
       name="description"
-      maxlength="500"
+      maxlength="5000"
       class="min-h-[110px] rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       bind:value={description}
       placeholder="Descreva o imóvel"
     ></textarea>
+    <span class="text-right text-xs text-gray-500 dark:text-gray-400">{description.length}/5000</span>
   </label>
 
   <div class="grid gap-4 md:grid-cols-2">

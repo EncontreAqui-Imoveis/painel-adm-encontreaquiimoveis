@@ -338,8 +338,8 @@ export function getOwnerDisplayName(contract: ContractItem | null | undefined): 
 }
 
 export function getContractPartySummary(contract: ContractItem | null | undefined): string {
-  if (!contract) return 'Anunciante: - · Comprador: -';
-  return `Anunciante: ${getAdvertiserDisplayName(contract)} · Comprador: ${getBuyerDisplayName(contract)}`;
+  if (!contract) return 'Vendedor: - · Comprador: -';
+  return `Vendedor: ${getAdvertiserDisplayName(contract)} · Comprador: ${getBuyerDisplayName(contract)}`;
 }
 
 export function formatDocumentPreviewName(doc: ContractDocument | null | undefined): string {

@@ -154,7 +154,7 @@
             bind:value={selectedSignedDocSide}
             class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
           >
-            <option value="seller">Anunciante</option>
+            <option value="seller">Vendedor</option>
             <option value="buyer">Comprador</option>
           </select>
         </label>

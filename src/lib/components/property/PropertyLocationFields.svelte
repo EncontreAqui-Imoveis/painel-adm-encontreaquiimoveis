@@ -52,8 +52,11 @@
   export let bairros: string[] = [];
   export let bairrosLoading = false;
   export let bairrosError: string | null = null;
+  export let bairroDisabled = false;
   export let cepLookupError: string | null = null;
   export let onStateChange: (nextState: string) => void = () => {};
+  export let onCityInput: (nextCity: string) => void = () => {};
+  export let onBairroInput: (nextBairro: string) => void = () => {};
   export let onCepLookup: (cepValue: string) => void = () => {};
 </script>
 
@@ -116,6 +119,7 @@
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={city}
         placeholder={citiesLoading ? 'Carregando cidades...' : 'Digite ou selecione'}
+        on:input={() => onCityInput(String(city ?? ''))}
       />
       <datalist id={`${idPrefix}-cities-list`}>
         {#each cities as option}
@@ -146,7 +150,9 @@
         maxlength="120"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={bairro}
-        placeholder={bairrosLoading ? 'Carregando bairros...' : 'Digite ou selecione'}
+        disabled={bairroDisabled}
+        placeholder={bairroDisabled ? 'Selecione uma cidade primeiro' : bairrosLoading ? 'Carregando bairros...' : 'Digite ou selecione'}
+        on:input={() => onBairroInput(String(bairro ?? ''))}
       />
       <datalist id={`${idPrefix}-bairros-list`}>
         {#each bairros as option}

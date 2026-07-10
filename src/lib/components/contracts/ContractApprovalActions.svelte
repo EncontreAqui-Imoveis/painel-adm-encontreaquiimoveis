@@ -37,7 +37,7 @@
 
   <div>
     <p class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-      Avaliação Anunciante
+      Avaliação Vendedor
     </p>
     <div class="flex flex-wrap gap-2">
       {#if getSideApprovalUiState(contract?.sellerApprovalStatus) === 'pending'}
@@ -48,7 +48,7 @@
           disabled={sellerApprovalDisabled}
           title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
         >
-          Aprovar<span class="sr-only"> anunciante</span>
+          Aprovar<span class="sr-only"> vendedor</span>
         </Button>
         <Button
           size="sm"
@@ -56,7 +56,7 @@
           className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
           on:click={() => evaluateContractSide('seller', 'APPROVED_WITH_RES')}
         >
-          Aprovar c/ ressalvas<span class="sr-only"> anunciante</span>
+          Aprovar c/ ressalvas<span class="sr-only"> vendedor</span>
         </Button>
         <Button
           size="sm"
@@ -91,7 +91,7 @@
           disabled={sellerApprovalDisabled}
           title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
         >
-          Aprovar<span class="sr-only"> anunciante</span>
+          Aprovar<span class="sr-only"> vendedor</span>
         </Button>
         <Button
           size="sm"
@@ -99,7 +99,7 @@
           className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
           on:click={() => evaluateContractSide('seller', 'APPROVED_WITH_RES')}
         >
-          Aprovar c/ ressalvas<span class="sr-only"> anunciante</span>
+          Aprovar c/ ressalvas<span class="sr-only"> vendedor</span>
         </Button>
         <Button
           size="sm"

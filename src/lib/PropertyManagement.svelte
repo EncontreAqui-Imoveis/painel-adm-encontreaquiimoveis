@@ -2755,12 +2755,13 @@ function parseNullableNumber(value: unknown): number | null {
           {#if isEditMode && editableProperty}
             <textarea
               name="description"
-              maxlength="500"
+              maxlength="5000"
               class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm leading-relaxed dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               rows="3"
               bind:value={editableProperty.description}
               placeholder="Descricao do imóvel"
             ></textarea>
+            <span class="text-right text-xs text-gray-500 dark:text-gray-400">{(editableProperty.description ?? '').length}/5000</span>
           {:else}
             <p class="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
               {selectedProperty.description ?? 'Sem descricao.'}

@@ -1717,7 +1717,7 @@
           </div>
           <dl class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
             <div class="flex items-center justify-between gap-3">
-              <dt>Anunciante</dt>
+              <dt>Vendedor</dt>
               <dd class="text-right">{getOwnerDisplayName(item)}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
@@ -1762,7 +1762,7 @@
             Imóvel (ID / código)
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Anunciante
+            Vendedor
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Comprador

@@ -139,12 +139,12 @@ export async function evaluateContractSide(
 export async function reviewContractDocument(
   contractId: string,
   documentId: number,
-  status: 'APPROVED' | 'REJECTED' | 'APPROVED_WITH_RES' | 'PENDING',
+  status: 'APPROVED' | 'REJECTED',
   reason?: string
 ): Promise<void> {
-  await api.put(`/admin/contracts/${contractId}/documents/${documentId}/review`, {
+  await api.patch(`/contracts/${contractId}/documents/${documentId}/status`, {
     status,
-    ...(reason ? { reason } : {}),
+    ...(reason ? { description: reason } : {}),
   });
 }
 
