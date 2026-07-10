@@ -355,6 +355,7 @@
         ? response.data
             .map((item) => normalizeResponsibleOption(item))
             .filter((item): item is ResponsibleOption => item != null)
+            .filter((item) => item.role === 'broker')
             .filter((item) => !selectedResponsibles.some((selected) => selected.id === item.id))
         : [];
       responsibleOptions = options;
@@ -373,10 +374,12 @@
     responsiblesLoadError = '';
     responsiblesLoadedProposalId = null;
     try {
-      const response = await api.get<{ data?: unknown[] } | unknown[]>(
+      const response = await api.get<{ responsibles?: unknown[]; data?: unknown[] } | unknown[]>(
         `/admin/negotiations/${proposalId}/responsibles`
       );
-      const raw = Array.isArray(response) ? response : response?.data;
+      const raw = Array.isArray(response)
+        ? response
+        : response?.responsibles ?? response?.data;
       const normalized = Array.isArray(raw)
         ? raw
             .map((item) => normalizeResponsibleOption(item))
@@ -1731,7 +1734,7 @@
                     <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(item)}</p>
                   </div>
                   <div>
-                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Anunciante</p>
+                    <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Vendedor</p>
                     <p class="text-sm text-gray-700 dark:text-gray-300">{getAdvertiserName(item)}</p>
                   </div>
                   <div>
@@ -1925,7 +1928,7 @@
                     Valor do imóvel: {formatCurrency(resolveProposalPropertyValue(property))}
                   </div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">
-                    Anunciante: {getProposalAdvertiserName(property)}
+                    Vendedor: {getProposalAdvertiserName(property)}
                   </div>
                 </div>
               </div>
@@ -1953,7 +1956,7 @@
                 Valor do imóvel: {formatCurrency(resolveProposalPropertyValue(selectedGenerateProperty))}
               </div>
               <div class="text-xs text-gray-600 dark:text-gray-300">
-                Anunciante: {getProposalAdvertiserName(selectedGenerateProperty)}
+                Vendedor: {getProposalAdvertiserName(selectedGenerateProperty)}
               </div>
               <div class="text-xs text-gray-500 dark:text-gray-400">
                 A proposta pode ficar acima ou abaixo do valor do imóvel.

@@ -521,10 +521,13 @@
 
         <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
           <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-            Responsável por acompanhar o processo
+            Corretor responsável pelo contrato
           </p>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Selecione até 5 pessoas para acompanhar esta proposta.
+            Selecione explicitamente até 5 corretores. Cada responsável indicado terá acesso operacional aos dois lados do contrato: vendedor e comprador.
+          </p>
+          <p class="mt-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+            Acesso aos dois lados
           </p>
 
           <div class="mt-3 space-y-2">

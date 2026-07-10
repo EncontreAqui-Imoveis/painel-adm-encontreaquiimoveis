@@ -383,6 +383,6 @@ describe('NegotiationRequests', () => {
     await fireEvent.click(
       screen.getByRole('button', { name: /IM-120 - Apartamento com imagem/ })
     );
-    expect(await screen.findAllByText('Anunciante: Corretor da Lista')).toHaveLength(2);
+    expect(await screen.findAllByText('Vendedor: Corretor da Lista')).toHaveLength(2);
   });
 });

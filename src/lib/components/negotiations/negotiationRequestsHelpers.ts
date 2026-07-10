@@ -40,6 +40,7 @@ export type ResponsibleOption = {
   id: number;
   name: string;
   email?: string | null;
+  role?: 'broker' | 'client' | 'auxiliary_administrative' | null;
 };
 
 export type ResponsibleSelectionState = {
@@ -329,7 +330,12 @@ export function normalizeResponsibleOption(item: unknown): ResponsibleOption | n
       ? rawName.trim()
       : `Responsável #${parsedId}`;
   const email = typeof raw.email === 'string' ? raw.email : null;
-  return { id: parsedId, name, email };
+  const rawRole = String(raw.role ?? raw.profile_type ?? '').trim().toLowerCase();
+  const role =
+    rawRole === 'broker' || rawRole === 'client' || rawRole === 'auxiliary_administrative'
+      ? rawRole
+      : null;
+  return { id: parsedId, name, email, role };
 }
 
 export function extractSignedDocumentId(payload: unknown): number | null {
