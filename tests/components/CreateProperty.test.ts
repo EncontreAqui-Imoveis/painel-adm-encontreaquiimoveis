@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { tick } from 'svelte';
 import { normalizeAmenityList } from '../../src/lib/propertyAmenities';
 
 const {
@@ -106,8 +107,17 @@ describe('CreateProperty', () => {
   }
 
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
-    apiGetMock.mockResolvedValue([]);
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.startsWith('/locations/cities')) {
+        return { data: [{ id: 1, name: 'Rio Verde', state: 'GO' }] };
+      }
+      if (endpoint.startsWith('/locations/neighborhoods')) {
+        return { data: [{ id: 10, cityId: 1, name: 'Centro' }] };
+      }
+      return [];
+    });
     apiPostMock.mockResolvedValue({
       apiKey: 'key',
       cloudName: 'demo',
@@ -143,24 +153,32 @@ describe('CreateProperty', () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   async function fillRequiredFields() {
     await fireEvent.input(screen.getByLabelText('Título *'), {
       target: { value: 'Casa teste painel' },
     });
-    await fireEvent.input(screen.getByLabelText('Descrição *'), {
+    await fireEvent.input(screen.getByPlaceholderText('Descreva o imóvel'), {
       target: { value: 'Descrição completa do imóvel.' },
     });
     await fireEvent.input(screen.getByLabelText('Endereço *'), {
       target: { value: 'Rua das Flores' },
-    });
-    await fireEvent.input(screen.getByLabelText('Bairro *'), {
-      target: { value: 'Centro' },
     });
     await fireEvent.input(screen.getByLabelText('Número *'), {
       target: { value: '10' },
     });
     await fireEvent.input(screen.getByLabelText('Cidade *'), {
       target: { value: 'Rio Verde' },
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    await tick();
+    expect(document.querySelector('#create-property-cities-list option')).toHaveValue('Rio Verde');
+    expect(getInputById('create-property-bairro')).not.toBeDisabled();
+    await fireEvent.input(screen.getByLabelText('Bairro *'), {
+      target: { value: 'Centro' },
     });
     await fireEvent.input(getInputById('create-property-quadra'), {
       target: { value: 'Q1' },
