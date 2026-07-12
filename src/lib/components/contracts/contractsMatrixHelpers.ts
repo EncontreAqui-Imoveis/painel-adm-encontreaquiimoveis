@@ -101,7 +101,7 @@ export function readRawMatrixRequirements(contract: ContractItem): MatrixRequire
       case 'estado_civil':
         return ['certidao_casamento_nascimento'];
       case 'conjuge_documentos':
-        return ['outro'];
+        return ['doc_identidade_conjuge'];
       case 'comprovante_renda':
         return ['comprovante_renda'];
       case 'dados_bancarios':
@@ -446,6 +446,7 @@ export function resolveMatrixUploadCategory(
 ): string {
   const normalizedType = documentType.trim().toLowerCase();
   if (normalizedType === 'doc_identidade') return 'identidade';
+  if (normalizedType === 'doc_identidade_conjuge') return 'conjuge_documentos';
   if (normalizedType === 'comprovante_endereco') return 'comprovante_endereco';
   if (normalizedType === 'certidao_casamento_nascimento') return 'estado_civil';
   if (normalizedType === 'comprovante_renda') return 'comprovante_renda';

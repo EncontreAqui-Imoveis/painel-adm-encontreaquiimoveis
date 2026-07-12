@@ -76,7 +76,7 @@ export async function getContractDetails<TContract>(
   return readPayload<ContractDetailResponse<TContract>>(response);
 }
 
-export async function saveContractPartyInfo<TPayload>(
+export async function saveContractPartyInfo<TPayload extends { side: 'seller' | 'buyer' }>(
   contractId: string,
   payload: TPayload
 ): Promise<void> {

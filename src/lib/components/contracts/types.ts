@@ -32,6 +32,8 @@ export type ContractItem = {
   propertyPurpose?: string | null;
   capturingBrokerId?: number | null;
   sellingBrokerId?: number | null;
+  advertiserId?: number | null;
+  proposerId?: number | null;
   ownerId?: number | null;
   buyerClientId?: number | null;
   sellerClientId?: number | null;
@@ -40,6 +42,9 @@ export type ContractItem = {
   ownerName?: string | null;
   propertyOwnerName?: string | null;
   buyerClientName?: string | null;
+  sellerClientName?: string | null;
+  advertiserName?: string | null;
+  proposerName?: string | null;
   buyer_client_name?: string | null;
   clientName?: string | null;
   clientCpf?: string | null;

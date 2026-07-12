@@ -570,7 +570,7 @@ describe('ContractsModule', () => {
     });
   });
 
-  it('envia slot outro explícito na matriz para buyer', async () => {
+  it('envia o documento pessoal explícito do cônjuge para buyer', async () => {
     const buyerOutroDocs: Array<Record<string, unknown>> = [];
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
@@ -654,10 +654,10 @@ describe('ContractsModule', () => {
     });
 
     const formData = apiClientPostMock.mock.calls[0][1] as FormData;
-    expect(formData.get('documentType')).toBe('cliente_outro_01');
-    expect(formData.get('documentCategory')).toBe('outro');
+    expect(formData.get('documentType')).toBe('doc_identidade_conjuge');
+    expect(formData.get('documentCategory')).toBe('conjuge_documentos');
     expect(formData.get('side')).toBe('buyer');
-    expect(screen.getByRole('button', { name: 'Adicionar outro' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Substituir' })).toBeInTheDocument();
   });
 
   it.skip('bloqueia o Aprovar normal e mantém Aprovar c/ ressalvas ativo quando faltam dados obrigatórios', async () => {

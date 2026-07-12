@@ -11,10 +11,17 @@ export type FinalizeFormState = {
 export type FinalizeFieldModeState = Record<FinalizeCommissionField, FinalizeFieldMode>;
 
 export type PartyInfoFormState = {
+  nome: string;
+  cpf: string;
   estadoCivil: string;
   profissao: string;
+  email: string;
+  telefone: string;
   dadosBancarios?: string;
   garantiaLocacao?: string;
+  conjugeNome: string;
+  conjugeCpf: string;
+  conjugeProfissao: string;
 };
 
 function trimInfoValue(raw: string): string | null {
@@ -122,40 +129,56 @@ export function resolveApiErrorMessage(error: unknown, fallback: string): string
   return requestId ? `${backendMessage} (Req: ${requestId})` : backendMessage;
 }
 
+export function requiresSpouseFields(civilStatus: string): boolean {
+  const normalized = civilStatus
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+  return normalized.includes('casad') || (normalized.includes('uniao') && normalized.includes('estav'));
+}
+
+function buildPartyInfoPayload(
+  selectedInfo: Record<string, unknown> | null | undefined,
+  form: PartyInfoFormState,
+  extra: Record<string, unknown>
+): Record<string, unknown> {
+  const previous =
+    selectedInfo && typeof selectedInfo === 'object'
+      ? { ...(selectedInfo as Record<string, unknown>) }
+      : {};
+  const spouseRequired = requiresSpouseFields(form.estadoCivil);
+
+  return {
+    ...previous,
+    nome: trimInfoValue(form.nome),
+    cpf: trimInfoValue(form.cpf),
+    profissao: trimInfoValue(form.profissao),
+    email: trimInfoValue(form.email),
+    telefone: trimInfoValue(form.telefone),
+    dados_bancarios: trimInfoValue(form.dadosBancarios ?? ''),
+    estado_civil: trimInfoValue(form.estadoCivil),
+    conjuge_nome: spouseRequired ? trimInfoValue(form.conjugeNome) : null,
+    conjuge_cpf: spouseRequired ? trimInfoValue(form.conjugeCpf) : null,
+    conjuge_profissao: spouseRequired ? trimInfoValue(form.conjugeProfissao) : null,
+    ...extra,
+  };
+}
+
 export function buildSellerInfoPayload(
   selectedSellerInfo: Record<string, unknown> | null | undefined,
   form: PartyInfoFormState
 ): Record<string, unknown> {
-  const previous =
-    selectedSellerInfo && typeof selectedSellerInfo === 'object'
-      ? { ...(selectedSellerInfo as Record<string, unknown>) }
-      : {};
-  const { email: _email, telefone: _telefone, phone: _phone, ...rest } = previous;
-
-  return {
-    ...rest,
-    estado_civil: trimInfoValue(form.estadoCivil),
-    profissao: trimInfoValue(form.profissao),
-    dados_bancarios: trimInfoValue(form.dadosBancarios ?? ''),
-  };
+  return buildPartyInfoPayload(selectedSellerInfo, form, {});
 }
 
 export function buildBuyerInfoPayload(
   selectedBuyerInfo: Record<string, unknown> | null | undefined,
   form: PartyInfoFormState
 ): Record<string, unknown> {
-  const previous =
-    selectedBuyerInfo && typeof selectedBuyerInfo === 'object'
-      ? { ...(selectedBuyerInfo as Record<string, unknown>) }
-      : {};
-  const { email: _email, telefone: _telefone, phone: _phone, ...rest } = previous;
-
-  return {
-    ...rest,
-    estado_civil: trimInfoValue(form.estadoCivil),
-    profissao: trimInfoValue(form.profissao),
+  return buildPartyInfoPayload(selectedBuyerInfo, form, {
     garantia_locacao: trimInfoValue(form.garantiaLocacao ?? ''),
-  };
+  });
 }
 
 function parseMoney(value: string): number | null {
