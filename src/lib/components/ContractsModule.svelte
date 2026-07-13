@@ -241,6 +241,10 @@
     conjugeCpf: '',
     conjugeProfissao: '',
   };
+  let inheritedSellerIdentity = {
+    nome: false,
+    cpf: false,
+  };
   let buyerInfoForm = {
     nome: '',
     cpf: '',
@@ -675,7 +679,7 @@
     };
     finalizePeopleForm = {
       nomeCaptador: String(contract?.capturingBrokerName ?? '').trim(),
-      nomeVendedor: String(contract?.sellingBrokerName ?? '').trim(),
+      nomeVendedor: getOwnerDisplayName(contract),
     };
   }
 
@@ -879,9 +883,15 @@
   function hydratePartyInfoFormsFromSelected() {
     if (!selected) return;
     const ownerInfo = selected.ownerInfo ?? selected.sellerInfo;
+    const sellerName = getRecordValueRaw(ownerInfo, ['nome', 'name', 'fullName', 'full_name']);
+    const sellerCpf = getRecordValueRaw(ownerInfo, ['cpf']);
+    inheritedSellerIdentity = {
+      nome: sellerName.length > 0,
+      cpf: sellerCpf.length > 0,
+    };
     ownerInfoForm = {
-      nome: getRecordValueRaw(ownerInfo, ['nome', 'name', 'fullName', 'full_name']),
-      cpf: getRecordValueRaw(ownerInfo, ['cpf']),
+      nome: sellerName,
+      cpf: sellerCpf,
       estadoCivil: getRecordValueRaw(ownerInfo, ['estado_civil', 'estadoCivil']),
       profissao: getRecordValueRaw(ownerInfo, ['profissao']),
       email: getRecordValueRaw(ownerInfo, ['email']),
@@ -2044,8 +2054,8 @@
                 <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">Motivo: {readReasonText(selected.sellerApprovalReason)}</p>
               {/if}
               <div class="mt-3 space-y-3 text-sm">
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-nome">Nome</label><LabeledTextInput id="owner-nome" bind:value={ownerInfoForm.nome} disabled={savingPartyData} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-cpf">CPF</label><LabeledTextInput id="owner-cpf" bind:value={ownerInfoForm.cpf} disabled={savingPartyData} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-nome">{inheritedSellerIdentity.nome ? 'Nome (herdado do imóvel)' : 'Nome'}</label><LabeledTextInput id="owner-nome" bind:value={ownerInfoForm.nome} disabled={savingPartyData || inheritedSellerIdentity.nome} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-cpf">{inheritedSellerIdentity.cpf ? 'CPF (herdado do imóvel)' : 'CPF'}</label><LabeledTextInput id="owner-cpf" bind:value={ownerInfoForm.cpf} disabled={savingPartyData || inheritedSellerIdentity.cpf} /></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-profissao">Profissão</label><LabeledTextInput id="owner-profissao" bind:value={ownerInfoForm.profissao} disabled={savingPartyData} /></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-email">Email</label><LabeledTextInput id="owner-email" bind:value={ownerInfoForm.email} disabled={savingPartyData} /></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-telefone">Telefone</label><LabeledTextInput id="owner-telefone" bind:value={ownerInfoForm.telefone} disabled={savingPartyData} /></div>

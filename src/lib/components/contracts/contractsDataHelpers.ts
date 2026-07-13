@@ -23,7 +23,7 @@ export const documentTypeLabels: Record<string, string> = {
   doc_identidade: 'Documento de Identidade',
   doc_identidade_conjuge: 'Documento de Identidade do Cônjuge',
   comprovante_endereco: 'Comprovante de Endereço',
-  certidao_casamento_nascimento: 'Certidão de Casamento/Nascimento',
+  certidao_casamento_nascimento: 'Certidão de Casamento',
   certidao_inteiro_teor: 'Certidão de Inteiro Teor',
   certidao_inteiro_teor_escritura: 'Certidão de Inteiro Teor/Escritura',
   certidao_onus_acoes: 'Certidão de Ônus/Ações',
@@ -102,6 +102,7 @@ export const maritalStatusOptions = [
 
 export const matrixDocumentSortOrder = [
   'doc_identidade',
+  'doc_identidade_conjuge',
   'comprovante_endereco',
   'certidao_casamento_nascimento',
   'certidao_inteiro_teor',
@@ -297,16 +298,7 @@ export function getAdvertiserDisplayName(contract: ContractItem | null | undefin
 
   const directName = String(
     contract.capturingBrokerName ??
-      contract.ownerName ??
-      contract.propertyOwnerName ??
-      (contract.ownerInfo && typeof contract.ownerInfo === 'object'
-        ? (contract.ownerInfo as Record<string, unknown>).nome ??
-          (contract.ownerInfo as Record<string, unknown>).name ??
-          (contract.ownerInfo as Record<string, unknown>).fullName ??
-          (contract.ownerInfo as Record<string, unknown>).full_name
-        : '') ??
-      (contract as unknown as Record<string, unknown>).owner_name ??
-      (contract as unknown as Record<string, unknown>).property_owner_name ??
+      contract.advertiserName ??
       ''
   ).trim();
 
@@ -314,7 +306,15 @@ export function getAdvertiserDisplayName(contract: ContractItem | null | undefin
     return directName;
   }
 
-  const sellerInfo = contract.sellerInfo ?? null;
+  return '-';
+}
+
+// The advertiser/capturing broker is an operational actor, not necessarily the legal seller.
+// Contract screens labelled "Vendedor" must resolve only the legal qualification/property owner.
+export function getSellerDisplayName(contract: ContractItem | null | undefined): string {
+  if (!contract) return '-';
+
+  const sellerInfo = contract.sellerInfo ?? contract.ownerInfo ?? null;
   const fromInfo = getRecordValueRaw(sellerInfo, [
     'nome',
     'nome_completo',
@@ -331,16 +331,27 @@ export function getAdvertiserDisplayName(contract: ContractItem | null | undefin
     return fromInfo;
   }
 
-  return '-';
+  const directName = String(
+    contract.sellerClientName ??
+      contract.propertyOwnerName ??
+      contract.ownerName ??
+      (contract as unknown as Record<string, unknown>).seller_name ??
+      (contract as unknown as Record<string, unknown>).seller_client_name ??
+      (contract as unknown as Record<string, unknown>).property_owner_name ??
+      (contract as unknown as Record<string, unknown>).owner_name ??
+      ''
+  ).trim();
+
+  return directName || '-';
 }
 
 export function getOwnerDisplayName(contract: ContractItem | null | undefined): string {
-  return getAdvertiserDisplayName(contract);
+  return getSellerDisplayName(contract);
 }
 
 export function getContractPartySummary(contract: ContractItem | null | undefined): string {
   if (!contract) return 'Vendedor: - · Comprador: -';
-  return `Vendedor: ${getAdvertiserDisplayName(contract)} · Comprador: ${getBuyerDisplayName(contract)}`;
+  return `Vendedor: ${getSellerDisplayName(contract)} · Comprador: ${getBuyerDisplayName(contract)}`;
 }
 
 export function formatDocumentPreviewName(doc: ContractDocument | null | undefined): string {

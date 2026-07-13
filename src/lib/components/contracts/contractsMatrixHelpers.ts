@@ -54,6 +54,13 @@ export function shouldShowBuyerMatrixSide(documentType: string): boolean {
   return buyerMatrixDocumentTypes.has(String(documentType ?? '').trim().toLowerCase());
 }
 
+function requiresSpouseDocuments(info: Record<string, unknown> | null | undefined): boolean {
+  const civilStatus = String(info?.estado_civil ?? info?.estadoCivil ?? '')
+    .trim()
+    .toLocaleLowerCase('pt-BR');
+  return civilStatus === 'casado(a)' || civilStatus === 'casado' || civilStatus === 'união estável' || civilStatus === 'uniao estavel';
+}
+
 export function requiresExactSaleSplit(contract: ContractItem | null): boolean {
   const purpose = String(contract?.propertyPurpose ?? '').trim().toLowerCase();
   const isRentalOnly = purpose.includes('alug') && !purpose.includes('venda');
@@ -157,14 +164,41 @@ export function readRawMatrixRequirements(contract: ContractItem): MatrixRequire
 export function getMatrixRows(contract: ContractItem): MatrixRow[] {
   const requirements = readRawMatrixRequirements(contract);
   if (requirements.length === 0) {
-    const fallbackTypes = getRequiredDocTypes(contract);
-    return fallbackTypes
+    // Legacy contracts without the API matrix still need marital documents only
+    // when the legal qualification declares a spouse.
+    const fallbackTypes = getRequiredDocTypes(contract).filter(
+      (documentType) => documentType !== 'certidao_casamento_nascimento'
+    );
+    const rows = fallbackTypes
       .map((documentType) => ({
         documentType,
         sellerRequired: true,
         buyerRequired: shouldShowBuyerMatrixSide(documentType),
-      }))
-      .sort((left, right) => matrixSortWeight(left.documentType) - matrixSortWeight(right.documentType));
+      }));
+
+    const appendSpouseDocuments = (side: MatrixSide) => {
+      const applies = side === 'seller'
+        ? requiresSpouseDocuments(contract.sellerInfo ?? contract.ownerInfo)
+        : requiresSpouseDocuments(contract.buyerInfo);
+      if (!applies) return;
+      for (const documentType of ['doc_identidade_conjuge', 'certidao_casamento_nascimento']) {
+        const row = rows.find((entry) => entry.documentType === documentType);
+        if (row) {
+          if (side === 'seller') row.sellerRequired = true;
+          else row.buyerRequired = true;
+          continue;
+        }
+        rows.push({
+          documentType,
+          sellerRequired: side === 'seller',
+          buyerRequired: side === 'buyer',
+        });
+      }
+    };
+
+    appendSpouseDocuments('seller');
+    appendSpouseDocuments('buyer');
+    return rows.sort((left, right) => matrixSortWeight(left.documentType) - matrixSortWeight(right.documentType));
   }
 
   const rows = new Map<string, MatrixRow>();
@@ -183,10 +217,6 @@ export function getMatrixRows(contract: ContractItem): MatrixRow[] {
   }
 
   return Array.from(rows.values())
-    .map((row) => ({
-      ...row,
-      buyerRequired: row.buyerRequired || shouldShowBuyerMatrixSide(row.documentType),
-    }))
     .sort((left, right) => matrixSortWeight(left.documentType) - matrixSortWeight(right.documentType));
 }
 
