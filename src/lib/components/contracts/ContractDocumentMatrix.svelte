@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Loader2 } from 'lucide-svelte';
+  import { Download, Loader2, Pencil, Trash2, Upload } from 'lucide-svelte';
   import { Button } from '$lib/components/ui/button';
   import type { ContractMatrixRowView, ContractItem } from '$lib/components/contracts/types';
 
@@ -8,11 +8,6 @@
   export let documentLabel: (documentType: string) => string = (value) => value;
   export let documentFileName: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => 'Documento';
   export let isMatrixUploading: (key: string) => boolean = () => false;
-  export let matrixCellUploadLabel: (
-    contract: ContractItem | null,
-    documentType: string,
-    side: 'seller' | 'buyer'
-  ) => string = () => 'Enviar';
   export let canAddAnotherMatrixDocument: (
     contract: ContractItem | null,
     documentType: string,
@@ -30,16 +25,31 @@
   export let documentStatusClass: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => '';
   export let onReview: (doc: ContractMatrixRowView['sellerDocs'][number], status: 'APPROVED' | 'REJECTED') => void = () => {};
 
-  function actorName(role: 'proposer' | 'advertiser'): string {
-    if (!contract) return 'Não identificado';
-    const value = role === 'proposer'
-      ? contract.proposerName ?? contract.buyerClientName ?? contract.clientName
-      : contract.advertiserName;
-    return String(value ?? '').trim() || (role === 'advertiser' ? 'Anunciante não vinculado' : 'Não identificado');
+  function nameFromInfo(info: Record<string, unknown> | null | undefined): string {
+    const value = info?.nome ?? info?.name ?? info?.fullName ?? info?.full_name;
+    return String(value ?? '').trim();
   }
 
-  function requiredCount(side: 'seller' | 'buyer'): number {
-    return rows.filter((row) => side === 'seller' ? row.sellerRequired : row.buyerRequired).length;
+  function actorName(role: 'proposer' | 'buyer' | 'advertiser' | 'seller'): string {
+    if (!contract) return '(A definir)';
+    const value = role === 'proposer'
+      ? contract.proposerName ?? contract.buyerClientName ?? contract.clientName
+      : role === 'buyer'
+      ? nameFromInfo(contract.buyerInfo) || contract.buyerClientName || contract.clientName
+      : role === 'advertiser'
+      ? contract.advertiserName ?? contract.ownerName ?? contract.propertyOwnerName
+      : nameFromInfo(contract.sellerInfo ?? contract.ownerInfo) || contract.sellerClientName || contract.ownerName;
+    return String(value ?? '').trim() || '(A definir)';
+  }
+
+  function isApproved(doc: ContractMatrixRowView['sellerDocs'][number]): boolean {
+    const metadata = doc.metadata ?? {};
+    const status = String(
+      doc.status ?? metadata.status ?? metadata.reviewStatus ?? metadata.validationStatus ?? ''
+    )
+      .trim()
+      .toUpperCase();
+    return status === 'APPROVED';
   }
 </script>
 
@@ -55,7 +65,7 @@
     </div>
     <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
       <p class="text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">Comprador</p>
-      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{requiredCount('buyer')} requisitos jurídicos</p>
+      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{actorName('buyer')}</p>
       <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Documentos do adquirente legal</p>
     </div>
     <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
@@ -65,7 +75,7 @@
     </div>
     <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
       <p class="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-300">Vendedor</p>
-      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{requiredCount('seller')} requisitos jurídicos</p>
+      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{actorName('seller')}</p>
       <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Documentos do proprietário legal</p>
     </div>
   </div>
@@ -116,40 +126,28 @@
                           {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
-                          <Button size="sm" variant="outline" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
-                            {#if downloadingDocumentId === sellerDoc.id}
-                              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                            {/if}
-                            Baixar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            on:click={() => onReplace(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase())}
-                            disabled={!canAddAnotherMatrixDocument(contract, documentType, 'seller')}
-                          >
-                            {#if isMatrixUploading(`seller:${documentType}`)}
-                              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                            {/if}
-                            {matrixCellUploadLabel(contract, documentType, 'seller')}
-                          </Button>
-                          <Button size="sm" variant="destructive" on:click={() => onDelete(sellerDoc)} disabled={matrixDeletingDocumentId === sellerDoc.id}>
-                            {#if matrixDeletingDocumentId === sellerDoc.id}
-                              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                            {/if}
-                            Excluir
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="bg-emerald-600 text-white hover:bg-emerald-700"
-                            on:click={() => onReview(sellerDoc, 'APPROVED')}
-                            disabled={reviewDocumentId === sellerDoc.id}
-                          >
-                            {#if reviewDocumentId === sellerDoc.id}
-                              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                            {/if}
-                            Aprovar<span class="sr-only"> documento</span>
-                          </Button>
+                          <details class="relative">
+                            <summary class="inline-flex h-8 cursor-pointer list-none items-center gap-1 rounded-md border border-gray-300 bg-white px-2 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">
+                              <Pencil class="h-3.5 w-3.5" /> Editar
+                            </summary>
+                            <div class="absolute bottom-full left-0 z-10 mb-2 flex items-center gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Baixar documento" title="Baixar" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
+                                {#if downloadingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
+                              </button>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => onReplace(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase())} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'seller')}>
+                                {#if isMatrixUploading(`seller:${documentType}`)}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
+                              </button>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40" aria-label="Excluir documento" title="Excluir" on:click={() => onDelete(sellerDoc)} disabled={matrixDeletingDocumentId === sellerDoc.id}>
+                                {#if matrixDeletingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
+                              </button>
+                            </div>
+                          </details>
+                          {#if !isApproved(sellerDoc)}
+                            <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" on:click={() => onReview(sellerDoc, 'APPROVED')} disabled={reviewDocumentId === sellerDoc.id}>
+                              {#if reviewDocumentId === sellerDoc.id}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
+                              Aprovar<span class="sr-only"> documento</span>
+                            </Button>
+                          {/if}
                           <Button
                             size="sm"
                             variant="destructive"
@@ -214,40 +212,28 @@
                           {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
-                          <Button size="sm" variant="outline" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
-                            {#if downloadingDocumentId === buyerDoc.id}
-                              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                            {/if}
-                            Baixar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            on:click={() => onReplace(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase())}
-                            disabled={!canAddAnotherMatrixDocument(contract, documentType, 'buyer')}
-                          >
-                            {#if isMatrixUploading(`buyer:${documentType}`)}
-                              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                            {/if}
-                            {matrixCellUploadLabel(contract, documentType, 'buyer')}
-                          </Button>
-                          <Button size="sm" variant="destructive" on:click={() => onDelete(buyerDoc)} disabled={matrixDeletingDocumentId === buyerDoc.id}>
-                            {#if matrixDeletingDocumentId === buyerDoc.id}
-                              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                            {/if}
-                            Excluir
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="bg-emerald-600 text-white hover:bg-emerald-700"
-                            on:click={() => onReview(buyerDoc, 'APPROVED')}
-                            disabled={reviewDocumentId === buyerDoc.id}
-                          >
-                            {#if reviewDocumentId === buyerDoc.id}
-                              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                            {/if}
-                            Aprovar<span class="sr-only"> documento</span>
-                          </Button>
+                          <details class="relative">
+                            <summary class="inline-flex h-8 cursor-pointer list-none items-center gap-1 rounded-md border border-gray-300 bg-white px-2 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">
+                              <Pencil class="h-3.5 w-3.5" /> Editar
+                            </summary>
+                            <div class="absolute bottom-full left-0 z-10 mb-2 flex items-center gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Baixar documento" title="Baixar" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
+                                {#if downloadingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
+                              </button>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => onReplace(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase())} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'buyer')}>
+                                {#if isMatrixUploading(`buyer:${documentType}`)}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
+                              </button>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40" aria-label="Excluir documento" title="Excluir" on:click={() => onDelete(buyerDoc)} disabled={matrixDeletingDocumentId === buyerDoc.id}>
+                                {#if matrixDeletingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
+                              </button>
+                            </div>
+                          </details>
+                          {#if !isApproved(buyerDoc)}
+                            <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" on:click={() => onReview(buyerDoc, 'APPROVED')} disabled={reviewDocumentId === buyerDoc.id}>
+                              {#if reviewDocumentId === buyerDoc.id}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
+                              Aprovar<span class="sr-only"> documento</span>
+                            </Button>
+                          {/if}
                           <Button
                             size="sm"
                             variant="destructive"

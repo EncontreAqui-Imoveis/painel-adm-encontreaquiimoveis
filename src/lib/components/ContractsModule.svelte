@@ -94,7 +94,6 @@
     documentTypeLabels,
     formatDocumentPreviewName,
     getBuyerDisplayName,
-    getContractPartySummary,
     getOwnerDisplayName,
     getRecordValueRaw,
     hasRecordValue,
@@ -123,7 +122,6 @@
     listMissingBuyerInfo,
     listMissingRequiredDocuments,
     listMissingSellerInfo,
-    matrixCellUploadLabel,
     requiresExactSaleSplit,
     resolveMatrixUploadCategory,
     resolveOutroMatrixDocumentType,
@@ -229,6 +227,7 @@
   };
 
   let savingPartyData = false;
+  let isEditingData = false;
   let ownerInfoForm = {
     nome: '',
     cpf: '',
@@ -938,12 +937,18 @@
       });
       toast.success('Dados do vendedor e do comprador salvos.');
       await reloadSelectedContract(selected.id);
+      isEditingData = false;
     } catch (error) {
       console.error('Erro ao salvar dados do contrato:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível salvar os dados.'));
     } finally {
       savingPartyData = false;
     }
+  }
+
+  function cancelPartyDataEdit() {
+    hydratePartyInfoFormsFromSelected();
+    isEditingData = false;
   }
 
   function changeTab(status: ContractStatus) {
@@ -982,6 +987,7 @@
     evaluatingSide = null;
     finalizingContract = false;
     savingPartyData = false;
+    isEditingData = false;
     hydrateFinalizeForm(item);
     hydratePartyInfoFormsFromSelected();
     void reloadSelectedContract(item.id)
@@ -1013,6 +1019,7 @@
     selectedDraftFile = null;
     selectedSignedFile = null;
     selectedSignedDocSide = 'seller';
+    isEditingData = false;
     pendingReplacementDocumentId = null;
     modalMode = 'review_docs';
     if (typeof document !== 'undefined') {
@@ -1960,12 +1967,6 @@
               {' — '}{selected.propertyTitle}
             {/if}
           </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Etapa: {statusLabel(selected.status)}
-          </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {getContractPartySummary(selected)}
-          </p>
           {#if formatResponsibleUserSummary(selected)}
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {formatResponsibleUserSummary(selected)}
@@ -2047,8 +2048,22 @@
 
         {#if modalMode === 'review_docs'}
         <div class="space-y-4">
-          <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
-            {getContractPartySummary(selected)}
+          <div class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
+            <div>
+              <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Dados das partes</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Edite somente quando precisar corrigir ou complementar informações.</p>
+            </div>
+            <Button
+              type="button"
+              variant={isEditingData ? 'outline' : 'default'}
+              disabled={savingPartyData}
+              on:click={() => {
+                if (isEditingData) cancelPartyDataEdit();
+                else isEditingData = true;
+              }}
+            >
+              {isEditingData ? 'Cancelar edição' : 'Editar Dados'}
+            </Button>
           </div>
           <div class="grid gap-4 md:grid-cols-2">
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
@@ -2062,15 +2077,15 @@
                 <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">Motivo: {readReasonText(selected.sellerApprovalReason)}</p>
               {/if}
               <div class="mt-3 space-y-3 text-sm">
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-nome">{inheritedSellerIdentity.nome ? 'Nome (herdado do perfil)' : 'Nome'}</label><LabeledTextInput id="owner-nome" bind:value={ownerInfoForm.nome} disabled={savingPartyData || inheritedSellerIdentity.nome} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-cpf">{inheritedSellerIdentity.cpf ? 'CPF (herdado do perfil)' : 'CPF'}</label><LabeledTextInput id="owner-cpf" bind:value={ownerInfoForm.cpf} disabled={savingPartyData || inheritedSellerIdentity.cpf} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-profissao">Profissão</label><LabeledTextInput id="owner-profissao" bind:value={ownerInfoForm.profissao} disabled={savingPartyData} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-email">Email</label><LabeledTextInput id="owner-email" bind:value={ownerInfoForm.email} disabled={savingPartyData} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-telefone">Telefone</label><LabeledTextInput id="owner-telefone" bind:value={ownerInfoForm.telefone} disabled={savingPartyData} /></div>
-                <div class="rounded-md bg-slate-50 p-3 dark:bg-slate-800/50"><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-banco">Dados bancários</label><textarea id="owner-banco" bind:value={ownerInfoForm.dadosBancarios} disabled={savingPartyData} rows="3" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"></textarea></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-estado-civil">Estado civil</label><select id="owner-estado-civil" bind:value={ownerInfoForm.estadoCivil} disabled={savingPartyData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800">{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-nome">{inheritedSellerIdentity.nome ? 'Nome (herdado do perfil)' : 'Nome'}</label><LabeledTextInput id="owner-nome" bind:value={ownerInfoForm.nome} disabled={savingPartyData || !isEditingData || inheritedSellerIdentity.nome} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-cpf">{inheritedSellerIdentity.cpf ? 'CPF (herdado do perfil)' : 'CPF'}</label><LabeledTextInput id="owner-cpf" bind:value={ownerInfoForm.cpf} disabled={savingPartyData || !isEditingData || inheritedSellerIdentity.cpf} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-profissao">Profissão</label><LabeledTextInput id="owner-profissao" bind:value={ownerInfoForm.profissao} disabled={savingPartyData || !isEditingData} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-email">Email</label><LabeledTextInput id="owner-email" bind:value={ownerInfoForm.email} disabled={savingPartyData || !isEditingData} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-telefone">Telefone</label><LabeledTextInput id="owner-telefone" bind:value={ownerInfoForm.telefone} disabled={savingPartyData || !isEditingData} /></div>
+                <div class="rounded-md bg-slate-50 p-3 dark:bg-slate-800/50"><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-banco">Dados bancários</label><textarea id="owner-banco" bind:value={ownerInfoForm.dadosBancarios} disabled={savingPartyData || !isEditingData} rows="3" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"></textarea></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-estado-civil">Estado civil</label><select id="owner-estado-civil" bind:value={ownerInfoForm.estadoCivil} disabled={savingPartyData || !isEditingData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800">{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select></div>
                 {#if requiresSpouseFields(ownerInfoForm.estadoCivil)}
-                  <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="owner-conjuge-nome" placeholder="Nome do cônjuge" bind:value={ownerInfoForm.conjugeNome} disabled={savingPartyData} /><LabeledTextInput id="owner-conjuge-cpf" placeholder="CPF do cônjuge" bind:value={ownerInfoForm.conjugeCpf} disabled={savingPartyData} /><LabeledTextInput id="owner-conjuge-profissao" placeholder="Profissão do cônjuge" bind:value={ownerInfoForm.conjugeProfissao} disabled={savingPartyData} /></div></div>
+                  <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="owner-conjuge-nome" placeholder="Nome do cônjuge" bind:value={ownerInfoForm.conjugeNome} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="owner-conjuge-cpf" placeholder="CPF do cônjuge" bind:value={ownerInfoForm.conjugeCpf} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="owner-conjuge-profissao" placeholder="Profissão do cônjuge" bind:value={ownerInfoForm.conjugeProfissao} disabled={savingPartyData || !isEditingData} /></div></div>
                 {/if}
               </div>
             </div>
@@ -2085,19 +2100,20 @@
                 <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">Motivo: {readReasonText(selected.buyerApprovalReason)}</p>
               {/if}
               <div class="mt-3 space-y-3 text-sm">
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-nome">{inheritedBuyerIdentity.nome ? 'Nome (herdado do perfil)' : 'Nome'}</label><LabeledTextInput id="buyer-nome" bind:value={buyerInfoForm.nome} disabled={savingPartyData || inheritedBuyerIdentity.nome} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-cpf">{inheritedBuyerIdentity.cpf ? 'CPF (herdado do perfil)' : 'CPF'}</label><LabeledTextInput id="buyer-cpf" bind:value={buyerInfoForm.cpf} disabled={savingPartyData || inheritedBuyerIdentity.cpf} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-profissao">Profissão</label><LabeledTextInput id="buyer-profissao" bind:value={buyerInfoForm.profissao} disabled={savingPartyData} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-email">Email</label><LabeledTextInput id="buyer-email" bind:value={buyerInfoForm.email} disabled={savingPartyData} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-telefone">Telefone</label><LabeledTextInput id="buyer-telefone" bind:value={buyerInfoForm.telefone} disabled={savingPartyData} /></div>
-                <div class="rounded-md bg-slate-50 p-3 dark:bg-slate-800/50"><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-banco">Dados bancários</label><textarea id="buyer-banco" bind:value={buyerInfoForm.dadosBancarios} disabled={savingPartyData} rows="3" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"></textarea></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-estado-civil">Estado civil</label><select id="buyer-estado-civil" bind:value={buyerInfoForm.estadoCivil} disabled={savingPartyData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800">{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-nome">{inheritedBuyerIdentity.nome ? 'Nome (herdado do perfil)' : 'Nome'}</label><LabeledTextInput id="buyer-nome" bind:value={buyerInfoForm.nome} disabled={savingPartyData || !isEditingData || inheritedBuyerIdentity.nome} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-cpf">{inheritedBuyerIdentity.cpf ? 'CPF (herdado do perfil)' : 'CPF'}</label><LabeledTextInput id="buyer-cpf" bind:value={buyerInfoForm.cpf} disabled={savingPartyData || !isEditingData || inheritedBuyerIdentity.cpf} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-profissao">Profissão</label><LabeledTextInput id="buyer-profissao" bind:value={buyerInfoForm.profissao} disabled={savingPartyData || !isEditingData} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-email">Email</label><LabeledTextInput id="buyer-email" bind:value={buyerInfoForm.email} disabled={savingPartyData || !isEditingData} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-telefone">Telefone</label><LabeledTextInput id="buyer-telefone" bind:value={buyerInfoForm.telefone} disabled={savingPartyData || !isEditingData} /></div>
+                <div class="rounded-md bg-slate-50 p-3 dark:bg-slate-800/50"><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-banco">Dados bancários</label><textarea id="buyer-banco" bind:value={buyerInfoForm.dadosBancarios} disabled={savingPartyData || !isEditingData} rows="3" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"></textarea></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-estado-civil">Estado civil</label><select id="buyer-estado-civil" bind:value={buyerInfoForm.estadoCivil} disabled={savingPartyData || !isEditingData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800">{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select></div>
                 {#if requiresSpouseFields(buyerInfoForm.estadoCivil)}
-                  <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="buyer-conjuge-nome" placeholder="Nome do cônjuge" bind:value={buyerInfoForm.conjugeNome} disabled={savingPartyData} /><LabeledTextInput id="buyer-conjuge-cpf" placeholder="CPF do cônjuge" bind:value={buyerInfoForm.conjugeCpf} disabled={savingPartyData} /><LabeledTextInput id="buyer-conjuge-profissao" placeholder="Profissão do cônjuge" bind:value={buyerInfoForm.conjugeProfissao} disabled={savingPartyData} /></div></div>
+                  <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="buyer-conjuge-nome" placeholder="Nome do cônjuge" bind:value={buyerInfoForm.conjugeNome} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="buyer-conjuge-cpf" placeholder="CPF do cônjuge" bind:value={buyerInfoForm.conjugeCpf} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="buyer-conjuge-profissao" placeholder="Profissão do cônjuge" bind:value={buyerInfoForm.conjugeProfissao} disabled={savingPartyData || !isEditingData} /></div></div>
                 {/if}
               </div>
             </div>
           </div>
+          {#if isEditingData}
           <div class="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -2112,6 +2128,7 @@
               Salvar dados vendedor e comprador
             </Button>
           </div>
+          {/if}
 
           <ContractDocumentMatrix
             contract={selected}
@@ -2121,7 +2138,6 @@
             documentStatusLabel={documentStatusLabel}
             documentStatusClass={documentStatusClass}
             isMatrixUploading={isMatrixUploading}
-            matrixCellUploadLabel={matrixCellUploadLabel}
             canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
             downloadingDocumentId={downloadingDocumentId}
             matrixDeletingDocumentId={matrixDeletingDocumentId}

@@ -223,8 +223,18 @@ export function getMatrixRows(contract: ContractItem): MatrixRow[] {
 export function getNonProposalDocuments(contract: ContractItem): ContractDocument[] {
   return (contract.documents ?? []).filter((doc) => {
     const documentType = String(doc.documentType ?? '').trim().toLowerCase();
-    return documentType !== 'proposal';
+    return documentType !== 'proposal' && !isRejectedContractDocument(doc);
   });
+}
+
+export function isRejectedContractDocument(doc: ContractDocument): boolean {
+  const metadata = doc.metadata ?? {};
+  const status = String(
+    doc.status ?? metadata.status ?? metadata.reviewStatus ?? metadata.validationStatus ?? ''
+  )
+    .trim()
+    .toUpperCase();
+  return status === 'REJECTED';
 }
 
 export function documentMatchesCurrentContract(contract: ContractItem, doc: ContractDocument): boolean {
