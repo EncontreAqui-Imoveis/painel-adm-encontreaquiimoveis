@@ -34,8 +34,8 @@
     if (!contract) return 'Não identificado';
     const value = role === 'proposer'
       ? contract.proposerName ?? contract.buyerClientName ?? contract.clientName
-      : contract.advertiserName ?? contract.sellerClientName ?? contract.ownerName;
-    return String(value ?? '').trim() || 'Não identificado';
+      : contract.advertiserName;
+    return String(value ?? '').trim() || (role === 'advertiser' ? 'Anunciante não vinculado' : 'Não identificado');
   }
 
   function requiredCount(side: 'seller' | 'buyer'): number {

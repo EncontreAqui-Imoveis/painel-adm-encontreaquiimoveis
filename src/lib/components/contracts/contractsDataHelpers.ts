@@ -297,8 +297,8 @@ export function getAdvertiserDisplayName(contract: ContractItem | null | undefin
   if (!contract) return '-';
 
   const directName = String(
-    contract.capturingBrokerName ??
-      contract.advertiserName ??
+    contract.advertiserName ??
+      contract.capturingBrokerName ??
       ''
   ).trim();
 
