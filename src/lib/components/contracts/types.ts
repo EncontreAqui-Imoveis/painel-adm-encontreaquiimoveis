@@ -34,6 +34,8 @@ export type ContractItem = {
   sellingBrokerId?: number | null;
   advertiserId?: number | null;
   proposerId?: number | null;
+  initiatorSide?: 'buyer' | 'seller' | null;
+  legalBuyerUserId?: number | null;
   ownerId?: number | null;
   buyerClientId?: number | null;
   sellerClientId?: number | null;
@@ -62,6 +64,10 @@ export type ContractItem = {
   } | null;
   commissionData?: Record<string, unknown> | null;
   workflowMetadata?: Record<string, unknown> | null;
+  identityCapabilities?: {
+    seller?: { canEditName?: boolean; canEditCpf?: boolean } | null;
+    buyer?: { canEditName?: boolean; canEditCpf?: boolean } | null;
+  } | null;
   responsibleUserIds?: number[] | null;
   documents?: ContractDocument[];
   documentRequirements?: unknown;
