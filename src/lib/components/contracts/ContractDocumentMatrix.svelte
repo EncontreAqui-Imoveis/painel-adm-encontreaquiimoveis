@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Download, Loader2, Pencil, Trash2, Upload } from 'lucide-svelte';
+  import { Check, Download, Loader2, Pencil, Trash2, Upload, X } from 'lucide-svelte';
   import { Button } from '$lib/components/ui/button';
   import type { ContractMatrixRowView, ContractItem } from '$lib/components/contracts/types';
 
@@ -25,23 +25,6 @@
   export let documentStatusClass: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => '';
   export let onReview: (doc: ContractMatrixRowView['sellerDocs'][number], status: 'APPROVED' | 'REJECTED') => void = () => {};
 
-  function nameFromInfo(info: Record<string, unknown> | null | undefined): string {
-    const value = info?.nome ?? info?.name ?? info?.fullName ?? info?.full_name;
-    return String(value ?? '').trim();
-  }
-
-  function actorName(role: 'proposer' | 'buyer' | 'advertiser' | 'seller'): string {
-    if (!contract) return '(A definir)';
-    const value = role === 'proposer'
-      ? contract.proposerName ?? contract.buyerClientName ?? contract.clientName
-      : role === 'buyer'
-      ? nameFromInfo(contract.buyerInfo) || contract.buyerClientName || contract.clientName
-      : role === 'advertiser'
-      ? contract.advertiserName ?? contract.ownerName ?? contract.propertyOwnerName
-      : nameFromInfo(contract.sellerInfo ?? contract.ownerInfo) || contract.sellerClientName || contract.ownerName;
-    return String(value ?? '').trim() || '(A definir)';
-  }
-
   function isApproved(doc: ContractMatrixRowView['sellerDocs'][number]): boolean {
     const metadata = doc.metadata ?? {};
     const status = String(
@@ -57,29 +40,7 @@
   <p id="contract-doc-matrix-help" class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
     Matriz de Documentos
   </p>
-  <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-    <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-      <p class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Proponente</p>
-      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{actorName('proposer')}</p>
-      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ator que iniciou a proposta</p>
-    </div>
-    <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
-      <p class="text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">Comprador</p>
-      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{actorName('buyer')}</p>
-      <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Documentos do adquirente legal</p>
-    </div>
-    <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-      <p class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Anunciante</p>
-      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{actorName('advertiser')}</p>
-      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ator que publicou o imóvel</p>
-    </div>
-    <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
-      <p class="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-300">Vendedor</p>
-      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{actorName('seller')}</p>
-      <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Documentos do proprietário legal</p>
-    </div>
-  </div>
-  <div class="mt-2 overflow-x-auto">
+  <div class="mt-3 overflow-x-auto">
     <table class="w-full min-w-[620px] text-sm" aria-describedby="contract-doc-matrix-help">
       <thead>
         <tr class="border-b border-gray-200 dark:border-gray-700">
@@ -98,7 +59,7 @@
                 <div class="space-y-2">
                   {#if row.sellerDocs.length === 0}
                     <div class="flex flex-wrap items-center gap-2">
-                      <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                         Pendente
                       </span>
                       <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')}>
@@ -120,15 +81,15 @@
                             {documentFileName(sellerDoc)}
                           </button>
                           {#if documentStatusLabel(sellerDoc)}
-                            <span class={`rounded-full px-2 py-1 text-[11px] font-semibold ${documentStatusClass(sellerDoc)}`}>
+                            <span class={`rounded-full px-2.5 py-0.5 text-xs font-medium ${documentStatusClass(sellerDoc)}`}>
                               {documentStatusLabel(sellerDoc)}
                             </span>
                           {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
                           <details class="relative">
-                            <summary class="inline-flex h-8 cursor-pointer list-none items-center gap-1 rounded-md border border-gray-300 bg-white px-2 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">
-                              <Pencil class="h-3.5 w-3.5" /> Editar
+                            <summary class="inline-flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Editar documento" title="Editar documento">
+                              <Pencil class="h-4 w-4" />
                             </summary>
                             <div class="absolute bottom-full left-0 z-10 mb-2 flex items-center gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-900">
                               <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Baixar documento" title="Baixar" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
@@ -142,20 +103,18 @@
                               </button>
                             </div>
                           </details>
-                          {#if !isApproved(sellerDoc)}
-                            <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" on:click={() => onReview(sellerDoc, 'APPROVED')} disabled={reviewDocumentId === sellerDoc.id}>
-                              {#if reviewDocumentId === sellerDoc.id}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
-                              Aprovar<span class="sr-only"> documento</span>
-                            </Button>
+                          {#if isApproved(sellerDoc)}
+                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento aprovado" title="Baixar documento aprovado" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
+                              {#if downloadingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
+                            </button>
+                          {:else}
+                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-50 dark:hover:bg-emerald-950/50" aria-label="Aprovar documento" title="Aprovar documento" on:click={() => onReview(sellerDoc, 'APPROVED')} disabled={reviewDocumentId === sellerDoc.id}>
+                              {#if reviewDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Check class="h-4 w-4" />{/if}
+                            </button>
+                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-red-600 hover:bg-red-100 hover:text-red-700 disabled:opacity-50 dark:hover:bg-red-950/50" aria-label="Rejeitar documento" title="Rejeitar documento" on:click={() => onReview(sellerDoc, 'REJECTED')} disabled={reviewDocumentId === sellerDoc.id}>
+                              <X class="h-4 w-4" />
+                            </button>
                           {/if}
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            on:click={() => onReview(sellerDoc, 'REJECTED')}
-                            disabled={reviewDocumentId === sellerDoc.id}
-                          >
-                            Rejeitar<span class="sr-only"> documento</span>
-                          </Button>
                         </div>
                       </div>
                     {/each}
@@ -184,7 +143,7 @@
                 <div class="space-y-2">
                   {#if row.buyerDocs.length === 0}
                     <div class="flex flex-wrap items-center gap-2">
-                      <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                         Pendente
                       </span>
                       <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')}>
@@ -206,15 +165,15 @@
                             {documentFileName(buyerDoc)}
                           </button>
                           {#if documentStatusLabel(buyerDoc)}
-                            <span class={`rounded-full px-2 py-1 text-[11px] font-semibold ${documentStatusClass(buyerDoc)}`}>
+                            <span class={`rounded-full px-2.5 py-0.5 text-xs font-medium ${documentStatusClass(buyerDoc)}`}>
                               {documentStatusLabel(buyerDoc)}
                             </span>
                           {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
                           <details class="relative">
-                            <summary class="inline-flex h-8 cursor-pointer list-none items-center gap-1 rounded-md border border-gray-300 bg-white px-2 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800">
-                              <Pencil class="h-3.5 w-3.5" /> Editar
+                            <summary class="inline-flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Editar documento" title="Editar documento">
+                              <Pencil class="h-4 w-4" />
                             </summary>
                             <div class="absolute bottom-full left-0 z-10 mb-2 flex items-center gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-900">
                               <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Baixar documento" title="Baixar" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
@@ -228,20 +187,18 @@
                               </button>
                             </div>
                           </details>
-                          {#if !isApproved(buyerDoc)}
-                            <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" on:click={() => onReview(buyerDoc, 'APPROVED')} disabled={reviewDocumentId === buyerDoc.id}>
-                              {#if reviewDocumentId === buyerDoc.id}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
-                              Aprovar<span class="sr-only"> documento</span>
-                            </Button>
+                          {#if isApproved(buyerDoc)}
+                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento aprovado" title="Baixar documento aprovado" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
+                              {#if downloadingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
+                            </button>
+                          {:else}
+                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-50 dark:hover:bg-emerald-950/50" aria-label="Aprovar documento" title="Aprovar documento" on:click={() => onReview(buyerDoc, 'APPROVED')} disabled={reviewDocumentId === buyerDoc.id}>
+                              {#if reviewDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Check class="h-4 w-4" />{/if}
+                            </button>
+                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-red-600 hover:bg-red-100 hover:text-red-700 disabled:opacity-50 dark:hover:bg-red-950/50" aria-label="Rejeitar documento" title="Rejeitar documento" on:click={() => onReview(buyerDoc, 'REJECTED')} disabled={reviewDocumentId === buyerDoc.id}>
+                              <X class="h-4 w-4" />
+                            </button>
                           {/if}
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            on:click={() => onReview(buyerDoc, 'REJECTED')}
-                            disabled={reviewDocumentId === buyerDoc.id}
-                          >
-                            Rejeitar<span class="sr-only"> documento</span>
-                          </Button>
                         </div>
                       </div>
                     {/each}

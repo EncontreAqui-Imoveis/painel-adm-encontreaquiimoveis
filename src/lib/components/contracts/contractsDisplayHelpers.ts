@@ -73,7 +73,7 @@ export function documentStatusLabel(doc?: ContractDocument | null): string {
 export function documentStatusClass(doc?: ContractDocument | null): string {
   const status = normalizeDocumentStatus(doc);
   if (status === 'APPROVED') {
-    return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+    return 'bg-emerald-600 text-white';
   }
   if (status === 'APPROVED_WITH_RES') {
     return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';

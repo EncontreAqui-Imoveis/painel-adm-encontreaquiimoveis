@@ -923,6 +923,22 @@
     };
   }
 
+  function contractActorName(
+    contract: ContractItem,
+    role: 'proposer' | 'buyer' | 'advertiser' | 'seller'
+  ): string {
+    const nameFromInfo = (info: Record<string, unknown> | null | undefined) =>
+      getRecordValueRaw(info, ['nome', 'name', 'fullName', 'full_name']);
+    const value = role === 'proposer'
+      ? contract.proposerName ?? contract.buyerClientName ?? contract.clientName
+      : role === 'buyer'
+      ? nameFromInfo(contract.buyerInfo) || contract.buyerClientName || contract.clientName
+      : role === 'advertiser'
+      ? contract.advertiserName ?? contract.ownerName ?? contract.propertyOwnerName
+      : nameFromInfo(contract.sellerInfo ?? contract.ownerInfo) || contract.sellerClientName || contract.ownerName;
+    return String(value ?? '').trim() || '(A definir)';
+  }
+
   async function saveContractPartyData() {
     if (!selected) return;
     savingPartyData = true;
@@ -2017,6 +2033,31 @@
                   Baixar PDF
                 </Button>
               </div>
+            </div>
+          </div>
+        {/if}
+
+        {#if modalMode === 'review_docs'}
+          <div class="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+              <p class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Proponente</p>
+              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{contractActorName(selected, 'proposer')}</p>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ator que iniciou a proposta</p>
+            </div>
+            <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
+              <p class="text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">Comprador</p>
+              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{contractActorName(selected, 'buyer')}</p>
+              <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Documentos do adquirente legal</p>
+            </div>
+            <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+              <p class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Anunciante</p>
+              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{contractActorName(selected, 'advertiser')}</p>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ator que publicou o imóvel</p>
+            </div>
+            <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+              <p class="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-300">Vendedor</p>
+              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{contractActorName(selected, 'seller')}</p>
+              <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Documentos do proprietário legal</p>
             </div>
           </div>
         {/if}
