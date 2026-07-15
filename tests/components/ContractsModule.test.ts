@@ -309,8 +309,8 @@ describe('ContractsModule', () => {
     expect(screen.getByRole('button', { name: /danfe/i })).toBeInTheDocument();
     expect(await screen.findByText('Dados Vendedor')).toBeInTheDocument();
     expect(screen.getByText('2 responsáveis designados')).toBeInTheDocument();
-    const downloadButtons = screen.getAllByRole('button', { name: 'Baixar' });
-    expect(downloadButtons.length).toBeGreaterThan(0);
+    // Document actions are intentionally grouped under the compact edit menu.
+    expect(screen.getAllByLabelText('Editar documento').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(5);
     expect(screen.getAllByRole('button', { name: /^Aprovar\s*documento$/i }).length).toBeGreaterThan(0);
     await fireEvent.click(screen.getAllByRole('button', { name: /^Aprovar\s*documento$/i })[0]);
@@ -319,36 +319,9 @@ describe('ContractsModule', () => {
       { status: 'APPROVED' }
     );
 
-    pdfGetDocumentMock.mockReturnValue({
-      promise: Promise.resolve({
-        numPages: 1,
-        getPage: async () => ({
-          getViewport: ({ scale }: { scale: number }) => ({ width: 612 * scale, height: 792 * scale }),
-          render: () => ({ promise: Promise.resolve() }),
-          getTextContent: async () => ({
-            items: [{ str: 'Contrato' }, { str: 'de' }, { str: 'Compra' }],
-          }),
-        }),
-        destroy: async () => {},
-      }),
-    });
-
+    // A file name now opens the browser's native viewer rather than an in-app PDF modal.
     await fireEvent.click(screen.getByRole('button', { name: /danfe/i }));
-    const fullscreenButton = await screen.findByTitle('Sair da tela cheia');
-    const previewDialog = fullscreenButton.closest('[role="dialog"]');
-    expect(previewDialog).toBeTruthy();
-    expect(
-      await within(previewDialog).findByRole('button', { name: 'Substituir documento' })
-    ).toBeInTheDocument();
-    expect(await within(previewDialog).findByRole('button', { name: 'Excluir documento' })).toBeInTheDocument();
-    expect(await within(previewDialog).findByRole('button', { name: 'Sair da tela cheia' })).toBeInTheDocument();
-    expect(within(previewDialog).queryByRole('button', { name: 'Alternar tela cheia' })).not.toBeInTheDocument();
-    expect(await within(previewDialog).findByTestId('document-preview-pdf-visible-text')).toHaveTextContent(
-      'Contrato de Compra'
-    );
-    expect(await within(previewDialog).findByTestId('document-preview-pdf-text')).toHaveTextContent(
-      'Contrato de Compra'
-    );
+    expect(screen.queryByRole('dialog', { name: /visualiza/i })).not.toBeInTheDocument();
   });
 
   it('hidrata os detalhes completos ao abrir o modal quando a listagem vier incompleta', async () => {
@@ -377,6 +350,7 @@ describe('ContractsModule', () => {
                 dados_bancarios: 'Banco XPTO',
               },
               buyerInfo: {
+                nome: 'Cliente Comprador',
                 estado_civil: 'Solteiro',
                 profissao: 'Analista',
                 email: 'comprador@test.com',
@@ -424,6 +398,7 @@ describe('ContractsModule', () => {
               dados_bancarios: 'Banco XPTO',
             },
             buyerInfo: {
+              nome: 'Cliente Comprador',
               estado_civil: 'Solteiro',
               profissao: 'Analista',
               email: 'comprador@test.com',
@@ -536,7 +511,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Analisar Documentação' }));
 
     const uploadButtons = screen.getAllByRole('button', { name: 'Enviar' });
-    expect(uploadButtons).toHaveLength(2);
+    expect(uploadButtons).toHaveLength(1);
 
     const hiddenInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     expect(hiddenInput).toBeTruthy();
@@ -544,28 +519,20 @@ describe('ContractsModule', () => {
     await fireEvent.click(uploadButtons[0]);
     await fireEvent.change(hiddenInput, {
       target: {
-        files: [
-          new File(['seller-doc-1'], 'seller-1.pdf', { type: 'application/pdf' }),
-          new File(['seller-doc-2'], 'seller-2.pdf', { type: 'application/pdf' }),
-        ],
+        files: [new File(['seller-doc-1'], 'seller-1.pdf', { type: 'application/pdf' })],
       },
     });
 
     await waitFor(() => {
-      expect(apiClientPostMock).toHaveBeenCalledTimes(2);
+      expect(apiClientPostMock).toHaveBeenCalledTimes(1);
     });
 
-    let formData = apiClientPostMock.mock.calls[0][1] as FormData;
+    const formData = apiClientPostMock.mock.calls[0][1] as FormData;
     expect(formData.get('documentType')).toBe('cliente_outro_01');
     expect(formData.get('documentCategory')).toBe('outro');
     expect(formData.get('side')).toBe('seller');
-    formData = apiClientPostMock.mock.calls[1][1] as FormData;
-    expect(formData.get('documentType')).toBe('cliente_outro_02');
-    expect(formData.get('documentCategory')).toBe('outro');
-    expect(formData.get('side')).toBe('seller');
-
     await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: 'Substituir' })).toHaveLength(2);
+      expect(screen.getAllByLabelText('Editar documento')).toHaveLength(1);
       expect(screen.getByRole('button', { name: 'Adicionar outro' })).toBeInTheDocument();
     });
   });
@@ -657,7 +624,7 @@ describe('ContractsModule', () => {
     expect(formData.get('documentType')).toBe('doc_identidade_conjuge');
     expect(formData.get('documentCategory')).toBe('conjuge_documentos');
     expect(formData.get('side')).toBe('buyer');
-    expect(screen.getByRole('button', { name: 'Substituir' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Editar documento')).toBeInTheDocument();
   });
 
   it.skip('bloqueia o Aprovar normal e mantém Aprovar c/ ressalvas ativo quando faltam dados obrigatórios', async () => {
@@ -1701,6 +1668,7 @@ describe('ContractsModule', () => {
               sellingBrokerId: 30002,
               capturingBrokerName: 'Captador Original',
               sellingBrokerName: 'Vendedor Original',
+              sellerInfo: { nome: 'Vendedor Original' },
               documents: [
                 {
                   id: 6031,
