@@ -20,8 +20,8 @@ export type MatrixRow = {
 };
 
 export const documentTypeLabels: Record<string, string> = {
-  doc_identidade: 'Documento de Identidade',
-  doc_identidade_conjuge: 'Documento de Identidade do Cônjuge',
+  doc_identidade: 'Documento Pessoal',
+  doc_identidade_conjuge: 'Documento Pessoal do Cônjuge',
   comprovante_endereco: 'Comprovante de Endereço',
   certidao_casamento_nascimento: 'Certidão de Casamento',
   certidao_inteiro_teor: 'Certidão de Inteiro Teor',

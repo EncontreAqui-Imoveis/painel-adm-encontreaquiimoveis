@@ -417,6 +417,20 @@
     }
   }
 
+  function openDocumentInBrowser(doc: ContractDocument, contract: ContractItem) {
+    if (!doc.downloadUrl) {
+      toast.error('Documento sem URL de visualização.');
+      return;
+    }
+
+    const opened = window.open(doc.downloadUrl, '_blank', 'noopener,noreferrer');
+    if (!opened) {
+      toast.error(
+        `Não foi possível abrir o documento do contrato ${contract.propertyCode ?? contract.propertyId}.`
+      );
+    }
+  }
+
   async function openSignedProposalInNativeViewer(doc: ContractDocument) {
     if (!doc.downloadUrl) {
       toast.error('Documento sem URL de visualização.');
@@ -2094,28 +2108,6 @@
 
         {#if modalMode === 'review_docs'}
         <div class="space-y-4">
-          <ContractDocumentMatrix
-            contract={selected}
-            rows={contractMatrixRows}
-            documentLabel={documentLabel}
-            documentFileName={documentFileName}
-            documentStatusLabel={documentStatusLabel}
-            documentStatusClass={documentStatusClass}
-            isMatrixUploading={isMatrixUploading}
-            canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
-            downloadingDocumentId={downloadingDocumentId}
-            matrixDeletingDocumentId={matrixDeletingDocumentId}
-            reviewDocumentId={reviewingDocumentId}
-            onOpenPreview={(doc) => selected && openDocumentPreview(doc, selected)}
-            onDownload={(doc) => selected && viewDocument(doc, selected)}
-            onReplace={(documentType, side, existingDocumentType) => {
-              triggerMatrixUpload(documentType, side, existingDocumentType ?? null);
-            }}
-            onDelete={deleteMatrixDocument}
-            onUpload={triggerMatrixUpload}
-            onReview={(doc, status) => reviewMatrixDocument(doc, status)}
-          />
-
           <div class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
             <div>
               <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Dados das partes</p>
@@ -2205,6 +2197,28 @@
             </div>
           {/if}
           </details>
+
+          <ContractDocumentMatrix
+            contract={selected}
+            rows={contractMatrixRows}
+            documentLabel={documentLabel}
+            documentFileName={documentFileName}
+            documentStatusLabel={documentStatusLabel}
+            documentStatusClass={documentStatusClass}
+            isMatrixUploading={isMatrixUploading}
+            canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
+            downloadingDocumentId={downloadingDocumentId}
+            matrixDeletingDocumentId={matrixDeletingDocumentId}
+            reviewDocumentId={reviewingDocumentId}
+            onOpenPreview={(doc) => selected && openDocumentInBrowser(doc, selected)}
+            onDownload={(doc) => selected && viewDocument(doc, selected)}
+            onReplace={(documentType, side, existingDocumentType) => {
+              triggerMatrixUpload(documentType, side, existingDocumentType ?? null);
+            }}
+            onDelete={deleteMatrixDocument}
+            onUpload={triggerMatrixUpload}
+            onReview={(doc, status) => reviewMatrixDocument(doc, status)}
+          />
 
           <footer class="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-700">
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Decisão da análise</p>

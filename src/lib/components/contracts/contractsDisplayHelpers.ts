@@ -10,7 +10,8 @@ export const tabs: { key: ContractStatus; label: string }[] = [
 ];
 
 export const documentTypeLabels: Record<string, string> = {
-  doc_identidade: 'Documento de Identidade',
+  doc_identidade: 'Documento Pessoal',
+  doc_identidade_conjuge: 'Documento Pessoal do Cônjuge',
   comprovante_endereco: 'Comprovante de Endereço',
   certidao_casamento_nascimento: 'Certidão de Casamento/Nascimento',
   certidao_inteiro_teor: 'Certidão de Inteiro Teor',
