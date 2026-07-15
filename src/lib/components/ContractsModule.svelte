@@ -228,6 +228,7 @@
 
   let savingPartyData = false;
   let isEditingData = false;
+  let isDataSectionExpanded = false;
   let ownerInfoForm = {
     nome: '',
     cpf: '',
@@ -954,6 +955,7 @@
       toast.success('Dados do vendedor e do comprador salvos.');
       await reloadSelectedContract(selected.id);
       isEditingData = false;
+      isDataSectionExpanded = false;
     } catch (error) {
       console.error('Erro ao salvar dados do contrato:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível salvar os dados.'));
@@ -965,6 +967,7 @@
   function cancelPartyDataEdit() {
     hydratePartyInfoFormsFromSelected();
     isEditingData = false;
+    isDataSectionExpanded = false;
   }
 
   function changeTab(status: ContractStatus) {
@@ -1004,6 +1007,7 @@
     finalizingContract = false;
     savingPartyData = false;
     isEditingData = false;
+    isDataSectionExpanded = false;
     hydrateFinalizeForm(item);
     hydratePartyInfoFormsFromSelected();
     void reloadSelectedContract(item.id)
@@ -1036,6 +1040,7 @@
     selectedSignedFile = null;
     selectedSignedDocSide = 'seller';
     isEditingData = false;
+    isDataSectionExpanded = false;
     pendingReplacementDocumentId = null;
     modalMode = 'review_docs';
     if (typeof document !== 'undefined') {
@@ -2089,10 +2094,32 @@
 
         {#if modalMode === 'review_docs'}
         <div class="space-y-4">
+          <ContractDocumentMatrix
+            contract={selected}
+            rows={contractMatrixRows}
+            documentLabel={documentLabel}
+            documentFileName={documentFileName}
+            documentStatusLabel={documentStatusLabel}
+            documentStatusClass={documentStatusClass}
+            isMatrixUploading={isMatrixUploading}
+            canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
+            downloadingDocumentId={downloadingDocumentId}
+            matrixDeletingDocumentId={matrixDeletingDocumentId}
+            reviewDocumentId={reviewingDocumentId}
+            onOpenPreview={(doc) => selected && openDocumentPreview(doc, selected)}
+            onDownload={(doc) => selected && viewDocument(doc, selected)}
+            onReplace={(documentType, side, existingDocumentType) => {
+              triggerMatrixUpload(documentType, side, existingDocumentType ?? null);
+            }}
+            onDelete={deleteMatrixDocument}
+            onUpload={triggerMatrixUpload}
+            onReview={(doc, status) => reviewMatrixDocument(doc, status)}
+          />
+
           <div class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
             <div>
               <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Dados das partes</p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">Edite somente quando precisar corrigir ou complementar informações.</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Recolhidos por padrão para manter a análise documental em foco.</p>
             </div>
             <Button
               type="button"
@@ -2100,13 +2127,20 @@
               disabled={savingPartyData}
               on:click={() => {
                 if (isEditingData) cancelPartyDataEdit();
-                else isEditingData = true;
+                else {
+                  isDataSectionExpanded = true;
+                  isEditingData = true;
+                }
               }}
             >
               {isEditingData ? 'Cancelar edição' : 'Editar Dados'}
             </Button>
           </div>
-          <div class="grid gap-4 md:grid-cols-2">
+          <details class="rounded-md border border-gray-200 dark:border-gray-700" bind:open={isDataSectionExpanded}>
+            <summary class="cursor-pointer px-3 py-2 text-sm font-medium text-gray-700 marker:text-gray-400 dark:text-gray-200">
+              {isDataSectionExpanded ? 'Ocultar dados cadastrais' : 'Ver dados cadastrais'}
+            </summary>
+            <div class="grid gap-4 border-t border-gray-200 p-3 md:grid-cols-2 dark:border-gray-700">
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <div class="flex items-center justify-between gap-2">
                 <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Dados Vendedor</p>
@@ -2153,60 +2187,42 @@
                 {/if}
               </div>
             </div>
-          </div>
+            </div>
           {#if isEditingData}
-          <div class="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              disabled={savingPartyData}
-              on:click={() => {
-                void saveContractPartyData();
-              }}
-            >
-              {#if savingPartyData}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-              {/if}
-              Salvar dados vendedor e comprador
-            </Button>
-          </div>
+            <div class="flex flex-wrap gap-2 border-t border-gray-200 px-3 py-3 dark:border-gray-700">
+              <Button
+                type="button"
+                disabled={savingPartyData}
+                on:click={() => {
+                  void saveContractPartyData();
+                }}
+              >
+                {#if savingPartyData}
+                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                {/if}
+                Salvar dados vendedor e comprador
+              </Button>
+            </div>
           {/if}
+          </details>
 
-          <ContractDocumentMatrix
-            contract={selected}
-            rows={contractMatrixRows}
-            documentLabel={documentLabel}
-            documentFileName={documentFileName}
-            documentStatusLabel={documentStatusLabel}
-            documentStatusClass={documentStatusClass}
-            isMatrixUploading={isMatrixUploading}
-            canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
-            downloadingDocumentId={downloadingDocumentId}
-            matrixDeletingDocumentId={matrixDeletingDocumentId}
-            reviewDocumentId={reviewingDocumentId}
-            onOpenPreview={(doc) => selected && openDocumentPreview(doc, selected)}
-            onDownload={(doc) => selected && viewDocument(doc, selected)}
-            onReplace={(documentType, side, existingDocumentType) => {
-              triggerMatrixUpload(documentType, side, existingDocumentType ?? null);
-            }}
-            onDelete={deleteMatrixDocument}
-            onUpload={triggerMatrixUpload}
-            onReview={(doc, status) => reviewMatrixDocument(doc, status)}
-          />
+          <footer class="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-700">
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Decisão da análise</p>
+            <ContractApprovalActions
+              contract={selected}
+              approvalLockReasons={approvalLockReasons}
+              isReadyToApprove={isReadyToApprove}
+              evaluatingSide={evaluatingSide}
+              sellerApprovalDisabled={sellerApprovalDisabled}
+              isDoubleEndedDeal={isDoubleEndedDeal}
+              getSideApprovalUiState={getSideApprovalUiState}
+              evaluateContractSide={evaluateContractSide}
+            />
 
-          <ContractApprovalActions
-            contract={selected}
-            approvalLockReasons={approvalLockReasons}
-            isReadyToApprove={isReadyToApprove}
-            evaluatingSide={evaluatingSide}
-            sellerApprovalDisabled={sellerApprovalDisabled}
-            isDoubleEndedDeal={isDoubleEndedDeal}
-            getSideApprovalUiState={getSideApprovalUiState}
-            evaluateContractSide={evaluateContractSide}
-          />
-
-          <div class="mt-1 flex justify-end">
-            <Button variant="outline" on:click={() => closeModal()}>Fechar</Button>
-          </div>
+            <div class="flex justify-end">
+              <Button variant="outline" on:click={() => closeModal()}>Fechar</Button>
+            </div>
+          </footer>
           <input
             class="hidden"
             type="file"

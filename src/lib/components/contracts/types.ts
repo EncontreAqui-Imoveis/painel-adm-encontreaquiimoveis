@@ -10,6 +10,7 @@ export type ContractDocument = {
   type?: string | null;
   documentType?: string | null;
   status?: ContractApprovalStatus | null;
+  categoryStatus?: ContractApprovalStatus | null;
   metadata?: Record<string, unknown> | null;
   side?: 'seller' | 'buyer' | null;
   originalFileName?: string | null;

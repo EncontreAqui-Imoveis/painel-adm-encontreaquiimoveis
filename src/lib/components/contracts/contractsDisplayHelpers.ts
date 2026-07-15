@@ -44,7 +44,7 @@ export function documentLabel(type?: string | null): string {
 }
 
 export function normalizeDocumentStatus(doc?: ContractDocument | null): string {
-  const direct = String(doc?.status ?? '').trim().toUpperCase();
+  const direct = String(doc?.status ?? doc?.categoryStatus ?? '').trim().toUpperCase();
   if (direct.length > 0) {
     return direct;
   }

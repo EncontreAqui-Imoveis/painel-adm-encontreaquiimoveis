@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Download, Loader2, Pencil, Trash2, Upload, X } from 'lucide-svelte';
+  import { Check, CircleAlert, Clock3, Download, Loader2, Pencil, Trash2, Upload, X } from 'lucide-svelte';
   import { Button } from '$lib/components/ui/button';
   import type { ContractMatrixRowView, ContractItem } from '$lib/components/contracts/types';
 
@@ -34,6 +34,19 @@
       .toUpperCase();
     return status === 'APPROVED';
   }
+
+  function documentStatus(doc: ContractMatrixRowView['sellerDocs'][number]): string {
+    const metadata = doc.metadata ?? {};
+    return String(
+      doc.status ?? doc.categoryStatus ?? metadata.status ?? metadata.reviewStatus ?? metadata.validationStatus ?? 'PENDING'
+    )
+      .trim()
+      .toUpperCase();
+  }
+
+  function isRejected(doc: ContractMatrixRowView['sellerDocs'][number]): boolean {
+    return documentStatus(doc) === 'REJECTED';
+  }
 </script>
 
 <div id="contract-doc-matrix" class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
@@ -59,7 +72,8 @@
                 <div class="space-y-2">
                   {#if row.sellerDocs.length === 0}
                     <div class="flex flex-wrap items-center gap-2">
-                      <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                      <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                        <Clock3 class="h-3 w-3" />
                         Pendente
                       </span>
                       <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')}>
@@ -81,7 +95,14 @@
                             {documentFileName(sellerDoc)}
                           </button>
                           {#if documentStatusLabel(sellerDoc)}
-                            <span class={`rounded-full px-2.5 py-0.5 text-xs font-medium ${documentStatusClass(sellerDoc)}`}>
+                            <span class={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${documentStatusClass(sellerDoc)}`}>
+                              {#if isApproved(sellerDoc)}
+                                <Check class="h-3 w-3" />
+                              {:else if isRejected(sellerDoc)}
+                                <CircleAlert class="h-3 w-3" />
+                              {:else}
+                                <Clock3 class="h-3 w-3" />
+                              {/if}
                               {documentStatusLabel(sellerDoc)}
                             </span>
                           {/if}
@@ -143,7 +164,8 @@
                 <div class="space-y-2">
                   {#if row.buyerDocs.length === 0}
                     <div class="flex flex-wrap items-center gap-2">
-                      <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                      <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                        <Clock3 class="h-3 w-3" />
                         Pendente
                       </span>
                       <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')}>
@@ -165,7 +187,14 @@
                             {documentFileName(buyerDoc)}
                           </button>
                           {#if documentStatusLabel(buyerDoc)}
-                            <span class={`rounded-full px-2.5 py-0.5 text-xs font-medium ${documentStatusClass(buyerDoc)}`}>
+                            <span class={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${documentStatusClass(buyerDoc)}`}>
+                              {#if isApproved(buyerDoc)}
+                                <Check class="h-3 w-3" />
+                              {:else if isRejected(buyerDoc)}
+                                <CircleAlert class="h-3 w-3" />
+                              {:else}
+                                <Clock3 class="h-3 w-3" />
+                              {/if}
                               {documentStatusLabel(buyerDoc)}
                             </span>
                           {/if}
