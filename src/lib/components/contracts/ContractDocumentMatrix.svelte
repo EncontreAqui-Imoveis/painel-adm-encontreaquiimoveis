@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Check, CircleAlert, Clock3, Download, Loader2, Pencil, Trash2, Upload, X } from 'lucide-svelte';
+  import { clickOutside } from '$lib/actions/clickOutside';
   import { Button } from '$lib/components/ui/button';
   import type { ContractMatrixRowView, ContractItem } from '$lib/components/contracts/types';
 
@@ -25,6 +26,20 @@
   export let documentStatusClass: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => '';
   export let onReview: (doc: ContractMatrixRowView['sellerDocs'][number], status: 'APPROVED' | 'REJECTED') => void = () => {};
 
+  let openDocumentMenuId: number | null = null;
+
+  function toggleDocumentMenu(documentId: number) {
+    openDocumentMenuId = openDocumentMenuId === documentId ? null : documentId;
+  }
+
+  function closeDocumentMenu() {
+    openDocumentMenuId = null;
+  }
+
+  function closeDocumentMenuOnEscape(event: KeyboardEvent) {
+    if (event.key === 'Escape') closeDocumentMenu();
+  }
+
   function isApproved(doc: ContractMatrixRowView['sellerDocs'][number]): boolean {
     const metadata = doc.metadata ?? {};
     const status = String(
@@ -48,6 +63,8 @@
     return documentStatus(doc) === 'REJECTED';
   }
 </script>
+
+<svelte:window on:keydown={closeDocumentMenuOnEscape} />
 
 <div id="contract-doc-matrix" class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
   <p id="contract-doc-matrix-help" class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
@@ -108,24 +125,33 @@
                           {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
-                          <details class="relative">
-                            <summary class="inline-flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Editar documento" title="Editar documento">
+                          <div class="relative" use:clickOutside={closeDocumentMenu}>
+                            <button
+                              type="button"
+                              class="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                              aria-label="Editar documento"
+                              title="Editar documento"
+                              aria-expanded={openDocumentMenuId === sellerDoc.id}
+                              on:click={() => toggleDocumentMenu(sellerDoc.id)}
+                            >
                               <Pencil class="h-4 w-4" />
-                            </summary>
-                            <div class="absolute bottom-full left-0 z-10 mb-2 flex items-center gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                            </button>
+                            {#if openDocumentMenuId === sellerDoc.id}
+                            <div class="absolute bottom-full left-0 z-10 mb-2 flex items-center gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-900" role="menu" aria-label="Ações do documento">
                               {#if !isApproved(sellerDoc)}
-                                <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Baixar documento" title="Baixar" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
+                                <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Baixar documento" title="Baixar" on:click={() => { onDownload(sellerDoc); closeDocumentMenu(); }} disabled={downloadingDocumentId === sellerDoc.id}>
                                   {#if downloadingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
                                 </button>
                               {/if}
-                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => onReplace(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase())} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'seller')}>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase()); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'seller')}>
                                 {#if isMatrixUploading(`seller:${documentType}`)}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
                               </button>
-                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40" aria-label="Excluir documento" title="Excluir" on:click={() => onDelete(sellerDoc)} disabled={matrixDeletingDocumentId === sellerDoc.id}>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40" aria-label="Excluir documento" title="Excluir" on:click={() => { onDelete(sellerDoc); closeDocumentMenu(); }} disabled={matrixDeletingDocumentId === sellerDoc.id}>
                                 {#if matrixDeletingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
                               </button>
                             </div>
-                          </details>
+                            {/if}
+                          </div>
                           {#if isApproved(sellerDoc)}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento aprovado" title="Baixar documento aprovado" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
                               {#if downloadingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
@@ -202,24 +228,33 @@
                           {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
-                          <details class="relative">
-                            <summary class="inline-flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Editar documento" title="Editar documento">
+                          <div class="relative" use:clickOutside={closeDocumentMenu}>
+                            <button
+                              type="button"
+                              class="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                              aria-label="Editar documento"
+                              title="Editar documento"
+                              aria-expanded={openDocumentMenuId === buyerDoc.id}
+                              on:click={() => toggleDocumentMenu(buyerDoc.id)}
+                            >
                               <Pencil class="h-4 w-4" />
-                            </summary>
-                            <div class="absolute bottom-full left-0 z-10 mb-2 flex items-center gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                            </button>
+                            {#if openDocumentMenuId === buyerDoc.id}
+                            <div class="absolute bottom-full left-0 z-10 mb-2 flex items-center gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-900" role="menu" aria-label="Ações do documento">
                               {#if !isApproved(buyerDoc)}
-                                <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Baixar documento" title="Baixar" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
+                                <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Baixar documento" title="Baixar" on:click={() => { onDownload(buyerDoc); closeDocumentMenu(); }} disabled={downloadingDocumentId === buyerDoc.id}>
                                   {#if downloadingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
                                 </button>
                               {/if}
-                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => onReplace(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase())} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'buyer')}>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase()); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'buyer')}>
                                 {#if isMatrixUploading(`buyer:${documentType}`)}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
                               </button>
-                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40" aria-label="Excluir documento" title="Excluir" on:click={() => onDelete(buyerDoc)} disabled={matrixDeletingDocumentId === buyerDoc.id}>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40" aria-label="Excluir documento" title="Excluir" on:click={() => { onDelete(buyerDoc); closeDocumentMenu(); }} disabled={matrixDeletingDocumentId === buyerDoc.id}>
                                 {#if matrixDeletingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
                               </button>
                             </div>
-                          </details>
+                            {/if}
+                          </div>
                           {#if isApproved(buyerDoc)}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento aprovado" title="Baixar documento aprovado" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
                               {#if downloadingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}

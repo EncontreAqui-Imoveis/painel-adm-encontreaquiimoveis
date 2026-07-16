@@ -141,12 +141,14 @@ export function requiresSpouseFields(civilStatus: string): boolean {
 function buildPartyInfoPayload(
   selectedInfo: Record<string, unknown> | null | undefined,
   form: PartyInfoFormState,
-  extra: Record<string, unknown>
+  extra: Record<string, unknown>,
+  includeBankDetails: boolean
 ): Record<string, unknown> {
-  const previous =
+  const previousSource =
     selectedInfo && typeof selectedInfo === 'object'
       ? { ...(selectedInfo as Record<string, unknown>) }
       : {};
+  const { dados_bancarios: _dadosBancarios, dadosBancarios: _dadosBancariosLegacy, ...previous } = previousSource;
   const spouseRequired = requiresSpouseFields(form.estadoCivil);
 
   return {
@@ -156,7 +158,9 @@ function buildPartyInfoPayload(
     profissao: trimInfoValue(form.profissao),
     email: trimInfoValue(form.email),
     telefone: trimInfoValue(form.telefone),
-    dados_bancarios: trimInfoValue(form.dadosBancarios ?? ''),
+    ...(includeBankDetails
+      ? { dados_bancarios: trimInfoValue(form.dadosBancarios ?? '') }
+      : {}),
     estado_civil: trimInfoValue(form.estadoCivil),
     conjuge_nome: spouseRequired ? trimInfoValue(form.conjugeNome) : null,
     conjuge_cpf: spouseRequired ? trimInfoValue(form.conjugeCpf) : null,
@@ -169,7 +173,7 @@ export function buildSellerInfoPayload(
   selectedSellerInfo: Record<string, unknown> | null | undefined,
   form: PartyInfoFormState
 ): Record<string, unknown> {
-  return buildPartyInfoPayload(selectedSellerInfo, form, {});
+  return buildPartyInfoPayload(selectedSellerInfo, form, {}, true);
 }
 
 export function buildBuyerInfoPayload(
@@ -178,7 +182,7 @@ export function buildBuyerInfoPayload(
 ): Record<string, unknown> {
   return buildPartyInfoPayload(selectedBuyerInfo, form, {
     garantia_locacao: trimInfoValue(form.garantiaLocacao ?? ''),
-  });
+  }, false);
 }
 
 function parseMoney(value: string): number | null {

@@ -311,6 +311,10 @@ describe('ContractsModule', () => {
     expect(screen.getByText('2 responsáveis designados')).toBeInTheDocument();
     // Document actions are intentionally grouped under the compact edit menu.
     expect(screen.getAllByLabelText('Editar documento').length).toBeGreaterThan(0);
+    await fireEvent.click(screen.getAllByLabelText('Editar documento')[0]);
+    expect(screen.getByRole('menu', { name: 'Ações do documento' })).toBeInTheDocument();
+    await fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('menu', { name: 'Ações do documento' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(5);
     expect(screen.getAllByRole('button', { name: /^Aprovar\s*documento$/i }).length).toBeGreaterThan(0);
     await fireEvent.click(screen.getAllByRole('button', { name: /^Aprovar\s*documento$/i })[0]);

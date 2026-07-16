@@ -257,7 +257,6 @@
     email: '',
     telefone: '',
     garantiaLocacao: '',
-    dadosBancarios: '',
     conjugeNome: '',
     conjugeCpf: '',
     conjugeProfissao: '',
@@ -423,12 +422,30 @@
       return;
     }
 
-    const opened = window.open(doc.downloadUrl, '_blank', 'noopener,noreferrer');
+    // Open a blank browser tab synchronously to preserve the user gesture, then
+    // navigate it to an authenticated Blob URL instead of a panel route.
+    const opened = window.open('', '_blank');
     if (!opened) {
       toast.error(
         `Não foi possível abrir o documento do contrato ${contract.propertyCode ?? contract.propertyId}.`
       );
+      return;
     }
+
+    opened.opener = null;
+    void downloadContractDocumentByUrl(doc.downloadUrl)
+      .then((response) => {
+        const blob = new Blob([response.blob], {
+          type: response.blob.type || 'application/octet-stream',
+        });
+        const objectUrl = URL.createObjectURL(blob);
+        opened.location.href = objectUrl;
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      })
+      .catch(() => {
+        opened.close();
+        toast.error('Não foi possível abrir o arquivo. Tente novamente.');
+      });
   }
 
   async function openSignedProposalInNativeViewer(doc: ContractDocument) {
@@ -927,7 +944,6 @@
       email: getRecordValueRaw(selected.buyerInfo, ['email']),
       telefone: getRecordValueRaw(selected.buyerInfo, ['telefone', 'phone']),
       garantiaLocacao: getRecordValueRaw(selected.buyerInfo, ['garantia_locacao', 'garantiaLocacao']),
-      dadosBancarios: getRecordValueRaw(selected.buyerInfo, ['dados_bancarios', 'dadosBancarios']),
       conjugeNome: getRecordValueRaw(selected.buyerInfo, ['conjuge_nome', 'conjugeNome', 'spouse_name', 'spouseName']),
       conjugeCpf: getRecordValueRaw(selected.buyerInfo, ['conjuge_cpf', 'conjugeCpf', 'spouse_cpf', 'spouseCpf']),
       conjugeProfissao: getRecordValueRaw(selected.buyerInfo, ['conjuge_profissao', 'conjugeProfissao', 'spouse_profession', 'spouseProfession']),
@@ -2172,7 +2188,6 @@
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-profissao">Profissão</label><LabeledTextInput id="buyer-profissao" bind:value={buyerInfoForm.profissao} disabled={savingPartyData || !isEditingData} /></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-email">Email</label><LabeledTextInput id="buyer-email" bind:value={buyerInfoForm.email} disabled={savingPartyData || !isEditingData} /></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-telefone">Telefone</label><LabeledTextInput id="buyer-telefone" bind:value={buyerInfoForm.telefone} disabled={savingPartyData || !isEditingData} /></div>
-                <div class="rounded-md bg-slate-50 p-3 dark:bg-slate-800/50"><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-banco">Dados bancários</label><textarea id="buyer-banco" bind:value={buyerInfoForm.dadosBancarios} disabled={savingPartyData || !isEditingData} rows="3" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"></textarea></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-estado-civil">Estado civil</label><select id="buyer-estado-civil" bind:value={buyerInfoForm.estadoCivil} disabled={savingPartyData || !isEditingData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800">{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select></div>
                 {#if requiresSpouseFields(buyerInfoForm.estadoCivil)}
                   <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="buyer-conjuge-nome" placeholder="Nome do cônjuge" bind:value={buyerInfoForm.conjugeNome} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="buyer-conjuge-cpf" placeholder="CPF do cônjuge" bind:value={buyerInfoForm.conjugeCpf} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="buyer-conjuge-profissao" placeholder="Profissão do cônjuge" bind:value={buyerInfoForm.conjugeProfissao} disabled={savingPartyData || !isEditingData} /></div></div>
