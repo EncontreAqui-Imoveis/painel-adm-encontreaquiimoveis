@@ -192,9 +192,36 @@
     return normalizeRotation(rotations[mediaKeyForPage(pageNumber)] ?? 0);
   }
 
+  function resolveVisiblePdfPageNumber() {
+    if (!previewViewportEl) return currentPage;
+
+    const viewportRect = previewViewportEl.getBoundingClientRect();
+    if (!viewportRect.height || !viewportRect.width) return currentPage;
+    const viewportCenter = viewportRect.top + viewportRect.height / 2;
+    const pageNodes = Array.from(
+      previewViewportEl.querySelectorAll<HTMLElement>('[data-page-number]')
+    );
+    let closestPage = currentPage;
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    for (const pageNode of pageNodes) {
+      const rect = pageNode.getBoundingClientRect();
+      if (rect.bottom < viewportRect.top || rect.top > viewportRect.bottom) continue;
+
+      const distance = Math.abs(rect.top + rect.height / 2 - viewportCenter);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestPage = Number(pageNode.dataset.pageNumber ?? currentPage);
+      }
+    }
+
+    return closestPage;
+  }
+
   function rotateDocument() {
-    const pageNumber = kind === 'image' ? undefined : currentPage;
+    const pageNumber = kind === 'image' ? undefined : resolveVisiblePdfPageNumber();
     const key = mediaKeyForPage(pageNumber);
+    if (pageNumber != null) currentPage = pageNumber;
     rotationsByMediaKey = {
       ...rotationsByMediaKey,
       [key]: (rotationForPage(pageNumber, rotationsByMediaKey) + 90) % 360,

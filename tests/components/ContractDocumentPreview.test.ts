@@ -83,6 +83,35 @@ describe('ContractDocumentPreview', () => {
     );
   });
 
+  it('gira apenas a página que está visível no viewport', async () => {
+    renderPreview();
+    const viewport = screen.getByTestId('document-preview-viewport');
+    const pageOne = viewport.querySelector<HTMLElement>('[data-page-number="1"]');
+    const pageTwo = viewport.querySelector<HTMLElement>('[data-page-number="2"]');
+
+    Object.defineProperty(viewport, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ top: 0, bottom: 500, height: 500, width: 600 }),
+    });
+    Object.defineProperty(pageOne, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ top: -600, bottom: -100, height: 500 }),
+    });
+    Object.defineProperty(pageTwo, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ top: 0, bottom: 500, height: 500 }),
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Girar documento' }));
+
+    expect(screen.getByAltText('documento-pessoal.pdf - página 1')).toHaveStyle(
+      'transform: rotate(0deg)'
+    );
+    expect(screen.getByAltText('documento-pessoal.pdf - página 2')).toHaveStyle(
+      'transform: rotate(90deg)'
+    );
+  });
+
   it('mantém paginação e um único controle de saída no modo tela cheia', () => {
     const onToggleFullscreen = vi.fn();
     renderPreview({ isFullscreen: true, onToggleFullscreen });
