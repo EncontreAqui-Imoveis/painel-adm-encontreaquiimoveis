@@ -46,16 +46,16 @@
   let lastOpenState = false;
   let pendingConfirmation: 'replace' | 'delete' | null = null;
   let mediaDimensions: Record<string, { width: number; height: number }> = {};
-  let currentRotation = 0;
+  let rotationsByMediaKey: Record<string, number> = {};
 
-  $: normalizedRotation = ((currentRotation % 360) + 360) % 360;
+  $: normalizedRotation = rotationForPage(kind === 'image' ? undefined : currentPage, rotationsByMediaKey);
   $: isSideways = normalizedRotation === 90 || normalizedRotation === 270;
 
   $: if (open !== lastOpenState) {
     lastOpenState = open;
     if (open) {
       currentPage = 1;
-      currentRotation = 0;
+      rotationsByMediaKey = {};
       void tick().then(() => closeButtonEl?.focus());
     }
   }
@@ -129,19 +129,43 @@
     return pageNumber == null ? 'image' : `pdf-${pageNumber}`;
   }
 
-  function mediaRatio(key: string) {
-    const dimensions = mediaDimensions[key];
-    return dimensions ? dimensions.height / dimensions.width : 1;
+  function mediaRatio(
+    key: string,
+    dimensions: Record<string, { width: number; height: number }> = mediaDimensions
+  ) {
+    const dimensionsForMedia = dimensions[key];
+    return dimensionsForMedia ? dimensionsForMedia.height / dimensionsForMedia.width : 1;
   }
 
-  function previewContentWidth(sideways: boolean, zoomLevel: number) {
-    const key = kind === 'image' ? mediaKeyForPage() : mediaKeyForPage(pdfPages[0]?.pageNumber);
+  function previewContentWidth(
+    zoomLevel: number,
+    rotations: Record<string, number>,
+    dimensions: Record<string, { width: number; height: number }>
+  ) {
     const width = previewBaseWidth(zoomLevel);
-    return sideways ? width * mediaRatio(key) : width;
+    const keys = kind === 'image'
+      ? [mediaKeyForPage()]
+      : pdfPages.map((page) => mediaKeyForPage(page.pageNumber));
+
+    return Math.max(
+      width,
+      ...keys.map((key) =>
+        isSidewaysRotation(normalizeRotation(rotations[key] ?? 0))
+          ? width * mediaRatio(key, dimensions)
+          : width
+      )
+    );
   }
 
-  function previewContentStyle(sideways: boolean, zoomLevel: number) {
-    return `width: ${previewContentWidth(sideways, zoomLevel)}px; max-width: ${!sideways && zoomLevel <= 1 ? '100%' : 'none'};`;
+  function previewContentStyle(
+    zoomLevel: number,
+    rotations: Record<string, number>,
+    dimensions: Record<string, { width: number; height: number }>
+  ) {
+    const hasSidewaysPage = Object.values(rotations).some((rotation) =>
+      isSidewaysRotation(normalizeRotation(rotation))
+    );
+    return `width: ${previewContentWidth(zoomLevel, rotations, dimensions)}px; max-width: ${!hasSidewaysPage && zoomLevel <= 1 ? '100%' : 'none'};`;
   }
 
   function previewPageStyle(sideways: boolean, zoomLevel: number) {
@@ -153,8 +177,28 @@
     return `width: ${width}; transform: rotate(${rotationDegrees}deg); transform-origin: center center;`;
   }
 
+  function normalizeRotation(rotation: number) {
+    return ((rotation % 360) + 360) % 360;
+  }
+
+  function isSidewaysRotation(rotation: number) {
+    return rotation === 90 || rotation === 270;
+  }
+
+  function rotationForPage(
+    pageNumber: number | undefined,
+    rotations: Record<string, number>
+  ) {
+    return normalizeRotation(rotations[mediaKeyForPage(pageNumber)] ?? 0);
+  }
+
   function rotateDocument() {
-    currentRotation = (currentRotation + 90) % 360;
+    const pageNumber = kind === 'image' ? undefined : currentPage;
+    const key = mediaKeyForPage(pageNumber);
+    rotationsByMediaKey = {
+      ...rotationsByMediaKey,
+      [key]: (rotationForPage(pageNumber, rotationsByMediaKey) + 90) % 360,
+    };
   }
 
   async function confirmAction() {
@@ -402,7 +446,7 @@
                   data-rotation={normalizedRotation}
                   data-zoom={zoom}
                   class="shrink-0"
-                  style={previewContentStyle(isSideways, zoom)}
+                  style={previewContentStyle(zoom, rotationsByMediaKey, mediaDimensions)}
                 >
                   <div class={`flex w-full justify-center overflow-visible ${isSideways ? 'items-center' : ''}`} style={previewPageStyle(isSideways, zoom)}>
                     <img
@@ -420,7 +464,7 @@
                   data-rotation={normalizedRotation}
                   data-zoom={zoom}
                   class="flex shrink-0 flex-col items-center gap-4"
-                  style={previewContentStyle(isSideways, zoom)}
+                  style={previewContentStyle(zoom, rotationsByMediaKey, mediaDimensions)}
                 >
                   {#if pdfText}
                     <p class="sr-only" data-testid="document-preview-pdf-text">{pdfText}</p>
@@ -433,14 +477,14 @@
                     {#each pdfPages as page (page.pageNumber)}
                       <div
                         data-page-number={page.pageNumber}
-                        class={`flex w-full scroll-mt-2 justify-center overflow-visible rounded-lg bg-white p-2 shadow-2xl dark:bg-gray-950 ${isSideways ? 'items-center' : ''}`}
-                        style={previewPageStyle(isSideways, zoom)}
+                        class={`flex w-full scroll-mt-2 justify-center overflow-visible rounded-lg bg-white p-2 shadow-2xl dark:bg-gray-950 ${isSidewaysRotation(rotationForPage(page.pageNumber, rotationsByMediaKey)) ? 'items-center' : ''}`}
+                        style={previewPageStyle(isSidewaysRotation(rotationForPage(page.pageNumber, rotationsByMediaKey)), zoom)}
                       >
                         <img
                           src={page.dataUrl}
                           alt={`${fileName} - página ${page.pageNumber}`}
                           class="h-auto rounded-md object-contain"
-                          style={previewImageStyle(isSideways, normalizedRotation, zoom)}
+                          style={previewImageStyle(isSidewaysRotation(rotationForPage(page.pageNumber, rotationsByMediaKey)), rotationForPage(page.pageNumber, rotationsByMediaKey), zoom)}
                           on:load={(event) => rememberMediaDimensions(mediaKeyForPage(page.pageNumber), event)}
                         />
                       </div>

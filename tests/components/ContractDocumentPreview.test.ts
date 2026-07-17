@@ -76,6 +76,9 @@ describe('ContractDocumentPreview', () => {
       '90'
     );
     expect(screen.getByAltText('documento-pessoal.pdf - página 1')).toHaveStyle(
+      'transform: rotate(0deg)'
+    );
+    expect(screen.getByAltText('documento-pessoal.pdf - página 2')).toHaveStyle(
       'transform: rotate(90deg)'
     );
   });
