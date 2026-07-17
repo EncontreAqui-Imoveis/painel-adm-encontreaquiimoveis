@@ -55,8 +55,7 @@ describe('ContractDocumentPreview', () => {
     const onZoomIn = vi.fn();
     const onZoomOut = vi.fn();
     const onResetZoom = vi.fn();
-    const onRotate = vi.fn();
-    renderPreview({ onZoomIn, onZoomOut, onResetZoom, onRotate });
+    renderPreview({ onZoomIn, onZoomOut, onResetZoom });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Próxima página' }));
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
@@ -69,7 +68,13 @@ describe('ContractDocumentPreview', () => {
     expect(onZoomOut).toHaveBeenCalledTimes(1);
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onResetZoom).toHaveBeenCalledTimes(1);
-    expect(onRotate).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('document-preview-scaled-content')).toHaveAttribute(
+      'data-rotation',
+      '90'
+    );
+    expect(screen.getByAltText('documento-pessoal.pdf - página 1')).toHaveStyle(
+      'transform: rotate(90deg)'
+    );
   });
 
   it('mantém paginação e um único controle de saída no modo tela cheia', () => {

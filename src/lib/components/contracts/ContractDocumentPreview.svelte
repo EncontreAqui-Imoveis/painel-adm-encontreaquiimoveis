@@ -26,7 +26,6 @@
   export let kind: 'image' | 'pdf' = 'image';
   export let sourceUrl = '';
   export let zoom = 1;
-  export let rotation = 0;
   export let pdfPages: Array<{ pageNumber: number; dataUrl: string }> = [];
   export let pdfText = '';
   export let doc: ContractDocument | null = null;
@@ -35,7 +34,6 @@
   export let onZoomOut: () => void = () => {};
   export let onZoomIn: () => void = () => {};
   export let onResetZoom: () => void = () => {};
-  export let onRotate: () => void = () => {};
   export let onDownload: () => void = () => {};
   export let onReplace: () => void = () => {};
   export let onDelete: () => void | Promise<void> = () => {};
@@ -48,14 +46,16 @@
   let lastOpenState = false;
   let pendingConfirmation: 'replace' | 'delete' | null = null;
   let mediaDimensions: Record<string, { width: number; height: number }> = {};
+  let currentRotation = 0;
 
-  $: normalizedRotation = ((rotation % 360) + 360) % 360;
+  $: normalizedRotation = ((currentRotation % 360) + 360) % 360;
   $: isSideways = normalizedRotation === 90 || normalizedRotation === 270;
 
   $: if (open !== lastOpenState) {
     lastOpenState = open;
     if (open) {
       currentPage = 1;
+      currentRotation = 0;
       void tick().then(() => closeButtonEl?.focus());
     }
   }
@@ -134,23 +134,27 @@
     return dimensions ? dimensions.height / dimensions.width : 1;
   }
 
-  function previewContentWidth() {
+  function previewContentWidth(sideways: boolean) {
     const key = kind === 'image' ? mediaKeyForPage() : mediaKeyForPage(pdfPages[0]?.pageNumber);
     const width = previewBaseWidth();
-    return isSideways ? width * mediaRatio(key) : width;
+    return sideways ? width * mediaRatio(key) : width;
   }
 
-  function previewContentStyle() {
-    return `width: ${previewContentWidth()}px; max-width: ${!isSideways && zoom <= 1 ? '100%' : 'none'};`;
+  function previewContentStyle(sideways: boolean) {
+    return `width: ${previewContentWidth(sideways)}px; max-width: ${!sideways && zoom <= 1 ? '100%' : 'none'};`;
   }
 
-  function previewPageStyle() {
-    return isSideways ? `height: ${previewBaseWidth()}px;` : '';
+  function previewPageStyle(sideways: boolean) {
+    return sideways ? `height: ${previewBaseWidth()}px;` : '';
   }
 
-  function previewImageStyle() {
-    const width = isSideways ? `${previewBaseWidth()}px` : '100%';
-    return `width: ${width}; transform: rotate(${normalizedRotation}deg); transform-origin: center center;`;
+  function previewImageStyle(sideways: boolean, rotationDegrees: number) {
+    const width = sideways ? `${previewBaseWidth()}px` : '100%';
+    return `width: ${width}; transform: rotate(${rotationDegrees}deg); transform-origin: center center;`;
+  }
+
+  function rotateDocument() {
+    currentRotation = (currentRotation + 90) % 360;
   }
 
   async function confirmAction() {
@@ -302,7 +306,7 @@
                     size="sm"
                     variant="outline"
                     className="h-9 w-9 rounded-full border-white/20 p-0 text-white hover:bg-white/10"
-                    on:click={onRotate}
+                    on:click={rotateDocument}
                     ariaLabel="Girar documento"
                     title="Girar 90 graus"
                   >
@@ -363,7 +367,7 @@
                   <Button size="sm" variant="outline" on:click={onResetZoom}>
                     100%
                   </Button>
-                  <Button size="sm" variant="outline" on:click={onRotate} ariaLabel="Girar documento" title="Girar 90 graus">
+                  <Button size="sm" variant="outline" on:click={rotateDocument} ariaLabel="Girar documento" title="Girar 90 graus">
                     <RotateCw class="h-4 w-4" />
                   </Button>
                 </div>
@@ -395,15 +399,16 @@
               {#if kind === 'image'}
                 <div
                   data-testid="document-preview-scaled-content"
+                  data-rotation={normalizedRotation}
                   class="shrink-0"
-                  style={previewContentStyle()}
+                  style={previewContentStyle(isSideways)}
                 >
-                  <div class={`flex w-full justify-center overflow-visible ${isSideways ? 'items-center' : ''}`} style={previewPageStyle()}>
+                  <div class={`flex w-full justify-center overflow-visible ${isSideways ? 'items-center' : ''}`} style={previewPageStyle(isSideways)}>
                     <img
                       src={sourceUrl}
                       alt={fileName}
                       class={`h-auto rounded-lg object-contain shadow-2xl ${isFullscreen ? 'max-h-[100vh]' : 'max-h-[76vh]'}`}
-                      style={previewImageStyle()}
+                      style={previewImageStyle(isSideways, normalizedRotation)}
                       on:load={(event) => rememberMediaDimensions(mediaKeyForPage(), event)}
                     />
                   </div>
@@ -411,8 +416,9 @@
               {:else}
                 <div
                   data-testid="document-preview-scaled-content"
+                  data-rotation={normalizedRotation}
                   class="flex shrink-0 flex-col items-center gap-4"
-                  style={previewContentStyle()}
+                  style={previewContentStyle(isSideways)}
                 >
                   {#if pdfText}
                     <p class="sr-only" data-testid="document-preview-pdf-text">{pdfText}</p>
@@ -426,13 +432,13 @@
                       <div
                         data-page-number={page.pageNumber}
                         class={`flex w-full scroll-mt-2 justify-center overflow-visible rounded-lg bg-white p-2 shadow-2xl dark:bg-gray-950 ${isSideways ? 'items-center' : ''}`}
-                        style={previewPageStyle()}
+                        style={previewPageStyle(isSideways)}
                       >
                         <img
                           src={page.dataUrl}
                           alt={`${fileName} - página ${page.pageNumber}`}
                           class="h-auto rounded-md object-contain"
-                          style={previewImageStyle()}
+                          style={previewImageStyle(isSideways, normalizedRotation)}
                           on:load={(event) => rememberMediaDimensions(mediaKeyForPage(page.pageNumber), event)}
                         />
                       </div>

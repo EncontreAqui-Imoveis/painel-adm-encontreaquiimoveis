@@ -184,7 +184,6 @@
   let documentPreviewOwnsObjectUrl = false;
   let documentPreviewKind: 'image' | 'pdf' = 'image';
   let documentPreviewZoom = 1;
-  let documentPreviewRotation = 0;
   let documentPreviewContract: ContractItem | null = null;
   let documentPreviewDoc: ContractDocument | null = null;
   let documentPreviewIsFullscreen = false;
@@ -310,7 +309,6 @@
     documentPreviewOwnsObjectUrl = false;
     documentPreviewKind = 'image';
     documentPreviewZoom = 1;
-    documentPreviewRotation = 0;
     documentPreviewContract = null;
     documentPreviewDoc = null;
     documentPreviewIsFullscreen = false;
@@ -362,7 +360,6 @@
     documentPreviewContract = options.contract ?? null;
     documentPreviewDoc = options.doc ?? null;
     documentPreviewZoom = 1;
-    documentPreviewRotation = 0;
     documentPreviewIsFullscreen = false;
     documentPreviewOpen = true;
   }
@@ -2711,7 +2708,6 @@
   kind={documentPreviewKind}
   sourceUrl={documentPreviewSourceUrl}
   zoom={documentPreviewZoom}
-  rotation={documentPreviewRotation}
   pdfPages={documentPreviewPdfPages}
   pdfText={documentPreviewPdfText}
   doc={documentPreviewDoc}
@@ -2720,7 +2716,6 @@
   onZoomOut={() => (documentPreviewZoom = Math.max(0.25, Number((documentPreviewZoom - 0.25).toFixed(2))))}
   onZoomIn={() => (documentPreviewZoom = Math.min(3, Number((documentPreviewZoom + 0.25).toFixed(2))))}
   onResetZoom={() => (documentPreviewZoom = 1)}
-  onRotate={() => (documentPreviewRotation = (documentPreviewRotation + 90) % 360)}
   onDownload={downloadPreviewDocument}
   onReplace={replacePreviewDocument}
   onDelete={deletePreviewDocument}
