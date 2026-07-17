@@ -191,12 +191,15 @@
             bind:this={previewViewportEl}
             data-testid="document-preview-viewport"
             class={`relative min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 overscroll-contain ${
-              isFullscreen ? 'rounded-none border-0 bg-black p-0' : 'p-4'
+              isFullscreen ? 'rounded-none border-0 bg-black p-0 pb-24' : 'p-4'
             } dark:border-gray-800 dark:bg-black`}
           >
             {#if isFullscreen}
-              <div class="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex items-end justify-between px-4">
-                <div class="pointer-events-auto flex items-center gap-2 rounded-full bg-black/70 px-3 py-2 text-white shadow-2xl backdrop-blur">
+              <div
+                data-testid="document-preview-fullscreen-controls"
+                class="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex items-end justify-between bg-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-10"
+              >
+                <div class="pointer-events-auto flex items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-white shadow-lg backdrop-blur-sm">
                   {#if kind === 'pdf' && pdfPages.length > 0}
                     <Button
                       size="sm"
@@ -248,7 +251,7 @@
                     100%
                   </Button>
                 </div>
-                <div class="pointer-events-auto flex items-center gap-2 rounded-full bg-black/70 px-3 py-2 text-white shadow-2xl backdrop-blur">
+                <div class="pointer-events-auto flex items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-white shadow-lg backdrop-blur-sm">
                   <Button size="sm" variant="outline" className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10" on:click={onDownload} title="Baixar documento">
                     <Download class="h-4 w-4" />
                   </Button>
@@ -266,7 +269,7 @@
                 </div>
               </div>
             {:else}
-              <div class="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 bg-gray-100 pb-3 pt-1 dark:bg-black">
+              <div class="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 bg-gray-100/85 pb-3 pt-1 backdrop-blur-sm dark:bg-black/35">
                 <div class="flex items-center gap-2">
                   {#if kind === 'pdf' && pdfPages.length > 0}
                     <Button

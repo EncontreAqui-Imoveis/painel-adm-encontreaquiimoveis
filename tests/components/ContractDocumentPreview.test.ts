@@ -74,6 +74,7 @@ describe('ContractDocumentPreview', () => {
     renderPreview({ isFullscreen: true, onToggleFullscreen });
 
     expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+    expect(screen.getByTestId('document-preview-fullscreen-controls')).toHaveClass('fixed');
     expect(screen.getByTitle('Sair da tela cheia')).toBeInTheDocument();
     expect(screen.queryByTitle('Alternar tela cheia')).not.toBeInTheDocument();
   });
