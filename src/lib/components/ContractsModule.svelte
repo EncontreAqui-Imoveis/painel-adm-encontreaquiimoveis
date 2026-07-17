@@ -416,39 +416,16 @@
     }
   }
 
-  function openDocumentInBrowser(doc: ContractDocument, contract: ContractItem) {
-    if (!doc.downloadUrl) {
-      toast.error('Documento sem URL de visualização.');
-      return;
-    }
-
-    // Open a blank browser tab synchronously to preserve the user gesture, then
-    // navigate it to an authenticated Blob URL instead of a panel route.
-    const opened = window.open('', '_blank');
-    if (!opened) {
-      toast.error(
-        `Não foi possível abrir o documento do contrato ${contract.propertyCode ?? contract.propertyId}.`
-      );
-      return;
-    }
-
-    opened.opener = null;
-    void downloadContractDocumentByUrl(doc.downloadUrl)
-      .then((response) => {
-        const blob = new Blob([response.blob], {
-          type: response.blob.type || 'application/octet-stream',
-        });
-        const objectUrl = URL.createObjectURL(blob);
-        opened.location.href = objectUrl;
-        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-      })
-      .catch(() => {
-        opened.close();
-        toast.error('Não foi possível abrir o arquivo. Tente novamente.');
-      });
+  function inferDocumentMimeType(fileName: string): string {
+    const normalizedName = fileName.trim().toLowerCase();
+    if (normalizedName.endsWith('.pdf')) return 'application/pdf';
+    if (normalizedName.endsWith('.png')) return 'image/png';
+    if (normalizedName.endsWith('.webp')) return 'image/webp';
+    if (normalizedName.endsWith('.jpg') || normalizedName.endsWith('.jpeg')) return 'image/jpeg';
+    return 'application/octet-stream';
   }
 
-  async function openSignedProposalInNativeViewer(doc: ContractDocument) {
+  async function openContractDocumentInNativeViewer(doc: ContractDocument) {
     if (!doc.downloadUrl) {
       toast.error('Documento sem URL de visualização.');
       return;
@@ -456,11 +433,14 @@
 
     try {
       const response = await downloadContractDocumentByUrl(doc.downloadUrl);
-      const pdfBlob =
-        response.blob.type === 'application/pdf'
-          ? response.blob
-          : new Blob([response.blob], { type: 'application/pdf' });
-      const objectUrl = URL.createObjectURL(pdfBlob);
+      const fileName = normalizePossiblyMojibakeText(
+        response.downloadName || doc.originalFileName || formatDocumentPreviewName(doc)
+      );
+      // Preserve the response MIME type. The browser then selects its native PDF or image viewer.
+      const blob = response.blob.type
+        ? response.blob
+        : new Blob([response.blob], { type: inferDocumentMimeType(fileName) });
+      const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = objectUrl;
       anchor.target = '_blank';
@@ -471,8 +451,8 @@
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     } catch (error) {
-      console.error('Erro ao abrir proposta assinada no visualizador nativo:', error);
-      toast.error('Não foi possível abrir a proposta assinada.');
+      console.error('Erro ao abrir documento no visualizador nativo:', error);
+      toast.error('Não foi possível abrir o documento.');
     }
   }
 
@@ -2054,7 +2034,7 @@
                 <Button
                   size="sm"
                   variant="outline"
-                  on:click={() => openSignedProposalInNativeViewer(signedProposalDoc)}
+                  on:click={() => openContractDocumentInNativeViewer(signedProposalDoc)}
                 >
                   <Eye class="mr-2 h-4 w-4" />
                   Visualizar na Web
@@ -2225,7 +2205,7 @@
             downloadingDocumentId={downloadingDocumentId}
             matrixDeletingDocumentId={matrixDeletingDocumentId}
             reviewDocumentId={reviewingDocumentId}
-            onOpenPreview={(doc) => selected && openDocumentInBrowser(doc, selected)}
+            onOpenPreview={(doc) => void openContractDocumentInNativeViewer(doc)}
             onDownload={(doc) => selected && viewDocument(doc, selected)}
             onReplace={(documentType, side, existingDocumentType) => {
               triggerMatrixUpload(documentType, side, existingDocumentType ?? null);
