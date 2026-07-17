@@ -121,8 +121,8 @@
     };
   }
 
-  function previewBaseWidth() {
-    return Math.max(240, 960 * zoom);
+  function previewBaseWidth(zoomLevel: number) {
+    return Math.max(240, 960 * zoomLevel);
   }
 
   function mediaKeyForPage(pageNumber?: number) {
@@ -134,22 +134,22 @@
     return dimensions ? dimensions.height / dimensions.width : 1;
   }
 
-  function previewContentWidth(sideways: boolean) {
+  function previewContentWidth(sideways: boolean, zoomLevel: number) {
     const key = kind === 'image' ? mediaKeyForPage() : mediaKeyForPage(pdfPages[0]?.pageNumber);
-    const width = previewBaseWidth();
+    const width = previewBaseWidth(zoomLevel);
     return sideways ? width * mediaRatio(key) : width;
   }
 
-  function previewContentStyle(sideways: boolean) {
-    return `width: ${previewContentWidth(sideways)}px; max-width: ${!sideways && zoom <= 1 ? '100%' : 'none'};`;
+  function previewContentStyle(sideways: boolean, zoomLevel: number) {
+    return `width: ${previewContentWidth(sideways, zoomLevel)}px; max-width: ${!sideways && zoomLevel <= 1 ? '100%' : 'none'};`;
   }
 
-  function previewPageStyle(sideways: boolean) {
-    return sideways ? `height: ${previewBaseWidth()}px;` : '';
+  function previewPageStyle(sideways: boolean, zoomLevel: number) {
+    return sideways ? `height: ${previewBaseWidth(zoomLevel)}px;` : '';
   }
 
-  function previewImageStyle(sideways: boolean, rotationDegrees: number) {
-    const width = sideways ? `${previewBaseWidth()}px` : '100%';
+  function previewImageStyle(sideways: boolean, rotationDegrees: number, zoomLevel: number) {
+    const width = sideways ? `${previewBaseWidth(zoomLevel)}px` : '100%';
     return `width: ${width}; transform: rotate(${rotationDegrees}deg); transform-origin: center center;`;
   }
 
@@ -400,15 +400,16 @@
                 <div
                   data-testid="document-preview-scaled-content"
                   data-rotation={normalizedRotation}
+                  data-zoom={zoom}
                   class="shrink-0"
-                  style={previewContentStyle(isSideways)}
+                  style={previewContentStyle(isSideways, zoom)}
                 >
-                  <div class={`flex w-full justify-center overflow-visible ${isSideways ? 'items-center' : ''}`} style={previewPageStyle(isSideways)}>
+                  <div class={`flex w-full justify-center overflow-visible ${isSideways ? 'items-center' : ''}`} style={previewPageStyle(isSideways, zoom)}>
                     <img
                       src={sourceUrl}
                       alt={fileName}
                       class={`h-auto rounded-lg object-contain shadow-2xl ${isFullscreen ? 'max-h-[100vh]' : 'max-h-[76vh]'}`}
-                      style={previewImageStyle(isSideways, normalizedRotation)}
+                      style={previewImageStyle(isSideways, normalizedRotation, zoom)}
                       on:load={(event) => rememberMediaDimensions(mediaKeyForPage(), event)}
                     />
                   </div>
@@ -417,8 +418,9 @@
                 <div
                   data-testid="document-preview-scaled-content"
                   data-rotation={normalizedRotation}
+                  data-zoom={zoom}
                   class="flex shrink-0 flex-col items-center gap-4"
-                  style={previewContentStyle(isSideways)}
+                  style={previewContentStyle(isSideways, zoom)}
                 >
                   {#if pdfText}
                     <p class="sr-only" data-testid="document-preview-pdf-text">{pdfText}</p>
@@ -432,13 +434,13 @@
                       <div
                         data-page-number={page.pageNumber}
                         class={`flex w-full scroll-mt-2 justify-center overflow-visible rounded-lg bg-white p-2 shadow-2xl dark:bg-gray-950 ${isSideways ? 'items-center' : ''}`}
-                        style={previewPageStyle(isSideways)}
+                        style={previewPageStyle(isSideways, zoom)}
                       >
                         <img
                           src={page.dataUrl}
                           alt={`${fileName} - página ${page.pageNumber}`}
                           class="h-auto rounded-md object-contain"
-                          style={previewImageStyle(isSideways, normalizedRotation)}
+                          style={previewImageStyle(isSideways, normalizedRotation, zoom)}
                           on:load={(event) => rememberMediaDimensions(mediaKeyForPage(page.pageNumber), event)}
                         />
                       </div>

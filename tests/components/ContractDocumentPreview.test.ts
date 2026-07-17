@@ -55,7 +55,7 @@ describe('ContractDocumentPreview', () => {
     const onZoomIn = vi.fn();
     const onZoomOut = vi.fn();
     const onResetZoom = vi.fn();
-    renderPreview({ onZoomIn, onZoomOut, onResetZoom });
+    const preview = renderPreview({ onZoomIn, onZoomOut, onResetZoom });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Próxima página' }));
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
@@ -68,6 +68,9 @@ describe('ContractDocumentPreview', () => {
     expect(onZoomOut).toHaveBeenCalledTimes(1);
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onResetZoom).toHaveBeenCalledTimes(1);
+    await preview.rerender({ zoom: 1.25 });
+    expect(screen.getByTestId('document-preview-scaled-content')).toHaveAttribute('data-zoom', '1.25');
+    expect(screen.getByTestId('document-preview-scaled-content')).toHaveStyle('width: 1200px');
     expect(screen.getByTestId('document-preview-scaled-content')).toHaveAttribute(
       'data-rotation',
       '90'
