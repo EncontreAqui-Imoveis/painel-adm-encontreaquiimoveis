@@ -193,7 +193,6 @@
   };
   let documentPreviewPdfPages: DocumentPreviewPdfPage[] = [];
   let documentPreviewPdfText = '';
-  let documentPreviewPdfFallbackUsed = false;
   let documentPreviewRenderToken = 0;
   let documentPreviewFullscreenTargetEl: HTMLDivElement | null = null;
   let previousBodyOverflow = '';
@@ -312,7 +311,6 @@
     documentPreviewIsFullscreen = false;
     documentPreviewPdfPages = [];
     documentPreviewPdfText = '';
-    documentPreviewPdfFallbackUsed = false;
     documentPreviewRenderToken += 1;
     unlockViewportGestureScroll();
   }
@@ -359,7 +357,7 @@
     documentPreviewContract = options.contract ?? null;
     documentPreviewDoc = options.doc ?? null;
     documentPreviewZoom = 1;
-    documentPreviewIsFullscreen = kind === 'pdf';
+    documentPreviewIsFullscreen = false;
     documentPreviewOpen = true;
   }
 
@@ -400,11 +398,9 @@
       if (documentPreviewKind === 'pdf') {
         documentPreviewPdfPages = preview.pdfPages;
         documentPreviewPdfText = preview.pdfText;
-        documentPreviewPdfFallbackUsed = preview.pdfFallbackUsed;
       } else {
         documentPreviewPdfPages = [];
         documentPreviewPdfText = '';
-        documentPreviewPdfFallbackUsed = false;
       }
     } catch (error) {
       console.error('Erro ao carregar visualização do documento:', error);
@@ -413,46 +409,6 @@
       if (renderToken === documentPreviewRenderToken) {
         documentPreviewLoading = false;
       }
-    }
-  }
-
-  function inferDocumentMimeType(fileName: string): string {
-    const normalizedName = fileName.trim().toLowerCase();
-    if (normalizedName.endsWith('.pdf')) return 'application/pdf';
-    if (normalizedName.endsWith('.png')) return 'image/png';
-    if (normalizedName.endsWith('.webp')) return 'image/webp';
-    if (normalizedName.endsWith('.jpg') || normalizedName.endsWith('.jpeg')) return 'image/jpeg';
-    return 'application/octet-stream';
-  }
-
-  async function openContractDocumentInNativeViewer(doc: ContractDocument) {
-    if (!doc.downloadUrl) {
-      toast.error('Documento sem URL de visualização.');
-      return;
-    }
-
-    try {
-      const response = await downloadContractDocumentByUrl(doc.downloadUrl);
-      const fileName = normalizePossiblyMojibakeText(
-        response.downloadName || doc.originalFileName || formatDocumentPreviewName(doc)
-      );
-      // Preserve the response MIME type. The browser then selects its native PDF or image viewer.
-      const blob = response.blob.type
-        ? response.blob
-        : new Blob([response.blob], { type: inferDocumentMimeType(fileName) });
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.target = '_blank';
-      anchor.rel = 'noopener noreferrer';
-      anchor.style.display = 'none';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-    } catch (error) {
-      console.error('Erro ao abrir documento no visualizador nativo:', error);
-      toast.error('Não foi possível abrir o documento.');
     }
   }
 
@@ -2034,7 +1990,7 @@
                 <Button
                   size="sm"
                   variant="outline"
-                  on:click={() => openContractDocumentInNativeViewer(signedProposalDoc)}
+                  on:click={() => selected && signedProposalDoc && openDocumentPreview(signedProposalDoc, selected)}
                 >
                   <Eye class="mr-2 h-4 w-4" />
                   Visualizar na Web
@@ -2205,7 +2161,7 @@
             downloadingDocumentId={downloadingDocumentId}
             matrixDeletingDocumentId={matrixDeletingDocumentId}
             reviewDocumentId={reviewingDocumentId}
-            onOpenPreview={(doc) => void openContractDocumentInNativeViewer(doc)}
+            onOpenPreview={(doc) => selected && openDocumentPreview(doc, selected)}
             onDownload={(doc) => selected && viewDocument(doc, selected)}
             onReplace={(documentType, side, existingDocumentType) => {
               triggerMatrixUpload(documentType, side, existingDocumentType ?? null);
@@ -2738,7 +2694,6 @@
   zoom={documentPreviewZoom}
   pdfPages={documentPreviewPdfPages}
   pdfText={documentPreviewPdfText}
-  pdfFallbackUsed={documentPreviewPdfFallbackUsed}
   doc={documentPreviewDoc}
   onClose={closeDocumentPreview}
   onToggleFullscreen={toggleDocumentPreviewFullscreen}

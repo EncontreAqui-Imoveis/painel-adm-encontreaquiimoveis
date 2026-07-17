@@ -7,6 +7,7 @@
   export let size: Size = 'md';
   export let disabled = false;
   export let title: string | undefined = undefined;
+  export let ariaLabel: string | undefined = undefined;
   export let className = '';
 
   const variantClasses: Record<Variant, string> = {
@@ -30,6 +31,7 @@
 <button
   type={type}
   {title}
+  aria-label={ariaLabel}
   class={cx(
     'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:cursor-not-allowed disabled:has-[.animate-spin]:cursor-wait',
     variantClasses[variant],

@@ -24,7 +24,6 @@
   export let zoom = 1;
   export let pdfPages: Array<{ pageNumber: number; dataUrl: string }> = [];
   export let pdfText = '';
-  export let pdfFallbackUsed = false;
   export let doc: ContractDocument | null = null;
   export let onClose: () => void = () => {};
   export let onToggleFullscreen: () => void | Promise<void> = () => {};
@@ -34,7 +33,43 @@
   export let onDownload: () => void = () => {};
   export let onReplace: () => void = () => {};
   export let onDelete: () => void | Promise<void> = () => {};
+
+  let closeButtonEl: HTMLButtonElement | null = null;
+  let pendingConfirmation: 'replace' | 'delete' | null = null;
+
+  $: if (open && closeButtonEl) {
+    closeButtonEl.focus();
+  }
+
+  function requestConfirmation(action: 'replace' | 'delete') {
+    pendingConfirmation = action;
+  }
+
+  function closeConfirmation() {
+    pendingConfirmation = null;
+  }
+
+  async function confirmAction() {
+    const action = pendingConfirmation;
+    pendingConfirmation = null;
+    if (action === 'replace') onReplace();
+    if (action === 'delete') await onDelete();
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if (!open) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (pendingConfirmation) {
+        closeConfirmation();
+      } else {
+        onClose();
+      }
+    }
+  }
 </script>
+
+<svelte:window on:keydown={handleWindowKeydown} />
 
 {#if open}
   <div
@@ -74,6 +109,7 @@
               <Maximize2 class="h-4 w-4" />
             </Button>
             <button
+              bind:this={closeButtonEl}
               type="button"
               class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
               on:click={onClose}
@@ -111,6 +147,7 @@
                     variant="outline"
                     className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
                     on:click={onZoomOut}
+                    ariaLabel="Diminuir zoom"
                     title="Diminuir zoom"
                   >
                     <ZoomOut class="h-4 w-4" />
@@ -120,6 +157,7 @@
                     variant="outline"
                     className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10"
                     on:click={onZoomIn}
+                    ariaLabel="Aumentar zoom"
                     title="Aumentar zoom"
                   >
                     <ZoomIn class="h-4 w-4" />
@@ -133,10 +171,10 @@
                     <Download class="h-4 w-4" />
                   </Button>
                   {#if doc}
-                    <Button size="sm" variant="outline" className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10" on:click={onReplace} title="Substituir documento">
+                    <Button size="sm" variant="outline" className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10" on:click={() => requestConfirmation('replace')} ariaLabel="Substituir documento" title="Substituir documento">
                       <RefreshCcw class="h-4 w-4" />
                     </Button>
-                    <Button size="sm" variant="destructive" className="h-9 w-9 rounded-full p-0" on:click={onDelete} title="Excluir documento">
+                    <Button size="sm" variant="destructive" className="h-9 w-9 rounded-full p-0" on:click={() => requestConfirmation('delete')} ariaLabel="Excluir documento" title="Excluir documento">
                       <Trash2 class="h-4 w-4" />
                     </Button>
                   {/if}
@@ -148,10 +186,10 @@
             {:else}
               <div class="flex flex-wrap items-center justify-between gap-2 pb-3">
                 <div class="flex items-center gap-2">
-                  <Button size="sm" variant="outline" on:click={onZoomOut}>
+                  <Button size="sm" variant="outline" on:click={onZoomOut} ariaLabel="Diminuir zoom" title="Diminuir zoom">
                     <ZoomOut class="h-4 w-4" />
                   </Button>
-                  <Button size="sm" variant="outline" on:click={onZoomIn}>
+                  <Button size="sm" variant="outline" on:click={onZoomIn} ariaLabel="Aumentar zoom" title="Aumentar zoom">
                     <ZoomIn class="h-4 w-4" />
                   </Button>
                   <Button size="sm" variant="outline" on:click={onResetZoom}>
@@ -163,10 +201,10 @@
                     <Download class="h-4 w-4" />
                   </Button>
                   {#if doc}
-                    <Button size="sm" variant="outline" className="h-9 w-9 rounded-full p-0" on:click={onReplace} title="Substituir documento">
+                    <Button size="sm" variant="outline" className="h-9 w-9 rounded-full p-0" on:click={() => requestConfirmation('replace')} ariaLabel="Substituir documento" title="Substituir documento">
                       <RefreshCcw class="h-4 w-4" />
                     </Button>
-                    <Button size="sm" variant="destructive" className="h-9 w-9 rounded-full p-0" on:click={onDelete} title="Excluir documento">
+                    <Button size="sm" variant="destructive" className="h-9 w-9 rounded-full p-0" on:click={() => requestConfirmation('delete')} ariaLabel="Excluir documento" title="Excluir documento">
                       <Trash2 class="h-4 w-4" />
                     </Button>
                   {/if}
@@ -189,14 +227,6 @@
                   {#if pdfText}
                     <p class="sr-only" data-testid="document-preview-pdf-text">{pdfText}</p>
                   {/if}
-                  {#if pdfFallbackUsed && pdfText}
-                    <div
-                      class="pointer-events-none absolute left-4 top-4 z-20 max-w-[min(32rem,calc(100%-2rem))] rounded-md bg-black/70 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur"
-                      data-testid="document-preview-pdf-visible-text"
-                    >
-                      {pdfText.split(' ').filter(Boolean).slice(0, 12).join(' ')}
-                    </div>
-                  {/if}
                   {#if pdfPages.length === 0}
                     <div class="flex min-h-[280px] w-full items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300">
                       Renderizando páginas do PDF...
@@ -215,5 +245,26 @@
         {/if}
       </div>
     </div>
+
+    {#if pendingConfirmation}
+      <div class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="presentation" on:click={(event) => event.target === event.currentTarget && closeConfirmation()}>
+        <div class="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-gray-900" role="alertdialog" aria-modal="true" aria-labelledby="document-confirmation-title" aria-describedby="document-confirmation-description">
+          <h4 id="document-confirmation-title" class="text-base font-semibold text-gray-900 dark:text-gray-100">
+            {pendingConfirmation === 'delete' ? 'Excluir documento?' : 'Substituir documento?'}
+          </h4>
+          <p id="document-confirmation-description" class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            {pendingConfirmation === 'delete'
+              ? 'O arquivo será removido e o requisito voltará a ficar pendente.'
+              : 'O arquivo atual será substituído pelo novo documento enviado.'}
+          </p>
+          <div class="mt-5 flex justify-end gap-2">
+            <Button size="sm" variant="outline" on:click={closeConfirmation}>Cancelar</Button>
+            <Button size="sm" variant={pendingConfirmation === 'delete' ? 'destructive' : 'default'} on:click={confirmAction}>
+              {pendingConfirmation === 'delete' ? 'Excluir documento' : 'Substituir documento'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    {/if}
   </div>
 {/if}

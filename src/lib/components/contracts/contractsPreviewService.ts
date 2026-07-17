@@ -3,6 +3,13 @@ import { renderPdfPreview } from '$lib/pdfPreviewRenderer';
 
 export type ContractPreviewKind = 'image' | 'pdf';
 
+const PREVIEW_CONTENT_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
 export type ContractPreviewResult = {
   blob: Blob;
   contentType: string;
@@ -20,15 +27,39 @@ export async function loadContractDocumentPreview(
     responseType: 'blob',
   });
 
-  const blob =
+  const responseBlob =
     response.data instanceof Blob
       ? response.data
       : new Blob([response.data], { type: 'application/octet-stream' });
-  const contentType = String(
-    response.headers?.['content-type'] ?? response.headers?.['Content-Type'] ?? blob.type ?? ''
-  ).toLowerCase();
-  const isPdfFile = contentType.includes('pdf') || resolvedName.toLowerCase().endsWith('.pdf');
-  const kind: ContractPreviewKind = contentType.includes('image/') && !isPdfFile ? 'image' : 'pdf';
+  const responseContentType = String(
+    response.headers?.['content-type'] ?? response.headers?.['Content-Type'] ?? responseBlob.type ?? ''
+  ).split(';')[0].trim().toLowerCase();
+  const extensionContentType = resolvedName.toLowerCase().endsWith('.pdf')
+    ? 'application/pdf'
+    : resolvedName.toLowerCase().endsWith('.png')
+      ? 'image/png'
+      : resolvedName.toLowerCase().endsWith('.webp')
+        ? 'image/webp'
+        : resolvedName.toLowerCase().endsWith('.jpg') || resolvedName.toLowerCase().endsWith('.jpeg')
+          ? 'image/jpeg'
+          : '';
+  const contentType = PREVIEW_CONTENT_TYPES.has(responseContentType)
+    ? responseContentType
+    : (!responseContentType || responseContentType === 'application/octet-stream')
+      ? extensionContentType
+      : '';
+
+  if (!contentType || !PREVIEW_CONTENT_TYPES.has(contentType)) {
+    throw new Error('Tipo de arquivo não permitido para visualização.');
+  }
+  if (responseBlob.size <= 0) {
+    throw new Error('Arquivo vazio.');
+  }
+
+  const blob = responseBlob.type === contentType
+    ? responseBlob
+    : new Blob([responseBlob], { type: contentType });
+  const kind: ContractPreviewKind = contentType === 'application/pdf' ? 'pdf' : 'image';
 
   if (kind !== 'pdf') {
     return {

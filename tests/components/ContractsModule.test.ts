@@ -74,6 +74,17 @@ import ContractsModule from '../../src/lib/components/ContractsModule.svelte';
 describe('ContractsModule', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pdfGetDocumentMock.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: vi.fn(async () => ({
+          getViewport: vi.fn(() => ({ width: 640, height: 900 })),
+          render: vi.fn(() => ({ promise: Promise.resolve() })),
+          getTextContent: vi.fn(async () => ({ items: [] })),
+        })),
+        destroy: vi.fn(async () => {}),
+      }),
+    });
     Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
       configurable: true,
       value: vi.fn(() => canvasContextMock),
@@ -1411,7 +1422,7 @@ describe('ContractsModule', () => {
     expect(screen.getByText('Contrato (Minuta)')).toBeInTheDocument();
   });
 
-  it('abre a proposta assinada no visualizador nativo e baixa o PDF de fato', async () => {
+  it('abre a proposta assinada no visualizador customizado e baixa o PDF de fato', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_SIGNATURES')) {
         return {
@@ -1495,7 +1506,9 @@ describe('ContractsModule', () => {
 
     await fireEvent.click(viewButton);
     await waitFor(() => {
-      expect(anchorClickSpy).toHaveBeenCalledTimes(1);
+      expect(
+        screen.getByRole('dialog', { name: 'proposta_04e4c102-32dd-4b9f-ac80-b46eb5c666a0.pdf' })
+      ).toBeInTheDocument();
     });
 
     await fireEvent.click(downloadButton);
@@ -1504,11 +1517,11 @@ describe('ContractsModule', () => {
         '/negotiations/neg-test-sign-view-1/documents/6141/download',
         { responseType: 'blob' }
       );
-      expect(anchorClickSpy).toHaveBeenCalledTimes(2);
+      expect(anchorClickSpy).toHaveBeenCalledTimes(1);
     });
 
     expect(windowOpenSpy).not.toHaveBeenCalled();
-    expect(createObjectUrlSpy).toHaveBeenCalledTimes(2);
+    expect(createObjectUrlSpy).toHaveBeenCalled();
     expect(revokeObjectUrlSpy).toHaveBeenCalledTimes(0);
 
     windowOpenSpy.mockRestore();
