@@ -55,7 +55,8 @@ describe('ContractDocumentPreview', () => {
     const onZoomIn = vi.fn();
     const onZoomOut = vi.fn();
     const onResetZoom = vi.fn();
-    renderPreview({ onZoomIn, onZoomOut, onResetZoom });
+    const onRotate = vi.fn();
+    renderPreview({ onZoomIn, onZoomOut, onResetZoom, onRotate });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Próxima página' }));
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
@@ -64,9 +65,11 @@ describe('ContractDocumentPreview', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Diminuir zoom' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Aumentar zoom' }));
     await fireEvent.click(screen.getByRole('button', { name: '100%' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Girar documento' }));
     expect(onZoomOut).toHaveBeenCalledTimes(1);
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onResetZoom).toHaveBeenCalledTimes(1);
+    expect(onRotate).toHaveBeenCalledTimes(1);
   });
 
   it('mantém paginação e um único controle de saída no modo tela cheia', () => {

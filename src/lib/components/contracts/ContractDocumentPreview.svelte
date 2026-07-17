@@ -6,6 +6,7 @@
     Loader2,
     Maximize2,
     RefreshCcw,
+    RotateCw,
     Trash2,
     X,
     ZoomIn,
@@ -25,6 +26,7 @@
   export let kind: 'image' | 'pdf' = 'image';
   export let sourceUrl = '';
   export let zoom = 1;
+  export let rotation = 0;
   export let pdfPages: Array<{ pageNumber: number; dataUrl: string }> = [];
   export let pdfText = '';
   export let doc: ContractDocument | null = null;
@@ -33,6 +35,7 @@
   export let onZoomOut: () => void = () => {};
   export let onZoomIn: () => void = () => {};
   export let onResetZoom: () => void = () => {};
+  export let onRotate: () => void = () => {};
   export let onDownload: () => void = () => {};
   export let onReplace: () => void = () => {};
   export let onDelete: () => void | Promise<void> = () => {};
@@ -44,6 +47,10 @@
   let currentPage = 1;
   let lastOpenState = false;
   let pendingConfirmation: 'replace' | 'delete' | null = null;
+  let mediaDimensions: Record<string, { width: number; height: number }> = {};
+
+  $: normalizedRotation = ((rotation % 360) + 360) % 360;
+  $: isSideways = normalizedRotation === 90 || normalizedRotation === 270;
 
   $: if (open !== lastOpenState) {
     lastOpenState = open;
@@ -103,6 +110,47 @@
     );
     page?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     currentPage = boundedPage;
+  }
+
+  function rememberMediaDimensions(key: string, event: Event) {
+    const image = event.currentTarget as HTMLImageElement;
+    if (!image.naturalWidth || !image.naturalHeight) return;
+    mediaDimensions = {
+      ...mediaDimensions,
+      [key]: { width: image.naturalWidth, height: image.naturalHeight },
+    };
+  }
+
+  function previewBaseWidth() {
+    return Math.max(240, 960 * zoom);
+  }
+
+  function mediaKeyForPage(pageNumber?: number) {
+    return pageNumber == null ? 'image' : `pdf-${pageNumber}`;
+  }
+
+  function mediaRatio(key: string) {
+    const dimensions = mediaDimensions[key];
+    return dimensions ? dimensions.height / dimensions.width : 1;
+  }
+
+  function previewContentWidth() {
+    const key = kind === 'image' ? mediaKeyForPage() : mediaKeyForPage(pdfPages[0]?.pageNumber);
+    const width = previewBaseWidth();
+    return isSideways ? width * mediaRatio(key) : width;
+  }
+
+  function previewContentStyle() {
+    return `width: ${previewContentWidth()}px; max-width: ${!isSideways && zoom <= 1 ? '100%' : 'none'};`;
+  }
+
+  function previewPageStyle() {
+    return isSideways ? `height: ${previewBaseWidth()}px;` : '';
+  }
+
+  function previewImageStyle() {
+    const width = isSideways ? `${previewBaseWidth()}px` : '100%';
+    return `width: ${width}; transform: rotate(${normalizedRotation}deg); transform-origin: center center;`;
   }
 
   async function confirmAction() {
@@ -250,6 +298,16 @@
                   <Button size="sm" variant="outline" className="h-9 rounded-full px-3 border-white/20 text-white hover:bg-white/10" on:click={onResetZoom}>
                     100%
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 w-9 rounded-full border-white/20 p-0 text-white hover:bg-white/10"
+                    on:click={onRotate}
+                    ariaLabel="Girar documento"
+                    title="Girar 90 graus"
+                  >
+                    <RotateCw class="h-4 w-4" />
+                  </Button>
                 </div>
                 <div class="pointer-events-auto flex items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-white shadow-lg backdrop-blur-sm">
                   <Button size="sm" variant="outline" className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10" on:click={onDownload} title="Baixar documento">
@@ -305,6 +363,9 @@
                   <Button size="sm" variant="outline" on:click={onResetZoom}>
                     100%
                   </Button>
+                  <Button size="sm" variant="outline" on:click={onRotate} ariaLabel="Girar documento" title="Girar 90 graus">
+                    <RotateCw class="h-4 w-4" />
+                  </Button>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                   <Button size="sm" variant="outline" className="h-9 w-9 rounded-full p-0" on:click={onDownload} title="Baixar documento">
@@ -335,19 +396,23 @@
                 <div
                   data-testid="document-preview-scaled-content"
                   class="shrink-0"
-                  style={`width: ${Math.max(240, 960 * zoom)}px; max-width: ${zoom <= 1 ? '100%' : 'none'};`}
+                  style={previewContentStyle()}
                 >
-                  <img
-                    src={sourceUrl}
-                    alt={fileName}
-                    class={`h-auto w-full rounded-lg object-contain shadow-2xl ${isFullscreen ? 'max-h-[100vh]' : 'max-h-[76vh]'}`}
-                  />
+                  <div class={`flex w-full justify-center overflow-visible ${isSideways ? 'items-center' : ''}`} style={previewPageStyle()}>
+                    <img
+                      src={sourceUrl}
+                      alt={fileName}
+                      class={`h-auto rounded-lg object-contain shadow-2xl ${isFullscreen ? 'max-h-[100vh]' : 'max-h-[76vh]'}`}
+                      style={previewImageStyle()}
+                      on:load={(event) => rememberMediaDimensions(mediaKeyForPage(), event)}
+                    />
+                  </div>
                 </div>
               {:else}
                 <div
                   data-testid="document-preview-scaled-content"
                   class="flex shrink-0 flex-col items-center gap-4"
-                  style={`width: ${Math.max(240, 960 * zoom)}px; max-width: ${zoom <= 1 ? '100%' : 'none'};`}
+                  style={previewContentStyle()}
                 >
                   {#if pdfText}
                     <p class="sr-only" data-testid="document-preview-pdf-text">{pdfText}</p>
@@ -358,8 +423,18 @@
                     </div>
                   {:else}
                     {#each pdfPages as page (page.pageNumber)}
-                      <div data-page-number={page.pageNumber} class="w-full scroll-mt-2 rounded-lg bg-white p-2 shadow-2xl dark:bg-gray-950">
-                        <img src={page.dataUrl} alt={`${fileName} - página ${page.pageNumber}`} class="h-auto w-full rounded-md object-contain" />
+                      <div
+                        data-page-number={page.pageNumber}
+                        class={`flex w-full scroll-mt-2 justify-center overflow-visible rounded-lg bg-white p-2 shadow-2xl dark:bg-gray-950 ${isSideways ? 'items-center' : ''}`}
+                        style={previewPageStyle()}
+                      >
+                        <img
+                          src={page.dataUrl}
+                          alt={`${fileName} - página ${page.pageNumber}`}
+                          class="h-auto rounded-md object-contain"
+                          style={previewImageStyle()}
+                          on:load={(event) => rememberMediaDimensions(mediaKeyForPage(page.pageNumber), event)}
+                        />
                       </div>
                     {/each}
                   {/if}
