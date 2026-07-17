@@ -112,6 +112,8 @@ export function readRawMatrixRequirements(contract: ContractItem): MatrixRequire
       case 'comprovante_renda':
         return ['comprovante_renda'];
       case 'dados_bancarios':
+        return ['dados_bancarios'];
+      case 'outro':
         return ['outro'];
       case 'docs_imovel':
         return isRentalOnly
@@ -405,8 +407,8 @@ export function getDocumentForMatrixCell(
   side: 'seller' | 'buyer'
 ): ContractDocument | null {
   const normalizedType = documentType.trim().toLowerCase();
-  const docs = getNonProposalDocuments(contract).filter(
-    (doc) => String(doc.documentType ?? '').trim().toLowerCase() === normalizedType
+  const docs = getNonProposalDocuments(contract).filter((doc) =>
+    documentBelongsToMatrixCell(doc, normalizedType)
   );
   if (docs.length === 0) {
     return null;
@@ -436,9 +438,8 @@ export function getDocumentsForMatrixCell(
 ): ContractDocument[] {
   if (!contract) return [];
   const normalizedType = documentType.trim().toLowerCase();
-  const docs = getNonProposalDocuments(contract).filter(
-    (doc) =>
-      documentTypeMatchesMatrixCell(String(doc.documentType ?? '').trim().toLowerCase(), normalizedType)
+  const docs = getNonProposalDocuments(contract).filter((doc) =>
+    documentBelongsToMatrixCell(doc, normalizedType)
   );
   if (docs.length === 0) {
     return [];
@@ -512,6 +513,26 @@ export function documentTypeMatchesMatrixCell(documentType: string, matrixType: 
     return isOutroMatrixDocumentType(documentType);
   }
   return documentType === matrixType;
+}
+
+function documentBelongsToMatrixCell(doc: ContractDocument, matrixType: string): boolean {
+  const documentType = String(doc.documentType ?? '').trim().toLowerCase();
+  const documentCategory = String(
+    doc.documentCategory ?? doc.metadata?.documentCategory ?? doc.metadata?.document_category ?? ''
+  )
+    .trim()
+    .toLowerCase();
+
+  if (matrixType === 'dados_bancarios') {
+    // Legacy uploads used the generic "outro" type but retained their category.
+    return documentType === 'dados_bancarios' || documentCategory === 'dados_bancarios';
+  }
+
+  if (matrixType === 'outro' && documentCategory === 'dados_bancarios') {
+    return false;
+  }
+
+  return documentTypeMatchesMatrixCell(documentType, matrixType);
 }
 
 export function resolveOutroMatrixDocumentType(

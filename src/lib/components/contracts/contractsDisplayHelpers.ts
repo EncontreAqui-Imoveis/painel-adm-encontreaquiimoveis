@@ -18,6 +18,7 @@ export const documentTypeLabels: Record<string, string> = {
   certidao_inteiro_teor_escritura: 'Certidão de Inteiro Teor/Escritura',
   certidao_onus_acoes: 'Certidão de Ônus/Ações',
   comprovante_renda: 'Comprovante de Renda',
+  dados_bancarios: 'Dados Bancários',
   contrato_minuta: 'Contrato (Minuta)',
   contrato_assinado: 'Contrato Assinado',
   comprovante_pagamento: 'Comprovante de Pagamento',

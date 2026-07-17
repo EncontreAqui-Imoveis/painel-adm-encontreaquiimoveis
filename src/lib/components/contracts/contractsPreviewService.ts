@@ -19,12 +19,19 @@ export type ContractPreviewResult = {
   pdfFallbackUsed: boolean;
 };
 
+export type ContractPreviewLoadOptions = {
+  signal?: AbortSignal;
+  onPdfPage?: (pages: Array<{ pageNumber: number; dataUrl: string }>, text: string) => void;
+};
+
 export async function loadContractDocumentPreview(
   url: string,
-  resolvedName: string
+  resolvedName: string,
+  options: ContractPreviewLoadOptions = {}
 ): Promise<ContractPreviewResult> {
   const response = await apiClient.get(url, {
     responseType: 'blob',
+    signal: options.signal,
   });
 
   const responseBlob =
@@ -72,7 +79,10 @@ export async function loadContractDocumentPreview(
     };
   }
 
-  const rendered = await renderPdfPreview(blob);
+  const rendered = await renderPdfPreview(blob, {
+    signal: options.signal,
+    onPage: options.onPdfPage,
+  });
   return {
     blob,
     contentType,

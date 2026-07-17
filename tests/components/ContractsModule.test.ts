@@ -478,7 +478,7 @@ describe('ContractsModule', () => {
               sellerInfo: {},
               buyerInfo: {},
               documentRequirements: {
-                seller: [{ category: 'dados_bancarios', applicability: 'required' }],
+                seller: [{ category: 'outro', applicability: 'optional' }],
                 buyer: [{ category: 'conjuge_documentos', applicability: 'not_applicable' }],
               },
               documents: sellerOutroDocs,

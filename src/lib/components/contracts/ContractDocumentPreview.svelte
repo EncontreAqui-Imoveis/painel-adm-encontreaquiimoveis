@@ -1,6 +1,8 @@
 <script lang="ts">
   import {
     Download,
+    ChevronLeft,
+    ChevronRight,
     Loader2,
     Maximize2,
     RefreshCcw,
@@ -11,6 +13,7 @@
   } from 'lucide-svelte';
   import { Button } from '$lib/components/ui/button';
   import type { ContractDocument, ContractItem } from '$lib/components/contracts/types';
+  import { onDestroy, tick } from 'svelte';
 
   export let open = false;
   export let isFullscreen = false;
@@ -35,10 +38,27 @@
   export let onDelete: () => void | Promise<void> = () => {};
 
   let closeButtonEl: HTMLButtonElement | null = null;
+  let confirmationCancelEl: HTMLButtonElement | null = null;
+  let previewViewportEl: HTMLDivElement | null = null;
+  let pageObserver: IntersectionObserver | null = null;
+  let currentPage = 1;
+  let lastOpenState = false;
   let pendingConfirmation: 'replace' | 'delete' | null = null;
 
-  $: if (open && closeButtonEl) {
-    closeButtonEl.focus();
+  $: if (open !== lastOpenState) {
+    lastOpenState = open;
+    if (open) {
+      currentPage = 1;
+      void tick().then(() => closeButtonEl?.focus());
+    }
+  }
+
+  $: if (pendingConfirmation) {
+    void tick().then(() => confirmationCancelEl?.focus());
+  }
+
+  $: if (open && kind === 'pdf' && pdfPages.length > 0) {
+    void refreshPageObserver();
   }
 
   function requestConfirmation(action: 'replace' | 'delete') {
@@ -47,6 +67,42 @@
 
   function closeConfirmation() {
     pendingConfirmation = null;
+  }
+
+  async function refreshPageObserver() {
+    await tick();
+    pageObserver?.disconnect();
+    pageObserver = null;
+    if (!previewViewportEl || typeof IntersectionObserver === 'undefined') return;
+
+    const pageNodes = Array.from(
+      previewViewportEl.querySelectorAll<HTMLElement>('[data-page-number]')
+    );
+    pageObserver = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+        if (visible) {
+          currentPage = Number(visible.target.getAttribute('data-page-number') ?? 1);
+        }
+      },
+      { root: previewViewportEl, threshold: [0.2, 0.5, 0.8] }
+    );
+    pageNodes.forEach((node) => pageObserver?.observe(node));
+  }
+
+  onDestroy(() => {
+    pageObserver?.disconnect();
+  });
+
+  function scrollToPage(pageNumber: number) {
+    const boundedPage = Math.min(Math.max(pageNumber, 1), pdfPages.length);
+    const page = previewViewportEl?.querySelector<HTMLElement>(
+      `[data-page-number="${boundedPage}"]`
+    );
+    page?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    currentPage = boundedPage;
   }
 
   async function confirmAction() {
@@ -105,9 +161,6 @@
             {/if}
           </div>
           <div class="flex items-center gap-2">
-            <Button size="sm" variant="outline" on:click={onToggleFullscreen} title="Alternar tela cheia">
-              <Maximize2 class="h-4 w-4" />
-            </Button>
             <button
               bind:this={closeButtonEl}
               type="button"
@@ -122,7 +175,7 @@
       {/if}
 
       <div class={`flex min-h-0 flex-1 flex-col gap-3 overflow-hidden ${isFullscreen ? 'p-0' : 'p-4'}`}>
-        {#if loading}
+        {#if loading && pdfPages.length === 0}
           <div class="flex min-h-[280px] flex-1 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40">
             <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
               <Loader2 class="h-4 w-4 animate-spin" />
@@ -135,13 +188,42 @@
           </div>
         {:else}
           <div
-            class={`relative min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 overscroll-y-contain ${
+            bind:this={previewViewportEl}
+            data-testid="document-preview-viewport"
+            class={`relative min-h-0 flex-1 overflow-auto rounded-xl border border-gray-200 bg-gray-100 overscroll-contain ${
               isFullscreen ? 'rounded-none border-0 bg-black p-0' : 'p-4'
             } dark:border-gray-800 dark:bg-black`}
           >
             {#if isFullscreen}
               <div class="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex items-end justify-between px-4">
                 <div class="pointer-events-auto flex items-center gap-2 rounded-full bg-black/70 px-3 py-2 text-white shadow-2xl backdrop-blur">
+                  {#if kind === 'pdf' && pdfPages.length > 0}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 w-9 rounded-full border-white/20 p-0 text-white hover:bg-white/10"
+                      on:click={() => scrollToPage(currentPage - 1)}
+                      ariaLabel="Página anterior"
+                      title="Página anterior"
+                      disabled={currentPage <= 1}
+                    >
+                      <ChevronLeft class="h-4 w-4" />
+                    </Button>
+                    <span class="min-w-[5rem] text-center text-xs font-medium" aria-live="polite">
+                      Página {currentPage} de {pdfPages.length}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 w-9 rounded-full border-white/20 p-0 text-white hover:bg-white/10"
+                      on:click={() => scrollToPage(currentPage + 1)}
+                      ariaLabel="Próxima página"
+                      title="Próxima página"
+                      disabled={currentPage >= pdfPages.length}
+                    >
+                      <ChevronRight class="h-4 w-4" />
+                    </Button>
+                  {/if}
                   <Button
                     size="sm"
                     variant="outline"
@@ -184,8 +266,33 @@
                 </div>
               </div>
             {:else}
-              <div class="flex flex-wrap items-center justify-between gap-2 pb-3">
+              <div class="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 bg-gray-100 pb-3 pt-1 dark:bg-black">
                 <div class="flex items-center gap-2">
+                  {#if kind === 'pdf' && pdfPages.length > 0}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      on:click={() => scrollToPage(currentPage - 1)}
+                      ariaLabel="Página anterior"
+                      title="Página anterior"
+                      disabled={currentPage <= 1}
+                    >
+                      <ChevronLeft class="h-4 w-4" />
+                    </Button>
+                    <span class="min-w-[5rem] text-center text-xs font-medium text-gray-700 dark:text-gray-200" aria-live="polite">
+                      Página {currentPage} de {pdfPages.length}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      on:click={() => scrollToPage(currentPage + 1)}
+                      ariaLabel="Próxima página"
+                      title="Próxima página"
+                      disabled={currentPage >= pdfPages.length}
+                    >
+                      <ChevronRight class="h-4 w-4" />
+                    </Button>
+                  {/if}
                   <Button size="sm" variant="outline" on:click={onZoomOut} ariaLabel="Diminuir zoom" title="Diminuir zoom">
                     <ZoomOut class="h-4 w-4" />
                   </Button>
@@ -215,15 +322,30 @@
               </div>
             {/if}
 
-            <div class="relative flex min-h-full w-full justify-center overflow-hidden overscroll-y-contain" style={`transform: scale(${zoom}); transform-origin: top center;`}>
+            <div class="relative flex w-full justify-center overscroll-contain">
+              {#if loading}
+                <div class="pointer-events-none sticky top-0 z-10 mx-auto mb-2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white shadow-lg" aria-live="polite">
+                  Carregando páginas...
+                </div>
+              {/if}
               {#if kind === 'image'}
-                <img
-                  src={sourceUrl}
-                  alt={fileName}
-                  class={`max-w-full rounded-lg object-contain shadow-2xl ${isFullscreen ? 'max-h-[100vh]' : 'max-h-[76vh]'}`}
-                />
+                <div
+                  data-testid="document-preview-scaled-content"
+                  class="shrink-0"
+                  style={`width: ${Math.max(240, 960 * zoom)}px; max-width: ${zoom <= 1 ? '100%' : 'none'};`}
+                >
+                  <img
+                    src={sourceUrl}
+                    alt={fileName}
+                    class={`h-auto w-full rounded-lg object-contain shadow-2xl ${isFullscreen ? 'max-h-[100vh]' : 'max-h-[76vh]'}`}
+                  />
+                </div>
               {:else}
-                <div class="flex w-full max-w-[960px] flex-col items-center gap-4">
+                <div
+                  data-testid="document-preview-scaled-content"
+                  class="flex shrink-0 flex-col items-center gap-4"
+                  style={`width: ${Math.max(240, 960 * zoom)}px; max-width: ${zoom <= 1 ? '100%' : 'none'};`}
+                >
                   {#if pdfText}
                     <p class="sr-only" data-testid="document-preview-pdf-text">{pdfText}</p>
                   {/if}
@@ -233,7 +355,7 @@
                     </div>
                   {:else}
                     {#each pdfPages as page (page.pageNumber)}
-                      <div class="w-full rounded-lg bg-white p-2 shadow-2xl dark:bg-gray-950">
+                      <div data-page-number={page.pageNumber} class="w-full scroll-mt-2 rounded-lg bg-white p-2 shadow-2xl dark:bg-gray-950">
                         <img src={page.dataUrl} alt={`${fileName} - página ${page.pageNumber}`} class="h-auto w-full rounded-md object-contain" />
                       </div>
                     {/each}
@@ -244,27 +366,43 @@
           </div>
         {/if}
       </div>
-    </div>
-
-    {#if pendingConfirmation}
-      <div class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="presentation" on:click={(event) => event.target === event.currentTarget && closeConfirmation()}>
-        <div class="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-gray-900" role="alertdialog" aria-modal="true" aria-labelledby="document-confirmation-title" aria-describedby="document-confirmation-description">
-          <h4 id="document-confirmation-title" class="text-base font-semibold text-gray-900 dark:text-gray-100">
-            {pendingConfirmation === 'delete' ? 'Excluir documento?' : 'Substituir documento?'}
-          </h4>
-          <p id="document-confirmation-description" class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-            {pendingConfirmation === 'delete'
-              ? 'O arquivo será removido e o requisito voltará a ficar pendente.'
-              : 'O arquivo atual será substituído pelo novo documento enviado.'}
-          </p>
-          <div class="mt-5 flex justify-end gap-2">
-            <Button size="sm" variant="outline" on:click={closeConfirmation}>Cancelar</Button>
-            <Button size="sm" variant={pendingConfirmation === 'delete' ? 'destructive' : 'default'} on:click={confirmAction}>
-              {pendingConfirmation === 'delete' ? 'Excluir documento' : 'Substituir documento'}
-            </Button>
+      {#if pendingConfirmation}
+        <div
+          class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+          role="presentation"
+          on:click={(event) => event.target === event.currentTarget && closeConfirmation()}
+        >
+          <div
+            class="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-gray-900"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="document-confirmation-title"
+            aria-describedby="document-confirmation-description"
+          >
+            <h4 id="document-confirmation-title" class="text-base font-semibold text-gray-900 dark:text-gray-100">
+              {pendingConfirmation === 'delete' ? 'Excluir documento?' : 'Substituir documento?'}
+            </h4>
+            <p id="document-confirmation-description" class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+              {pendingConfirmation === 'delete'
+                ? 'O arquivo será removido e o requisito voltará a ficar pendente.'
+                : 'O arquivo atual será substituído pelo novo documento enviado.'}
+            </p>
+            <div class="mt-5 flex justify-end gap-2">
+              <button
+                bind:this={confirmationCancelEl}
+                type="button"
+                class="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-1 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                on:click={closeConfirmation}
+              >
+                Cancelar
+              </button>
+              <Button size="sm" variant={pendingConfirmation === 'delete' ? 'destructive' : 'default'} on:click={confirmAction}>
+                {pendingConfirmation === 'delete' ? 'Excluir documento' : 'Substituir documento'}
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-    {/if}
+      {/if}
+    </div>
   </div>
 {/if}

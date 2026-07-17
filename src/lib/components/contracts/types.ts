@@ -9,6 +9,7 @@ export type ContractDocument = {
   id: number;
   type?: string | null;
   documentType?: string | null;
+  documentCategory?: string | null;
   status?: ContractApprovalStatus | null;
   categoryStatus?: ContractApprovalStatus | null;
   metadata?: Record<string, unknown> | null;

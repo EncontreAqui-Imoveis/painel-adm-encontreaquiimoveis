@@ -194,6 +194,7 @@
   let documentPreviewPdfPages: DocumentPreviewPdfPage[] = [];
   let documentPreviewPdfText = '';
   let documentPreviewRenderToken = 0;
+  let documentPreviewAbortController: AbortController | null = null;
   let documentPreviewFullscreenTargetEl: HTMLDivElement | null = null;
   let previousBodyOverflow = '';
   let previousViewportOverscrollBehavior = '';
@@ -287,6 +288,8 @@
   }
 
   function closeDocumentPreview() {
+    documentPreviewAbortController?.abort();
+    documentPreviewAbortController = null;
     if (documentPreviewOwnsObjectUrl && documentPreviewObjectUrl) {
       URL.revokeObjectURL(documentPreviewObjectUrl);
     }
@@ -377,6 +380,8 @@
     documentPreviewLoading = true;
     documentPreviewError = '';
     const renderToken = ++documentPreviewRenderToken;
+    const abortController = new AbortController();
+    documentPreviewAbortController = abortController;
     prepareDocumentPreview(formatDocumentPreviewName(doc), doc.downloadUrl, 'pdf', {
       contract,
       doc,
@@ -384,7 +389,14 @@
 
     try {
       const resolvedName = formatDocumentPreviewName(doc);
-      const preview = await loadContractDocumentPreview(doc.downloadUrl, resolvedName);
+      const preview = await loadContractDocumentPreview(doc.downloadUrl, resolvedName, {
+        signal: abortController.signal,
+        onPdfPage: (pages, text) => {
+          if (renderToken !== documentPreviewRenderToken) return;
+          documentPreviewPdfPages = pages;
+          if (text) documentPreviewPdfText = text;
+        },
+      });
       if (renderToken !== documentPreviewRenderToken) {
         return;
       }
@@ -403,11 +415,15 @@
         documentPreviewPdfText = '';
       }
     } catch (error) {
+      if (abortController.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        return;
+      }
       console.error('Erro ao carregar visualização do documento:', error);
       documentPreviewError = 'Não foi possível carregar a visualização do documento.';
     } finally {
       if (renderToken === documentPreviewRenderToken) {
         documentPreviewLoading = false;
+        documentPreviewAbortController = null;
       }
     }
   }
@@ -2697,7 +2713,7 @@
   doc={documentPreviewDoc}
   onClose={closeDocumentPreview}
   onToggleFullscreen={toggleDocumentPreviewFullscreen}
-  onZoomOut={() => (documentPreviewZoom = Math.max(0.5, Number((documentPreviewZoom - 0.25).toFixed(2))))}
+  onZoomOut={() => (documentPreviewZoom = Math.max(0.25, Number((documentPreviewZoom - 0.25).toFixed(2))))}
   onZoomIn={() => (documentPreviewZoom = Math.min(3, Number((documentPreviewZoom + 0.25).toFixed(2))))}
   onResetZoom={() => (documentPreviewZoom = 1)}
   onDownload={downloadPreviewDocument}

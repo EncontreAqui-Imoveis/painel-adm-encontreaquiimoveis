@@ -16,52 +16,83 @@ async function loadPdfJs() {
   return pdfjsPromise;
 }
 
-/** @param {Blob} blob */
-export async function renderPdfPreview(blob) {
+/** @param {AbortSignal | undefined} signal */
+function throwIfAborted(signal) {
+  if (!signal?.aborted) return;
+
+  const error = new Error('Renderização do PDF cancelada.');
+  error.name = 'AbortError';
+  throw error;
+}
+
+/**
+ * @param {Blob} blob
+ * @param {{ signal?: AbortSignal, onPage?: (pages: Array<{pageNumber: number, dataUrl: string}>, text: string) => void }} [options]
+ */
+export async function renderPdfPreview(blob, options = {}) {
+  const { signal, onPage } = options;
+  throwIfAborted(signal);
   const pdfjsLib = await loadPdfJs();
+  throwIfAborted(signal);
   const pdfBytes = new Uint8Array(await blob.arrayBuffer());
+  throwIfAborted(signal);
   const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
-  const pdf = await loadingTask.promise;
+  let pdf = null;
 
   try {
+    pdf = await loadingTask.promise;
+    throwIfAborted(signal);
+
     const pages = [];
     let firstText = '';
-    
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      throwIfAborted(signal);
       const page = await pdf.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 1.5 });
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      if (!context) {
-        throw new Error('Não foi possível preparar o canvas do PDF.');
+      try {
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) {
+          throw new Error('Não foi possível preparar o canvas do PDF.');
+        }
+
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        await page.render({ canvasContext: context, canvas, viewport }).promise;
+        throwIfAborted(signal);
+
+        // Text is used for accessibility/search only; avoid parsing every page.
+        if (pageNumber === 1) {
+          const textContent = await page.getTextContent();
+          const textItems = /** @type {Array<{str?: string}>} */ (textContent.items ?? []);
+          firstText = textItems
+            .map((item) => String(item.str ?? ''))
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        }
+
+        pages.push({
+          pageNumber,
+          dataUrl: canvas.toDataURL('image/png'),
+        });
+        onPage?.([...pages], firstText);
+
+        // Release the backing bitmap before rendering the next page.
+        canvas.width = 0;
+        canvas.height = 0;
+      } finally {
+        page.cleanup?.();
       }
-
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
-      await page.render({ canvasContext: context, canvas, viewport }).promise;
-
-      const textContent = await page.getTextContent();
-      const textItems = /** @type {Array<{str?: string}>} */ (textContent.items ?? []);
-      const text = textItems
-        .map((item) => String(item.str ?? ''))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      if (!firstText && text) {
-        firstText = text;
-      }
-
-      pages.push({
-        pageNumber,
-        dataUrl: canvas.toDataURL('image/png'),
-        text,
-      });
     }
 
     return { pages, text: firstText, usedFallback: false };
   } finally {
-    await pdf.destroy().catch(() => {});
+    if (pdf) {
+      await pdf.destroy().catch(() => {});
+    } else {
+      await loadingTask.destroy().catch(() => {});
+    }
   }
 }
