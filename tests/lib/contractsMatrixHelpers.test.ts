@@ -48,4 +48,44 @@ describe('contractsMatrixHelpers', () => {
     expect(getDocumentsForMatrixCell(contract, 'outro', 'seller')).toHaveLength(1);
     expect(resolveMatrixUploadCategory('dados_bancarios', 'seller')).toBe('dados_bancarios');
   });
+
+  it('prioriza a matriz canônica de locação sem inferir a finalidade textual do imóvel', () => {
+    const rentalContract: ContractItem = {
+      ...contract,
+      dealType: 'rent',
+      propertyPurpose: 'Venda e aluguel',
+      documentRequirementMatrix: {
+        seller: [
+          {
+            category: 'dados_bancarios',
+            applicability: 'required',
+            preferredDocumentType: 'dados_bancarios',
+          },
+        ],
+        buyer: [
+          {
+            category: 'comprovante_garantia',
+            applicability: 'required',
+            preferredDocumentType: 'comprovante_garantia',
+          },
+          {
+            category: 'outro',
+            applicability: 'optional',
+            preferredDocumentType: 'outro',
+          },
+        ],
+      },
+    };
+
+    const rows = getMatrixRows(rentalContract);
+    expect(rows.find((row) => row.documentType === 'dados_bancarios')).toMatchObject({
+      sellerRequired: true,
+      buyerRequired: false,
+    });
+    expect(rows.find((row) => row.documentType === 'comprovante_garantia')).toMatchObject({
+      sellerRequired: false,
+      buyerRequired: true,
+    });
+    expect(rows.find((row) => row.documentType === 'certidao_onus_acoes')).toBeUndefined();
+  });
 });

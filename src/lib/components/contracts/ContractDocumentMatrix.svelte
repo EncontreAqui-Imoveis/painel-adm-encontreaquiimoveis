@@ -6,6 +6,8 @@
 
   export let contract: ContractItem | null = null;
   export let rows: ContractMatrixRowView[] = [];
+  export let sellerLabel = 'Vendedor';
+  export let buyerLabel = 'Comprador';
   export let documentLabel: (documentType: string) => string = (value) => value;
   export let documentFileName: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => 'Documento';
   export let isMatrixUploading: (key: string) => boolean = () => false;
@@ -75,8 +77,8 @@
       <thead>
         <tr class="border-b border-gray-200 dark:border-gray-700">
           <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Documento</th>
-          <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Vendedor</th>
-          <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">Comprador</th>
+          <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">{sellerLabel}</th>
+          <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">{buyerLabel}</th>
         </tr>
       </thead>
       <tbody>
@@ -125,6 +127,7 @@
                           {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
+                          {#if !isApproved(sellerDoc)}
                           <div class="relative" use:clickOutside={closeDocumentMenu}>
                             <button
                               type="button"
@@ -152,6 +155,7 @@
                             </div>
                             {/if}
                           </div>
+                          {/if}
                           {#if isApproved(sellerDoc)}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento aprovado" title="Baixar documento aprovado" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
                               {#if downloadingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
@@ -228,6 +232,7 @@
                           {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
+                          {#if !isApproved(buyerDoc)}
                           <div class="relative" use:clickOutside={closeDocumentMenu}>
                             <button
                               type="button"
@@ -255,6 +260,7 @@
                             </div>
                             {/if}
                           </div>
+                          {/if}
                           {#if isApproved(buyerDoc)}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento aprovado" title="Baixar documento aprovado" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
                               {#if downloadingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}

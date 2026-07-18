@@ -1,4 +1,4 @@
-import { documentLabel } from './contractsDisplayHelpers';
+import { contractSideLabel, documentLabel } from './contractsDisplayHelpers';
 import {
   buyerMatrixDocumentTypes,
   buyerRentalRequiredInfoFields,
@@ -62,23 +62,20 @@ function requiresSpouseDocuments(info: Record<string, unknown> | null | undefine
 }
 
 export function requiresExactSaleSplit(contract: ContractItem | null): boolean {
-  const purpose = String(contract?.propertyPurpose ?? '').trim().toLowerCase();
-  const isRentalOnly = purpose.includes('alug') && !purpose.includes('venda');
-  return !isRentalOnly;
+  return contract?.dealType === 'sale';
 }
 
 export function getRequiredDocTypes(contract: ContractItem): string[] {
-  const purpose = String(contract.propertyPurpose ?? '').trim().toLowerCase();
-  const isSale = purpose.includes('venda') || purpose.includes('sale');
-  const isRent = purpose.includes('alug') || purpose.includes('rent');
-
-  if (isSale && isRent) {
-    return Array.from(new Set([...saleRequiredDocTypes, ...rentRequiredDocTypes]));
-  }
-  if (isRent) {
+  if (contract.dealType === 'rent') {
     return [...rentRequiredDocTypes];
   }
-  return [...saleRequiredDocTypes];
+  if (contract.dealType === 'sale') {
+    return [...saleRequiredDocTypes];
+  }
+
+  // Legacy contracts without a modality cannot be classified as sale or rent.
+  // Keep only the neutral slots until the API provides its canonical matrix.
+  return ['doc_identidade', 'comprovante_endereco', 'certidao_casamento_nascimento', 'outro'];
 }
 
 export function normalizeMatrixSide(value: unknown): MatrixSide | null {
@@ -94,10 +91,10 @@ export function normalizeMatrixDocumentType(value: unknown): string {
 }
 
 export function readRawMatrixRequirements(contract: ContractItem): MatrixRequirement[] {
-  const raw = contract.documentRequirements;
+  // The canonical matrix provides preferredDocumentType. Prefer it to avoid
+  // reinterpreting API categories in the client.
+  const raw = contract.documentRequirementMatrix ?? contract.documentRequirements;
   const entries: MatrixRequirement[] = [];
-  const purpose = String(contract.propertyPurpose ?? '').trim().toLowerCase();
-  const isRentalOnly = purpose.includes('alug') && !purpose.includes('venda');
 
   const categoryToDocumentTypes = (category: string): string[] => {
     switch (category.trim().toLowerCase()) {
@@ -111,14 +108,22 @@ export function readRawMatrixRequirements(contract: ContractItem): MatrixRequire
         return ['doc_identidade_conjuge'];
       case 'comprovante_renda':
         return ['comprovante_renda'];
+      case 'comprovante_garantia':
+        return ['comprovante_garantia'];
       case 'dados_bancarios':
         return ['dados_bancarios'];
+      case 'certidao_inteiro_teor_escritura':
+        return ['certidao_inteiro_teor_escritura'];
+      case 'certidao_onus_acoes':
+        return ['certidao_onus_acoes'];
       case 'outro':
         return ['outro'];
       case 'docs_imovel':
-        return isRentalOnly
-          ? ['certidao_inteiro_teor_escritura']
-          : ['certidao_inteiro_teor', 'certidao_onus_acoes'];
+        // Compatibility for records created before the API exposed the
+        // preferredDocumentType. Never infer from property description.
+        return contract.dealType === 'sale'
+          ? ['certidao_inteiro_teor_escritura', 'certidao_onus_acoes']
+          : ['certidao_inteiro_teor_escritura'];
       default:
         return [];
     }
@@ -131,9 +136,15 @@ export function readRawMatrixRequirements(contract: ContractItem): MatrixRequire
       const source = row as Record<string, unknown>;
       const applicability = String(source.applicability ?? '').trim().toLowerCase();
       if (applicability === 'not_applicable') continue;
+      const preferredDocumentType = normalizeMatrixDocumentType(
+        source.preferredDocumentType ?? source.documentType ?? source.type
+      );
       const category = String(source.category ?? '').trim();
-      if (!category) continue;
-      const docTypes = categoryToDocumentTypes(category);
+      const docTypes = preferredDocumentType
+        ? [preferredDocumentType]
+        : category
+          ? categoryToDocumentTypes(category)
+          : [];
       for (const documentType of docTypes) {
         entries.push({ documentType, side });
       }
@@ -309,8 +320,7 @@ export function listMissingSellerInfo(contract: ContractItem): string[] {
 }
 
 export function listMissingBuyerInfo(contract: ContractItem): string[] {
-  const normalizedPurpose = String(contract.propertyPurpose ?? '').toLowerCase();
-  const requiresRentalGuarantee = normalizedPurpose.includes('alug') || normalizedPurpose.includes('rent');
+  const requiresRentalGuarantee = contract.dealType === 'rent';
   const requiredFields = requiresRentalGuarantee
     ? [...buyerRequiredInfoFields, ...buyerRentalRequiredInfoFields]
     : buyerRequiredInfoFields;
@@ -336,10 +346,10 @@ export function listMissingRequiredDocuments(contract: ContractItem): string[] {
     const sellerDoc = getDocumentForMatrixCell(contract, row.documentType, 'seller');
     const buyerDoc = getDocumentForMatrixCell(contract, row.documentType, 'buyer');
     if (row.documentType !== 'outro' && row.sellerRequired && sellerDoc == null) {
-      missing.push(`${documentLabel(row.documentType)} (Vendedor)`);
+      missing.push(`${documentLabel(row.documentType)} (${contractSideLabel(contract, 'seller')})`);
     }
     if (row.documentType !== 'outro' && row.buyerRequired && buyerDoc == null) {
-      missing.push(`${documentLabel(row.documentType)} (Comprador)`);
+      missing.push(`${documentLabel(row.documentType)} (${contractSideLabel(contract, 'buyer')})`);
     }
   }
 
@@ -361,7 +371,9 @@ export function listBlockingDocumentStatuses(contract: ContractItem): string[] {
       }
 
       const side = getDocumentSide(doc);
-      const sideLabel = side === 'seller' ? ' (Vendedor)' : side === 'buyer' ? ' (Comprador)' : '';
+      const sideLabel = side
+        ? ` (${contractSideLabel(contract, side)})`
+        : '';
       const label = documentLabel(doc.documentType) + sideLabel;
       return `${label}: ${status === 'REJECTED' ? 'rejeitado' : 'pendente'}`;
     })
@@ -383,11 +395,11 @@ export function computeApprovalLockReasons(
   const blockingDocuments = listBlockingDocumentStatuses(contract);
 
   if (missingSellerInfo.length > 0) {
-      reasons.push(`Vendedor sem: ${missingSellerInfo.join(', ')}`);
+      reasons.push(`${contractSideLabel(contract, 'seller')} sem: ${missingSellerInfo.join(', ')}`);
   }
 
   if (missingBuyerInfo.length > 0) {
-    reasons.push(`Comprador sem: ${missingBuyerInfo.join(', ')}`);
+    reasons.push(`${contractSideLabel(contract, 'buyer')} sem: ${missingBuyerInfo.join(', ')}`);
   }
 
   if (missingDocuments.length > 0) {

@@ -5,10 +5,23 @@ export type PaymentBreakdown = {
   outros: number;
 };
 
+export type RentalProposalTerms = {
+  monthlyRent?: number | null;
+  guaranteeType?: string | null;
+  guaranteeAmount?: number | null;
+  leaseTermMonths?: number | null;
+  expectedStartDate?: string | null;
+  monthlyDueDay?: number | null;
+  condominiumResponsibility?: string | null;
+  propertyTaxResponsibility?: string | null;
+  observations?: string | null;
+};
+
 export type NegotiationItem = {
   id: string;
   status: string;
   internalStatus: string;
+  dealType?: 'sale' | 'rent' | null;
   propertyId: number;
   propertyCode?: string | null;
   propertyTitle?: string | null;
@@ -25,6 +38,7 @@ export type NegotiationItem = {
   created_at?: string | null;
   validityDate?: string | null;
   payment?: PaymentBreakdown | null;
+  rentalTerms?: RentalProposalTerms | null;
   updatedAt?: string | null;
   updated_at?: string | null;
   signedDocumentId?: number | null;
@@ -237,6 +251,28 @@ export function paymentLines(payment?: PaymentBreakdown | null) {
     { label: 'Financiamento', value: normalized.financiamento ?? 0 },
     { label: 'Outros', value: normalized.outros ?? 0 },
   ];
+}
+
+export function isRentalProposal(item: NegotiationItem | null | undefined): boolean {
+  return item?.dealType === 'rent';
+}
+
+export function rentalTermsLines(terms?: RentalProposalTerms | null): Array<{ label: string; value: string }> {
+  if (!terms) return [];
+  const money = (value: number | null | undefined) => formatCurrency(value ?? 0);
+  const date = terms.expectedStartDate ? formatDate(terms.expectedStartDate) : null;
+  const values = [
+    { label: 'Aluguel mensal', value: terms.monthlyRent != null ? money(terms.monthlyRent) : null },
+    { label: 'Garantia', value: terms.guaranteeType ?? null },
+    { label: 'Valor da garantia', value: terms.guaranteeAmount != null ? money(terms.guaranteeAmount) : null },
+    { label: 'Prazo', value: terms.leaseTermMonths != null ? `${terms.leaseTermMonths} meses` : null },
+    { label: 'Início previsto', value: date },
+    { label: 'Vencimento', value: terms.monthlyDueDay != null ? `Dia ${terms.monthlyDueDay}` : null },
+    { label: 'Condomínio', value: terms.condominiumResponsibility ?? null },
+    { label: 'IPTU', value: terms.propertyTaxResponsibility ?? null },
+    { label: 'Observações', value: terms.observations ?? null },
+  ];
+  return values.filter((item): item is { label: string; value: string } => Boolean(item.value?.trim()));
 }
 
 export function normalizeErrorMessage(error: unknown, fallback: string): string {

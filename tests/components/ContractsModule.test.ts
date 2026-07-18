@@ -310,7 +310,7 @@ describe('ContractsModule', () => {
     expect(screen.getByText('Em análise')).toBeInTheDocument();
     expect(screen.getByAltText('Foto do imóvel Casa Contrato')).toBeInTheDocument();
     expect(screen.getAllByText(/Vendedor/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Comprador').length).toBeGreaterThan(0);
+    expect(screen.getByText('Parte compradora/locatária')).toBeInTheDocument();
     expect(screen.getByText('Cliente Comprador')).toBeInTheDocument();
     const openReviewButton = await screen.findByRole('button', {
       name: 'Analisar Documentação',
@@ -1754,6 +1754,7 @@ describe('ContractsModule', () => {
               propertyCode: 'RV-604',
               propertyTitle: 'Casa Percentual',
               propertyPurpose: 'Venda',
+              dealType: 'sale',
               capturingBrokerId: 30001,
               sellingBrokerId: 30002,
               capturingBrokerName: 'Captador',

@@ -54,6 +54,10 @@
     canApproveSide,
     canRejectSide,
     canRestartSide,
+    contractDraftTemplateSummary,
+    contractSideDataLabel,
+    contractSideDocumentDescription,
+    contractSideLabel,
     documentFileName,
     documentLabel,
     documentSideLabel,
@@ -85,7 +89,6 @@
     type FinalizeFieldMode,
   } from '$lib/components/contracts/contractsFormHelpers';
   import {
-    buyerMatrixDocumentTypes,
     type MatrixRequirement,
     type MatrixRow,
     type MatrixSide,
@@ -101,8 +104,6 @@
     matrixDocumentSortOrder,
     normalizePossiblyMojibakeText,
     outroMatrixSlotTypes,
-    rentRequiredDocTypes,
-    saleRequiredDocTypes,
     signedReviewDocTypes,
   } from '$lib/components/contracts/contractsDataHelpers';
   import {
@@ -269,6 +270,9 @@
           !doc.metadata?.contractId
       ) ?? null
     : null;
+  $: selectedSellerLabel = contractSideLabel(selected, 'seller');
+  $: selectedBuyerLabel = contractSideLabel(selected, 'buyer');
+  $: selectedDraftTemplate = contractDraftTemplateSummary(selected);
 
   function lockViewportGestureScroll() {
     if (typeof document === 'undefined') return;
@@ -596,7 +600,7 @@
       return [
         {
           key: 'seller',
-          label: 'Vendedor',
+          label: contractSideLabel(contract, 'seller'),
           status: contract.sellerApprovalStatus,
           reason: readReasonText(contract.sellerApprovalReason),
         },
@@ -606,13 +610,13 @@
     return [
       {
         key: 'seller',
-        label: 'Vendedor',
+        label: contractSideLabel(contract, 'seller'),
         status: contract.sellerApprovalStatus,
         reason: readReasonText(contract.sellerApprovalReason),
       },
       {
         key: 'buyer',
-        label: 'Comprador',
+        label: contractSideLabel(contract, 'buyer'),
         status: contract.buyerApprovalStatus,
         reason: readReasonText(contract.buyerApprovalReason),
       },
@@ -1404,7 +1408,7 @@
       finalizedDocumentRequiresSide(signedDocType) &&
       !selectedSignedDocSide
     ) {
-      toast.error('Selecione se o documento pertence ao Vendedor ou ao Comprador.');
+      toast.error(`Selecione se o documento pertence ao ${selectedSellerLabel} ou ao ${selectedBuyerLabel}.`);
       return;
     }
 
@@ -1780,11 +1784,11 @@
           </div>
           <dl class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
             <div class="flex items-center justify-between gap-3">
-              <dt>Vendedor</dt>
+              <dt>{contractSideLabel(item, 'seller')}</dt>
               <dd class="text-right">{getOwnerDisplayName(item)}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
-              <dt>Comprador</dt>
+              <dt>{contractSideLabel(item, 'buyer')}</dt>
               <dd class="text-right">{getBuyerDisplayName(item)}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
@@ -1825,10 +1829,10 @@
             Imóvel (ID / código)
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Vendedor
+            Parte vendedora/locadora
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Comprador
+            Parte compradora/locatária
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Data
@@ -2024,6 +2028,18 @@
           </div>
         {/if}
 
+        {#if selected.status === 'IN_DRAFT' || modalMode === 'upload_draft'}
+          <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
+            <p class="text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">Minuta canônica</p>
+            <p class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {selectedDraftTemplate.label}
+            </p>
+            <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">
+              Template {selectedDraftTemplate.templateKey} · versão {selectedDraftTemplate.templateVersion}
+            </p>
+          </div>
+        {/if}
+
         {#if modalMode === 'review_docs'}
           <div class="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
@@ -2032,9 +2048,9 @@
               <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ator que iniciou a proposta</p>
             </div>
             <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
-              <p class="text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">Comprador</p>
+              <p class="text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">{selectedBuyerLabel}</p>
               <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{contractActorName(selected, 'buyer')}</p>
-              <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Documentos do adquirente legal</p>
+              <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">{contractSideDocumentDescription(selected, 'buyer')}</p>
             </div>
             <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
               <p class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Anunciante</p>
@@ -2042,9 +2058,9 @@
               <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ator que publicou o imóvel</p>
             </div>
             <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
-              <p class="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-300">Vendedor</p>
+              <p class="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-300">{selectedSellerLabel}</p>
               <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{contractActorName(selected, 'seller')}</p>
-              <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Documentos do proprietário legal</p>
+              <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">{contractSideDocumentDescription(selected, 'seller')}</p>
             </div>
           </div>
         {/if}
@@ -2103,7 +2119,7 @@
             <div class="grid gap-4 border-t border-gray-200 p-3 md:grid-cols-2 dark:border-gray-700">
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <div class="flex items-center justify-between gap-2">
-                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Dados Vendedor</p>
+                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{contractSideDataLabel(selected, 'seller')}</p>
                 <span class={`rounded-full px-2 py-1 text-xs font-semibold ${approvalBadgeClass(selected.sellerApprovalStatus)}`}>
                   {approvalLabel(selected.sellerApprovalStatus)}
                 </span>
@@ -2126,7 +2142,7 @@
             </div>
             <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
               <div class="flex items-center justify-between gap-2">
-                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Dados Comprador</p>
+                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{contractSideDataLabel(selected, 'buyer')}</p>
                 <span class={`rounded-full px-2 py-1 text-xs font-semibold ${approvalBadgeClass(selected.buyerApprovalStatus)}`}>
                   {approvalLabel(selected.buyerApprovalStatus)}
                 </span>
@@ -2168,6 +2184,8 @@
           <ContractDocumentMatrix
             contract={selected}
             rows={contractMatrixRows}
+            sellerLabel={selectedSellerLabel}
+            buyerLabel={selectedBuyerLabel}
             documentLabel={documentLabel}
             documentFileName={documentFileName}
             documentStatusLabel={documentStatusLabel}
@@ -2226,7 +2244,7 @@
           downloadingDocumentId={downloadingDocumentId}
           documentFileName={documentFileName}
           documentLabel={documentLabel}
-          documentSideLabel={documentSideLabel}
+          documentSideLabel={(doc) => documentSideLabel(doc, selected)}
           formatDate={formatDate}
           hasCurrentDraftDocument={hasCurrentDraftDocument}
           draftUploadInputLabel={draftUploadInputLabel}
@@ -2257,7 +2275,7 @@
                 />
               </label>
               <label class="text-sm text-gray-700 dark:text-gray-200">
-                Nome do vendedor
+                Nome do {selectedSellerLabel.toLocaleLowerCase('pt-BR')}
                 <input
                   type="text"
                   bind:value={finalizePeopleForm.nomeVendedor}
@@ -2275,7 +2293,7 @@
                   {finalizePeopleForm.nomeCaptador || '-'}
                 </p>
                 <p>
-                  <span class="font-semibold">Vendedor:</span>
+                  <span class="font-semibold">{selectedSellerLabel}:</span>
                   {finalizePeopleForm.nomeVendedor || '-'}
                 </p>
               </div>
@@ -2458,8 +2476,8 @@
                     bind:value={selectedSignedDocSide}
                     class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                   >
-                    <option value="seller">Vendedor</option>
-                    <option value="buyer">Comprador</option>
+                    <option value="seller">{selectedSellerLabel}</option>
+                    <option value="buyer">{selectedBuyerLabel}</option>
                   </select>
                 </label>
               {/if}
@@ -2673,7 +2691,7 @@
           selectedSignedDocSide={selectedSignedDocSide}
           documentTypeLabels={documentTypeLabels}
           documentLabel={documentLabel}
-          documentSideLabel={documentSideLabel}
+          documentSideLabel={(doc) => documentSideLabel(doc, selected)}
           documentFileName={documentFileName}
           formatDate={formatDate}
           statusLabel={statusLabel}

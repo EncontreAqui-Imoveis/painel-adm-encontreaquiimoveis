@@ -18,6 +18,7 @@ export const documentTypeLabels: Record<string, string> = {
   certidao_inteiro_teor_escritura: 'Certidão de Inteiro Teor/Escritura',
   certidao_onus_acoes: 'Certidão de Ônus/Ações',
   comprovante_renda: 'Comprovante de Renda',
+  comprovante_garantia: 'Comprovante de Garantia',
   dados_bancarios: 'Dados Bancários',
   contrato_minuta: 'Contrato (Minuta)',
   contrato_assinado: 'Contrato Assinado',
@@ -107,10 +108,65 @@ function normalizePossiblyMojibakeText(value: string): string {
   }
 }
 
-export function documentSideLabel(doc?: ContractDocument | null): string {
+export function isRentalContract(contract?: ContractItem | null): boolean {
+  return contract?.dealType === 'rent';
+}
+
+export function contractSideLabel(
+  contract: ContractItem | null | undefined,
+  side: 'seller' | 'buyer'
+): string {
+  if (isRentalContract(contract)) {
+    return side === 'seller' ? 'Locador' : 'Locatário';
+  }
+  return side === 'seller' ? 'Vendedor' : 'Comprador';
+}
+
+export function contractSideDataLabel(
+  contract: ContractItem | null | undefined,
+  side: 'seller' | 'buyer'
+): string {
+  return `Dados ${contractSideLabel(contract, side)}`;
+}
+
+export function contractSideDocumentDescription(
+  contract: ContractItem | null | undefined,
+  side: 'seller' | 'buyer'
+): string {
+  if (isRentalContract(contract)) {
+    return side === 'seller' ? 'Documentos do locador legal' : 'Documentos do locatário legal';
+  }
+  return side === 'seller' ? 'Documentos do proprietário legal' : 'Documentos do adquirente legal';
+}
+
+export function contractDraftTemplateSummary(contract?: ContractItem | null): {
+  label: string;
+  templateKey: string;
+  templateVersion: string;
+} {
+  const draftMetadata = (contract?.documents ?? []).find(
+    (doc) => String(doc.documentType ?? '').trim().toLowerCase() === 'contrato_minuta'
+  )?.metadata;
+  const metadata = draftMetadata && typeof draftMetadata === 'object' ? draftMetadata : {};
+  const isRental = isRentalContract(contract);
+  const templateKey = String(
+    metadata.templateKey ?? (isRental ? 'rental_contract_v1' : 'sale_contract_v1')
+  );
+  const templateVersion = String(metadata.templateVersion ?? '1');
+  return {
+    label: isRental ? 'Contrato de Locação' : 'Contrato de Compra e Venda',
+    templateKey,
+    templateVersion,
+  };
+}
+
+export function documentSideLabel(
+  doc?: ContractDocument | null,
+  contract?: ContractItem | null
+): string {
   const side = String(doc?.side ?? '').trim().toLowerCase();
-  if (side === 'seller') return 'Vendedor';
-  if (side === 'buyer') return 'Comprador';
+  if (side === 'seller') return contractSideLabel(contract, 'seller');
+  if (side === 'buyer') return contractSideLabel(contract, 'buyer');
   return '';
 }
 

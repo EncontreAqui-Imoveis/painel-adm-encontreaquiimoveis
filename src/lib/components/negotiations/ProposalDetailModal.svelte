@@ -1,7 +1,12 @@
 <script lang="ts">
   import { Loader2, X } from 'lucide-svelte';
   import { Button } from '$lib/components/ui/button';
-  import type { NegotiationItem, PaymentBreakdown, ResponsibleOption } from '$lib/components/negotiations/negotiationRequestsHelpers';
+  import type {
+    NegotiationItem,
+    PaymentBreakdown,
+    RentalProposalTerms,
+    ResponsibleOption,
+  } from '$lib/components/negotiations/negotiationRequestsHelpers';
 
   export let showDetailModal = false;
   export let selectedProposal: NegotiationItem | null = null;
@@ -13,6 +18,8 @@
   export let readClientName: (proposal: NegotiationItem | null) => string;
   export let readClientCpf: (proposal: NegotiationItem | null) => string;
   export let paymentLines: (payment?: PaymentBreakdown | null) => Array<{ label: string; value: number }>;
+  export let isRentalProposal: (proposal: NegotiationItem | null | undefined) => boolean;
+  export let rentalTermsLines: (terms?: RentalProposalTerms | null) => Array<{ label: string; value: string }>;
   export let signedPdfDisplayName: () => string;
   export let requiresSignedPdf: () => boolean;
 
@@ -57,6 +64,7 @@
   export let proposalFinancingUnit: 'reais' | 'percent' = 'reais';
   export let proposalOthersInput = '';
   export let proposalOthersUnit: 'reais' | 'percent' = 'reais';
+  export let proposalRentalTerms: RentalProposalTerms = {};
   export let formatCpf: (value: string | null | undefined) => string;
   export let normalizeProposalFieldValue: (
     field: 'dinheiro' | 'permuta' | 'financiamento' | 'outros',
@@ -124,7 +132,9 @@
       <div class="min-h-0 max-h-[min(70vh,32rem)] flex-1 overflow-y-auto pr-1 sm:max-h-[min(65vh,40rem)]">
         <div class="grid gap-4 md:grid-cols-2">
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Comprador / Proponente</p>
+          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+            {isRentalProposal(selectedProposal) ? 'Locatário / Proponente' : 'Comprador / Proponente'}
+          </p>
             <p class="mt-1 text-sm text-gray-900 dark:text-gray-100">{readClientName(selectedProposal)}</p>
             <p class="text-xs text-gray-500 dark:text-gray-400">{readClientCpf(selectedProposal)}</p>
           </div>
@@ -137,17 +147,28 @@
         </div>
 
         <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
-          <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Condições de pagamento</p>
-          <div class="mt-2 grid gap-2 sm:grid-cols-2">
-            {#each paymentLines(selectedProposal.payment) as item (item.label)}
-              <div class="rounded bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-                <span class="font-semibold">{item.label}:</span> {formatCurrency(item.value)}
-              </div>
-            {/each}
-          </div>
-          <p class="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
-            Valor total: {formatCurrency(selectedProposal.value)}
-          </p>
+          {#if isRentalProposal(selectedProposal)}
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Condições de locação</p>
+            <div class="mt-2 grid gap-2 sm:grid-cols-2">
+              {#each rentalTermsLines(selectedProposal.rentalTerms) as item (item.label)}
+                <div class="rounded bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                  <span class="font-semibold">{item.label}:</span> {item.value}
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Condições de pagamento</p>
+            <div class="mt-2 grid gap-2 sm:grid-cols-2">
+              {#each paymentLines(selectedProposal.payment) as item (item.label)}
+                <div class="rounded bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                  <span class="font-semibold">{item.label}:</span> {formatCurrency(item.value)}
+                </div>
+              {/each}
+            </div>
+            <p class="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Valor total: {formatCurrency(selectedProposal.value)}
+            </p>
+          {/if}
         </div>
 
         <div class="mt-4 rounded-md border border-gray-200 p-3 dark:border-gray-700">
@@ -302,6 +323,50 @@
                   disabled={generateProposalSubmitting}
                 />
               </label>
+              {#if isRentalProposal(selectedProposal)}
+                <label class="space-y-1">
+                  <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Aluguel mensal</span>
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    value={proposalRentalTerms.monthlyRent ?? ''}
+                    inputmode="decimal"
+                    placeholder="0,00"
+                    on:input={(event) => {
+                      const value = Number(String((event.currentTarget as HTMLInputElement).value).replace(',', '.'));
+                      proposalRentalTerms = { ...proposalRentalTerms, monthlyRent: Number.isFinite(value) ? value : null };
+                    }}
+                    disabled={generateProposalSubmitting}
+                  />
+                </label>
+                <label class="space-y-1">
+                  <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Garantia</span>
+                  <select
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    value={proposalRentalTerms.guaranteeType ?? ''}
+                    on:change={(event) => proposalRentalTerms = { ...proposalRentalTerms, guaranteeType: (event.currentTarget as HTMLSelectElement).value || null }}
+                    disabled={generateProposalSubmitting}
+                  >
+                    <option value="">Selecione</option>
+                    <option value="CAUCAO">Caução</option>
+                    <option value="FIADOR">Fiador</option>
+                    <option value="SEGURO_FIANCA">Seguro-fiança</option>
+                    <option value="OUTRA">Outra</option>
+                  </select>
+                </label>
+                <label class="space-y-1">
+                  <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Prazo (meses)</span>
+                  <input
+                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                    value={proposalRentalTerms.leaseTermMonths ?? ''}
+                    inputmode="numeric"
+                    on:input={(event) => {
+                      const value = Number((event.currentTarget as HTMLInputElement).value);
+                      proposalRentalTerms = { ...proposalRentalTerms, leaseTermMonths: Number.isInteger(value) && value > 0 ? value : null };
+                    }}
+                    disabled={generateProposalSubmitting}
+                  />
+                </label>
+              {/if}
               <label class="space-y-1">
                 <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">CPF</span>
                 <input

@@ -21,6 +21,8 @@ export type ContractDocument = {
 
 export type ContractItem = {
   id: string;
+  /** Modalidade imutavel resolvida pelo backend a partir da negociacao aprovada. */
+  dealType?: 'sale' | 'rent' | null;
   status:
     | 'AWAITING_DOCS'
     | 'IN_DRAFT'
@@ -73,6 +75,8 @@ export type ContractItem = {
   responsibleUserIds?: number[] | null;
   documents?: ContractDocument[];
   documentRequirements?: unknown;
+  /** Matriz canônica com o tipo de documento preferido para cada requisito. */
+  documentRequirementMatrix?: unknown;
   documentProgress?: unknown;
   agencyName?: string | null;
   agencyAddress?: string | null;

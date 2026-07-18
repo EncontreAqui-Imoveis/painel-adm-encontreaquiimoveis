@@ -25,6 +25,8 @@
     hasResponsiblesInconsistentState as hasResponsiblesInconsistentStateHelper,
     hasResponsibleChanges as hasResponsibleChangesHelper,
     paymentLines,
+    isRentalProposal,
+    rentalTermsLines,
     PROPOSAL_FILTERS,
     readClientCpf,
     readClientName,
@@ -37,6 +39,7 @@
     type ProposalFilterKey,
     type ResponsibleOption,
     type ResponsibleSelectionState,
+    type RentalProposalTerms,
   } from '$lib/components/negotiations/negotiationRequestsHelpers';
 
   type TopProposal = {
@@ -102,6 +105,8 @@
       financiamento: number;
       outros: number;
     };
+    dealType: 'sale' | 'rent';
+    rentalTerms?: RentalProposalTerms | null;
     idempotencyKey: string;
   };
 
@@ -184,6 +189,8 @@
   let proposalOthersUnit: 'reais' | 'percent' = 'reais';
   let proposalSignedFile: File | null = null;
   let proposalSignedInputKey = 0;
+  let proposalDealType: 'sale' | 'rent' = 'sale';
+  let proposalRentalTerms: RentalProposalTerms = {};
 
   function requestSummaryFetch(resetPage = false) {
     if (resetPage) summaryPage = 1;
@@ -531,6 +538,8 @@
     proposalOthersUnit = 'reais';
     proposalSignedFile = null;
     proposalSignedInputKey += 1;
+    proposalDealType = 'sale';
+    proposalRentalTerms = {};
   }
 
   function fillProposalFormFromNegotiation(proposal: NegotiationItem) {
@@ -559,6 +568,8 @@
     proposalFinancingInput = proposalFinancing;
     proposalOthers = formatProposalMoneyInput(Number(proposal.payment?.outros ?? 0));
     proposalOthersInput = proposalOthers;
+    proposalDealType = isRentalProposal(proposal) ? 'rent' : 'sale';
+    proposalRentalTerms = { ...(proposal.rentalTerms ?? {}) };
   }
 
   function fillGenerateProposalFromProperty(property: ProposalPropertyOption, mode: 'create' | 'edit' = 'create') {
@@ -578,6 +589,7 @@
     proposalOthers = '0';
     proposalOthersInput = '0';
     proposalOthersUnit = 'reais';
+    proposalRentalTerms = {};
     generateProposalMode = mode;
   }
 
@@ -821,11 +833,14 @@
   }
 
   function collectProposalSubmissionData() {
-    commitAllProposalFields();
+    if (proposalDealType === 'sale') commitAllProposalFields();
     const clientName = proposalClientName.trim();
     const clientCpf = normalizeCpfDigits(proposalClientCpf);
     const validityDays = Number(proposalValidityDays);
-    const totalValue = parseProposalAmount(proposalTotalValue);
+    const rentalMonthlyRent = Number(proposalRentalTerms.monthlyRent ?? 0);
+    const totalValue = proposalDealType === 'rent'
+      ? rentalMonthlyRent
+      : parseProposalAmount(proposalTotalValue);
     const cash = calculateProposalAmount(proposalCash, proposalCashUnit, totalValue);
     const tradeIn = calculateProposalAmount(proposalTradeIn, proposalTradeInUnit, totalValue);
     const financing = calculateProposalAmount(proposalFinancing, proposalFinancingUnit, totalValue);
@@ -848,16 +863,18 @@
     }
 
     if (!Number.isFinite(totalValue) || totalValue < 1 || totalValue > 999_000_000_000) {
-      generateProposalError = 'Valor da proposta deve ficar entre R$ 1,00 e R$ 999.000.000.000,00.';
+      generateProposalError = proposalDealType === 'rent'
+        ? 'Informe um valor mensal de aluguel válido.'
+        : 'Valor da proposta deve ficar entre R$ 1,00 e R$ 999.000.000.000,00.';
       return null;
     }
 
-    if (![cash, tradeIn, financing, others].every((value) => Number.isFinite(value))) {
+    if (proposalDealType === 'sale' && ![cash, tradeIn, financing, others].every((value) => Number.isFinite(value))) {
       generateProposalError = 'Valores de pagamento invalidos.';
       return null;
     }
 
-    if (Math.round(paymentTotal * 100) !== Math.round(totalValue * 100)) {
+    if (proposalDealType === 'sale' && Math.round(paymentTotal * 100) !== Math.round(totalValue * 100)) {
       generateProposalError = 'A soma dos pagamentos deve bater com o valor da proposta.';
       return null;
     }
@@ -883,6 +900,8 @@
           financiamento: financing,
           outros: others,
         },
+        dealType: proposalDealType,
+        rentalTerms: proposalDealType === 'rent' ? proposalRentalTerms : null,
         idempotencyKey: crypto.randomUUID(),
       },
     };
@@ -1805,6 +1824,8 @@
     {readClientName}
     {readClientCpf}
     {paymentLines}
+    {isRentalProposal}
+    {rentalTermsLines}
     {signedPdfDisplayName}
     {draftPdfDisplayName}
     {requiresSignedPdf}
@@ -1849,6 +1870,7 @@
     bind:proposalFinancingUnit
     bind:proposalOthersInput
     bind:proposalOthersUnit
+    bind:proposalRentalTerms
     {formatCpf}
     {normalizeProposalFieldValue}
     {updateProposalTotalValue}
@@ -1971,6 +1993,16 @@
           {/if}
 
           <div class="grid gap-3 md:grid-cols-2">
+            <label class="space-y-1">
+              <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Modalidade</span>
+              <select
+                bind:value={proposalDealType}
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+              >
+                <option value="sale">Compra e venda</option>
+                <option value="rent">Locação</option>
+              </select>
+            </label>
             <label class="space-y-1">
               <span class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Nome do proponente</span>
               <input
@@ -2159,6 +2191,51 @@
               </div>
             </label>
           </div>
+
+          {#if proposalDealType === 'rent'}
+            <div class="grid gap-3 rounded-md border border-blue-200 bg-blue-50/50 p-3 md:grid-cols-3 dark:border-blue-900/60 dark:bg-blue-950/20">
+              <p class="md:col-span-3 text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">Condições de locação</p>
+              <label class="space-y-1">
+                <span class="block text-xs font-medium text-gray-700 dark:text-gray-200">Aluguel mensal</span>
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  value={proposalRentalTerms.monthlyRent ?? ''}
+                  inputmode="decimal"
+                  placeholder="0,00"
+                  on:input={(event) => {
+                    const value = Number(String((event.currentTarget as HTMLInputElement).value).replace(',', '.'));
+                    proposalRentalTerms = { ...proposalRentalTerms, monthlyRent: Number.isFinite(value) ? value : null };
+                  }}
+                />
+              </label>
+              <label class="space-y-1">
+                <span class="block text-xs font-medium text-gray-700 dark:text-gray-200">Garantia</span>
+                <select
+                  value={proposalRentalTerms.guaranteeType ?? ''}
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  on:change={(event) => proposalRentalTerms = { ...proposalRentalTerms, guaranteeType: (event.currentTarget as HTMLSelectElement).value || null }}
+                >
+                  <option value="">Selecione</option>
+                  <option value="CAUCAO">Caução</option>
+                  <option value="FIADOR">Fiador</option>
+                  <option value="SEGURO_FIANCA">Seguro-fiança</option>
+                  <option value="OUTRA">Outra</option>
+                </select>
+              </label>
+              <label class="space-y-1">
+                <span class="block text-xs font-medium text-gray-700 dark:text-gray-200">Prazo (meses)</span>
+                <input
+                  class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+                  value={proposalRentalTerms.leaseTermMonths ?? ''}
+                  inputmode="numeric"
+                  on:input={(event) => {
+                    const value = Number((event.currentTarget as HTMLInputElement).value);
+                    proposalRentalTerms = { ...proposalRentalTerms, leaseTermMonths: Number.isInteger(value) && value > 0 ? value : null };
+                  }}
+                />
+              </label>
+            </div>
+          {/if}
 
           <p class="text-xs text-gray-600 dark:text-gray-300">
             Clique no campo para editar; a formatação final volta ao sair do campo.
