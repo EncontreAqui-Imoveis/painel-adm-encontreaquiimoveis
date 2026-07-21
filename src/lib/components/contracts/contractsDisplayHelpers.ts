@@ -3,7 +3,7 @@ import type { ContractApprovalStatus, ContractDocument, ContractItem } from './t
 export type ContractStatus = ContractItem['status'];
 
 export const tabs: { key: ContractStatus; label: string }[] = [
-  { key: 'AWAITING_DOCS', label: 'Aguardando Documentação' },
+  { key: 'AWAITING_DOCS', label: 'Aguardando Documentos' },
   { key: 'IN_DRAFT', label: 'Em Confecção' },
   { key: 'AWAITING_SIGNATURES', label: 'Aguardando Assinaturas' },
   { key: 'FINALIZED', label: 'Finalizados' },
@@ -18,7 +18,6 @@ export const documentTypeLabels: Record<string, string> = {
   certidao_inteiro_teor_escritura: 'Certidão de Inteiro Teor/Escritura',
   certidao_onus_acoes: 'Certidão de Ônus/Ações',
   comprovante_renda: 'Comprovante de Renda',
-  comprovante_garantia: 'Comprovante de Garantia',
   dados_bancarios: 'Dados Bancários',
   contrato_minuta: 'Contrato (Minuta)',
   contrato_assinado: 'Contrato Assinado',

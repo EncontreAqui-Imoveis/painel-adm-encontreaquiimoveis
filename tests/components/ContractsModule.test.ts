@@ -1636,7 +1636,7 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(finalizeButton);
 
-    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
     const vendedorInput = screen.getByLabelText('Comissão do vendedor') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
@@ -1659,7 +1659,7 @@ describe('ContractsModule', () => {
     await waitFor(() => {
       expect(apiPostMock).toHaveBeenCalledWith('/admin/contracts/contract-test-sign-2/finalize', {
         commission_data: {
-          valorVenda: 1234.56,
+          valorBaseComissao: 1234.56,
           comissaoCaptador: 500,
           comissaoVendedor: 500,
           taxaPlataforma: 234.56,
@@ -1796,7 +1796,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(openFinalizeButton);
     await tick();
 
-    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorInput = (await screen.findByLabelText('Comissão Captador')) as HTMLInputElement;
     const vendedorInput = (await screen.findByLabelText('Comissão do vendedor')) as HTMLInputElement;
     const taxaInput = (await screen.findByLabelText('Taxa Encontre Aqui')) as HTMLInputElement;
@@ -1885,7 +1885,7 @@ describe('ContractsModule', () => {
     );
     await tick();
 
-    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorInput = (await screen.findByLabelText('Comissão Captador')) as HTMLInputElement;
     const vendedorInput = (await screen.findByLabelText('Comissão do vendedor')) as HTMLInputElement;
     const taxaInput = (await screen.findByLabelText('Taxa Encontre Aqui')) as HTMLInputElement;
@@ -1903,7 +1903,7 @@ describe('ContractsModule', () => {
     await waitFor(() => {
       expect(apiPostMock).toHaveBeenCalledWith('/admin/contracts/contract-test-sign-4/finalize', {
         commission_data: {
-          valorVenda: 1000,
+          valorBaseComissao: 1000,
           comissaoCaptador: 500,
           comissaoVendedor: 250,
           taxaPlataforma: 250,
@@ -1971,7 +1971,7 @@ describe('ContractsModule', () => {
     );
     await tick();
 
-    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorInput = (await screen.findByLabelText('Comissão Captador')) as HTMLInputElement;
     const vendedorInput = screen.getByLabelText('Comissão do vendedor') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
@@ -1989,7 +1989,7 @@ describe('ContractsModule', () => {
     await waitFor(() => {
       expect(apiPostMock).toHaveBeenCalledWith('/admin/contracts/contract-test-sign-4b/finalize', {
         commission_data: {
-          valorVenda: 1000,
+          valorBaseComissao: 1000,
           comissaoCaptador: 500,
           comissaoVendedor: 250,
           taxaPlataforma: 250,
@@ -2059,7 +2059,7 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(openFinalizeButton);
 
-    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
     const vendedorInput = screen.getByLabelText('Comissão do vendedor') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;

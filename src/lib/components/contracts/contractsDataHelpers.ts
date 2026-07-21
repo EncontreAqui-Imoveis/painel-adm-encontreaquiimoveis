@@ -23,12 +23,12 @@ export const documentTypeLabels: Record<string, string> = {
   doc_identidade: 'Documento Pessoal',
   doc_identidade_conjuge: 'Documento Pessoal do Cônjuge',
   comprovante_endereco: 'Comprovante de Endereço',
-  certidao_casamento_nascimento: 'Certidão de Casamento',
+  certidao_casamento_nascimento: 'Certidão de Casamento/Nascimento',
   certidao_inteiro_teor: 'Certidão de Inteiro Teor',
   certidao_inteiro_teor_escritura: 'Certidão de Inteiro Teor/Escritura',
   certidao_onus_acoes: 'Certidão de Ônus/Ações',
   comprovante_renda: 'Comprovante de Renda',
-  comprovante_garantia: 'Comprovante de Garantia',
+  seguro_incendio: 'Apólice/Comprovante de Seguro Incêndio',
   dados_bancarios: 'Dados Bancários',
   contrato_minuta: 'Contrato (Minuta)',
   contrato_assinado: 'Contrato Assinado',
@@ -73,8 +73,8 @@ export const rentRequiredDocTypes = [
   'comprovante_endereco',
   'certidao_casamento_nascimento',
   'comprovante_renda',
-  'comprovante_garantia',
   'certidao_inteiro_teor_escritura',
+  'seguro_incendio',
 ];
 
 export const sellerRequiredInfoFields: RequiredFieldDescriptor[] = [
@@ -98,9 +98,7 @@ export const maritalStatusOptions = [
   'Casado(a)',
   'Divorciado(a)',
   'Viúvo(a)',
-  'Separado(a)',
-  'União estável',
-  'Não informado',
+  'União Estável',
 ];
 
 export const matrixDocumentSortOrder = [
@@ -112,7 +110,7 @@ export const matrixDocumentSortOrder = [
   'certidao_inteiro_teor_escritura',
   'certidao_onus_acoes',
   'comprovante_renda',
-  'comprovante_garantia',
+  'seguro_incendio',
   'dados_bancarios',
   'outro',
 ];
@@ -122,7 +120,6 @@ export const buyerMatrixDocumentTypes = new Set([
   'comprovante_endereco',
   'certidao_casamento_nascimento',
   'comprovante_renda',
-  'comprovante_garantia',
   'outro',
 ]);
 

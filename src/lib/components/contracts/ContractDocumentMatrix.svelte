@@ -43,13 +43,8 @@
   }
 
   function isApproved(doc: ContractMatrixRowView['sellerDocs'][number]): boolean {
-    const metadata = doc.metadata ?? {};
-    const status = String(
-      doc.status ?? metadata.status ?? metadata.reviewStatus ?? metadata.validationStatus ?? ''
-    )
-      .trim()
-      .toUpperCase();
-    return status === 'APPROVED';
+    const status = documentStatus(doc);
+    return status === 'APPROVED' || status === 'APPROVED_WITH_RES';
   }
 
   function documentStatus(doc: ContractMatrixRowView['sellerDocs'][number]): string {

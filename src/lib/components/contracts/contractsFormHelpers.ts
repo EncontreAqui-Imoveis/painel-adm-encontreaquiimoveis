@@ -2,7 +2,7 @@ export type FinalizeFieldMode = 'amount' | 'percentage';
 export type FinalizeCommissionField = 'comissaoCaptador' | 'comissaoVendedor' | 'taxaPlataforma';
 
 export type FinalizeFormState = {
-  valorVenda: string;
+  valorBaseComissao: string;
   comissaoCaptador: string;
   comissaoVendedor: string;
   taxaPlataforma: string;
@@ -197,32 +197,32 @@ function formatPercentageValue(value: number): string {
   return Number(value).toFixed(2).replace('.', ',');
 }
 
-function convertAmountFieldToPercentage(rawValue: string, saleValue: number): number | null {
+function convertAmountFieldToPercentage(rawValue: string, baseValue: number): number | null {
   const amount = parseMoney(rawValue);
-  if (amount == null || saleValue <= 0) {
+  if (amount == null || baseValue <= 0) {
     return null;
   }
-  return Number(((amount / saleValue) * 100).toFixed(2));
+  return Number(((amount / baseValue) * 100).toFixed(2));
 }
 
-function convertPercentageFieldToAmount(rawValue: string, saleValue: number): number | null {
+function convertPercentageFieldToAmount(rawValue: string, baseValue: number): number | null {
   const percentage = parsePercentage(rawValue);
-  if (percentage == null || saleValue <= 0) {
+  if (percentage == null || baseValue <= 0) {
     return null;
   }
-  return Number(((saleValue * percentage) / 100).toFixed(2));
+  return Number(((baseValue * percentage) / 100).toFixed(2));
 }
 
 function resolveCommissionFieldAmount(
   field: FinalizeCommissionField,
-  saleValue: number,
+  baseValue: number,
   form: FinalizeFormState,
   fieldModes: FinalizeFieldModeState
 ): number | null {
   const rawValue = form[field];
   const mode = fieldModes[field] ?? 'amount';
   return mode === 'percentage'
-    ? convertPercentageFieldToAmount(rawValue, saleValue)
+    ? convertPercentageFieldToAmount(rawValue, baseValue)
     : parseMoney(rawValue);
 }
 
@@ -231,32 +231,32 @@ export function resolveFinalizeCommissionAmounts(
   fieldModes: FinalizeFieldModeState
 ):
   | {
-      valorVenda: number;
+      valorBaseComissao: number;
       comissaoCaptador: number;
       comissaoVendedor: number;
       taxaPlataforma: number;
     }
   | null {
-  const valorVenda = parseMoney(form.valorVenda);
-  if (valorVenda == null) {
+  const valorBaseComissao = parseMoney(form.valorBaseComissao);
+  if (valorBaseComissao == null || valorBaseComissao <= 0) {
     return null;
   }
 
   const comissaoCaptador = resolveCommissionFieldAmount(
     'comissaoCaptador',
-    valorVenda,
+    valorBaseComissao,
     form,
     fieldModes
   );
   const comissaoVendedor = resolveCommissionFieldAmount(
     'comissaoVendedor',
-    valorVenda,
+    valorBaseComissao,
     form,
     fieldModes
   );
   const taxaPlataforma = resolveCommissionFieldAmount(
     'taxaPlataforma',
-    valorVenda,
+    valorBaseComissao,
     form,
     fieldModes
   );
@@ -270,7 +270,7 @@ export function resolveFinalizeCommissionAmounts(
   }
 
   return {
-    valorVenda,
+    valorBaseComissao,
     comissaoCaptador,
     comissaoVendedor,
     taxaPlataforma,
@@ -280,7 +280,7 @@ export function resolveFinalizeCommissionAmounts(
 export function hasExactSaleSplit(
   values:
     | {
-        valorVenda: number;
+        valorBaseComissao: number;
         comissaoCaptador: number;
         comissaoVendedor: number;
         taxaPlataforma: number;
@@ -295,5 +295,5 @@ export function hasExactSaleSplit(
       values.taxaPlataforma
     ).toFixed(2)
   );
-  return Math.abs(total - values.valorVenda) <= 0.01;
+  return Math.abs(total - values.valorBaseComissao) <= 0.01;
 }

@@ -108,8 +108,8 @@ export function readRawMatrixRequirements(contract: ContractItem): MatrixRequire
         return ['doc_identidade_conjuge'];
       case 'comprovante_renda':
         return ['comprovante_renda'];
-      case 'comprovante_garantia':
-        return ['comprovante_garantia'];
+      case 'seguro_incendio':
+        return ['seguro_incendio'];
       case 'dados_bancarios':
         return ['dados_bancarios'];
       case 'certidao_inteiro_teor_escritura':

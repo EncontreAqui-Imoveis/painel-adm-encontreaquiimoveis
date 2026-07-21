@@ -217,7 +217,7 @@
     taxaPlataforma: 'amount',
   };
   let finalizeForm = {
-    valorVenda: '',
+    valorBaseComissao: '',
     comissaoCaptador: '',
     comissaoVendedor: '',
     taxaPlataforma: '',
@@ -663,7 +663,8 @@
       taxaPlataforma: 'amount',
     };
     finalizeForm = {
-      valorVenda: readCommissionValue(data, 'valorVenda'),
+      valorBaseComissao:
+        readCommissionValue(data, 'valorBaseComissao') || readCommissionValue(data, 'valorVenda'),
       comissaoCaptador: readCommissionValue(data, 'comissaoCaptador'),
       comissaoVendedor: readCommissionValue(data, 'comissaoVendedor'),
       taxaPlataforma: readCommissionValue(data, 'taxaPlataforma'),
@@ -1486,7 +1487,7 @@
       return;
     }
 
-    const { valorVenda, comissaoCaptador, comissaoVendedor, taxaPlataforma } =
+    const { valorBaseComissao, comissaoCaptador, comissaoVendedor, taxaPlataforma } =
       resolvedCommissionAmounts;
 
     if (
@@ -1502,7 +1503,7 @@
     finalizingContract = true;
     try {
       await finalizeContract(selected.id, {
-        valorVenda,
+        valorBaseComissao,
         comissaoCaptador,
         comissaoVendedor,
         taxaPlataforma,
@@ -2133,7 +2134,7 @@
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-profissao">Profissão</label><LabeledTextInput id="owner-profissao" bind:value={ownerInfoForm.profissao} disabled={savingPartyData || !isEditingData} /></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-email">Email</label><LabeledTextInput id="owner-email" bind:value={ownerInfoForm.email} disabled={savingPartyData || !isEditingData} /></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-telefone">Telefone</label><LabeledTextInput id="owner-telefone" bind:value={ownerInfoForm.telefone} disabled={savingPartyData || !isEditingData} /></div>
-                <div class="rounded-md bg-slate-50 p-3 dark:bg-slate-800/50"><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-banco">Dados bancários</label><textarea id="owner-banco" bind:value={ownerInfoForm.dadosBancarios} disabled={savingPartyData || !isEditingData} rows="3" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"></textarea></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-banco">Dados bancários</label><textarea id="owner-banco" bind:value={ownerInfoForm.dadosBancarios} disabled={savingPartyData || !isEditingData} rows="3" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"></textarea></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-estado-civil">Estado civil</label><select id="owner-estado-civil" bind:value={ownerInfoForm.estadoCivil} disabled={savingPartyData || !isEditingData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800">{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select></div>
                 {#if requiresSpouseFields(ownerInfoForm.estadoCivil)}
                   <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="owner-conjuge-nome" placeholder="Nome do cônjuge" bind:value={ownerInfoForm.conjugeNome} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="owner-conjuge-cpf" placeholder="CPF do cônjuge" bind:value={ownerInfoForm.conjugeCpf} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="owner-conjuge-profissao" placeholder="Profissão do cônjuge" bind:value={ownerInfoForm.conjugeProfissao} disabled={savingPartyData || !isEditingData} /></div></div>
@@ -2156,6 +2157,9 @@
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-profissao">Profissão</label><LabeledTextInput id="buyer-profissao" bind:value={buyerInfoForm.profissao} disabled={savingPartyData || !isEditingData} /></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-email">Email</label><LabeledTextInput id="buyer-email" bind:value={buyerInfoForm.email} disabled={savingPartyData || !isEditingData} /></div>
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-telefone">Telefone</label><LabeledTextInput id="buyer-telefone" bind:value={buyerInfoForm.telefone} disabled={savingPartyData || !isEditingData} /></div>
+                {#if selected.dealType === 'rent'}
+                  <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-garantia-locacao">Garantia de locação</label><select id="buyer-garantia-locacao" bind:value={buyerInfoForm.garantiaLocacao} disabled={savingPartyData || !isEditingData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"><option value="">Selecione</option><option value="Fiador">Fiador</option><option value="Seguro Fiança">Seguro Fiança</option><option value="Caução">Caução</option></select></div>
+                {/if}
                 <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-estado-civil">Estado civil</label><select id="buyer-estado-civil" bind:value={buyerInfoForm.estadoCivil} disabled={savingPartyData || !isEditingData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800">{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select></div>
                 {#if requiresSpouseFields(buyerInfoForm.estadoCivil)}
                   <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="buyer-conjuge-nome" placeholder="Nome do cônjuge" bind:value={buyerInfoForm.conjugeNome} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="buyer-conjuge-cpf" placeholder="CPF do cônjuge" bind:value={buyerInfoForm.conjugeCpf} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="buyer-conjuge-profissao" placeholder="Profissão do cônjuge" bind:value={buyerInfoForm.conjugeProfissao} disabled={savingPartyData || !isEditingData} /></div></div>
@@ -2300,12 +2304,14 @@
             </div>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
               <label class="text-sm text-gray-700 dark:text-gray-200">
-                Valor de Venda/Locação (R$)
+                {selected?.dealType === 'rent'
+                  ? 'Aluguel mensal (base da comissão) (R$)'
+                  : 'Valor de venda (base da comissão) (R$)'}
                 <input
                   type="text"
                   inputmode="decimal"
-                  value={finalizeForm.valorVenda}
-                  on:input={(event) => handleFinalizeMoneyInput('valorVenda', event)}
+                  value={finalizeForm.valorBaseComissao}
+                  on:input={(event) => handleFinalizeMoneyInput('valorBaseComissao', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
                 />
               </label>

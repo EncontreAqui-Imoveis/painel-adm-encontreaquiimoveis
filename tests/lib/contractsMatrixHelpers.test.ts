@@ -57,6 +57,11 @@ describe('contractsMatrixHelpers', () => {
       documentRequirementMatrix: {
         seller: [
           {
+            category: 'seguro_incendio',
+            applicability: 'required',
+            preferredDocumentType: 'seguro_incendio',
+          },
+          {
             category: 'dados_bancarios',
             applicability: 'required',
             preferredDocumentType: 'dados_bancarios',
@@ -64,9 +69,9 @@ describe('contractsMatrixHelpers', () => {
         ],
         buyer: [
           {
-            category: 'comprovante_garantia',
+            category: 'comprovante_renda',
             applicability: 'required',
-            preferredDocumentType: 'comprovante_garantia',
+            preferredDocumentType: 'comprovante_renda',
           },
           {
             category: 'outro',
@@ -82,7 +87,11 @@ describe('contractsMatrixHelpers', () => {
       sellerRequired: true,
       buyerRequired: false,
     });
-    expect(rows.find((row) => row.documentType === 'comprovante_garantia')).toMatchObject({
+    expect(rows.find((row) => row.documentType === 'seguro_incendio')).toMatchObject({
+      sellerRequired: true,
+      buyerRequired: false,
+    });
+    expect(rows.find((row) => row.documentType === 'comprovante_renda')).toMatchObject({
       sellerRequired: false,
       buyerRequired: true,
     });

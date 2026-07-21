@@ -84,7 +84,7 @@ describe('CommissionsModule', () => {
 
     const captadorNomeInput = screen.getByLabelText('Nome do captador') as HTMLInputElement;
     const vendedorNomeInput = screen.getByLabelText('Nome do vendedor') as HTMLInputElement;
-    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
     const vendedorInput = screen.getByLabelText('Comissão Complementar') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
@@ -101,7 +101,7 @@ describe('CommissionsModule', () => {
     await waitFor(() => {
       expect(apiPutMock).toHaveBeenCalledWith('/admin/contracts/contract-final-1/commission-data', {
         commission_data: {
-          valorVenda: 1000,
+          valorBaseComissao: 1000,
           comissaoCaptador: 400,
           comissaoVendedor: 300,
           taxaPlataforma: 300,
@@ -134,7 +134,7 @@ describe('CommissionsModule', () => {
       'false'
     );
 
-    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
     const vendedorInput = screen.getByLabelText('Comissão Complementar') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;
@@ -149,7 +149,7 @@ describe('CommissionsModule', () => {
     await waitFor(() => {
       expect(apiPutMock).toHaveBeenCalledWith('/admin/contracts/contract-final-1/commission-data', {
         commission_data: {
-          valorVenda: 1000,
+          valorBaseComissao: 1000,
           comissaoCaptador: 400,
           comissaoVendedor: 300,
           taxaPlataforma: 300,
@@ -166,7 +166,7 @@ describe('CommissionsModule', () => {
     await screen.findAllByText(/Casa Centro/);
     await fireEvent.click(screen.getAllByRole('button', { name: 'Editar' })[0]);
 
-    const valorInput = screen.getByLabelText('Valor de Venda/Locação (R$)') as HTMLInputElement;
+    const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorModeButton = screen.getByRole('button', { name: 'Comissão Captador em percentual' });
     const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
     const taxaInput = screen.getByLabelText('Taxa Encontre Aqui') as HTMLInputElement;

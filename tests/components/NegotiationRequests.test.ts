@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   apiGetMock,
@@ -41,14 +41,34 @@ vi.mock('svelte-sonner', () => ({
 import NegotiationRequests from '../../src/lib/components/NegotiationRequests.svelte';
 
 describe('NegotiationRequests', () => {
+  let unexpectedGetEndpoints: string[] = [];
+
+  function unexpectedGetEndpoint(endpoint: string): never {
+    unexpectedGetEndpoints.push(endpoint);
+    throw new Error(`Endpoint GET não mapeado no cenário: ${endpoint}`);
+  }
+
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    unexpectedGetEndpoints = [];
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
+  afterEach(() => {
+    cleanup();
+    expect(unexpectedGetEndpoints).toEqual([]);
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
   it('exibe erro inline e retry quando falha ao carregar responsáveis', async () => {
+    let requestCount = 0;
     apiGetMock.mockImplementation(async (endpoint: string) => {
+      requestCount += 1;
+      if (requestCount > 20) {
+        throw new Error(`Loop de requisições inesperado no teste: ${endpoint}`);
+      }
       if (endpoint.startsWith('/admin/negotiations/requests/summary?')) {
         return {
           data: [
@@ -101,7 +121,7 @@ describe('NegotiationRequests', () => {
         };
       }
 
-      return { data: [] };
+      return unexpectedGetEndpoint(endpoint);
     });
 
     render(NegotiationRequests);
@@ -173,7 +193,7 @@ describe('NegotiationRequests', () => {
         return { data: [] };
       }
 
-      return { data: [] };
+      return unexpectedGetEndpoint(endpoint);
     });
 
     render(NegotiationRequests);
@@ -244,7 +264,7 @@ describe('NegotiationRequests', () => {
         return { data: [] };
       }
 
-      return { data: [] };
+      return unexpectedGetEndpoint(endpoint);
     });
 
     apiDeleteMock.mockImplementation(async (endpoint: string) => {
@@ -331,7 +351,7 @@ describe('NegotiationRequests', () => {
         };
       }
 
-      return { data: [] };
+      return unexpectedGetEndpoint(endpoint);
     });
 
     render(NegotiationRequests);
@@ -369,7 +389,7 @@ describe('NegotiationRequests', () => {
         };
       }
 
-      return { data: [] };
+      return unexpectedGetEndpoint(endpoint);
     });
 
     render(NegotiationRequests);

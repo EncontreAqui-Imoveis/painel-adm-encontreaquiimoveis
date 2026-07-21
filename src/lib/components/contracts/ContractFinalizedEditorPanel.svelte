@@ -45,7 +45,12 @@
   <div class="rounded-md border border-gray-200 p-3 text-sm dark:border-gray-700">
     <p><span class="font-semibold">Status:</span> {statusLabel(contract?.status)}</p>
     <p><span class="font-semibold">Atualizado em:</span> {formatDate(contract?.updatedAt ?? contract?.createdAt)}</p>
-    <p><span class="font-semibold">Valor:</span> {readCommissionValue(contract?.commissionData ?? null, 'valorVenda') || '-'}</p>
+    <p>
+      <span class="font-semibold">
+        {contract?.dealType === 'rent' ? 'Aluguel mensal (base da comissão):' : 'Valor de venda (base da comissão):'}
+      </span>
+      {readCommissionValue(contract?.commissionData ?? null, 'valorBaseComissao') || readCommissionValue(contract?.commissionData ?? null, 'valorVenda') || '-'}
+    </p>
   </div>
 
   <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">

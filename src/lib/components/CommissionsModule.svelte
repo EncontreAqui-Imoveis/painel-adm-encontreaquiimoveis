@@ -45,6 +45,7 @@
     signedProposalDocumentId?: number | string | null;
     signedProposalDocumentSource?: 'negotiation_documents' | null;
     commissionData: {
+      valorBaseComissao?: number;
       valorVenda: number;
       comissaoCaptador: number;
       comissaoVendedor: number;
@@ -140,6 +141,21 @@
 
   function propertyLabel(item: CommissionsTransaction): string {
     return resolveCommissionPropertyLabel(item);
+  }
+
+  function isRentalTransaction(item: CommissionsTransaction): boolean {
+    const purpose = String(item.propertyPurpose ?? '').trim().toLowerCase();
+    return purpose.includes('alug') && !purpose.includes('venda');
+  }
+
+  function commissionBaseValue(item: CommissionsTransaction): number {
+    return toNumber(
+      item.commissionData?.valorBaseComissao ?? item.commissionData?.valorVenda
+    );
+  }
+
+  function commissionBaseLabel(item: CommissionsTransaction): string {
+    return isRentalTransaction(item) ? 'Aluguel mensal' : 'Valor de venda';
   }
 
   function normalizeDisplayName(value: string | null | undefined): string {
@@ -288,7 +304,9 @@
       taxaPlataforma: 'amount',
     };
     commissionForm = {
-      valorVenda: readCommissionValue(item.commissionData?.valorVenda),
+      valorVenda: readCommissionValue(
+        item.commissionData?.valorBaseComissao ?? item.commissionData?.valorVenda
+      ),
       comissaoCaptador: readCommissionValue(item.commissionData?.comissaoCaptador),
       comissaoVendedor: readCommissionValue(item.commissionData?.comissaoVendedor),
       taxaPlataforma: readCommissionValue(item.commissionData?.taxaPlataforma),
@@ -325,14 +343,19 @@
     savingCommissionData = true;
     try {
       await api.put(`/admin/contracts/${selectedTransaction.contractId}/commission-data`, {
-        commission_data: resolved,
+        commission_data: {
+          valorBaseComissao: resolved.valorVenda,
+          comissaoCaptador: resolved.comissaoCaptador,
+          comissaoVendedor: resolved.comissaoVendedor,
+          taxaPlataforma: resolved.taxaPlataforma,
+        },
       });
-      toast.success('VGV atualizado com sucesso.');
+      toast.success('Base de comissão atualizada com sucesso.');
       await fetchCommissions();
       closeEditModal();
     } catch (saveError) {
-      console.error('Erro ao atualizar VGV:', saveError);
-      toast.error(resolveApiErrorMessage(saveError, 'Não foi possível atualizar o VGV.'));
+      console.error('Erro ao atualizar base de comissão:', saveError);
+      toast.error(resolveApiErrorMessage(saveError, 'Não foi possível atualizar a base de comissão.'));
     } finally {
       savingCommissionData = false;
     }
@@ -584,13 +607,13 @@
               </p>
             </div>
             <span class="rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300">
-              VGV
+              {isRentalTransaction(item) ? 'Aluguel mensal' : 'Venda'}
             </span>
           </div>
           <dl class="mt-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
             <div class="flex items-center justify-between gap-3">
-              <dt>VGV</dt>
-              <dd class="text-right">{formatCurrency(toNumber(item.commissionData?.valorVenda))}</dd>
+              <dt>{commissionBaseLabel(item)}</dt>
+              <dd class="text-right">{formatCurrency(commissionBaseValue(item))}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
               <dt>Captador</dt>
@@ -637,7 +660,7 @@
             Imóvel
           </th>
           <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            VGV
+            Base da comissão
           </th>
           <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Comissão Captador
@@ -688,7 +711,7 @@
                 </div>
               </td>
               <td class="px-6 py-4 text-right text-sm text-gray-700 dark:text-gray-300">
-                {formatCurrency(toNumber(item.commissionData?.valorVenda))}
+                {formatCurrency(commissionBaseValue(item))}
               </td>
               <td class="px-6 py-4 text-right text-sm text-gray-700 dark:text-gray-300">
                 {formatCurrency(toNumber(item.commissionData?.comissaoCaptador))}
@@ -746,7 +769,7 @@
       <div class="mb-4 flex items-start justify-between gap-3">
         <div>
           <h3 id="commission-edit-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Editar VGV
+            Editar base da comissão
           </h3>
           <p class="text-sm text-gray-500 dark:text-gray-400">
             {propertyLabel(selectedTransaction)}
@@ -767,7 +790,7 @@
           <div class="flex items-start justify-between gap-3">
             <div>
               <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                Pessoas do VGV
+                Pessoas da comissão
               </span>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Campos apenas visuais nesta tela.
@@ -810,7 +833,9 @@
 
           <div class="mt-3 grid gap-3 md:grid-cols-2">
             <label class="text-sm text-gray-700 dark:text-gray-200 md:col-span-2">
-              Valor de Venda/Locação (R$)
+              {isRentalTransaction(selectedTransaction)
+                ? 'Aluguel mensal (base da comissão) (R$)'
+                : 'Valor de venda (base da comissão) (R$)'}
               <input
                 type="text"
                 inputmode="decimal"
@@ -829,7 +854,7 @@
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       {commissionFieldModes[field.key] === 'amount'
                         ? 'Valor real em reais.'
-                        : 'Percentual sobre o VGV.'}
+                        : 'Percentual sobre a base da comissão.'}
                     </p>
                   </div>
                   <div class="inline-flex rounded-full bg-slate-200 p-1 text-xs font-semibold dark:bg-slate-800">
