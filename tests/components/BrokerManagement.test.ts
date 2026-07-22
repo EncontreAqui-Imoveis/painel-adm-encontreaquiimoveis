@@ -51,6 +51,19 @@ function setupBrokerListMock() {
         total: 1,
       };
     }
+    if (endpoint === '/admin/brokers/1/properties') {
+      return {
+        data: [
+          {
+            id: 901,
+            code: 'BR-901',
+            title: 'Imóvel do corretor',
+            status: 'approved',
+            created_at: '2026-01-10T10:00:00.000Z',
+          },
+        ],
+      };
+    }
     if (endpoint.startsWith('/admin/brokers/')) {
       return broker;
     }
@@ -152,5 +165,16 @@ describe('BrokerManagement', () => {
     });
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Salvar alterações' })).toBeInTheDocument();
+  });
+
+  it('mostra o código do imóvel do corretor sem usar o ID como rótulo', async () => {
+    render(BrokerManagement);
+
+    await screen.findByText('Corretor Exemplo');
+    await fireEvent.click(screen.getByRole('button', { name: 'Ver imóveis' }));
+
+    expect(await screen.findByText('Imóvel do corretor')).toBeInTheDocument();
+    expect(screen.getByText(/Cód\. BR-901/)).toBeInTheDocument();
+    expect(screen.queryByText(/#901/)).not.toBeInTheDocument();
   });
 });

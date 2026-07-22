@@ -1718,12 +1718,12 @@
     {/each}
   </div>
 
-  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="text-sm text-gray-600 dark:text-gray-300">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="text-sm text-gray-600 dark:text-gray-300">
         {tabs.find((tab) => tab.key === activeTab)?.label}
       </div>
-      <div className="relative">
+      <div class="relative">
         <input
           type="text"
           bind:value={contractSearchQuery}

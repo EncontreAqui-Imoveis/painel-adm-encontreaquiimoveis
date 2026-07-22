@@ -77,7 +77,17 @@ describe('ClientManagement', () => {
       }
 
       if (endpoint === '/admin/clients/7/properties') {
-        return { data: [] };
+        return {
+          data: [
+            {
+              id: 900,
+              code: 'RV-900',
+              title: 'Casa com código',
+              status: 'approved',
+              created_at: '2026-01-10T10:00:00.000Z',
+            },
+          ],
+        };
       }
 
       return { data: [] };
@@ -134,5 +144,16 @@ describe('ClientManagement', () => {
         'X-Admin-Reauth': 'reauth-123',
       },
     });
+  });
+
+  it('mostra código do imóvel no modal administrativo sem expor o ID interno', async () => {
+    render(ClientManagement);
+
+    await screen.findByText('Cliente Teste');
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Ver Imóveis' })[0]);
+
+    expect(await screen.findByText('Casa com código')).toBeInTheDocument();
+    expect(screen.getByText(/Cód\. RV-900/)).toBeInTheDocument();
+    expect(screen.queryByText(/#900/)).not.toBeInTheDocument();
   });
 });
