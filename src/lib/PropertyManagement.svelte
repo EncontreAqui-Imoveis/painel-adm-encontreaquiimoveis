@@ -19,13 +19,6 @@
   import PropertyDecisionDialogs from '$lib/components/property/PropertyDecisionDialogs.svelte';
   import PropertyManagementActionBar from '$lib/components/property/PropertyManagementActionBar.svelte';
   import {
-    humanizePropertyRequestType,
-    inferPropertyRequestType,
-    propertyRequestTypeBadgeClasses,
-    reviewPropertyRequestTypeLabel,
-    type PropertyRequestTypeFilter,
-  } from '$lib/components/property/propertyReviewHelpers';
-  import {
     humanizePropertyStatus,
     propertyStatusBadgeClasses,
     normalizePublicCode,
@@ -132,9 +125,6 @@ function parseNullableNumber(value: unknown): number | null {
     broker_phone?: string | null;
     broker_status?: string | null;
     broker_creci?: string | null;
-    created_at?: string | null;
-    updated_at?: string | null;
-    request_type?: 'creation' | 'edit' | null;
     area_construida_unidade?: AreaUnit | null;
     area_terreno_unidade?: AreaUnit | null;
     area_construida_valor?: number | null;
@@ -204,9 +194,7 @@ function parseNullableNumber(value: unknown): number | null {
   };
   export let initialStatus: PropertyStatus | 'all' = 'approved';
   export let allowApproval = false;
-  export let initialReviewRequestType: PropertyRequestTypeFilter = 'all';
   let isReviewOnly = false;
-  let reviewRequestType: PropertyRequestTypeFilter = initialReviewRequestType;
   $: isReviewOnly = allowApproval;
 
     let properties: PropertySummary[] = [];
@@ -575,9 +563,6 @@ function parseNullableNumber(value: unknown): number | null {
       if (filters.purpose !== 'all') {
         params.append('purpose', filters.purpose);
       }
-      if (isReviewOnly && reviewRequestType !== 'all') {
-        params.append('requestType', reviewRequestType);
-      }
       params.append('sortBy', sortConfig.key);
       params.append('sortOrder', sortConfig.order);
       if (shouldFetchFullDataset) {
@@ -630,9 +615,6 @@ function parseNullableNumber(value: unknown): number | null {
           const brokerPhoneValue = record['broker_phone'];
           const brokerStatusValue = record['broker_status'];
           const brokerCreciValue = record['broker_creci'];
-          const createdAtValue = record['created_at'];
-          const updatedAtValue = record['updated_at'];
-          const requestTypeValue = String(record['request_type'] ?? '').trim().toLowerCase();
           const cepValue = record['cep'];
           const areaConstruidaUnidade = normalizeAreaUnit(record['area_construida_unidade']);
           const areaTerrenoUnidadeRaw =
@@ -686,14 +668,6 @@ function parseNullableNumber(value: unknown): number | null {
             broker_phone: (brokerPhoneValue as string | null | undefined) ?? null,
             broker_status: (brokerStatusValue as string | null | undefined) ?? null,
             broker_creci: (brokerCreciValue as string | null | undefined) ?? null,
-            created_at: createdAtValue != null ? String(createdAtValue) : null,
-            updated_at: updatedAtValue != null ? String(updatedAtValue) : null,
-            request_type:
-              requestTypeValue === 'edit'
-                ? 'edit'
-                : requestTypeValue === 'creation'
-                ? 'creation'
-                : null,
             amenities: getAmenityPayload(record as Record<string, unknown>),
             images:
               (record['images'] as
@@ -1114,12 +1088,6 @@ function parseNullableNumber(value: unknown): number | null {
     if ('images' in patch) {
       selectedPropertyGalleryImages = normalizeImages(patch.images ?? null);
     }
-  }
-
-  function setReviewRequestType(type: PropertyRequestTypeFilter) {
-    if (reviewRequestType === type) return;
-    reviewRequestType = type;
-    requestFetch(true);
   }
 
   function sanitizeEditable(data: Partial<PropertyDetails>): PropertyDetails {
@@ -2198,7 +2166,7 @@ function parseNullableNumber(value: unknown): number | null {
   <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
     <div class="space-y-2">
       {#if isReviewOnly}
-        <span class="inline-flex items-center gap-2 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 dark:bg-green-900/60 dark:text-green-100">
+        <span class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-100">
           Fila de revisão
         </span>
         <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Solicitações de imóveis</h1>
@@ -2214,13 +2182,8 @@ function parseNullableNumber(value: unknown): number | null {
     </div>
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
       {#if isReviewOnly}
-        <div class="grid gap-2 sm:grid-cols-2">
-          <div class="rounded-lg border border-green-100 bg-white/80 px-4 py-2 text-sm text-gray-700 shadow-sm dark:border-green-900/60 dark:bg-gray-900/70 dark:text-gray-200">
-            Pendentes: {isLoading ? '...' : totalItems}
-          </div>
-          <div class="rounded-lg border border-green-100 bg-white/80 px-4 py-2 text-sm text-gray-700 shadow-sm dark:border-green-900/60 dark:bg-gray-900/70 dark:text-gray-200">
-            Filtro: pendente de aprovação • {reviewPropertyRequestTypeLabel(reviewRequestType)}
-          </div>
+        <div class="rounded-lg border border-gray-200 bg-white/80 px-4 py-2 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-900/70 dark:text-gray-200">
+          Pendentes de aprovação: {isLoading ? '...' : totalItems}
         </div>
       {/if}
       <div class="flex flex-wrap items-center gap-2">
@@ -2235,7 +2198,7 @@ function parseNullableNumber(value: unknown): number | null {
         {#if isReviewOnly}
           <Button
             variant="outline"
-            className="flex items-center gap-2 border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30"
+            className="flex items-center gap-2"
             on:click={handleRefresh}
             disabled={isLoading}
           >
@@ -2246,7 +2209,6 @@ function parseNullableNumber(value: unknown): number | null {
           </Button>
           <Button
             variant="outline"
-            className="border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30"
             on:click={sortByCreatedDesc}
             disabled={isLoading}
           >
@@ -2254,7 +2216,6 @@ function parseNullableNumber(value: unknown): number | null {
           </Button>
           <Button
             variant="outline"
-            className="border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30"
             on:click={sortAlphabetical}
             disabled={isLoading}
           >
@@ -2314,13 +2275,11 @@ function parseNullableNumber(value: unknown): number | null {
     <PropertyManagementQueue
       {displayedProperties}
       {isReviewOnly}
-      {reviewRequestType}
       {selectedProperty}
       {isDetailLoading}
       {getPropertyCoverUrl}
       {openCoverPreviewFromList}
       {markThumbnailAsBroken}
-      {inferPropertyRequestType}
       {reviewProperty}
       {handleSort}
       {getSortIndicator}
@@ -2351,7 +2310,7 @@ function parseNullableNumber(value: unknown): number | null {
 
     <div class="space-y-5 px-1 py-4">
       {#if isReviewOnly}
-        <div class="space-y-4 rounded-xl border border-green-100 bg-green-50/50 p-4 dark:border-green-900/50 dark:bg-green-950/20">
+        <div class="space-y-4 rounded-xl border border-gray-200 bg-gray-50/70 p-4 dark:border-gray-700 dark:bg-gray-900/40">
           <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
             <Input
               className="w-full"
@@ -2362,7 +2321,7 @@ function parseNullableNumber(value: unknown): number | null {
               onkeydown={handleKeydown}
               onkeyup={handleKeyup}
             />
-            <div class="text-xs text-green-700 dark:text-green-200">
+            <div class="text-xs text-gray-600 dark:text-gray-300">
               Dica: clique em Revisar para ver os detalhes completos.
             </div>
           </div>
@@ -2384,57 +2343,20 @@ function parseNullableNumber(value: unknown): number | null {
             </select>
             <span class="text-sm text-gray-600 dark:text-gray-300">entradas</span>
           </div>
-          <div class="grid gap-3 md:grid-cols-2">
-            <div class="grid gap-2">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de solicitação</span>
-              <div class="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  className={reviewRequestType === 'all'
-                    ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
-                    : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
-                  on:click={() => setReviewRequestType('all')}
-                  disabled={isLoading}
-                >
-                  Todas
-                </Button>
-                <Button
-                  variant="outline"
-                  className={reviewRequestType === 'creation'
-                    ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
-                    : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
-                  on:click={() => setReviewRequestType('creation')}
-                  disabled={isLoading}
-                >
-                  Criação
-                </Button>
-                <Button
-                  variant="outline"
-                  className={reviewRequestType === 'edit'
-                    ? 'border-green-500 bg-green-100 text-green-900 dark:border-green-500 dark:bg-green-900/40 dark:text-green-100'
-                    : 'border-green-200 text-green-800 hover:bg-green-100/60 dark:border-green-800 dark:text-green-100 dark:hover:bg-green-900/30'}
-                  on:click={() => setReviewRequestType('edit')}
-                  disabled={isLoading}
-                >
-                  Edição
-                </Button>
-              </div>
-            </div>
-            <div class="grid gap-2">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Cidade</span>
-              <div class="relative">
-                <Select.Root bind:value={filters.city} on:valueChange={onFilterChange}>
-                  <Select.Trigger>
-                    <Select.Value placeholder="Filtrar por cidade" />
-                  </Select.Trigger>
-                  <Select.Content>
-                    <Select.Item value="all">Todas as cidades</Select.Item>
-                    {#each cities as city (city)}
-                      <Select.Item value={city}>{city}</Select.Item>
-                    {/each}
-                  </Select.Content>
-                </Select.Root>
-              </div>
+          <div class="grid gap-2">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Cidade</span>
+            <div class="relative">
+              <Select.Root bind:value={filters.city} on:valueChange={onFilterChange}>
+                <Select.Trigger>
+                  <Select.Value placeholder="Filtrar por cidade" />
+                </Select.Trigger>
+                <Select.Content>
+                  <Select.Item value="all">Todas as cidades</Select.Item>
+                  {#each cities as city (city)}
+                    <Select.Item value={city}>{city}</Select.Item>
+                  {/each}
+                </Select.Content>
+              </Select.Root>
             </div>
           </div>
         </div>
@@ -2690,7 +2612,7 @@ function parseNullableNumber(value: unknown): number | null {
         </p>
       </Dialog.Header>
 
-      <PropertyFormShell mode="edit" variant="orange" showHeader={false}>
+      <PropertyFormShell mode="edit" showHeader={false}>
       <div class="min-w-0 space-y-6 overflow-y-auto overflow-x-hidden px-6 py-4">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <PropertyPricingSection
@@ -2973,7 +2895,7 @@ function parseNullableNumber(value: unknown): number | null {
                 </p>
                 <div class="mb-3 flex flex-wrap gap-2">
                   {#each propertyAmenityOptions.filter((amenity) => isAmenityChecked(selectedProperty, amenity)) as amenity}
-                    <span class="rounded-full bg-green-100 px-3 py-1 text-green-800 dark:bg-green-900 dark:text-green-200">
+                    <span class="rounded-full bg-slate-100 px-3 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-100">
                       {amenity}
                     </span>
                   {/each}
@@ -3130,7 +3052,7 @@ function parseNullableNumber(value: unknown): number | null {
               {#if image?.url && !brokenPreviewImages.has(image.url)}
                 <button
                   type="button"
-                  class="shrink-0 overflow-hidden rounded-md ring-2 transition focus:outline-none focus-visible:ring-green-400 {thumbIdx ===
+                  class="shrink-0 overflow-hidden rounded-md ring-2 transition focus:outline-none focus-visible:ring-sky-400 {thumbIdx ===
                   previewImageIndex
                     ? 'ring-white'
                     : 'ring-transparent opacity-80 hover:opacity-100'}"

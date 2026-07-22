@@ -36,7 +36,7 @@
     try {
       const [creationResponse, editResponse] = await Promise.all([
         api.get<{ data?: Array<Record<string, unknown>>; total?: number }>(
-          '/admin/properties-with-brokers?status=pending_approval&requestType=creation&page=1&limit=1'
+          '/admin/properties-with-brokers?status=pending_approval&page=1&limit=1'
         ),
         api.get<{ data?: Array<Record<string, unknown>>; total?: number }>(
           '/admin/property-edit-requests?status=PENDING&page=1&limit=1'
@@ -97,7 +97,6 @@
     <PropertyManagement
       initialStatus="pending_approval"
       allowApproval={true}
-      initialReviewRequestType="creation"
     />
   {:else}
     <PropertyEditRequests />

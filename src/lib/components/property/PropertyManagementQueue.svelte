@@ -7,13 +7,6 @@
     resolvePriceLines,
     type AreaUnit,
   } from '$lib/components/property/propertyFormattingHelpers';
-  import {
-    humanizePropertyRequestType,
-    propertyRequestTypeBadgeClasses,
-    type PropertyRequestType,
-    type PropertyRequestTypeFilter,
-    reviewPropertyRequestTypeLabel,
-  } from '$lib/components/property/propertyReviewHelpers';
   import { humanizePropertyStatus, propertyStatusBadgeClasses } from '$lib/components/property/propertyPresentationHelpers';
   import type { PropertyImage, PropertyStatus } from '$lib/types';
 
@@ -28,9 +21,6 @@
     broker_name?: string | null;
     broker_phone?: string | null;
     images?: string | (string | PropertyImage)[] | null;
-    request_type?: PropertyRequestType | null;
-    created_at?: string | null;
-    updated_at?: string | null;
     price?: number | null;
     price_sale?: number | null;
     price_rent?: number | null;
@@ -46,14 +36,11 @@
 
   export let displayedProperties: QueueProperty[] = [];
   export let isReviewOnly = false;
-  export let reviewRequestType: PropertyRequestTypeFilter = 'all';
   export let selectedProperty: QueueProperty | null = null;
   export let isDetailLoading = false;
   export let getPropertyCoverUrl: (property: QueueProperty) => string | null = () => null;
   export let openCoverPreviewFromList: (property: QueueProperty, event: Event) => void = () => {};
   export let markThumbnailAsBroken: (propertyId: number) => void = () => {};
-  export let inferPropertyRequestType: (property: QueueProperty) => PropertyRequestType = () =>
-    'creation';
   export let reviewProperty: (property: QueueProperty, event?: Event) => void | Promise<void> =
     () => {};
   export let handleSort: (column: string) => void = () => {};
@@ -71,7 +58,7 @@
     </h2>
     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
       {#if isReviewOnly}
-        Não há itens pendentes no recorte "{reviewPropertyRequestTypeLabel(reviewRequestType)}".
+        Não há imóveis pendentes de aprovação.
       {:else}
         Ajuste os filtros para visualizar outros resultados.
       {/if}
@@ -80,13 +67,7 @@
 {:else}
   <div class="space-y-3 md:hidden">
     {#each displayedProperties as property}
-      <div
-        class={`w-full rounded-lg border p-4 text-left shadow-sm transition ${
-          isReviewOnly
-            ? 'border-green-200 bg-green-50/40 dark:border-green-800/60 dark:bg-gray-900/70'
-            : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900'
-        }`}
-      >
+      <div class="w-full rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm transition dark:border-gray-700 dark:bg-gray-900">
         <div class="flex items-start justify-between gap-3">
           <div class="flex min-w-0 items-start gap-3">
             <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-100 text-[10px] font-semibold text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
@@ -127,14 +108,6 @@
             {humanizePropertyStatus(property.status, property.purpose)}
           </span>
         </div>
-        {#if isReviewOnly}
-          {@const requestType = inferPropertyRequestType(property)}
-          <div class="mt-2">
-            <span class={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${propertyRequestTypeBadgeClasses(requestType)}`}>
-              Solicitação: {humanizePropertyRequestType(requestType)}
-            </span>
-          </div>
-        {/if}
         <div class="mt-2 text-sm text-gray-700 dark:text-gray-300">
           {property.bairro ?? '-'}
           {#if property.city}
@@ -159,7 +132,7 @@
           <Button
             variant="outline"
             size="sm"
-            className="border-green-500 text-green-700 hover:bg-green-50 dark:border-green-400 dark:text-green-200 dark:hover:bg-green-900/40"
+            className="border-sky-500 text-sky-700 hover:bg-sky-50 dark:border-sky-400 dark:text-sky-200 dark:hover:bg-sky-950/40"
             on:click={(event) => {
               event.stopPropagation();
               reviewProperty(property, event);
@@ -177,13 +150,7 @@
       </div>
     {/each}
   </div>
-  <div
-    class={`hidden md:block show-scrollbar overflow-x-auto rounded-lg border shadow-sm ${
-      isReviewOnly
-        ? 'border-green-200 bg-green-50/40 dark:border-green-800/60 dark:bg-gray-900/70'
-        : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900'
-    }`}
-  >
+  <div class="hidden md:block show-scrollbar overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
       <thead class="bg-gray-50 dark:bg-gray-900/70">
         <tr>
@@ -205,11 +172,6 @@
               <span>{getSortIndicator('p.price')}</span>
             </button>
           </th>
-          {#if isReviewOnly}
-            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              Solicitação
-            </th>
-          {/if}
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Anunciante</th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Telefone do anunciante</th>
           <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Ações</th>
@@ -265,14 +227,6 @@
                 {/each}
               </div>
             </td>
-            {#if isReviewOnly}
-              {@const requestType = inferPropertyRequestType(property)}
-              <td class="px-6 py-4">
-                <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${propertyRequestTypeBadgeClasses(requestType)}`}>
-                  {humanizePropertyRequestType(requestType)}
-                </span>
-              </td>
-            {/if}
             <td class="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
               {property.broker_name ?? '-'}
             </td>
@@ -283,7 +237,7 @@
               <Button
                 variant="outline"
                 size="sm"
-                className="border-green-500 text-green-700 hover:bg-green-50 dark:border-green-400 dark:text-green-200 dark:hover:bg-green-900/40"
+                className="border-sky-500 text-sky-700 hover:bg-sky-50 dark:border-sky-400 dark:text-sky-200 dark:hover:bg-sky-950/40"
                 on:click={(event) => reviewProperty(property, event)}
                 disabled={isDetailLoading && selectedProperty?.id === property.id}
               >

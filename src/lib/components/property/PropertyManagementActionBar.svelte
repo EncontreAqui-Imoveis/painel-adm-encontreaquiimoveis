@@ -41,7 +41,7 @@
   </Button>
   {#if isEditMode && editableProperty?.status === 'pending_approval'}
     <span
-      class="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-sm font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100"
+      class="rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100"
     >
       Pendente de aprovação
     </span>
@@ -51,7 +51,7 @@
       <select
         id="status-select"
         name="status"
-        class="rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:border-green-500 focus:ring-2 focus:ring-green-500"
+        class="rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:border-sky-500 focus:ring-2 focus:ring-sky-500"
         bind:value={editableProperty.status}
       >
         <option value="approved">Disponível</option>

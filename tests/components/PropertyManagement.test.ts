@@ -1348,7 +1348,7 @@ describe('PropertyManagement', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  it('salva solicitação de edição com public_code e não envia status inválido no PUT', async () => {
+  it('mantém imóvel pendente na fila de criação após correção, sem classificá-lo por tipo', async () => {
     mockPropertyManagementRequests({
       initialProperty: {
         ...basePropertyState,
@@ -1364,6 +1364,13 @@ describe('PropertyManagement', () => {
     });
 
     await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    expect(screen.queryByText('Solicitação')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tipo de solicitação')).not.toBeInTheDocument();
+    const reviewQueueRequests = apiGetMock.mock.calls
+      .map(([endpoint]) => String(endpoint))
+      .filter((endpoint) => endpoint.includes('/admin/properties-with-brokers'));
+    expect(reviewQueueRequests.every((endpoint) => !endpoint.includes('requestType='))).toBe(true);
+
     await fireEvent.click(getRevisarButtons()[0]);
 
     const dialog = await screen.findByRole('dialog');

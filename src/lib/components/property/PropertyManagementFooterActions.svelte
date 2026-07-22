@@ -31,7 +31,7 @@
 
 {#if isEditMode && hasEditableProperty}
   <Button
-    className={allowApproval ? 'bg-green-500 text-black hover:bg-green-600' : 'bg-emerald-400 text-white hover:bg-emerald-500'}
+    className={allowApproval ? 'bg-sky-600 text-white hover:bg-sky-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}
     on:click={onSave}
     disabled={isSavingEdit || isProcessing}
   >
@@ -43,7 +43,7 @@
 {/if}
 
 {#if allowApproval && selectedStatus !== 'approved'}
-  <Button className="bg-green-600 text-white hover:bg-green-700" on:click={onApprove} disabled={isProcessing}>
+  <Button className="bg-emerald-600 text-white hover:bg-emerald-700" on:click={onApprove} disabled={isProcessing}>
     {#if isProcessing}
       <Loader2 class="mr-2 h-4 w-4 animate-spin" />
     {/if}
