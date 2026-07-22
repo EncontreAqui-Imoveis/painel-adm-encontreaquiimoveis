@@ -138,27 +138,6 @@ export function contractSideDocumentDescription(
   return side === 'seller' ? 'Documentos do proprietário legal' : 'Documentos do adquirente legal';
 }
 
-export function contractDraftTemplateSummary(contract?: ContractItem | null): {
-  label: string;
-  templateKey: string;
-  templateVersion: string;
-} {
-  const draftMetadata = (contract?.documents ?? []).find(
-    (doc) => String(doc.documentType ?? '').trim().toLowerCase() === 'contrato_minuta'
-  )?.metadata;
-  const metadata = draftMetadata && typeof draftMetadata === 'object' ? draftMetadata : {};
-  const isRental = isRentalContract(contract);
-  const templateKey = String(
-    metadata.templateKey ?? (isRental ? 'rental_contract_v1' : 'sale_contract_v1')
-  );
-  const templateVersion = String(metadata.templateVersion ?? '1');
-  return {
-    label: isRental ? 'Contrato de Locação' : 'Contrato de Compra e Venda',
-    templateKey,
-    templateVersion,
-  };
-}
-
 export function documentSideLabel(
   doc?: ContractDocument | null,
   contract?: ContractItem | null

@@ -1144,6 +1144,39 @@ describe('ContractsModule', () => {
 
     expect(screen.getByRole('button', { name: 'PDF da minuta' })).toBeInTheDocument();
     expect(screen.getByText('Nenhum arquivo selecionado.')).toBeInTheDocument();
+
+    const draftFileInput = document.querySelector('#draft-pdf') as HTMLInputElement | null;
+    expect(draftFileInput).not.toBeNull();
+    if (!draftFileInput) {
+      throw new Error('draft-pdf input not found');
+    }
+
+    const draftFile = new File(['%PDF-1.4 draft%'], 'minuta.pdf', {
+      type: 'application/pdf',
+    });
+    await fireEvent.change(draftFileInput, {
+      target: { files: [draftFile] },
+    });
+    const submitDraftButton = screen
+      .getAllByRole('button', { name: 'Anexar Minuta' })
+      .at(-1);
+    expect(submitDraftButton).toBeDefined();
+    if (!submitDraftButton) {
+      throw new Error('submit draft button not found');
+    }
+    await fireEvent.click(submitDraftButton);
+
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledWith(
+        '/admin/contracts/contract-test-draft-required-1/draft',
+        expect.any(FormData)
+      );
+    });
+
+    const form = apiClientPostMock.mock.calls[0][1] as FormData;
+    expect(form.get('side')).toBe('seller');
+    expect(form.get('file')).toBeInstanceOf(File);
+    expect((form.get('file') as File).name).toBe('minuta.pdf');
   });
 
   it('mostra a minuta atual e muda o CTA para atualizar quando já existe PDF', async () => {

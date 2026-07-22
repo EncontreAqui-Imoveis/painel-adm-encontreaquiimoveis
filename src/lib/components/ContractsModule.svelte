@@ -54,7 +54,6 @@
     canApproveSide,
     canRejectSide,
     canRestartSide,
-    contractDraftTemplateSummary,
     contractSideDataLabel,
     contractSideDocumentDescription,
     contractSideLabel,
@@ -274,7 +273,6 @@
     : null;
   $: selectedSellerLabel = contractSideLabel(selected, 'seller');
   $: selectedBuyerLabel = contractSideLabel(selected, 'buyer');
-  $: selectedDraftTemplate = contractDraftTemplateSummary(selected);
 
   function lockViewportGestureScroll() {
     if (typeof document === 'undefined') return;
@@ -2050,18 +2048,6 @@
           </div>
         {/if}
 
-        {#if selected.status === 'IN_DRAFT' || modalMode === 'upload_draft'}
-          <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
-            <p class="text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">Minuta canônica</p>
-            <p class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
-              {selectedDraftTemplate.label}
-            </p>
-            <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">
-              Template {selectedDraftTemplate.templateKey} · versão {selectedDraftTemplate.templateVersion}
-            </p>
-          </div>
-        {/if}
-
         {#if modalMode === 'review_docs'}
           <div class="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
@@ -2260,6 +2246,10 @@
         {:else if modalMode === 'upload_draft'}
         <ContractDraftUploadPanel
           contract={selected}
+          sellerLabel={selectedSellerLabel}
+          buyerLabel={selectedBuyerLabel}
+          ownerDisplayName={selected ? getOwnerDisplayName(selected) : ''}
+          buyerDisplayName={selected ? getBuyerDisplayName(selected) : ''}
           currentDraftDocument={getCurrentDraftDocument(selected)}
           documents={selected ? getAllContractDocuments(selected) : []}
           selectedDraftFile={selectedDraftFile}

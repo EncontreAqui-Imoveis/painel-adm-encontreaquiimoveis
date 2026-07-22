@@ -4,6 +4,10 @@
   import type { ContractItem, ContractDocument } from '$lib/components/contracts/types';
 
   export let contract: ContractItem | null = null;
+  export let sellerLabel = 'Parte Vendedora/Locadora';
+  export let buyerLabel = 'Parte Compradora/Locatária';
+  export let ownerDisplayName = '';
+  export let buyerDisplayName = '';
   export let currentDraftDocument: ContractDocument | null = null;
   export let documents: ContractDocument[] = [];
   export let selectedDraftFile: File | null = null;
@@ -27,9 +31,31 @@
   export let deleteDraftDocument: (doc: ContractDocument) => Promise<void> | void = () => {};
   export let handleDraftFileChange: (event: Event) => void = () => {};
   export let draftUploadInputEl: HTMLInputElement | null = null;
+
+  function onPickDraftFile() {
+    if (draftUploadInputEl) {
+      draftUploadInputEl.click();
+    } else {
+      (document.getElementById('draft-pdf') as HTMLInputElement | null)?.click();
+      triggerDraftPicker();
+    }
+  }
 </script>
 
 <div class="space-y-4">
+  {#if contract}
+    <div class="grid gap-3 sm:grid-cols-2">
+      <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
+        <p class="text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">{sellerLabel}</p>
+        <p class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{ownerDisplayName || '-'}</p>
+      </div>
+      <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+        <p class="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-300">{buyerLabel}</p>
+        <p class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{buyerDisplayName || '-'}</p>
+      </div>
+    </div>
+  {/if}
+
   {#if currentDraftDocument}
     <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
       <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
@@ -129,7 +155,7 @@
         aria-hidden="true"
         tabindex="-1"
       />
-      <Button variant="outline" on:click={triggerDraftPicker}>
+      <Button variant="outline" on:click={onPickDraftFile}>
         {draftUploadInputLabel(contract)}
       </Button>
       {#if hasCurrentDraftDocument(contract) && !selectedDraftFile}

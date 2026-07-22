@@ -1,22 +1,30 @@
 <script lang="ts">
-  import { Loader2 } from 'lucide-svelte';
-  import { Button } from '$lib/components/ui/button';
-  import type { ContractItem, ContractApprovalStatus } from '$lib/components/contracts/types';
+  import { Loader2 } from "lucide-svelte";
+  import { Button } from "$lib/components/ui/button";
+  import type {
+    ContractItem,
+    ContractApprovalStatus,
+  } from "$lib/components/contracts/types";
 
   export let contract: ContractItem | null = null;
   export let approvalLockReasons: string[] = [];
   export let isReadyToApprove = false;
-  export let evaluatingSide: 'seller' | 'buyer' | null = null;
+  export let evaluatingSide: "seller" | "buyer" | null = null;
   export let sellerApprovalDisabled = false;
-  export let isDoubleEndedDeal: (value: ContractItem | null) => boolean = () => false;
-  export let getSideApprovalUiState: (value?: ContractApprovalStatus | null) => string = () => 'pending';
+  export let isDoubleEndedDeal: (value: ContractItem | null) => boolean = () =>
+    false;
+  export let getSideApprovalUiState: (
+    value?: ContractApprovalStatus | null,
+  ) => string = () => "pending";
   export let evaluateContractSide: (
-    side: 'seller' | 'buyer',
-    action: 'APPROVED' | 'APPROVED_WITH_RES' | 'REJECTED' | 'PENDING'
+    side: "seller" | "buyer",
+    action: "APPROVED" | "APPROVED_WITH_RES" | "REJECTED" | "PENDING",
   ) => void = () => {};
 </script>
 
-<div class="space-y-3 rounded-md border border-gray-200 p-3 dark:border-gray-700">
+<div
+  class="space-y-3 rounded-md border border-gray-200 p-3 dark:border-gray-700"
+>
   {#if !isReadyToApprove}
     <div
       class="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900/60 dark:bg-red-950/30"
@@ -27,7 +35,9 @@
       <p class="text-sm font-medium text-red-700 dark:text-red-300">
         Aprovação bloqueada.
       </p>
-      <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-red-600 dark:text-red-300">
+      <ul
+        class="mt-2 list-disc space-y-1 pl-5 text-sm text-red-600 dark:text-red-300"
+      >
         {#each approvalLockReasons as reason}
           <li>{reason}</li>
         {/each}
@@ -36,17 +46,21 @@
   {/if}
 
   <div>
-    <p class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+    <p
+      class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
+    >
       Avaliação Vendedor
     </p>
     <div class="flex flex-wrap gap-2">
-      {#if getSideApprovalUiState(contract?.sellerApprovalStatus) === 'pending'}
+      {#if getSideApprovalUiState(contract?.sellerApprovalStatus) === "pending"}
         <Button
           size="sm"
           className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
-          on:click={() => evaluateContractSide('seller', 'APPROVED')}
+          on:click={() => evaluateContractSide("seller", "APPROVED")}
           disabled={sellerApprovalDisabled}
-          title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
+          title={!isReadyToApprove
+            ? approvalLockReasons.join(" | ")
+            : undefined}
         >
           Aprovar<span class="sr-only"> vendedor</span>
         </Button>
@@ -54,24 +68,24 @@
           size="sm"
           variant="outline"
           className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-          on:click={() => evaluateContractSide('seller', 'APPROVED_WITH_RES')}
+          on:click={() => evaluateContractSide("seller", "APPROVED_WITH_RES")}
         >
           Aprovar c/ ressalvas<span class="sr-only"> vendedor</span>
         </Button>
         <Button
           size="sm"
           variant="destructive"
-          on:click={() => evaluateContractSide('seller', 'REJECTED')}
-          disabled={evaluatingSide === 'seller'}
+          on:click={() => evaluateContractSide("seller", "REJECTED")}
+          disabled={evaluatingSide === "seller"}
         >
           Rejeitar
         </Button>
-      {:else if getSideApprovalUiState(contract?.sellerApprovalStatus) === 'approved'}
+      {:else if getSideApprovalUiState(contract?.sellerApprovalStatus) === "approved"}
         <Button
           size="sm"
           variant="destructive"
-          on:click={() => evaluateContractSide('seller', 'REJECTED')}
-          disabled={evaluatingSide === 'seller'}
+          on:click={() => evaluateContractSide("seller", "REJECTED")}
+          disabled={evaluatingSide === "seller"}
         >
           Rejeitar
         </Button>
@@ -79,7 +93,7 @@
           size="sm"
           variant="outline"
           className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-          on:click={() => evaluateContractSide('seller', 'PENDING')}
+          on:click={() => evaluateContractSide("seller", "PENDING")}
         >
           Reiniciar
         </Button>
@@ -87,9 +101,11 @@
         <Button
           size="sm"
           className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
-          on:click={() => evaluateContractSide('seller', 'APPROVED')}
+          on:click={() => evaluateContractSide("seller", "APPROVED")}
           disabled={sellerApprovalDisabled}
-          title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
+          title={!isReadyToApprove
+            ? approvalLockReasons.join(" | ")
+            : undefined}
         >
           Aprovar<span class="sr-only"> vendedor</span>
         </Button>
@@ -97,7 +113,7 @@
           size="sm"
           variant="outline"
           className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-          on:click={() => evaluateContractSide('seller', 'APPROVED_WITH_RES')}
+          on:click={() => evaluateContractSide("seller", "APPROVED_WITH_RES")}
         >
           Aprovar c/ ressalvas<span class="sr-only"> vendedor</span>
         </Button>
@@ -105,7 +121,7 @@
           size="sm"
           variant="outline"
           className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-          on:click={() => evaluateContractSide('seller', 'PENDING')}
+          on:click={() => evaluateContractSide("seller", "PENDING")}
         >
           Reiniciar
         </Button>
@@ -115,42 +131,46 @@
 
   {#if !isDoubleEndedDeal(contract)}
     <div>
-      <p class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+      <p
+        class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
+      >
         Avaliação Comprador
       </p>
       <div class="flex flex-wrap gap-2">
-        {#if getSideApprovalUiState(contract?.buyerApprovalStatus) === 'pending'}
+        {#if getSideApprovalUiState(contract?.buyerApprovalStatus) === "pending"}
           <Button
-          size="sm"
-          className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
-          on:click={() => evaluateContractSide('buyer', 'APPROVED')}
-          disabled={evaluatingSide === 'buyer' || !isReadyToApprove}
-          title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
-        >
+            size="sm"
+            className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
+            on:click={() => evaluateContractSide("buyer", "APPROVED")}
+            disabled={evaluatingSide === "buyer" || !isReadyToApprove}
+            title={!isReadyToApprove
+              ? approvalLockReasons.join(" | ")
+              : undefined}
+          >
             Aprovar<span class="sr-only"> comprador</span>
           </Button>
           <Button
             size="sm"
             variant="outline"
             className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-            on:click={() => evaluateContractSide('buyer', 'APPROVED_WITH_RES')}
+            on:click={() => evaluateContractSide("buyer", "APPROVED_WITH_RES")}
           >
             Aprovar c/ ressalvas<span class="sr-only"> comprador</span>
           </Button>
           <Button
             size="sm"
             variant="destructive"
-            on:click={() => evaluateContractSide('buyer', 'REJECTED')}
-            disabled={evaluatingSide === 'buyer'}
+            on:click={() => evaluateContractSide("buyer", "REJECTED")}
+            disabled={evaluatingSide === "buyer"}
           >
             Rejeitar
           </Button>
-        {:else if getSideApprovalUiState(contract?.buyerApprovalStatus) === 'approved'}
+        {:else if getSideApprovalUiState(contract?.buyerApprovalStatus) === "approved"}
           <Button
             size="sm"
             variant="destructive"
-            on:click={() => evaluateContractSide('buyer', 'REJECTED')}
-            disabled={evaluatingSide === 'buyer'}
+            on:click={() => evaluateContractSide("buyer", "REJECTED")}
+            disabled={evaluatingSide === "buyer"}
           >
             Rejeitar
           </Button>
@@ -158,25 +178,27 @@
             size="sm"
             variant="outline"
             className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-            on:click={() => evaluateContractSide('buyer', 'PENDING')}
+            on:click={() => evaluateContractSide("buyer", "PENDING")}
           >
             Reiniciar
           </Button>
         {:else}
           <Button
-          size="sm"
-          className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
-          on:click={() => evaluateContractSide('buyer', 'APPROVED')}
-          disabled={evaluatingSide === 'buyer' || !isReadyToApprove}
-          title={!isReadyToApprove ? approvalLockReasons.join(' | ') : undefined}
-        >
+            size="sm"
+            className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
+            on:click={() => evaluateContractSide("buyer", "APPROVED")}
+            disabled={evaluatingSide === "buyer" || !isReadyToApprove}
+            title={!isReadyToApprove
+              ? approvalLockReasons.join(" | ")
+              : undefined}
+          >
             Aprovar<span class="sr-only"> comprador</span>
           </Button>
           <Button
             size="sm"
             variant="outline"
             className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-            on:click={() => evaluateContractSide('buyer', 'APPROVED_WITH_RES')}
+            on:click={() => evaluateContractSide("buyer", "APPROVED_WITH_RES")}
           >
             Aprovar c/ ressalvas<span class="sr-only"> comprador</span>
           </Button>
@@ -184,7 +206,7 @@
             size="sm"
             variant="outline"
             className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-            on:click={() => evaluateContractSide('buyer', 'PENDING')}
+            on:click={() => evaluateContractSide("buyer", "PENDING")}
           >
             Reiniciar
           </Button>
