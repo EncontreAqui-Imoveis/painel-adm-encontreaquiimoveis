@@ -1372,6 +1372,9 @@ describe('PropertyManagement', () => {
       within(dialog).getByPlaceholderText('Descricao do imóvel'),
       { target: { value: 'Correção de solicitação pendente' } }
     );
+    const bairroInput = dialog.querySelector('input[name="bairro"]');
+    expect(bairroInput).toBeTruthy();
+    await fireEvent.input(bairroInput as HTMLInputElement, { target: { value: 'Jardim das Flores' } });
     const requestAreaInput = dialog.querySelector('input[name="area_construida_valor"]');
     expect(requestAreaInput).toBeTruthy();
     await fireEvent.input(requestAreaInput as HTMLInputElement, { target: { value: '3210' } });
@@ -1397,6 +1400,7 @@ describe('PropertyManagement', () => {
     expect(apiPatchMock).not.toHaveBeenCalled();
     expect(requestPayload).toMatchObject({
       description: 'Correção de solicitação pendente',
+      bairro: 'Jardim das Flores',
       area_construida_valor: 3210,
       area_construida_unidade: 'hectare',
       area_terreno_valor: 5000,
@@ -1896,8 +1900,15 @@ describe('PropertyManagement', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
 
-    await fireEvent.click(screen.getByTestId('image-preview-backdrop'));
+    const displayedImage = document.querySelector('[data-image-preview-image]');
+    expect(displayedImage).toBeTruthy();
+    await fireEvent.click(displayedImage as HTMLImageElement);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByTestId('image-preview-backdrop'));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 
   it('atualiza a galeria do modal imediatamente ao adicionar e remover imagem em edição', async () => {

@@ -39,7 +39,13 @@
   >
     Notificar promoção
   </Button>
-  {#if isEditMode && editableProperty}
+  {#if isEditMode && editableProperty?.status === 'pending_approval'}
+    <span
+      class="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-sm font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100"
+    >
+      Pendente de aprovação
+    </span>
+  {:else if isEditMode && editableProperty}
     <div class="flex items-center gap-2">
       <label class="text-xs text-gray-500 dark:text-gray-400" for="status-select">Status</label>
       <select

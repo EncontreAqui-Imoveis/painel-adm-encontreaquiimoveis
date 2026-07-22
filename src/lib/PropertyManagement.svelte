@@ -437,6 +437,18 @@ function parseNullableNumber(value: unknown): number | null {
     previewImagesSnapshot = [];
   }
 
+  function handlePreviewBackdropClick(event: MouseEvent) {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    // Only the displayed image and explicit controls keep the viewer open.
+    if (target.closest('[data-image-preview-image], [data-image-preview-control]')) {
+      return;
+    }
+
+    closeImagePreview();
+  }
+
   function markImageAsBroken(url?: string | null) {
     if (!url) return;
     if (/^(blob:|data:|file:)/i.test(url)) return;
@@ -3057,16 +3069,17 @@ function parseNullableNumber(value: unknown): number | null {
 
 {#if isImagePreviewOpen}
   <div
-    class="fixed inset-0 z-50 pointer-events-auto"
+    class="fixed inset-0 z-50 pointer-events-auto bg-black/85"
     data-testid="image-preview-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Visualização de imagens do imóvel"
+    tabindex="-1"
+    on:click={handlePreviewBackdropClick}
+    on:keydown={handlePreviewKeydown}
   >
-    <div class="absolute inset-0 bg-black/85" aria-hidden="true"></div>
     <div
-      class="relative mx-auto flex h-[94vh] w-[96vw] max-w-[1600px] flex-col items-center justify-center px-2 py-3 sm:px-4"
-      role="dialog"
-      aria-modal="true"
-      tabindex="0"
-      on:keydown={handlePreviewKeydown}
+      class="relative mx-auto flex h-[98vh] w-[99vw] max-w-none flex-col items-center justify-center px-1 py-2 sm:px-2"
     >
       {#if previewTotal > 1}
         <button
@@ -3075,6 +3088,7 @@ function parseNullableNumber(value: unknown): number | null {
           on:click|stopPropagation={goPrevImage}
           disabled={!previewViewerState.canPrev}
           aria-label="Imagem anterior"
+          data-image-preview-control
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -3086,6 +3100,7 @@ function parseNullableNumber(value: unknown): number | null {
           on:click|stopPropagation={goNextImage}
           disabled={!previewViewerState.canNext}
           aria-label="Próxima imagem"
+          data-image-preview-control
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -3097,9 +3112,10 @@ function parseNullableNumber(value: unknown): number | null {
           <img
             src={previewViewerState.currentImage.url}
             alt=""
-            class="max-h-full max-w-full select-none object-contain"
+            class="h-full w-full select-none object-contain"
             draggable="false"
             on:error={handlePreviewImageError}
+            data-image-preview-image
           />
         {/if}
       </div>
@@ -3124,6 +3140,7 @@ function parseNullableNumber(value: unknown): number | null {
                     previewImageIndex = thumbIdx;
                     previewImageUrl = image.url;
                   }}
+                  data-image-preview-control
                 >
                   <img
                     src={image.url}
@@ -3144,15 +3161,17 @@ function parseNullableNumber(value: unknown): number | null {
           on:click|stopPropagation={handleDeleteCurrentPreviewImage}
           disabled={previewImageDeleteBusy || (previewTotal > 0 && selectedPropertyImages().length <= 1)}
           aria-label="Excluir foto atual"
+          data-image-preview-control
         >
           {previewImageDeleteBusy ? 'Excluindo...' : 'Excluir foto'}
         </button>
       {/if}
       <button
         type="button"
-        class="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white shadow hover:bg-black/70"
-        on:click={closeImagePreview}
+          class="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white shadow hover:bg-black/70"
+        on:click|stopPropagation={closeImagePreview}
         aria-label="Fechar"
+        data-image-preview-control
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
