@@ -263,6 +263,8 @@
     conjugeProfissao: '',
   };
 
+  let contractSearchQuery = '';
+
   $: signedProposalDoc = selected != null && Array.isArray(selected.documents)
     ? selected.documents.find(
         (doc) =>
@@ -1716,9 +1718,28 @@
     {/each}
   </div>
 
-  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div class="text-sm text-gray-600 dark:text-gray-300">
-      {tabs.find((tab) => tab.key === activeTab)?.label}
+  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="text-sm text-gray-600 dark:text-gray-300">
+        {tabs.find((tab) => tab.key === activeTab)?.label}
+      </div>
+      <div className="relative">
+        <input
+          type="text"
+          bind:value={contractSearchQuery}
+          placeholder="Buscar imóvel, parte ou ID..."
+          class="w-56 rounded-md border border-gray-300 bg-white px-3 py-1 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+        />
+        {#if contractSearchQuery}
+          <button
+            type="button"
+            on:click={() => (contractSearchQuery = '')}
+            class="absolute right-2 top-1.5 text-xs text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        {/if}
+      </div>
     </div>
     <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
       <label for="contracts-items-per-page" class="font-medium">Mostrar</label>
