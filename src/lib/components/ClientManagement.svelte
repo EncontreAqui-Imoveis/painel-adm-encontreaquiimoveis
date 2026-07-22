@@ -25,6 +25,7 @@
 
   type ClientProperty = {
     id: number;
+    code?: string | null;
     title: string;
     status: PropertyStatus;
     created_at?: string | null;
@@ -363,6 +364,19 @@
     } finally {
       isProcessing = false;
     }
+  }
+
+  function formatDateTime(value?: string | null) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   }
 
   async function deleteClient(password: string) {
@@ -819,7 +833,7 @@
                     {property.title}
                   </div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">
-                    ID: {property.id} · {formatDate(property.created_at ?? undefined)}
+                    {property.code ? `Cód. ${property.code} · ` : ''}{formatDateTime(property.created_at)}
                   </div>
                 </div>
                 <span class="mt-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-gray-600 dark:bg-gray-800 dark:text-gray-300">

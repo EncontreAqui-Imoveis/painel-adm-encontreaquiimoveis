@@ -88,6 +88,19 @@
     });
   }
 
+  function formatDateTime(value?: string | null): string {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
   function formatCurrency(value: unknown): string {
     const numeric = Number(value);
     if (Number.isNaN(numeric)) {
@@ -802,6 +815,9 @@
                     <p class="text-sm font-semibold text-gray-900 dark:text-white">{property.title ?? `Imóvel #${property.id}`}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">
                       {property.city ?? '-'}{#if property.state} / {property.state}{/if}
+                    </p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {property.code ? `Cód. ${property.code} · ` : ''}{formatDateTime(property.created_at)}
                     </p>
                   </div>
                   <div class="flex items-center gap-3 text-sm">

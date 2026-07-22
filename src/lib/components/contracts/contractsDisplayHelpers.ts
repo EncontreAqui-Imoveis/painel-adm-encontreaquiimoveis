@@ -13,7 +13,7 @@ export const documentTypeLabels: Record<string, string> = {
   doc_identidade: 'Documento Pessoal',
   doc_identidade_conjuge: 'Documento Pessoal do Cônjuge',
   comprovante_endereco: 'Comprovante de Endereço',
-  certidao_casamento_nascimento: 'Certidão de Casamento/Nascimento',
+  certidao_casamento_nascimento: 'Certidão de Estado Civil',
   certidao_inteiro_teor: 'Certidão de Inteiro Teor',
   certidao_inteiro_teor_escritura: 'Certidão de Inteiro Teor/Escritura',
   certidao_onus_acoes: 'Certidão de Ônus/Ações',
