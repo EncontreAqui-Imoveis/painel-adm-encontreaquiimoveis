@@ -220,7 +220,7 @@
     isLoading = true;
     try {
       const params = new URLSearchParams();
-      params.set('status', 'APPROVED');
+      params.set('status', 'IN_NEGOTIATION');
       params.set('page', String(currentPage));
       params.set('limit', String(itemsPerPage));
 
