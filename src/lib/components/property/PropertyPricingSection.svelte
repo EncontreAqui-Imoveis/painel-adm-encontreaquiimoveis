@@ -16,6 +16,7 @@
 
   type PropertyPricingLike = {
     purpose?: string | null;
+    market_stage?: 'STANDARD' | 'LAUNCH' | string | null;
     price?: number | null;
     price_sale?: number | null;
     price_rent?: number | null;
@@ -41,6 +42,7 @@
     const flags = getPurposeFlags(editableProperty.purpose ?? null);
 
     if (!flags.supportsSale) {
+      editableProperty.market_stage = 'STANDARD';
       editableProperty.price_sale = null;
       editableProperty.promotion_price = null;
       editableProperty.promotion_percentage = null;
@@ -123,6 +125,20 @@
         <option value="Aluguel">Aluguel</option>
         <option value="Venda e Aluguel">Venda e Aluguel</option>
       </select>
+      {#if getPurposeFlags(editableProperty.purpose ?? null).supportsSale}
+        <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={String(editableProperty.market_stage ?? 'STANDARD').toUpperCase() === 'LAUNCH'}
+            on:change={(event) => {
+              editableProperty!.market_stage = (event.currentTarget as HTMLInputElement).checked
+                ? 'LAUNCH'
+                : 'STANDARD';
+            }}
+          />
+          Este imóvel é um lançamento
+        </label>
+      {/if}
     </div>
 
     {@const flags = getPurposeFlags(editableProperty.purpose ?? null)}

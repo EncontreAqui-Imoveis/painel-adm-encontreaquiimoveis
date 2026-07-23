@@ -87,6 +87,7 @@
   let description = '';
   let type = 'Casa';
   let purpose = 'Venda';
+  let marketStage: 'STANDARD' | 'LAUNCH' = 'STANDARD';
   let status = 'approved';
   let priceSale = '';
   let priceRent = '';
@@ -922,6 +923,7 @@
         description: description.trim(),
         type,
         purpose,
+        market_stage: marketStage,
         status,
         price,
         price_sale: resolvedSale,
@@ -987,6 +989,7 @@
       title = '';
       description = '';
       purpose = 'Venda';
+      marketStage = 'STANDARD';
       type = 'Casa';
       status = 'approved';
       priceSale = '';
@@ -1099,6 +1102,7 @@
       bind:title
       bind:type
       bind:purpose
+      bind:marketStage
       bind:status
       bind:ownerName
       bind:ownerPhone

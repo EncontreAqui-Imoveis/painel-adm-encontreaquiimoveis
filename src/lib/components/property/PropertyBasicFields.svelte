@@ -41,6 +41,7 @@
   export let title = '';
   export let type = 'Casa';
   export let purpose = 'Venda';
+  export let marketStage: 'STANDARD' | 'LAUNCH' = 'STANDARD';
   export let status = 'approved';
   export let ownerName = '';
   export let ownerPhone = '';
@@ -74,6 +75,9 @@
 
   $: if (purpose === 'Aluguel' && promotionSalePercentage) {
     promotionSalePercentage = '';
+  }
+  $: if (!purpose.toLowerCase().includes('vend') && marketStage !== 'STANDARD') {
+    marketStage = 'STANDARD';
   }
 </script>
 
@@ -129,6 +133,20 @@
       </select>
     </label>
   </div>
+
+  {#if purpose.toLowerCase().includes('vend')}
+    <label class="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+      <input
+        id="create-property-market-stage"
+        type="checkbox"
+        checked={marketStage === 'LAUNCH'}
+        on:change={(event) => {
+          marketStage = (event.currentTarget as HTMLInputElement).checked ? 'LAUNCH' : 'STANDARD';
+        }}
+      />
+      Este imóvel é um lançamento
+    </label>
+  {/if}
 
   <div class="grid gap-4 md:grid-cols-2">
     <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
