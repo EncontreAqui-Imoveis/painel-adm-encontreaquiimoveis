@@ -73,6 +73,7 @@
     title: 'Título',
     description: 'Descrição',
     type: 'Tipo',
+    marketStage: 'Lançamento',
     purpose: 'Finalidade',
     code: 'Código',
     ownerName: 'Nome do proprietário',
@@ -223,6 +224,9 @@
   function formatValue(key: string, value: unknown): string {
     if (value === null || value === undefined || value === '') {
       return '-';
+    }
+    if (key === 'marketStage') {
+      return String(value).trim().toUpperCase() === 'LAUNCH' ? 'Sim' : 'Não';
     }
     if (booleanFields.has(key)) {
       return value === true ? 'Sim' : value === false ? 'Não' : String(value);

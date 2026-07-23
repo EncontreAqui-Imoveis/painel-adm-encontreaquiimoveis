@@ -6,6 +6,7 @@ export type PropertyEditLike = {
   id?: number;
   status?: PropertyStatus;
   purpose?: string | null;
+  market_stage?: 'STANDARD' | 'LAUNCH' | string | null;
   title?: string | null;
   description?: string | null;
   price?: number | null;
@@ -152,7 +153,15 @@ export function shouldRefreshPropertyListAfterEdit(
   original: PropertyEditLike,
   patch: Record<string, unknown>
 ): boolean {
-  const listSensitiveKeys = ['title', 'purpose', 'city', 'state', 'bairro', 'public_code'];
+  const listSensitiveKeys = [
+    'title',
+    'purpose',
+    'market_stage',
+    'city',
+    'state',
+    'bairro',
+    'public_code',
+  ];
   return listSensitiveKeys.some((key) => {
     if (!Object.prototype.hasOwnProperty.call(patch, key)) return false;
     return patch[key] !== (original as Record<string, unknown>)[key];
@@ -294,6 +303,7 @@ export function buildPropertyEditPayload(
     title: editableProperty.title,
     description: editableProperty.description,
     purpose: editableProperty.purpose,
+    market_stage: editableProperty.market_stage ?? originalProperty.market_stage ?? undefined,
     price: resolvedPriceValue ?? undefined,
     price_sale: purposeFlags.supportsSale ? (resolvedPriceSaleValue ?? undefined) : null,
     price_rent: purposeFlags.supportsRent ? (resolvedPriceRentValue ?? undefined) : null,

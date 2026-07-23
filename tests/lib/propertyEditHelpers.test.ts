@@ -112,4 +112,40 @@ describe('propertyEditHelpers', () => {
       endpoint: 'status',
     });
   });
+
+  it('inclui a classificação de lançamento no payload de edição', () => {
+    const result = buildPropertyEditPayload({
+      originalProperty: {
+        id: 1,
+        status: 'approved',
+        title: 'Casa',
+        purpose: 'Venda',
+        market_stage: 'STANDARD',
+      },
+      editableProperty: {
+        title: 'Casa',
+        purpose: 'Venda',
+        market_stage: 'LAUNCH',
+        price: 500000,
+      },
+      flags: {
+        editSemNumero: false,
+        editSemQuadra: false,
+        editSemLote: false,
+        editSemCep: false,
+      },
+      state: {
+        editPromotionSalePercentageDisplay: '',
+        editPromotionRentPercentageDisplay: '',
+        editValorCondominioDisplay: '',
+        editValorIptuDisplay: '',
+        editSelectedAmenities: [],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.market_stage).toBe('LAUNCH');
+    expect(result.shouldRefreshList).toBe(true);
+  });
 });
