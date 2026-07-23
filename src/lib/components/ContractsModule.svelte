@@ -123,7 +123,6 @@
     listMissingBuyerInfo,
     listMissingRequiredDocuments,
     listMissingSellerInfo,
-    requiresExactSaleSplit,
     resolveMatrixUploadCategory,
     resolveOutroMatrixDocumentType,
     resolveOutroMatrixDocumentTypes,
@@ -229,6 +228,7 @@
   };
   let finalizeCommissionPreview: ReturnType<typeof resolveFinalizeCommissionAmounts> = null;
   let finalizeCommissionRemaining: number | null = null;
+  let isEditingCommissions = false;
 
   let savingPartyData = false;
   let isEditingData = false;
@@ -661,23 +661,29 @@
 
   function hydrateFinalizeForm(contract: ContractItem | null): void {
     const data = contract?.commissionData ?? null;
-    const isRental = contract?.dealType === 'rent';
+    const savedCommissionValues = [
+      readCommissionValue(data, 'comissaoCaptador'),
+      readCommissionValue(data, 'comissaoVendedor'),
+      readCommissionValue(data, 'taxaPlataforma'),
+    ];
+    const hasSavedCommissionValues = savedCommissionValues.some((value) => value.length > 0);
     finalizeFieldModes = {
-      comissaoCaptador: isRental ? 'percentage' : 'amount',
-      comissaoVendedor: isRental ? 'percentage' : 'amount',
-      taxaPlataforma: isRental ? 'percentage' : 'amount',
+      comissaoCaptador: hasSavedCommissionValues ? 'amount' : 'percentage',
+      comissaoVendedor: hasSavedCommissionValues ? 'amount' : 'percentage',
+      taxaPlataforma: hasSavedCommissionValues ? 'amount' : 'percentage',
     };
     finalizeForm = {
       valorBaseComissao:
         readCommissionValue(data, 'valorBaseComissao') || readCommissionValue(data, 'valorVenda'),
-      comissaoCaptador: isRental ? '10,00' : readCommissionValue(data, 'comissaoCaptador'),
-      comissaoVendedor: isRental ? '50,00' : readCommissionValue(data, 'comissaoVendedor'),
-      taxaPlataforma: isRental ? '40,00' : readCommissionValue(data, 'taxaPlataforma'),
+      comissaoCaptador: hasSavedCommissionValues ? savedCommissionValues[0] : '10,00',
+      comissaoVendedor: hasSavedCommissionValues ? savedCommissionValues[1] : '50,00',
+      taxaPlataforma: hasSavedCommissionValues ? savedCommissionValues[2] : '40,00',
     };
     finalizePeopleForm = {
       nomeCaptador: String(contract?.capturingBrokerName ?? '').trim(),
       nomeVendedor: getOwnerDisplayName(contract),
     };
+    isEditingCommissions = false;
   }
 
   function parseMoney(value: string): number | null {
@@ -748,14 +754,6 @@
       [field]: nextValue,
     };
 
-    if (field === 'valorBaseComissao' && selected?.dealType === 'rent') {
-      finalizeForm = {
-        ...finalizeForm,
-        comissaoCaptador: '10,00',
-        comissaoVendedor: '50,00',
-        taxaPlataforma: '40,00',
-      };
-    }
   }
 
   function handleFinalizePercentageInput(
@@ -775,7 +773,7 @@
 
   function setFinalizeFieldMode(field: FinalizeCommissionField, mode: FinalizeFieldMode): void {
     const currentMode = getFinalizeFieldMode(field);
-    if (selected?.dealType === 'rent' || currentMode === mode) return;
+    if (currentMode === mode) return;
 
     const base = parseMoney(finalizeForm.valorBaseComissao);
     const convertedValue =
@@ -855,11 +853,14 @@
     return (Math.round(base * 100) - allocatedCents) / 100;
   }
 
-  $: finalizeCommissionPreview = resolveFinalizeCommissionAmounts(
-    finalizeForm,
-    finalizeFieldModes,
-  );
-  $: finalizeCommissionRemaining = calculateFinalizeCommissionRemaining();
+  // Keep dependencies explicit. Svelte cannot infer values read inside helper functions.
+  $: {
+    finalizeCommissionPreview = resolveFinalizeCommissionAmounts(
+      finalizeForm,
+      finalizeFieldModes,
+    );
+    finalizeCommissionRemaining = calculateFinalizeCommissionRemaining();
+  }
 
   function getDocumentsForFinalize(contract: ContractItem): ContractDocument[] {
     return getAllContractDocuments(contract).filter((doc) =>
@@ -1591,6 +1592,10 @@
 
   async function submitFinalize() {
     if (!selected) return;
+    if (!isEditingCommissions) {
+      toast.error('Clique em "Editar comissões" antes de finalizar o contrato.');
+      return;
+    }
 
     const resolvedCommissionAmounts = resolveFinalizeCommissionAmounts(
       finalizeForm,
@@ -1605,12 +1610,9 @@
     const { valorBaseComissao, comissaoCaptador, comissaoVendedor, taxaPlataforma } =
       resolvedCommissionAmounts;
 
-    if (
-      requiresExactSaleSplit(selected) &&
-      !hasExactSaleSplit(resolvedCommissionAmounts)
-    ) {
+    if (!hasExactSaleSplit(resolvedCommissionAmounts)) {
       toast.error(
-        'Na venda, a soma das comissões precisa fechar exatamente 100% do valor.'
+        'A soma das comissões e da taxa Encontre Aqui precisa fechar exatamente 100% do valor base.'
       );
       return;
     }
@@ -2219,6 +2221,9 @@
             <Button
               type="button"
               variant={isEditingData ? 'outline' : 'default'}
+              className={isEditingData
+                ? 'border-amber-400 text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-950/30'
+                : 'bg-amber-500 text-black hover:bg-amber-400'}
               disabled={savingPartyData}
               on:click={() => {
                 if (isEditingData) cancelPartyDataEdit();
@@ -2402,9 +2407,29 @@
             sellerDescription={contractSideDocumentDescription(selected, 'seller')}
           />
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
-            <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-              Formulário de Comissões
-            </p>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                  Formulário de Comissões
+                </p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Sugestão inicial: 10% captador, 50% vendedor e 40% Encontre Aqui. Você pode ajustar a divisão.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant={isEditingCommissions ? 'outline' : 'default'}
+                className={isEditingCommissions
+                  ? 'border-amber-400 text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-950/30'
+                  : 'bg-amber-500 text-black hover:bg-amber-400'}
+                on:click={() => {
+                  if (isEditingCommissions) hydrateFinalizeForm(selected);
+                  else isEditingCommissions = true;
+                }}
+              >
+                {isEditingCommissions ? 'Cancelar edição' : 'Editar comissões'}
+              </Button>
+            </div>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
               <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/60">
                 <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Nome do captador</p>
@@ -2426,6 +2451,7 @@
                   value={finalizeForm.valorBaseComissao}
                   on:input={(event) => handleFinalizeMoneyInput('valorBaseComissao', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums dark:border-gray-700 dark:bg-gray-900"
+                  readonly={!isEditingCommissions}
                 />
               </label>
               <div class="text-sm text-gray-700 dark:text-gray-200">
@@ -2442,7 +2468,7 @@
                     }`}
                     aria-label="Alternar modo da comissão captador"
                     aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'percentage'}
-                    disabled={selected?.dealType === 'rent'}
+                    disabled={!isEditingCommissions}
                     on:click={() =>
                       setFinalizeFieldMode(
                         'comissaoCaptador',
@@ -2467,7 +2493,7 @@
                       ? handleFinalizeMoneyInput('comissaoCaptador', event)
                       : handleFinalizePercentageInput('comissaoCaptador', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
-                  readonly={selected?.dealType === 'rent'}
+                  readonly={!isEditingCommissions}
                 />
                 {#if finalizeFieldEquivalent('comissaoCaptador')}
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -2489,7 +2515,7 @@
                     }`}
                     aria-label="Alternar modo da comissão do vendedor"
                     aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'percentage'}
-                    disabled={selected?.dealType === 'rent'}
+                    disabled={!isEditingCommissions}
                     on:click={() =>
                       setFinalizeFieldMode(
                         'comissaoVendedor',
@@ -2514,7 +2540,7 @@
                       ? handleFinalizeMoneyInput('comissaoVendedor', event)
                       : handleFinalizePercentageInput('comissaoVendedor', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
-                  readonly={selected?.dealType === 'rent'}
+                  readonly={!isEditingCommissions}
                 />
                 {#if finalizeFieldEquivalent('comissaoVendedor')}
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -2536,7 +2562,7 @@
                     }`}
                     aria-label="Alternar modo da taxa da plataforma"
                     aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'percentage'}
-                    disabled={selected?.dealType === 'rent'}
+                    disabled={!isEditingCommissions}
                     on:click={() =>
                       setFinalizeFieldMode(
                         'taxaPlataforma',
@@ -2561,7 +2587,7 @@
                       ? handleFinalizeMoneyInput('taxaPlataforma', event)
                       : handleFinalizePercentageInput('taxaPlataforma', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
-                  readonly={selected?.dealType === 'rent'}
+                  readonly={!isEditingCommissions}
                 />
                 {#if finalizeFieldEquivalent('taxaPlataforma')}
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -2570,11 +2596,6 @@
                 {/if}
               </div>
             </div>
-            {#if selected?.dealType === 'rent'}
-              <p class="mt-3 text-xs text-gray-600 dark:text-gray-300">
-                Na locação, a comissão do primeiro aluguel é distribuída automaticamente: 10% captador, 50% vendedor e 40% Encontre Aqui.
-              </p>
-            {/if}
             <div class={`mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm ${
               finalizeCommissionRemaining != null && finalizeCommissionRemaining < 0
                 ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'
@@ -2586,7 +2607,7 @@
               <Button
                 size="sm"
                 variant="outline"
-                disabled={finalizeCommissionRemaining == null || finalizeCommissionRemaining < 0}
+                disabled={!isEditingCommissions || finalizeCommissionRemaining == null || finalizeCommissionRemaining < 0}
                 on:click={() => fillFinalizeRemaining('taxaPlataforma')}
               >
                 Preencher restante na taxa Encontre Aqui
@@ -2839,7 +2860,7 @@
             <Button
               className="bg-green-600 text-white hover:bg-green-700"
               on:click={submitFinalize}
-              disabled={finalizingContract || uploadingSignedDoc || movingToPreviousStage}
+              disabled={!isEditingCommissions || finalizingContract || uploadingSignedDoc || movingToPreviousStage}
             >
               {#if finalizingContract}
                 <Loader2 class="mr-2 h-4 w-4 animate-spin" />
