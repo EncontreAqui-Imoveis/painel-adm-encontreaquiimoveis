@@ -18,6 +18,8 @@
     bairro?: string | null;
     city?: string | null;
     state?: string | null;
+    public_code?: string | null;
+    market_stage?: 'STANDARD' | 'LAUNCH' | string | null;
     broker_name?: string | null;
     broker_phone?: string | null;
     images?: string | (string | PropertyImage)[] | null;
@@ -101,7 +103,14 @@
               <div class="text-base font-semibold text-gray-900 dark:text-gray-100">
                 {property.title}
               </div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">ID: {property.id}</div>
+              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                {#if property.public_code}
+                  <span>Cód. {property.public_code}</span>
+                {/if}
+                {#if property.market_stage === 'LAUNCH'}
+                  <span class="rounded-full bg-violet-100 px-2 py-0.5 font-semibold text-violet-700 dark:bg-violet-950/50 dark:text-violet-200">Lançamento</span>
+                {/if}
+              </div>
             </div>
           </div>
           <span class={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${propertyStatusBadgeClasses(property.status)}`}>
@@ -207,7 +216,14 @@
                 </div>
                 <div class="min-w-0">
                   <div class="font-semibold text-gray-900 dark:text-gray-100">{property.title}</div>
-                  <div class="text-xs text-gray-500 dark:text-gray-400">ID: {property.id}</div>
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                    {#if property.public_code}
+                      <span>Cód. {property.public_code}</span>
+                    {/if}
+                    {#if property.market_stage === 'LAUNCH'}
+                      <span class="rounded-full bg-violet-100 px-2 py-0.5 font-semibold text-violet-700 dark:bg-violet-950/50 dark:text-violet-200">Lançamento</span>
+                    {/if}
+                  </div>
                 </div>
               </div>
             </td>

@@ -117,6 +117,7 @@ function parseNullableNumber(value: unknown): number | null {
     purpose?: string | null;
     public_id?: number | null;
     public_code?: string | null;
+    market_stage?: 'STANDARD' | 'LAUNCH' | string | null;
     broker_id?: number | null;
     owner_id?: number | null;
     owner_name?: string | null;
@@ -191,6 +192,7 @@ function parseNullableNumber(value: unknown): number | null {
     city: string;
     search: string;
     purpose: 'all' | 'Venda' | 'Aluguel';
+    marketStage: 'all' | 'LAUNCH';
   };
   export let initialStatus: PropertyStatus | 'all' = 'approved';
   export let allowApproval = false;
@@ -206,6 +208,7 @@ function parseNullableNumber(value: unknown): number | null {
     city: 'all',
     search: '',
     purpose: 'all',
+    marketStage: 'all',
   };
   let currentPage = 1;
   let itemsPerPage = 10;
@@ -563,6 +566,9 @@ function parseNullableNumber(value: unknown): number | null {
       if (filters.purpose !== 'all') {
         params.append('purpose', filters.purpose);
       }
+      if (filters.marketStage === 'LAUNCH') {
+        params.append('market_stage', 'LAUNCH');
+      }
       params.append('sortBy', sortConfig.key);
       params.append('sortOrder', sortConfig.order);
       if (shouldFetchFullDataset) {
@@ -646,6 +652,10 @@ function parseNullableNumber(value: unknown): number | null {
             area_terreno: areaTerrenoM2 ?? parseNullableNumber(record['area_terreno']),
             public_id: publicIdValue != null ? Number(publicIdValue) : null,
             public_code: normalizePublicCode(publicCodeValue),
+            market_stage:
+              String(record['market_stage'] ?? 'STANDARD').trim().toUpperCase() === 'LAUNCH'
+                ? 'LAUNCH'
+                : 'STANDARD',
             promotion_percentage:
               promotionPercentageValue != null ? Number(promotionPercentageValue) : null,
             promotion_price:
@@ -2368,7 +2378,7 @@ function parseNullableNumber(value: unknown): number | null {
               <Input
                 className="w-full"
                 type="search"
-                placeholder="Buscar por título, cidade, ID..."
+                placeholder="Buscar por título, cidade ou código público..."
                 bind:value={filters.search}
                 oninput={onSearchInput}
                 onkeydown={handleKeydown}
@@ -2453,6 +2463,21 @@ function parseNullableNumber(value: unknown): number | null {
                   {#each cities as city (city)}
                     <Select.Item value={city}>{city}</Select.Item>
                   {/each}
+                </Select.Content>
+              </Select.Root>
+            </div>
+            <div class="grid gap-2">
+              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Classificação</span>
+              <Select.Root
+                bind:value={filters.marketStage}
+                on:valueChange={() => requestFetch(true)}
+              >
+                <Select.Trigger>
+                  <Select.Value placeholder="Todas as classificações" />
+                </Select.Trigger>
+                <Select.Content>
+                  <Select.Item value="all">Todas</Select.Item>
+                  <Select.Item value="LAUNCH">Lançamentos</Select.Item>
                 </Select.Content>
               </Select.Root>
             </div>

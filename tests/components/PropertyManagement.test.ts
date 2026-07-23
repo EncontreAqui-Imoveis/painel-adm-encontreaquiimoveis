@@ -428,16 +428,13 @@ function getTablePropertyRows(): HTMLTableRowElement[] {
 function getTablePropertyTitles(): string[] {
   return getTablePropertyRows()
     .map((row) => {
-      const titleWrapper = row.querySelector('td .min-w-0') as HTMLElement | null;
-      if (!titleWrapper?.textContent) {
+      const title = row.querySelector('td .min-w-0 > .font-semibold.text-gray-900') as HTMLElement | null;
+      if (!title?.textContent) {
         return '';
       }
 
-      return titleWrapper.textContent
+      return title.textContent
         .replace(/\s+/g, ' ')
-        .trim()
-        .replace(/\s*ID:\s*\d+\s*$/, '')
-        .replace(/^Sem imagem\s+/, '')
         .trim();
     })
     .filter(Boolean);
@@ -1095,7 +1092,7 @@ describe('PropertyManagement', () => {
     });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Filtros' }));
-    const searchInput = screen.getByPlaceholderText('Buscar por título, cidade, ID...');
+    const searchInput = screen.getByPlaceholderText('Buscar por título, cidade ou código público...');
     await fireEvent.input(searchInput, { target: { value: 'Casa' } });
 
     await waitFor(() => {
@@ -1422,7 +1419,13 @@ describe('PropertyManagement', () => {
 
     await fireEvent.click(getRevisarButtons()[0]);
     const reopenedDialog = await screen.findByRole('dialog');
-    expect(await within(reopenedDialog).findByText(/Dashboard \/ Imóveis \/ Referência PUB-PEND-01/)).toBeInTheDocument();
+    expect(
+      await within(reopenedDialog).findByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          element.textContent?.includes('Dashboard / Imóveis / Referência PUB-PEND-01') === true
+      )
+    ).toBeInTheDocument();
     expect(findListItemByLabel(reopenedDialog, 'Área construída')).toHaveTextContent('3210 ha');
     expect(findAmenityInActiveSection(reopenedDialog, 'Mobiliada')).toBeInTheDocument();
     expect(findAmenityInActiveSection(reopenedDialog, 'Academia')).toBeInTheDocument();
@@ -1850,7 +1853,13 @@ describe('PropertyManagement', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(
-      within(dialog).getByText('Dashboard / Imóveis / Referência Sem referência pública')
+      within(dialog).getByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          element.textContent?.includes(
+            'Dashboard / Imóveis / Referência Sem referência pública'
+          ) === true
+      )
     ).toBeInTheDocument();
 
     await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
