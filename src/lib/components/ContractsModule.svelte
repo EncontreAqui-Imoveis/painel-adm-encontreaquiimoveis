@@ -2459,42 +2459,57 @@
                   <label for="finalize-comissao-captador" class="font-medium">
                     Comissão Captador
                   </label>
-                  <button
-                    type="button"
-                    class={`inline-flex min-w-[4.5rem] items-center justify-center rounded-full px-3 py-1 text-xs font-semibold transition ${
-                      getFinalizeFieldMode('comissaoCaptador') === 'percentage'
-                        ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                    aria-label="Alternar modo da comissão captador"
-                    aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'percentage'}
-                    disabled={!isEditingCommissions}
-                    on:click={() =>
-                      setFinalizeFieldMode(
-                        'comissaoCaptador',
+                  <div class="inline-flex overflow-hidden rounded-full border border-emerald-600 text-xs font-semibold shadow-sm">
+                    <button
+                      type="button"
+                      class={`min-w-10 px-3 py-1 transition ${
                         getFinalizeFieldMode('comissaoCaptador') === 'amount'
-                          ? 'percentage'
-                          : 'amount'
-                      )
-                    }
-                  >
-                    {getFinalizeFieldMode('comissaoCaptador') === 'amount' ? 'R$' : '%'}
-                  </button>
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40'
+                      }`}
+                      aria-label="Usar reais na comissão captador"
+                      aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'amount'}
+                      disabled={!isEditingCommissions}
+                      on:click={() => setFinalizeFieldMode('comissaoCaptador', 'amount')}
+                    >R$</button>
+                    <button
+                      type="button"
+                      class={`min-w-10 border-l border-emerald-600 px-3 py-1 transition ${
+                        getFinalizeFieldMode('comissaoCaptador') === 'percentage'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40'
+                      }`}
+                      aria-label="Usar porcentagem na comissão captador"
+                      aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'percentage'}
+                      disabled={!isEditingCommissions}
+                      on:click={() => setFinalizeFieldMode('comissaoCaptador', 'percentage')}
+                    >%</button>
+                  </div>
                 </div>
-                <input
-                  id="finalize-comissao-captador"
-                  type="text"
-                  inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? 6 : 18}
-                  placeholder={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? '0,00' : '0,00'}
-                  value={finalizeForm.comissaoCaptador}
-                  on:input={(event) =>
-                    getFinalizeFieldMode('comissaoCaptador') === 'amount'
-                      ? handleFinalizeMoneyInput('comissaoCaptador', event)
-                      : handleFinalizePercentageInput('comissaoCaptador', event)}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
-                  readonly={!isEditingCommissions}
-                />
+                <div class="relative mt-1">
+                  {#if getFinalizeFieldMode('comissaoCaptador') === 'amount'}
+                    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">R$</span>
+                  {/if}
+                  <input
+                    id="finalize-comissao-captador"
+                    type="text"
+                    inputmode="decimal"
+                    maxlength={getFinalizeFieldMode('comissaoCaptador') === 'percentage' ? 6 : 18}
+                    placeholder="0,00"
+                    value={finalizeForm.comissaoCaptador}
+                    on:input={(event) =>
+                      getFinalizeFieldMode('comissaoCaptador') === 'amount'
+                        ? handleFinalizeMoneyInput('comissaoCaptador', event)
+                        : handleFinalizePercentageInput('comissaoCaptador', event)}
+                    class={`w-full rounded border border-gray-300 bg-white py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900 ${
+                      getFinalizeFieldMode('comissaoCaptador') === 'amount' ? 'px-3 pl-9' : 'px-8'
+                    }`}
+                    readonly={!isEditingCommissions}
+                  />
+                  {#if getFinalizeFieldMode('comissaoCaptador') === 'percentage'}
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">%</span>
+                  {/if}
+                </div>
                 {#if finalizeFieldEquivalent('comissaoCaptador')}
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {finalizeFieldEquivalent('comissaoCaptador')}
@@ -2506,42 +2521,57 @@
                   <label for="finalize-comissao-vendedor" class="font-medium">
                     Comissão do vendedor
                   </label>
-                  <button
-                    type="button"
-                    class={`inline-flex min-w-[4.5rem] items-center justify-center rounded-full px-3 py-1 text-xs font-semibold transition ${
-                      getFinalizeFieldMode('comissaoVendedor') === 'percentage'
-                        ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                    aria-label="Alternar modo da comissão do vendedor"
-                    aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'percentage'}
-                    disabled={!isEditingCommissions}
-                    on:click={() =>
-                      setFinalizeFieldMode(
-                        'comissaoVendedor',
+                  <div class="inline-flex overflow-hidden rounded-full border border-emerald-600 text-xs font-semibold shadow-sm">
+                    <button
+                      type="button"
+                      class={`min-w-10 px-3 py-1 transition ${
                         getFinalizeFieldMode('comissaoVendedor') === 'amount'
-                          ? 'percentage'
-                          : 'amount'
-                      )
-                    }
-                  >
-                    {getFinalizeFieldMode('comissaoVendedor') === 'amount' ? 'R$' : '%'}
-                  </button>
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40'
+                      }`}
+                      aria-label="Usar reais na comissão do vendedor"
+                      aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'amount'}
+                      disabled={!isEditingCommissions}
+                      on:click={() => setFinalizeFieldMode('comissaoVendedor', 'amount')}
+                    >R$</button>
+                    <button
+                      type="button"
+                      class={`min-w-10 border-l border-emerald-600 px-3 py-1 transition ${
+                        getFinalizeFieldMode('comissaoVendedor') === 'percentage'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40'
+                      }`}
+                      aria-label="Usar porcentagem na comissão do vendedor"
+                      aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'percentage'}
+                      disabled={!isEditingCommissions}
+                      on:click={() => setFinalizeFieldMode('comissaoVendedor', 'percentage')}
+                    >%</button>
+                  </div>
                 </div>
-                <input
-                  id="finalize-comissao-vendedor"
-                  type="text"
-                  inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? 6 : 18}
-                  placeholder={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? '0,00' : '0,00'}
-                  value={finalizeForm.comissaoVendedor}
-                  on:input={(event) =>
-                    getFinalizeFieldMode('comissaoVendedor') === 'amount'
-                      ? handleFinalizeMoneyInput('comissaoVendedor', event)
-                      : handleFinalizePercentageInput('comissaoVendedor', event)}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
-                  readonly={!isEditingCommissions}
-                />
+                <div class="relative mt-1">
+                  {#if getFinalizeFieldMode('comissaoVendedor') === 'amount'}
+                    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">R$</span>
+                  {/if}
+                  <input
+                    id="finalize-comissao-vendedor"
+                    type="text"
+                    inputmode="decimal"
+                    maxlength={getFinalizeFieldMode('comissaoVendedor') === 'percentage' ? 6 : 18}
+                    placeholder="0,00"
+                    value={finalizeForm.comissaoVendedor}
+                    on:input={(event) =>
+                      getFinalizeFieldMode('comissaoVendedor') === 'amount'
+                        ? handleFinalizeMoneyInput('comissaoVendedor', event)
+                        : handleFinalizePercentageInput('comissaoVendedor', event)}
+                    class={`w-full rounded border border-gray-300 bg-white py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900 ${
+                      getFinalizeFieldMode('comissaoVendedor') === 'amount' ? 'px-3 pl-9' : 'px-8'
+                    }`}
+                    readonly={!isEditingCommissions}
+                  />
+                  {#if getFinalizeFieldMode('comissaoVendedor') === 'percentage'}
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">%</span>
+                  {/if}
+                </div>
                 {#if finalizeFieldEquivalent('comissaoVendedor')}
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {finalizeFieldEquivalent('comissaoVendedor')}
@@ -2553,42 +2583,57 @@
                   <label for="finalize-taxa-plataforma" class="font-medium">
                     Taxa Encontre Aqui
                   </label>
-                  <button
-                    type="button"
-                    class={`inline-flex min-w-[4.5rem] items-center justify-center rounded-full px-3 py-1 text-xs font-semibold transition ${
-                      getFinalizeFieldMode('taxaPlataforma') === 'percentage'
-                        ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 ring-offset-transparent'
-                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                    aria-label="Alternar modo da taxa da plataforma"
-                    aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'percentage'}
-                    disabled={!isEditingCommissions}
-                    on:click={() =>
-                      setFinalizeFieldMode(
-                        'taxaPlataforma',
+                  <div class="inline-flex overflow-hidden rounded-full border border-emerald-600 text-xs font-semibold shadow-sm">
+                    <button
+                      type="button"
+                      class={`min-w-10 px-3 py-1 transition ${
                         getFinalizeFieldMode('taxaPlataforma') === 'amount'
-                          ? 'percentage'
-                          : 'amount'
-                      )
-                    }
-                  >
-                    {getFinalizeFieldMode('taxaPlataforma') === 'amount' ? 'R$' : '%'}
-                  </button>
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40'
+                      }`}
+                      aria-label="Usar reais na taxa Encontre Aqui"
+                      aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'amount'}
+                      disabled={!isEditingCommissions}
+                      on:click={() => setFinalizeFieldMode('taxaPlataforma', 'amount')}
+                    >R$</button>
+                    <button
+                      type="button"
+                      class={`min-w-10 border-l border-emerald-600 px-3 py-1 transition ${
+                        getFinalizeFieldMode('taxaPlataforma') === 'percentage'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white text-emerald-700 hover:bg-emerald-50 dark:bg-gray-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40'
+                      }`}
+                      aria-label="Usar porcentagem na taxa Encontre Aqui"
+                      aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'percentage'}
+                      disabled={!isEditingCommissions}
+                      on:click={() => setFinalizeFieldMode('taxaPlataforma', 'percentage')}
+                    >%</button>
+                  </div>
                 </div>
-                <input
-                  id="finalize-taxa-plataforma"
-                  type="text"
-                  inputmode="decimal"
-                  maxlength={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? 6 : 18}
-                  placeholder={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? '0,00' : '0,00'}
-                  value={finalizeForm.taxaPlataforma}
-                  on:input={(event) =>
-                    getFinalizeFieldMode('taxaPlataforma') === 'amount'
-                      ? handleFinalizeMoneyInput('taxaPlataforma', event)
-                      : handleFinalizePercentageInput('taxaPlataforma', event)}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
-                  readonly={!isEditingCommissions}
-                />
+                <div class="relative mt-1">
+                  {#if getFinalizeFieldMode('taxaPlataforma') === 'amount'}
+                    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">R$</span>
+                  {/if}
+                  <input
+                    id="finalize-taxa-plataforma"
+                    type="text"
+                    inputmode="decimal"
+                    maxlength={getFinalizeFieldMode('taxaPlataforma') === 'percentage' ? 6 : 18}
+                    placeholder="0,00"
+                    value={finalizeForm.taxaPlataforma}
+                    on:input={(event) =>
+                      getFinalizeFieldMode('taxaPlataforma') === 'amount'
+                        ? handleFinalizeMoneyInput('taxaPlataforma', event)
+                        : handleFinalizePercentageInput('taxaPlataforma', event)}
+                    class={`w-full rounded border border-gray-300 bg-white py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900 ${
+                      getFinalizeFieldMode('taxaPlataforma') === 'amount' ? 'px-3 pl-9' : 'px-8'
+                    }`}
+                    readonly={!isEditingCommissions}
+                  />
+                  {#if getFinalizeFieldMode('taxaPlataforma') === 'percentage'}
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">%</span>
+                  {/if}
+                </div>
                 {#if finalizeFieldEquivalent('taxaPlataforma')}
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {finalizeFieldEquivalent('taxaPlataforma')}
@@ -2601,9 +2646,15 @@
                 ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'
                 : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200'
             }`}>
-              <span>
-                Restante: <strong>{finalizeCommissionRemaining == null ? '-' : `R$ ${formatManualDecimalDisplay(finalizeCommissionRemaining)}`}</strong>
-              </span>
+              {#if finalizeCommissionRemaining == null}
+                <span class="text-gray-600 dark:text-gray-300">
+                  Digite o valor de venda para calcularmos o restante.
+                </span>
+              {:else}
+                <span>
+                  Restante: <strong>R$ {formatManualDecimalDisplay(finalizeCommissionRemaining)}</strong>
+                </span>
+              {/if}
               <Button
                 size="sm"
                 variant="outline"
