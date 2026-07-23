@@ -661,17 +661,18 @@
 
   function hydrateFinalizeForm(contract: ContractItem | null): void {
     const data = contract?.commissionData ?? null;
+    const isRental = contract?.dealType === 'rent';
     finalizeFieldModes = {
-      comissaoCaptador: 'amount',
-      comissaoVendedor: 'amount',
-      taxaPlataforma: 'amount',
+      comissaoCaptador: isRental ? 'percentage' : 'amount',
+      comissaoVendedor: isRental ? 'percentage' : 'amount',
+      taxaPlataforma: isRental ? 'percentage' : 'amount',
     };
     finalizeForm = {
       valorBaseComissao:
         readCommissionValue(data, 'valorBaseComissao') || readCommissionValue(data, 'valorVenda'),
-      comissaoCaptador: readCommissionValue(data, 'comissaoCaptador'),
-      comissaoVendedor: readCommissionValue(data, 'comissaoVendedor'),
-      taxaPlataforma: readCommissionValue(data, 'taxaPlataforma'),
+      comissaoCaptador: isRental ? '10,00' : readCommissionValue(data, 'comissaoCaptador'),
+      comissaoVendedor: isRental ? '50,00' : readCommissionValue(data, 'comissaoVendedor'),
+      taxaPlataforma: isRental ? '40,00' : readCommissionValue(data, 'taxaPlataforma'),
     };
     finalizePeopleForm = {
       nomeCaptador: String(contract?.capturingBrokerName ?? '').trim(),
@@ -741,10 +742,20 @@
     event: Event
   ): void {
     const target = event.currentTarget as HTMLInputElement;
+    const nextValue = formatFinalizeMoneyInput(target.value);
     finalizeForm = {
       ...finalizeForm,
-      [field]: formatFinalizeMoneyInput(target.value),
+      [field]: nextValue,
     };
+
+    if (field === 'valorBaseComissao' && selected?.dealType === 'rent') {
+      finalizeForm = {
+        ...finalizeForm,
+        comissaoCaptador: '10,00',
+        comissaoVendedor: '50,00',
+        taxaPlataforma: '40,00',
+      };
+    }
   }
 
   function handleFinalizePercentageInput(
@@ -763,11 +774,36 @@
   }
 
   function setFinalizeFieldMode(field: FinalizeCommissionField, mode: FinalizeFieldMode): void {
-    if (getFinalizeFieldMode(field) === mode) return;
+    const currentMode = getFinalizeFieldMode(field);
+    if (selected?.dealType === 'rent' || currentMode === mode) return;
+
+    const base = parseMoney(finalizeForm.valorBaseComissao);
+    const convertedValue =
+      currentMode === 'amount'
+        ? convertAmountFieldToPercentage(finalizeForm[field], base)
+        : convertPercentageFieldToAmount(finalizeForm[field], base);
+
     finalizeFieldModes = {
       ...finalizeFieldModes,
       [field]: mode,
     };
+    finalizeForm = { ...finalizeForm, [field]: convertedValue };
+  }
+
+  function finalizeFieldEquivalent(field: FinalizeCommissionField): string | null {
+    const base = parseMoney(finalizeForm.valorBaseComissao);
+    const rawValue = finalizeForm[field].trim();
+    if (base == null || base <= 0 || !rawValue) return null;
+
+    if (getFinalizeFieldMode(field) === 'amount') {
+      const amount = parseMoney(rawValue);
+      if (amount == null) return null;
+      return `${formatPercentageValue((amount / base) * 100)}% da base`;
+    }
+
+    const percentage = parsePercentage(rawValue);
+    if (percentage == null) return null;
+    return `Equivale a R$ ${formatManualDecimalDisplay((base * percentage) / 100)}`;
   }
 
   function fillFinalizeRemaining(field: FinalizeCommissionField): void {
@@ -2406,6 +2442,7 @@
                     }`}
                     aria-label="Alternar modo da comissão captador"
                     aria-pressed={getFinalizeFieldMode('comissaoCaptador') === 'percentage'}
+                    disabled={selected?.dealType === 'rent'}
                     on:click={() =>
                       setFinalizeFieldMode(
                         'comissaoCaptador',
@@ -2430,7 +2467,13 @@
                       ? handleFinalizeMoneyInput('comissaoCaptador', event)
                       : handleFinalizePercentageInput('comissaoCaptador', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
+                  readonly={selected?.dealType === 'rent'}
                 />
+                {#if finalizeFieldEquivalent('comissaoCaptador')}
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {finalizeFieldEquivalent('comissaoCaptador')}
+                  </p>
+                {/if}
               </div>
               <div class="text-sm text-gray-700 dark:text-gray-200">
                 <div class="flex items-center justify-between gap-3">
@@ -2446,6 +2489,7 @@
                     }`}
                     aria-label="Alternar modo da comissão do vendedor"
                     aria-pressed={getFinalizeFieldMode('comissaoVendedor') === 'percentage'}
+                    disabled={selected?.dealType === 'rent'}
                     on:click={() =>
                       setFinalizeFieldMode(
                         'comissaoVendedor',
@@ -2470,7 +2514,13 @@
                       ? handleFinalizeMoneyInput('comissaoVendedor', event)
                       : handleFinalizePercentageInput('comissaoVendedor', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
+                  readonly={selected?.dealType === 'rent'}
                 />
+                {#if finalizeFieldEquivalent('comissaoVendedor')}
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {finalizeFieldEquivalent('comissaoVendedor')}
+                  </p>
+                {/if}
               </div>
               <div class="text-sm text-gray-700 dark:text-gray-200">
                 <div class="flex items-center justify-between gap-3">
@@ -2486,6 +2536,7 @@
                     }`}
                     aria-label="Alternar modo da taxa da plataforma"
                     aria-pressed={getFinalizeFieldMode('taxaPlataforma') === 'percentage'}
+                    disabled={selected?.dealType === 'rent'}
                     on:click={() =>
                       setFinalizeFieldMode(
                         'taxaPlataforma',
@@ -2510,9 +2561,20 @@
                       ? handleFinalizeMoneyInput('taxaPlataforma', event)
                       : handleFinalizePercentageInput('taxaPlataforma', event)}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-right text-sm tabular-nums tracking-tight dark:border-gray-700 dark:bg-gray-900"
+                  readonly={selected?.dealType === 'rent'}
                 />
+                {#if finalizeFieldEquivalent('taxaPlataforma')}
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {finalizeFieldEquivalent('taxaPlataforma')}
+                  </p>
+                {/if}
               </div>
             </div>
+            {#if selected?.dealType === 'rent'}
+              <p class="mt-3 text-xs text-gray-600 dark:text-gray-300">
+                Na locação, a comissão do primeiro aluguel é distribuída automaticamente: 10% captador, 50% vendedor e 40% Encontre Aqui.
+              </p>
+            {/if}
             <div class={`mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm ${
               finalizeCommissionRemaining != null && finalizeCommissionRemaining < 0
                 ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'

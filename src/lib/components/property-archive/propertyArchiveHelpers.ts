@@ -117,6 +117,15 @@ export function normalizeImageUrl(value: unknown): string | null {
   return null;
 }
 
+function normalizeStoredImage(value: unknown): string | null {
+  const raw = normalizeImageUrl(value);
+  if (!raw) return null;
+
+  // Legacy administrative responses serialize images as "id|url".
+  const separator = raw.indexOf('|');
+  return separator >= 0 ? normalizeImageUrl(raw.slice(separator + 1)) : raw;
+}
+
 export function extractCoverUrl(
   source: {
     imageUrl?: unknown;
@@ -128,10 +137,10 @@ export function extractCoverUrl(
 ): string | null {
   if (!source) return null;
   const direct =
-    normalizeImageUrl(source.imageUrl) ??
-    normalizeImageUrl(source.propertyImageUrl) ??
-    normalizeImageUrl(source.image_url) ??
-    normalizeImageUrl(source.property_image_url);
+    normalizeStoredImage(source.imageUrl) ??
+    normalizeStoredImage(source.propertyImageUrl) ??
+    normalizeStoredImage(source.image_url) ??
+    normalizeStoredImage(source.property_image_url);
   if (direct) return direct;
 
   const rawImages = source.images;
@@ -144,20 +153,20 @@ export function extractCoverUrl(
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed) && parsed.length > 0) {
         const first = parsed[0] as Record<string, unknown>;
-        return normalizeImageUrl(first?.url) ?? normalizeImageUrl(first?.image_url);
+        return normalizeStoredImage(first?.url) ?? normalizeStoredImage(first?.image_url);
       }
     } catch {
-      return normalizeImageUrl(trimmed.split(/[;,|]/)[0] ?? null);
+      return normalizeStoredImage(trimmed.split(';')[0] ?? null);
     }
     return null;
   }
 
   if (Array.isArray(rawImages) && rawImages.length > 0) {
     const first = rawImages[0];
-    if (typeof first === 'string') return normalizeImageUrl(first);
+    if (typeof first === 'string') return normalizeStoredImage(first);
     if (first && typeof first === 'object') {
       const record = first as Record<string, unknown>;
-      return normalizeImageUrl(record.url) ?? normalizeImageUrl(record.image_url);
+      return normalizeStoredImage(record.url) ?? normalizeStoredImage(record.image_url);
     }
   }
 
