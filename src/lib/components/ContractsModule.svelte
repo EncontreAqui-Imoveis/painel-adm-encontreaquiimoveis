@@ -24,6 +24,7 @@
   import ContractDocumentMatrix from '$lib/components/contracts/ContractDocumentMatrix.svelte';
   import ContractApprovalActions from '$lib/components/contracts/ContractApprovalActions.svelte';
   import ContractDraftUploadPanel from '$lib/components/contracts/ContractDraftUploadPanel.svelte';
+  import ContractActorsGrid from '$lib/components/contracts/ContractActorsGrid.svelte';
   import ContractFinalizedEditorPanel from '$lib/components/contracts/ContractFinalizedEditorPanel.svelte';
   import {
     type ContractStatus,
@@ -156,6 +157,7 @@
   let itemsPerPage = 10;
   let totalItems = 0;
   let totalPages = 1;
+  let contractSearchDebounce: ReturnType<typeof setTimeout> | null = null;
   let downloadingDocumentId: number | null = null;
   let selectedDraftFile: File | null = null;
   let draftUploadInputEl: HTMLInputElement | null = null;
@@ -225,6 +227,8 @@
     nomeCaptador: '',
     nomeVendedor: '',
   };
+  let finalizeCommissionPreview: ReturnType<typeof resolveFinalizeCommissionAmounts> = null;
+  let finalizeCommissionRemaining: number | null = null;
 
   let savingPartyData = false;
   let isEditingData = false;
@@ -766,6 +770,61 @@
     };
   }
 
+  function fillFinalizeRemaining(field: FinalizeCommissionField): void {
+    const remaining = calculateFinalizeCommissionRemaining(field);
+    const base = parseMoney(finalizeForm.valorBaseComissao);
+    if (remaining == null || remaining < 0 || base == null || base <= 0) return;
+
+    const displayValue =
+      getFinalizeFieldMode(field) === 'percentage'
+        ? formatPercentageValue((remaining / base) * 100)
+        : formatManualDecimalDisplay(remaining);
+    finalizeForm = { ...finalizeForm, [field]: displayValue };
+  }
+
+  function resolveFinalizeFieldAmount(
+    field: FinalizeCommissionField,
+    emptyValue: number | null = null,
+  ): number | null {
+    const rawValue = finalizeForm[field].trim();
+    if (!rawValue) return emptyValue;
+
+    const base = parseMoney(finalizeForm.valorBaseComissao);
+    if (base == null || base <= 0) return null;
+    if (getFinalizeFieldMode(field) === 'amount') return parseMoney(rawValue);
+
+    const percentage = parsePercentage(rawValue);
+    return percentage == null ? null : Number(((base * percentage) / 100).toFixed(2));
+  }
+
+  // Empty allocations count as zero in the preview, so the remaining value can
+  // be assigned before all three commission fields have been filled.
+  function calculateFinalizeCommissionRemaining(
+    ignoredField: FinalizeCommissionField | null = null,
+  ): number | null {
+    const base = parseMoney(finalizeForm.valorBaseComissao);
+    if (base == null || base <= 0) return null;
+
+    const fields: FinalizeCommissionField[] = [
+      'comissaoCaptador',
+      'comissaoVendedor',
+      'taxaPlataforma',
+    ];
+    const allocatedCents = fields.reduce((sum, field) => {
+      if (field === ignoredField) return sum;
+      const amount = resolveFinalizeFieldAmount(field, 0);
+      return amount == null ? Number.NaN : sum + Math.round(amount * 100);
+    }, 0);
+    if (!Number.isFinite(allocatedCents)) return null;
+    return (Math.round(base * 100) - allocatedCents) / 100;
+  }
+
+  $: finalizeCommissionPreview = resolveFinalizeCommissionAmounts(
+    finalizeForm,
+    finalizeFieldModes,
+  );
+  $: finalizeCommissionRemaining = calculateFinalizeCommissionRemaining();
+
   function getDocumentsForFinalize(contract: ContractItem): ContractDocument[] {
     return getAllContractDocuments(contract).filter((doc) =>
       signedReviewDocTypes.has((doc.documentType ?? '').trim().toLowerCase())
@@ -827,7 +886,12 @@
   async function fetchContracts() {
     isLoading = true;
     try {
-      const response = await listContracts<ContractItem>(activeTab, currentPage, itemsPerPage);
+      const response = await listContracts<ContractItem>(
+        activeTab,
+        currentPage,
+        itemsPerPage,
+        contractSearchQuery,
+      );
       items = response.items.filter((item) => !isRejectedContract(item));
       totalItems = response.total;
       totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -848,6 +912,21 @@
   function refresh(resetPage = false) {
     if (resetPage) currentPage = 1;
     refreshKey += 1;
+  }
+
+  function scheduleContractSearch(): void {
+    if (contractSearchDebounce) {
+      clearTimeout(contractSearchDebounce);
+    }
+    contractSearchDebounce = setTimeout(() => {
+      contractSearchDebounce = null;
+      refresh(true);
+    }, 300);
+  }
+
+  function clearContractSearch(): void {
+    contractSearchQuery = '';
+    scheduleContractSearch();
   }
 
   async function reloadSelectedContract(contractId: string): Promise<void> {
@@ -1669,6 +1748,9 @@
   });
 
   onDestroy(() => {
+    if (contractSearchDebounce) {
+      clearTimeout(contractSearchDebounce);
+    }
     if (documentPreviewOwnsObjectUrl && documentPreviewObjectUrl) {
       URL.revokeObjectURL(documentPreviewObjectUrl);
     }
@@ -1725,13 +1807,14 @@
         <input
           type="text"
           bind:value={contractSearchQuery}
-          placeholder="Buscar imóvel, parte ou ID..."
+          on:input={scheduleContractSearch}
+          placeholder="Buscar por código, imóvel ou parte..."
           class="w-56 rounded-md border border-gray-300 bg-white px-3 py-1 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
         />
         {#if contractSearchQuery}
           <button
             type="button"
-            on:click={() => (contractSearchQuery = '')}
+            on:click={clearContractSearch}
             class="absolute right-2 top-1.5 text-xs text-gray-400 hover:text-gray-600"
           >
             ✕
@@ -2051,27 +2134,17 @@
         {/if}
 
         {#if modalMode === 'review_docs'}
-          <div class="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-              <p class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Proponente</p>
-              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{contractActorName(selected, 'proposer')}</p>
-              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ator que iniciou a proposta</p>
-            </div>
-            <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
-              <p class="text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">{selectedBuyerLabel}</p>
-              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{contractActorName(selected, 'buyer')}</p>
-              <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">{contractSideDocumentDescription(selected, 'buyer')}</p>
-            </div>
-            <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-              <p class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Anunciante</p>
-              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{contractActorName(selected, 'advertiser')}</p>
-              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ator que publicou o imóvel</p>
-            </div>
-            <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
-              <p class="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-300">{selectedSellerLabel}</p>
-              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{contractActorName(selected, 'seller')}</p>
-              <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">{contractSideDocumentDescription(selected, 'seller')}</p>
-            </div>
+          <div class="mb-4">
+            <ContractActorsGrid
+              proposerName={contractActorName(selected, 'proposer')}
+              buyerName={contractActorName(selected, 'buyer')}
+              advertiserName={contractActorName(selected, 'advertiser')}
+              sellerName={contractActorName(selected, 'seller')}
+              buyerLabel={selectedBuyerLabel}
+              sellerLabel={selectedSellerLabel}
+              buyerDescription={contractSideDocumentDescription(selected, 'buyer')}
+              sellerDescription={contractSideDocumentDescription(selected, 'seller')}
+            />
           </div>
         {/if}
 
@@ -2246,12 +2319,16 @@
           />
         </div>
         {:else if modalMode === 'upload_draft'}
-        <ContractDraftUploadPanel
-          contract={selected}
-          sellerLabel={selectedSellerLabel}
-          buyerLabel={selectedBuyerLabel}
-          ownerDisplayName={selected ? getOwnerDisplayName(selected) : ''}
-          buyerDisplayName={selected ? getBuyerDisplayName(selected) : ''}
+          <ContractDraftUploadPanel
+            contract={selected}
+            sellerLabel={selectedSellerLabel}
+            buyerLabel={selectedBuyerLabel}
+            proposerName={contractActorName(selected, 'proposer')}
+            buyerName={contractActorName(selected, 'buyer')}
+            advertiserName={contractActorName(selected, 'advertiser')}
+            sellerName={contractActorName(selected, 'seller')}
+            buyerDescription={contractSideDocumentDescription(selected, 'buyer')}
+            sellerDescription={contractSideDocumentDescription(selected, 'seller')}
           currentDraftDocument={getCurrentDraftDocument(selected)}
           documents={selected ? getAllContractDocuments(selected) : []}
           selectedDraftFile={selectedDraftFile}
@@ -2278,41 +2355,28 @@
         />
         {:else if modalMode === 'finalize'}
         <div class="space-y-4">
+          <ContractActorsGrid
+            proposerName={contractActorName(selected, 'proposer')}
+            buyerName={contractActorName(selected, 'buyer')}
+            advertiserName={contractActorName(selected, 'advertiser')}
+            sellerName={contractActorName(selected, 'seller')}
+            buyerLabel={selectedBuyerLabel}
+            sellerLabel={selectedSellerLabel}
+            buyerDescription={contractSideDocumentDescription(selected, 'buyer')}
+            sellerDescription={contractSideDocumentDescription(selected, 'seller')}
+          />
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
               Formulário de Comissões
             </p>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
-              <label class="text-sm text-gray-700 dark:text-gray-200">
-                Nome do captador
-                <input
-                  type="text"
-                  bind:value={finalizePeopleForm.nomeCaptador}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-                />
-              </label>
-              <label class="text-sm text-gray-700 dark:text-gray-200">
-                Nome do {selectedSellerLabel.toLocaleLowerCase('pt-BR')}
-                <input
-                  type="text"
-                  bind:value={finalizePeopleForm.nomeVendedor}
-                  class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-                />
-              </label>
-            </div>
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              Campos somente para conferência visual nesta etapa.
-            </p>
-            <div class="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
-              <div class="flex flex-wrap gap-x-4 gap-y-1">
-                <p>
-                  <span class="font-semibold">Captador:</span>
-                  {finalizePeopleForm.nomeCaptador || '-'}
-                </p>
-                <p>
-                  <span class="font-semibold">{selectedSellerLabel}:</span>
-                  {finalizePeopleForm.nomeVendedor || '-'}
-                </p>
+              <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/60">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Nome do captador</p>
+                <p class="mt-1 font-medium text-slate-900 dark:text-slate-100">{finalizePeopleForm.nomeCaptador || '(A definir)'}</p>
+              </div>
+              <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/60">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Nome do {selectedSellerLabel.toLocaleLowerCase('pt-BR')}</p>
+                <p class="mt-1 font-medium text-slate-900 dark:text-slate-100">{finalizePeopleForm.nomeVendedor || '(A definir)'}</p>
               </div>
             </div>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
@@ -2449,6 +2513,23 @@
                 />
               </div>
             </div>
+            <div class={`mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm ${
+              finalizeCommissionRemaining != null && finalizeCommissionRemaining < 0
+                ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'
+                : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200'
+            }`}>
+              <span>
+                Restante: <strong>{finalizeCommissionRemaining == null ? '-' : `R$ ${formatManualDecimalDisplay(finalizeCommissionRemaining)}`}</strong>
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={finalizeCommissionRemaining == null || finalizeCommissionRemaining < 0}
+                on:click={() => fillFinalizeRemaining('taxaPlataforma')}
+              >
+                Preencher restante na taxa Encontre Aqui
+              </Button>
+            </div>
           </div>
 
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
@@ -2478,16 +2559,30 @@
                   <option value="outro">Outro</option>
                 </select>
               </label>
-              <label class="text-sm text-gray-700 dark:text-gray-200 md:col-span-1">
-                Arquivo
+              <div class="text-sm text-gray-700 dark:text-gray-200 md:col-span-1">
+                <p class="mb-1">Arquivo</p>
                 <input
                   bind:this={signedUploadInputEl}
                   type="file"
                   accept="application/pdf,image/png,image/jpeg,image/webp"
                   on:change={handleSignedFileChange}
-                  class="mt-1 block w-full text-sm text-gray-700 dark:text-gray-200"
+                  class="sr-only"
+                  aria-hidden="true"
+                  tabindex="-1"
                 />
-              </label>
+                <button
+                  type="button"
+                  class="flex min-h-[42px] w-full items-center justify-between gap-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 text-left text-sm transition hover:border-emerald-500 hover:bg-emerald-50 dark:border-slate-700 dark:bg-slate-900/50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/20"
+                  on:click={triggerSignedPicker}
+                >
+                  <span class="truncate font-medium text-slate-800 dark:text-slate-100">
+                    {selectedSignedFile ? selectedSignedFile.name : 'Escolher arquivo'}
+                  </span>
+                  <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                    {selectedSignedFile ? `${Math.ceil(selectedSignedFile.size / 1024)} KB` : 'PDF ou imagem'}
+                  </span>
+                </button>
+              </div>
               {#if finalizedDocumentRequiresSide(signedDocType)}
                 <label class="text-sm text-gray-700 dark:text-gray-200 md:col-span-1">
                   Lado
@@ -2502,11 +2597,6 @@
               {/if}
             </div>
             <div class="mt-3 flex flex-wrap items-center gap-3">
-              {#if selectedSignedFile}
-                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                  Selecionado: {selectedSignedFile.name}
-                </span>
-              {/if}
               {#if pendingReplacementDocumentId}
                 <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
                   Substituição em andamento
@@ -2519,19 +2609,21 @@
                   Cancelar substituição
                 </Button>
               {/if}
+              {#if selectedSignedFile}
               <div class="ml-auto flex flex-wrap gap-2">
                 <Button
                   size="sm"
-                  variant="outline"
-                  on:click={selectedSignedFile ? uploadSignedDocsByAdmin : triggerSignedPicker}
+                  className="bg-green-600 text-white hover:bg-green-700"
+                  on:click={uploadSignedDocsByAdmin}
                   disabled={uploadingSignedDoc}
                 >
                   {#if uploadingSignedDoc}
                     <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                   {/if}
-                  {selectedSignedFile ? 'Anexar documento físico' : 'Selecionar PDF'}
+                  Anexar documento físico
                 </Button>
               </div>
+              {/if}
             </div>
             {#if !hasPaymentProofForFinalize(selected)}
               <p class="mt-2 text-xs text-amber-500 dark:text-amber-300">
@@ -2673,7 +2765,7 @@
               {#if movingToPreviousStage}
                 <Loader2 class="mr-2 h-4 w-4 animate-spin" />
               {/if}
-              Voltar
+              Voltar para a etapa anterior
             </Button>
             <Button
               variant="outline"

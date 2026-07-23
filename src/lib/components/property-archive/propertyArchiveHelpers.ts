@@ -8,6 +8,7 @@ export type ArchiveItemLike = {
   status: ArchiveStatus;
   transactionDate?: string | null;
   imageUrl?: string | null;
+  propertyImageUrl?: string | null;
   images?: unknown;
 };
 
@@ -117,11 +118,18 @@ export function normalizeImageUrl(value: unknown): string | null {
 }
 
 export function extractCoverUrl(
-  source: { imageUrl?: unknown; image_url?: unknown; property_image_url?: unknown; images?: unknown } | null | undefined
+  source: {
+    imageUrl?: unknown;
+    propertyImageUrl?: unknown;
+    image_url?: unknown;
+    property_image_url?: unknown;
+    images?: unknown;
+  } | null | undefined
 ): string | null {
   if (!source) return null;
   const direct =
     normalizeImageUrl(source.imageUrl) ??
+    normalizeImageUrl(source.propertyImageUrl) ??
     normalizeImageUrl(source.image_url) ??
     normalizeImageUrl(source.property_image_url);
   if (direct) return direct;

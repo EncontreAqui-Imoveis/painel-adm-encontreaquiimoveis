@@ -856,7 +856,7 @@ describe('ContractsModule', () => {
     expect(screen.getByText('Formulário de Comissões').compareDocumentPosition(
       screen.getByText('Documentos para conferência')
     ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Selecionar PDF' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Escolher arquivo/i })).toBeInTheDocument();
   });
 
   it('envia o anexo de documento assinado em AWAITING_SIGNATURES', async () => {
@@ -905,10 +905,14 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Aguardando Assinaturas' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Finalizar Venda/Locação' }));
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Selecionar PDF' }));
+    await fireEvent.click(screen.getByRole('button', { name: /Escolher arquivo/i }));
     expect(clickSpy).toHaveBeenCalled();
 
-    const signedFileInput = screen.getByLabelText('Arquivo') as HTMLInputElement;
+    const signedFileInput = document.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(signedFileInput).not.toBeNull();
+    if (!signedFileInput) {
+      throw new Error('signed document input not found');
+    }
     const signedPdf = new File(['%PDF-1.4 signed document%'], 'contrato_assinado.pdf', {
       type: 'application/pdf',
     });
@@ -916,7 +920,7 @@ describe('ContractsModule', () => {
       target: { files: [signedPdf] },
     });
 
-    expect(screen.getByText('Selecionado: contrato_assinado.pdf')).toBeInTheDocument();
+    expect(screen.getByText('contrato_assinado.pdf')).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Anexar documento físico' }));
 
@@ -1291,7 +1295,9 @@ describe('ContractsModule', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Em Confecção' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
-    await fireEvent.click(await screen.findByRole('button', { name: 'Voltar' }));
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Voltar para a etapa anterior' })
+    );
 
     await waitFor(() => {
       expect(apiPutMock).toHaveBeenCalledWith(
@@ -1603,7 +1609,9 @@ describe('ContractsModule', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Aguardando Assinaturas' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Finalizar Venda/Locação' }));
-    await fireEvent.click(await screen.findByRole('button', { name: 'Voltar' }));
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'Voltar para a etapa anterior' })
+    );
 
     await waitFor(() => {
       expect(apiPutMock).toHaveBeenCalledWith(

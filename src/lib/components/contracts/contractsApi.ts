@@ -49,13 +49,18 @@ function readListResponse<T>(response: unknown): { items: T[]; total: number } {
 export async function listContracts<TContract extends ContractListItem>(
   status: ContractStatus,
   page: number,
-  limit: number
+  limit: number,
+  search?: string
 ): Promise<{ items: TContract[]; total: number }> {
   const params = new URLSearchParams({
     status,
     page: String(page),
     limit: String(limit),
   });
+  const normalizedSearch = String(search ?? '').trim();
+  if (normalizedSearch) {
+    params.set('search', normalizedSearch);
+  }
   const response = await api.get<{ data?: TContract[]; total?: number }>(
     `/admin/contracts?${params.toString()}`
   );

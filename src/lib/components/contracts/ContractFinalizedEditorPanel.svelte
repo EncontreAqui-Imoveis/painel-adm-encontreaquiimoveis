@@ -164,22 +164,31 @@
           </select>
         </label>
       {/if}
-      <label class="text-sm text-gray-700 dark:text-gray-200">
-        Arquivo
+      <div class="text-sm text-gray-700 dark:text-gray-200">
+        <p class="mb-1">Arquivo</p>
         <input
           bind:this={signedUploadInputEl}
           type="file"
           accept="application/pdf,image/png,image/jpeg,image/webp"
           on:change={handleSignedFileChange}
-          class="mt-1 block w-full text-sm text-gray-700 dark:text-gray-200"
+          class="sr-only"
+          aria-hidden="true"
+          tabindex="-1"
         />
-      </label>
+        <button
+          type="button"
+          class="flex min-h-[42px] w-full items-center justify-between gap-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 text-left text-sm transition hover:border-emerald-500 hover:bg-emerald-50 dark:border-slate-700 dark:bg-slate-900/50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/20"
+          on:click={triggerSignedFilePicker}
+        >
+          <span class="truncate font-medium text-slate-800 dark:text-slate-100">
+            {selectedSignedFile ? selectedSignedFile.name : 'Escolher arquivo'}
+          </span>
+          <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+            {selectedSignedFile ? `${Math.ceil(selectedSignedFile.size / 1024)} KB` : 'PDF ou imagem'}
+          </span>
+        </button>
+      </div>
     </div>
-    {#if selectedSignedFile}
-      <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-        Selecionado: {selectedSignedFile.name}
-      </p>
-    {/if}
     {#if pendingReplacementDocumentId}
       <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
         <span>Substituição em andamento.</span>
@@ -188,18 +197,20 @@
         </Button>
       </div>
     {/if}
+    {#if selectedSignedFile}
     <div class="mt-3 flex justify-end">
       <Button
-        className="bg-blue-600 text-white hover:bg-blue-700"
-        on:click={selectedSignedFile ? uploadFinalizedDocument : triggerSignedFilePicker}
+        className="bg-green-600 text-white hover:bg-green-700"
+        on:click={uploadFinalizedDocument}
         disabled={uploadingSignedDoc}
       >
         {#if uploadingSignedDoc}
           <Loader2 class="mr-2 h-4 w-4 animate-spin" />
         {/if}
-        {selectedSignedFile ? 'Adicionar documento' : 'Selecionar PDF'}
+        Adicionar documento
       </Button>
     </div>
+    {/if}
   </div>
 
   <div class="flex justify-end gap-2">

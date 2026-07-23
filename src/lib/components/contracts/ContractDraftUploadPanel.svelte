@@ -1,13 +1,18 @@
 <script lang="ts">
   import { Loader2 } from 'lucide-svelte';
   import { Button } from '$lib/components/ui/button';
+  import ContractActorsGrid from '$lib/components/contracts/ContractActorsGrid.svelte';
   import type { ContractItem, ContractDocument } from '$lib/components/contracts/types';
 
   export let contract: ContractItem | null = null;
   export let sellerLabel = 'Parte Vendedora/Locadora';
   export let buyerLabel = 'Parte Compradora/Locatária';
-  export let ownerDisplayName = '';
-  export let buyerDisplayName = '';
+  export let proposerName = '';
+  export let buyerName = '';
+  export let advertiserName = '';
+  export let sellerName = '';
+  export let buyerDescription = 'Documentos do adquirente legal';
+  export let sellerDescription = 'Documentos do proprietário legal';
   export let currentDraftDocument: ContractDocument | null = null;
   export let documents: ContractDocument[] = [];
   export let selectedDraftFile: File | null = null;
@@ -44,16 +49,16 @@
 
 <div class="space-y-4">
   {#if contract}
-    <div class="grid gap-3 sm:grid-cols-2">
-      <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
-        <p class="text-xs font-semibold uppercase text-blue-700 dark:text-blue-300">{sellerLabel}</p>
-        <p class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{ownerDisplayName || '-'}</p>
-      </div>
-      <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
-        <p class="text-xs font-semibold uppercase text-emerald-700 dark:text-emerald-300">{buyerLabel}</p>
-        <p class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{buyerDisplayName || '-'}</p>
-      </div>
-    </div>
+    <ContractActorsGrid
+      {proposerName}
+      {buyerName}
+      {advertiserName}
+      {sellerName}
+      {buyerLabel}
+      {sellerLabel}
+      {buyerDescription}
+      {sellerDescription}
+    />
   {/if}
 
   {#if currentDraftDocument}
@@ -160,7 +165,7 @@
       </Button>
       {#if hasCurrentDraftDocument(contract) && !selectedDraftFile}
         <Button
-          variant="outline"
+          className="bg-green-600 text-white hover:bg-green-700"
           on:click={() => submitDraft({ reuseCurrentDraft: true })}
           disabled={uploadingDraft || movingToPreviousStage}
         >
@@ -271,7 +276,7 @@
       {#if movingToPreviousStage}
         <Loader2 class="mr-2 h-4 w-4 animate-spin" />
       {/if}
-      Voltar
+      Voltar para a etapa anterior
     </Button>
     <Button
       variant="outline"
@@ -291,6 +296,17 @@
             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
           {/if}
           {draftSubmitLabel(contract)}
+        </Button>
+      {:else}
+        <Button
+          className="bg-green-600 text-white hover:bg-green-700"
+          on:click={() => submitDraft({ reuseCurrentDraft: true })}
+          disabled={uploadingDraft || movingToPreviousStage}
+        >
+          {#if uploadingDraft}
+            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+          {/if}
+          Prosseguir com a mesma minuta
         </Button>
       {/if}
     {:else}

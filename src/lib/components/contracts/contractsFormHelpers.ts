@@ -288,12 +288,23 @@ export function hasExactSaleSplit(
     | null
 ): boolean {
   if (!values) return false;
-  const total = Number(
-    (
-      values.comissaoCaptador +
-      values.comissaoVendedor +
-      values.taxaPlataforma
-    ).toFixed(2)
-  );
-  return Math.abs(total - values.valorBaseComissao) <= 0.01;
+  const toCents = (value: number) => Math.round(value * 100);
+  const totalCents =
+    toCents(values.comissaoCaptador) +
+    toCents(values.comissaoVendedor) +
+    toCents(values.taxaPlataforma);
+  return totalCents === toCents(values.valorBaseComissao);
+}
+
+export function calculateCommissionRemaining(
+  values: ReturnType<typeof resolveFinalizeCommissionAmounts>
+): number | null {
+  if (!values) return null;
+  const toCents = (value: number) => Math.round(value * 100);
+  const remainingCents =
+    toCents(values.valorBaseComissao) -
+    toCents(values.comissaoCaptador) -
+    toCents(values.comissaoVendedor) -
+    toCents(values.taxaPlataforma);
+  return remainingCents / 100;
 }
