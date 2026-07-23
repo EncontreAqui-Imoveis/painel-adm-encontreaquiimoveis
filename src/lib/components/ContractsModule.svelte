@@ -918,9 +918,9 @@
     const nameFromInfo = (info: Record<string, unknown> | null | undefined) =>
       getRecordValueRaw(info, ['nome', 'name', 'fullName', 'full_name']);
     const value = role === 'proposer'
-      ? contract.proposerName ?? contract.buyerClientName ?? contract.clientName
+      ? contract.proposerName ?? contract.clientName ?? contract.buyerClientName
       : role === 'buyer'
-      ? nameFromInfo(contract.buyerInfo) || contract.buyerClientName || contract.clientName
+      ? nameFromInfo(contract.buyerInfo) || contract.buyerClientName
       : role === 'advertiser'
       ? contract.advertiserName ?? contract.ownerName ?? contract.propertyOwnerName
       : nameFromInfo(contract.sellerInfo ?? contract.ownerInfo) || contract.sellerClientName || contract.ownerName;
@@ -1793,9 +1793,11 @@
               {/if}
               <div class="min-w-0">
                 <p class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                  ID {item.propertyId}{#if item.propertyCode}{' · '}{item.propertyCode}{/if}
+                  {#if item.propertyCode}Cód. {item.propertyCode}{:else}{item.propertyTitle ?? '-'}{/if}
                 </p>
-                <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">{item.propertyTitle ?? '-'}</p>
+                {#if item.propertyCode}
+                  <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">{item.propertyTitle ?? '-'}</p>
+                {/if}
               </div>
             </div>
             <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">

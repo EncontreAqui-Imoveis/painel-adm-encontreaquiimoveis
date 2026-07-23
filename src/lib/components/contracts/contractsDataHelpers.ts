@@ -186,19 +186,6 @@ export function formatPhoneMaskBr(value: string | null | undefined): string {
 
 export function getBuyerDisplayName(contract: ContractItem | null | undefined): string {
   if (!contract) return '-';
-  const directName = String(
-    contract.buyerClientName ??
-      contract.buyer_client_name ??
-      contract.clientName ??
-      (contract as unknown as Record<string, unknown>).client_name ??
-      (contract as unknown as Record<string, unknown>).clientName ??
-      (contract as unknown as Record<string, unknown>).buyerName ??
-      (contract as unknown as Record<string, unknown>).buyer_name ??
-      ''
-  ).trim();
-  if (directName.length > 0) {
-    return directName;
-  }
 
   const buyerInfo = contract.buyerInfo ?? null;
   const fromInfo = getRecordValueRaw(buyerInfo, [
@@ -207,8 +194,6 @@ export function getBuyerDisplayName(contract: ContractItem | null | undefined): 
     'nomeCompleto',
     'buyer_name',
     'buyerName',
-    'client_name',
-    'clientName',
     'cliente_nome',
     'clienteNome',
     'nome_cliente',
@@ -230,8 +215,6 @@ export function getBuyerDisplayName(contract: ContractItem | null | undefined): 
         'nomeCompleto',
         'buyer_name',
         'buyerName',
-        'client_name',
-        'clientName',
         'cliente_nome',
         'clienteNome',
         'nome_cliente',
@@ -244,6 +227,21 @@ export function getBuyerDisplayName(contract: ContractItem | null | undefined): 
         return nestedBuyerName;
       }
     }
+  }
+
+  const directName = String(
+    contract.buyerClientName ??
+      contract.buyer_client_name ??
+      (contract as unknown as Record<string, unknown>).buyerName ??
+      (contract as unknown as Record<string, unknown>).buyer_name ??
+      contract.proposerName ??
+      contract.clientName ??
+      (contract as unknown as Record<string, unknown>).client_name ??
+      (contract as unknown as Record<string, unknown>).clientName ??
+      ''
+  ).trim();
+  if (directName.length > 0) {
+    return directName;
   }
 
   return '-';

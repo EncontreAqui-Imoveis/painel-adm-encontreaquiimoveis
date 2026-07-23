@@ -805,19 +805,19 @@
           {#each brokerProperties as property}
             <li class="rounded-lg border border-gray-200 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800/60 dark:hover:bg-gray-700/60">
               <a
-                href={`https://encontreaquiimoveis.app/property/${property.id}`}
+                href={`https://encontreaquiimoveis.com.br/imoveis/${property.public_code || property.code || property.id}`}
                 target="_blank"
                 rel="noreferrer"
                 class="block p-4"
               >
                 <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p class="text-sm font-semibold text-gray-900 dark:text-white">{property.title ?? `Imóvel #${property.id}`}</p>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-white">{property.title ?? 'Imóvel'}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">
                       {property.city ?? '-'}{#if property.state} / {property.state}{/if}
                     </p>
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {property.code ? `Cód. ${property.code} · ` : ''}{formatDateTime(property.created_at)}
+                      {(property.public_code || property.code) ? `Cód. ${property.public_code || property.code} · ` : ''}{formatDateTime(property.created_at)}
                     </p>
                   </div>
                   <div class="flex items-center gap-3 text-sm">
