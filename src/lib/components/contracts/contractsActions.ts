@@ -53,10 +53,12 @@ export async function deleteFinalizedContractDocument(
 export async function uploadSignedDocument(
   contractId: string,
   documentType: string,
-  file: File
+  file: File,
+  replaceDocumentId?: number
 ): Promise<void> {
   const form = new FormData();
   form.append('documentType', documentType);
+  if (replaceDocumentId) form.append('replaceDocumentId', String(replaceDocumentId));
   form.append('file', file);
   await apiClient.post(`/admin/contracts/${contractId}/signed-docs`, form);
 }
@@ -65,13 +67,15 @@ export async function uploadFinalizedContractDocument(
   contractId: string,
   documentType: string,
   file: File,
-  side?: 'seller' | 'buyer'
+  side?: 'seller' | 'buyer',
+  replaceDocumentId?: number
 ): Promise<void> {
   const form = new FormData();
   form.append('documentType', documentType);
   if (side) {
     form.append('side', side);
   }
+  if (replaceDocumentId) form.append('replaceDocumentId', String(replaceDocumentId));
   form.append('file', file);
   await apiClient.post(`/admin/contracts/${contractId}/finalized-docs`, form);
 }

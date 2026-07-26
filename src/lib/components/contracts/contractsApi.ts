@@ -12,6 +12,19 @@ export type ContractDetailResponse<TContract> = {
   documents?: unknown[];
 };
 
+export type ContractDocumentRejection = {
+  id: number;
+  sourceDocumentId: number | null;
+  documentType: string | null;
+  documentLabel: string | null;
+  originalFileName: string | null;
+  ownerSide: 'seller' | 'buyer' | null;
+  reason: string;
+  uploadedByUserId: number | null;
+  rejectedByAdminId: number | null;
+  rejectedAt: string | null;
+};
+
 function readPayload<T>(response: unknown): T {
   if (response && typeof response === 'object' && 'data' in response) {
     return ((response as { data?: T }).data ?? {}) as T;
@@ -79,6 +92,14 @@ export async function getContractDetails<TContract>(
     }
   }
   return readPayload<ContractDetailResponse<TContract>>(response);
+}
+
+export async function listContractDocumentRejections(
+  contractId: string
+): Promise<ContractDocumentRejection[]> {
+  const response = await api.get(`/admin/contracts/${contractId}/document-rejections`);
+  const payload = readPayload<{ rejections?: ContractDocumentRejection[] }>(response);
+  return Array.isArray(payload.rejections) ? payload.rejections : [];
 }
 
 export async function saveContractPartyInfo<TPayload extends { side: 'seller' | 'buyer' }>(

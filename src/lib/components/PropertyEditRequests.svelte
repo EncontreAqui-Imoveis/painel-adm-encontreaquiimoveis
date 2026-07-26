@@ -207,7 +207,9 @@
   }
 
   function requestTitle(item: PropertyEditRequest) {
-    return item.propertyCode ? `${item.propertyCode} · ${item.propertyTitle ?? '-'}` : item.propertyTitle ?? `Imóvel #${item.propertyId}`;
+    return item.propertyCode
+      ? `${item.propertyCode} · ${item.propertyTitle ?? '-'}`
+      : item.propertyTitle ?? 'Imóvel sem código';
   }
 
   function changedFieldsCount(item: PropertyEditRequest) {

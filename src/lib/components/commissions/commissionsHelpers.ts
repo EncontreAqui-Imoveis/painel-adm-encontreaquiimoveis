@@ -95,7 +95,7 @@ export function resolveCommissionPropertyLabel(item: CommissionsTransactionLike)
   if (code && title) return `${code} - ${title}`;
   if (title) return title;
   if (code) return code;
-  return `Imóvel #${item.propertyId}`;
+  return 'Imóvel sem código';
 }
 
 export function requiresExactSaleSplit(item: CommissionsTransactionLike | null): boolean {

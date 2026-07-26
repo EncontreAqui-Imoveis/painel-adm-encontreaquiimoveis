@@ -1596,16 +1596,16 @@
                 {#if item.propertyImageUrl}
                   <button
                     type="button"
-                    aria-label={`Abrir imagem de ${item.propertyTitle ?? `Imóvel #${item.propertyId}`}`}
+                    aria-label={`Abrir imagem de ${item.propertyTitle ?? item.propertyCode ?? 'imóvel selecionado'}`}
                     on:click|stopPropagation={() =>
                       openImagePreview(
                         item.propertyImageUrl,
-                        item.propertyTitle ?? `Imóvel #${item.propertyId}`
+                        item.propertyTitle ?? item.propertyCode ?? 'Imóvel selecionado'
                       )}
                   >
                     <img
                       src={item.propertyImageUrl}
-                      alt={item.propertyTitle ?? `Imóvel #${item.propertyId}`}
+                      alt={item.propertyTitle ?? item.propertyCode ?? 'Imóvel selecionado'}
                       class="h-10 w-14 rounded-md border border-gray-200 object-cover dark:border-gray-700"
                       loading="lazy"
                     />
@@ -1616,7 +1616,7 @@
               </td>
               <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                 <div class="font-semibold">
-                  {item.propertyCode ? `${item.propertyCode}` : `#${item.propertyId}`}
+                  {item.propertyCode ? `${item.propertyCode}` : 'Código indisponível'}
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400">
                   {item.propertyTitle ?? item.propertyAddress ?? '-'}
@@ -1681,7 +1681,7 @@
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Propostas do imóvel</h3>
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            {selectedProperty.propertyCode ? `${selectedProperty.propertyCode}` : `#${selectedProperty.propertyId}`}
+            {selectedProperty.propertyCode ? `${selectedProperty.propertyCode}` : 'Código indisponível'}
             {#if selectedProperty.propertyTitle}
               - {selectedProperty.propertyTitle}
             {:else if selectedProperty.propertyAddress}
@@ -1944,7 +1944,7 @@
                 {/if}
                 <div class="min-w-0 text-left">
                   <div class="font-semibold">
-                    {property.code ? `${property.code}` : `#${property.id}`} - {property.title ?? 'Imóvel sem título'}
+                    {property.code ? `${property.code}` : 'Código indisponível'} - {property.title ?? 'Imóvel sem título'}
                   </div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">
                     Valor do imóvel: {formatCurrency(resolveProposalPropertyValue(property))}
@@ -1971,7 +1971,7 @@
             {/if}
             <div>
               <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {selectedGenerateProperty.code ? `${selectedGenerateProperty.code}` : `#${selectedGenerateProperty.id}`}
+                {selectedGenerateProperty.code ? `${selectedGenerateProperty.code}` : 'Código indisponível'}
                 - {selectedGenerateProperty.title ?? 'Imóvel sem título'}
               </div>
               <div class="text-xs text-gray-600 dark:text-gray-300">

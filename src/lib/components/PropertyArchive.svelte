@@ -61,7 +61,7 @@
   function openNotificationModal(item: ArchiveItem) {
     promotionNotificationPropertyId = item.id;
     promotionNotificationTitle = `Imóvel ${item.status === 'sold' ? 'Vendido' : 'Alugado'}: ${item.title}`;
-    promotionNotificationMessage = `O imóvel ${item.code || `#${item.id}`} foi ${item.status === 'sold' ? 'vendido' : 'alugado'} com sucesso!`;
+    promotionNotificationMessage = `O imóvel ${item.code || 'sem código'} foi ${item.status === 'sold' ? 'vendido' : 'alugado'} com sucesso!`;
     isPromotionNotificationModalOpen = true;
   }
 
@@ -361,7 +361,7 @@
               {/if}
               <div class="min-w-0">
               <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {item.code ? item.code : `#${item.id}`}
+                {item.code ? item.code : 'Código indisponível'}
               </p>
               <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">{item.title}</p>
               </div>
@@ -461,7 +461,7 @@
                 {/if}
               </td>
               <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                {item.code ? item.code : `#${item.id}`}
+                {item.code ? item.code : 'Código indisponível'}
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{item.title}</td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">{item.brokerName ?? '-'}</td>
@@ -529,7 +529,7 @@
             Revisar imóvel finalizado
           </h3>
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            {selectedReviewItem.code ? selectedReviewItem.code : `#${selectedReviewItem.id}`} - {selectedReviewItem.title}
+            {selectedReviewItem.code ? selectedReviewItem.code : 'Código indisponível'} - {selectedReviewItem.title}
           </p>
         </div>
         <span class={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusClass(selectedReviewItem.status)}`}>

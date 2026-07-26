@@ -24,6 +24,39 @@ export type ContractPreviewLoadOptions = {
   onPdfPage?: (pages: Array<{ pageNumber: number; dataUrl: string }>, text: string) => void;
 };
 
+type PreviewApiError = {
+  response?: {
+    status?: number;
+    data?: unknown;
+  };
+  message?: string;
+};
+
+/** Converts Axios blob errors back to the API's safe, user-facing message. */
+export async function resolveContractPreviewErrorMessage(error: unknown): Promise<string> {
+  const candidate = error as PreviewApiError;
+  const responseData = candidate?.response?.data;
+
+  if (responseData instanceof Blob) {
+    try {
+      const payload = JSON.parse(await responseData.text()) as Record<string, unknown>;
+      const message = String(payload.error ?? payload.message ?? '').trim();
+      if (message) return message;
+    } catch {
+      // Non-JSON blob errors use the generic safe message below.
+    }
+  }
+
+  if (candidate?.response?.status === 403) {
+    return 'Você não possui permissão para visualizar este documento.';
+  }
+  if (candidate?.response?.status === 404) {
+    return 'Este documento não está mais disponível.';
+  }
+
+  return 'Não foi possível carregar a visualização do documento.';
+}
+
 export async function loadContractDocumentPreview(
   url: string,
   resolvedName: string,

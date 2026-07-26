@@ -29,6 +29,7 @@
   import {
     type ContractStatus,
     getContractDetails,
+    listContractDocumentRejections,
     listContracts,
     saveContractPartyInfo,
   } from '$lib/components/contracts/contractsApi';
@@ -47,7 +48,10 @@
     uploadMatrixDocument,
     uploadSignedDocument,
   } from '$lib/components/contracts/contractsActions';
-  import { loadContractDocumentPreview } from '$lib/components/contracts/contractsPreviewService';
+  import {
+    loadContractDocumentPreview,
+    resolveContractPreviewErrorMessage,
+  } from '$lib/components/contracts/contractsPreviewService';
   import {
     approvalAllowsProgress,
     approvalBadgeClass,
@@ -132,6 +136,7 @@
     ContractDocument,
     ContractItem,
   } from '$lib/components/contracts/types';
+  import type { ContractDocumentRejection } from '$lib/components/contracts/contractsApi';
 
   /** TS do IDE: tipo inferido do `Input` costuma omitir `id`/handlers; aqui usamos o contrato explícito. */
   const LabeledTextInput = Input as unknown as Component<InputProps, {}, 'value'>;
@@ -168,6 +173,8 @@
   let selectedSignedDocSide: 'seller' | 'buyer' = 'seller';
   let signedUploadInputEl: HTMLInputElement | null = null;
   let pendingReplacementDocumentId: number | null = null;
+  let documentRejections: ContractDocumentRejection[] = [];
+  let loadingDocumentRejections = false;
   let matrixUploadInputEl: HTMLInputElement | null = null;
   let matrixUploadContext:
     | { documentType: string; side: 'seller' | 'buyer'; existingDocumentType?: string | null }
@@ -225,6 +232,7 @@
   let finalizeCommissionPreview: ReturnType<typeof resolveFinalizeCommissionAmounts> = null;
   let finalizeCommissionRemaining: number | null = null;
   let isEditingCommissions = false;
+  let commissionEditionSaved = false;
 
   let savingPartyData = false;
   let isEditingData = false;
@@ -423,7 +431,7 @@
         return;
       }
       console.error('Erro ao carregar visualização do documento:', error);
-      documentPreviewError = 'Não foi possível carregar a visualização do documento.';
+      documentPreviewError = await resolveContractPreviewErrorMessage(error);
     } finally {
       if (renderToken === documentPreviewRenderToken) {
         documentPreviewLoading = false;
@@ -676,6 +684,7 @@
       taxaPlataforma: hasSavedCommissionValues ? savedCommissionValues[2] : '40,00',
     };
     isEditingCommissions = false;
+    commissionEditionSaved = false;
   }
 
   function parseMoney(value: string): number | null {
@@ -964,10 +973,18 @@
   }
 
   async function reloadSelectedContract(contractId: string): Promise<void> {
-    const payload = await getContractDetails<ContractItem>(contractId);
+    const [payload, rejections] = await Promise.all([
+      getContractDetails<ContractItem>(contractId),
+      listContractDocumentRejections(contractId).catch((error) => {
+        console.error('Falha ao carregar histórico de rejeições:', error);
+        return [] as ContractDocumentRejection[];
+      }),
+    ]);
     if (!payload?.contract || !selected || selected.id !== contractId) {
       return;
     }
+
+    documentRejections = rejections;
 
     selected = {
       ...selected,
@@ -1097,6 +1114,8 @@
     selectedSignedFile = null;
     signedDocType = 'contrato_assinado';
     selectedSignedDocSide = 'seller';
+    documentRejections = [];
+    loadingDocumentRejections = true;
     uploadingDraft = false;
     uploadingSignedDoc = false;
     reopeningContract = false;
@@ -1118,6 +1137,9 @@
       })
       .catch((error) => {
         console.error('Falha ao carregar detalhes completos do contrato:', error);
+      })
+      .finally(() => {
+        loadingDocumentRejections = false;
       });
   }
 
@@ -1142,6 +1164,8 @@
     isEditingData = false;
     isDataSectionExpanded = false;
     pendingReplacementDocumentId = null;
+    documentRejections = [];
+    loadingDocumentRejections = false;
     modalMode = 'review_docs';
     if (typeof document !== 'undefined') {
       document.body.style.overflow = previousModalBodyOverflow;
@@ -1467,9 +1491,17 @@
     );
     if (!confirmed) return;
 
-    deletingFinalizedDocumentId = doc.id;
+    const isFinalized = String(selected.status ?? '').trim().toUpperCase() === 'FINALIZED';
+    if (isFinalized) deletingFinalizedDocumentId = doc.id;
+    else matrixDeletingDocumentId = doc.id;
     try {
-      await deleteFinalizedContractDocument(selected.id, doc.id);
+      // Documents attached while awaiting physical signatures still belong to
+      // the regular contract area. The finalized-only endpoint rejects them.
+      if (isFinalized) {
+        await deleteFinalizedContractDocument(selected.id, doc.id);
+      } else {
+        await deleteContractDocument(selected.id, doc.id);
+      }
       toast.success('Documento removido com sucesso.');
       await reloadSelectedContract(selected.id);
       if (selected) {
@@ -1480,6 +1512,7 @@
       toast.error(resolveApiErrorMessage(error, 'Não foi possível excluir o documento.'));
     } finally {
       deletingFinalizedDocumentId = null;
+      matrixDeletingDocumentId = null;
     }
   }
 
@@ -1492,17 +1525,19 @@
 
     uploadingSignedDoc = true;
     try {
-      await uploadSignedDocument(selected.id, signedDocType, selectedSignedFile);
-      if (pendingReplacementDocumentId) {
-        await deleteContractDocument(selected.id, pendingReplacementDocumentId);
-      }
+      await uploadSignedDocument(
+        selected.id,
+        signedDocType,
+        selectedSignedFile,
+        pendingReplacementDocumentId ?? undefined
+      );
       toast.success('Documento físico anexado com sucesso.');
       pendingReplacementDocumentId = null;
       await reloadSelectedContract(selected.id);
       if (selected) {
         syncSelectedContractInList(selected);
       }
-      closeModal(true);
+      // Mantém o operador na mesma etapa após o upload físico.
     } catch (error) {
       console.error('Erro ao anexar documento físico:', error);
       toast.error('Não foi possível anexar o documento físico.');
@@ -1532,11 +1567,9 @@
         selected.id,
         signedDocType,
         selectedSignedFile,
-        finalizedDocumentRequiresSide(signedDocType) ? selectedSignedDocSide : undefined
+        finalizedDocumentRequiresSide(signedDocType) ? selectedSignedDocSide : undefined,
+        pendingReplacementDocumentId ?? undefined
       );
-      if (pendingReplacementDocumentId) {
-        await deleteContractDocument(selected.id, pendingReplacementDocumentId);
-      }
       toast.success('Documento anexado ao contrato finalizado.');
       selectedSignedFile = null;
       pendingReplacementDocumentId = null;
@@ -1589,8 +1622,8 @@
 
   async function submitFinalize() {
     if (!selected) return;
-    if (!isEditingCommissions) {
-      toast.error('Clique em "Editar comissões" antes de finalizar o contrato.');
+    if (!commissionEditionSaved) {
+      toast.error('Edite e salve as comissões antes de finalizar o contrato.');
       return;
     }
 
@@ -1631,6 +1664,29 @@
     } finally {
       finalizingContract = false;
     }
+  }
+
+  function saveCommissionEdition(): void {
+    const resolvedCommissionAmounts = resolveFinalizeCommissionAmounts(
+      finalizeForm,
+      finalizeFieldModes
+    );
+
+    if (resolvedCommissionAmounts == null) {
+      toast.error('Preencha todos os campos de comissão com valores válidos.');
+      return;
+    }
+
+    if (!hasExactSaleSplit(resolvedCommissionAmounts)) {
+      toast.error(
+        'A soma das comissões e da taxa Encontre Aqui precisa fechar exatamente 100% do valor base.'
+      );
+      return;
+    }
+
+    isEditingCommissions = false;
+    commissionEditionSaved = true;
+    toast.success('Edição salva. Os valores serão registrados ao finalizar o contrato.');
   }
 
   async function deleteFinalizedDocument(doc: ContractDocument) {
@@ -1677,7 +1733,7 @@
 
   async function deleteFinalizedContract(contract: ContractItem) {
     const confirmed = window.confirm(
-      `Tem certeza que deseja excluir o contrato finalizado do imóvel ${contract.propertyCode ?? contract.propertyId}?`
+      `Tem certeza que deseja excluir o contrato finalizado do imóvel ${contract.propertyCode ?? 'Código indisponível'}?`
     );
     if (!confirmed) return;
 
@@ -1702,7 +1758,7 @@
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = objectUrl;
-      anchor.download = `${contract.propertyCode ?? contract.propertyId}_documentos.zip`;
+      anchor.download = `${contract.propertyCode ?? 'imovel'}_documentos.zip`;
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();
@@ -1760,7 +1816,7 @@
     } catch (error) {
       console.error('Erro ao baixar documento do contrato:', error);
       toast.error(
-        `Não foi possível abrir o documento do contrato ${contract.propertyCode ?? contract.propertyId}.`
+        `Não foi possível abrir o documento do contrato ${contract.propertyCode ?? 'selecionado'}.`
       );
     } finally {
       downloadingDocumentId = null;
@@ -1966,7 +2022,7 @@
       <thead class="bg-gray-50 dark:bg-gray-900/70">
         <tr>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Imóvel (ID / código)
+            Código do imóvel
           </th>
           <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Parte vendedora/locadora
@@ -2017,7 +2073,7 @@
                   {/if}
                   <div class="min-w-0">
                     <div class="font-semibold">
-                      ID {item.propertyId}{#if item.propertyCode}{' · '}{item.propertyCode}{/if}
+                      {#if item.propertyCode}Cód. {item.propertyCode}{:else}Código indisponível{/if}
                     </div>
                     <div class="text-xs text-gray-500 dark:text-gray-400">
                       {item.propertyTitle ?? '-'}
@@ -2109,7 +2165,7 @@
               : 'Editar Contrato Finalizado'}
           </h3>
           <p id="contract-modal-description" class="text-sm text-gray-500 dark:text-gray-400">
-            ID {selected.propertyId}{#if selected.propertyCode}{' · Código '}{selected.propertyCode}{/if}
+            {#if selected.propertyCode}Cód. {selected.propertyCode}{:else}Código indisponível{/if}
             {#if selected.propertyTitle}
               {' — '}{selected.propertyTitle}
             {/if}
@@ -2413,19 +2469,36 @@
                   Sugestão inicial: 10% captador, 50% vendedor e 40% Encontre Aqui. Você pode ajustar a divisão.
                 </p>
               </div>
-              <Button
-                type="button"
-                variant={isEditingCommissions ? 'outline' : 'default'}
-                className={isEditingCommissions
-                  ? 'border-amber-400 text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-950/30'
-                  : 'bg-amber-500 text-black hover:bg-amber-400'}
-                on:click={() => {
-                  if (isEditingCommissions) hydrateFinalizeForm(selected);
-                  else isEditingCommissions = true;
-                }}
-              >
-                {isEditingCommissions ? 'Cancelar edição' : 'Editar comissões'}
-              </Button>
+              <div class="flex flex-wrap items-center gap-2">
+                {#if isEditingCommissions}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-amber-400 text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-950/30"
+                    on:click={() => hydrateFinalizeForm(selected)}
+                  >
+                    Cancelar edição
+                  </Button>
+                  <Button
+                    type="button"
+                    className="!bg-emerald-600 !text-white hover:!bg-emerald-700"
+                    on:click={saveCommissionEdition}
+                  >
+                    Salvar edição
+                  </Button>
+                {:else}
+                  <Button
+                    type="button"
+                    className="bg-amber-500 text-black hover:bg-amber-400"
+                    on:click={() => {
+                      isEditingCommissions = true;
+                      commissionEditionSaved = false;
+                    }}
+                  >
+                    Editar comissões
+                  </Button>
+                {/if}
+              </div>
             </div>
             <div class="mt-3 grid gap-3 md:grid-cols-2">
               <label class="text-sm text-gray-700 dark:text-gray-200">
@@ -2877,6 +2950,45 @@
             {/if}
           </div>
 
+          <div class="rounded-md border border-rose-200 bg-rose-50/40 p-3 dark:border-rose-900/60 dark:bg-rose-950/20">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-semibold uppercase text-rose-700 dark:text-rose-300">
+                Histórico de rejeições
+              </p>
+              {#if loadingDocumentRejections}
+                <Loader2 class="h-4 w-4 animate-spin text-rose-600" />
+              {/if}
+            </div>
+            {#if !loadingDocumentRejections && documentRejections.length === 0}
+              <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                Nenhum documento rejeitado neste contrato.
+              </p>
+            {:else if documentRejections.length > 0}
+              <div class="mt-2 space-y-2">
+                {#each documentRejections as rejection (rejection.id)}
+                  <div class="rounded-md border border-rose-100 bg-white px-3 py-2 text-sm dark:border-rose-900/50 dark:bg-slate-900">
+                    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                      <p class="font-medium text-slate-900 dark:text-slate-100">
+                        {rejection.documentLabel || documentLabel(rejection.documentType || '')}
+                      </p>
+                      <span class="text-xs text-slate-500 dark:text-slate-400">
+                        {rejection.rejectedAt ? formatDate(rejection.rejectedAt) : 'Data não disponível'}
+                      </span>
+                    </div>
+                    {#if rejection.originalFileName}
+                      <p class="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">
+                        Arquivo removido: {rejection.originalFileName}
+                      </p>
+                    {/if}
+                    <p class="mt-1 text-sm text-rose-800 dark:text-rose-200">
+                      Motivo: {rejection.reason}
+                    </p>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
           <div class="flex justify-end gap-2">
             <Button
               variant="outline"
@@ -2896,9 +3008,9 @@
               Fechar
             </Button>
             <Button
-              className="bg-green-600 text-white hover:bg-green-700"
+              className="!bg-emerald-600 !text-white hover:!bg-emerald-700"
               on:click={submitFinalize}
-              disabled={!isEditingCommissions || finalizingContract || uploadingSignedDoc || movingToPreviousStage}
+              disabled={!commissionEditionSaved || finalizingContract || uploadingSignedDoc || movingToPreviousStage}
             >
               {#if finalizingContract}
                 <Loader2 class="mr-2 h-4 w-4 animate-spin" />

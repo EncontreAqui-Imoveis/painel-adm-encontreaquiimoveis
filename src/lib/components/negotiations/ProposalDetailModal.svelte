@@ -135,7 +135,7 @@
           <p class="text-sm text-gray-500 dark:text-gray-400">
             {selectedProposal.propertyCode
               ? `${selectedProposal.propertyCode}`
-              : `#${selectedProposal.propertyId}`}
+              : 'Código indisponível'}
             {#if selectedProposal.propertyTitle}
               - {selectedProposal.propertyTitle}
             {/if}

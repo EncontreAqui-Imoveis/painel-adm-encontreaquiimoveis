@@ -198,7 +198,7 @@
             Notificação de promoção
           </h3>
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            {propertyTitle ? propertyTitle : `Imóvel #${propertyId}`}
+            {propertyTitle ? propertyTitle : 'Imóvel sem código'}
           </p>
         </div>
         <button

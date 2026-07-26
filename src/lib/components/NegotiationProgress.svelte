@@ -405,16 +405,16 @@
                 {#if extractCoverUrl(item)}
                   <button
                     type="button"
-                    aria-label={`Abrir imagem de ${item.propertyTitle ?? `Imóvel #${item.propertyId}`}`}
+                    aria-label={`Abrir imagem de ${item.propertyTitle ?? item.propertyCode ?? 'imóvel selecionado'}`}
                     on:click|stopPropagation={() =>
                       openImagePreview(
                         extractCoverUrl(item),
-                        item.propertyTitle ?? `Imóvel #${item.propertyId}`
+                        item.propertyTitle ?? item.propertyCode ?? 'Imóvel selecionado'
                       )}
                   >
                     <img
                       src={extractCoverUrl(item)}
-                      alt={item.propertyTitle ?? `Imóvel #${item.propertyId}`}
+                      alt={item.propertyTitle ?? item.propertyCode ?? 'Imóvel selecionado'}
                       class="h-10 w-14 rounded-md border border-gray-200 object-cover dark:border-gray-700"
                       loading="lazy"
                     />
@@ -425,7 +425,7 @@
               </td>
               <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                 <div class="font-semibold">
-                  {item.propertyCode ? `${item.propertyCode}` : `#${item.propertyId}`}
+                  {item.propertyCode ? `${item.propertyCode}` : 'Código indisponível'}
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400">
                   {item.propertyTitle ?? '-'}
@@ -497,7 +497,7 @@
             Revisar imóvel em negociação
           </h3>
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            {selectedReviewItem.propertyCode ? `${selectedReviewItem.propertyCode}` : `#${selectedReviewItem.propertyId}`}
+            {selectedReviewItem.propertyCode ? `${selectedReviewItem.propertyCode}` : 'Código indisponível'}
             {#if selectedReviewItem.propertyTitle}
               - {selectedReviewItem.propertyTitle}
             {/if}
