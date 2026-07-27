@@ -15,6 +15,7 @@
     ZoomOut,
   } from 'lucide-svelte';
   import { toast } from 'svelte-sonner';
+  import { adminSession } from '$lib/sessionState';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import type { InputProps } from '$lib/components/ui/input/input-props';
@@ -233,6 +234,11 @@
   let finalizeCommissionRemaining: number | null = null;
   let isEditingCommissions = false;
   let commissionEditionSaved = false;
+  // Sessões anteriores ao DTO de capabilities não recebem ações destrutivas.
+  // Um novo login reidrata as permissões reais do administrador titular.
+  $: canCurrentAdminDelete = $adminSession?.capabilities?.canDeleteDocuments ?? false;
+  $: canCurrentAdminReplace = $adminSession?.capabilities?.canReplaceDocuments ?? false;
+  $: canCurrentAdminCreateDocuments = $adminSession?.capabilities?.canCreateDocuments ?? false;
 
   let savingPartyData = false;
   let isEditingData = false;
@@ -2005,7 +2011,7 @@
             <Button variant="outline" on:click={() => openModal(item)}>
               {tableActionLabel(item.status)}
             </Button>
-            {#if item.status === 'FINALIZED'}
+            {#if item.status === 'FINALIZED' && canCurrentAdminDelete}
               <Button variant="destructive" on:click={() => deleteFinalizedContract(item)}>
                 Excluir
               </Button>
@@ -2110,7 +2116,7 @@
                   <Button size="sm" variant="outline" on:click={() => openModal(item)}>
                     {tableActionLabel(item.status)}
                   </Button>
-                  {#if item.status === 'FINALIZED'}
+                  {#if item.status === 'FINALIZED' && canCurrentAdminDelete}
                     <Button
                       size="sm"
                       variant="destructive"
@@ -2374,6 +2380,7 @@
             canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
             downloadingDocumentId={downloadingDocumentId}
             matrixDeletingDocumentId={matrixDeletingDocumentId}
+            canDeleteDocuments={canCurrentAdminDelete}
             reviewDocumentId={reviewingDocumentId}
             onOpenPreview={(doc) => selected && openDocumentPreview(doc, selected)}
             onDownload={(doc) => selected && viewDocument(doc, selected)}
@@ -2429,6 +2436,7 @@
           uploadingDraft={uploadingDraft}
           movingToPreviousStage={movingToPreviousStage}
           deletingDraftDocumentId={deletingDraftDocumentId}
+          canDeleteDocuments={canCurrentAdminDelete}
           downloadingDocumentId={downloadingDocumentId}
           documentFileName={documentFileName}
           documentLabel={documentLabel}
@@ -2459,6 +2467,7 @@
             buyerDescription={contractSideDocumentDescription(selected, 'buyer')}
             sellerDescription={contractSideDocumentDescription(selected, 'seller')}
           />
+          {#if canCurrentAdminCreateDocuments || pendingReplacementDocumentId}
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -2725,6 +2734,7 @@
               </Button>
             </div>
           </div>
+          {/if}
 
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <div class="flex flex-wrap items-start justify-between gap-3">
@@ -2983,6 +2993,11 @@
                     <p class="mt-1 text-sm text-rose-800 dark:text-rose-200">
                       Motivo: {rejection.reason}
                     </p>
+                    {#if rejection.rejectedByAdminName}
+                      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Rejeitado por: {rejection.rejectedByAdminName}
+                      </p>
+                    {/if}
                   </div>
                 {/each}
               </div>
@@ -3025,6 +3040,9 @@
           documents={selected ? getAllContractDocuments(selected) : []}
           downloadingAllDocuments={downloadingAllDocuments}
           deletingFinalizedDocumentId={deletingFinalizedDocumentId}
+          canDeleteDocuments={canCurrentAdminDelete}
+          canReplaceDocuments={canCurrentAdminReplace}
+          canCreateDocuments={canCurrentAdminCreateDocuments}
           deletingContract={deletingContract}
           reopeningContract={reopeningContract}
           uploadingSignedDoc={uploadingSignedDoc}
@@ -3073,6 +3091,7 @@
   pdfPages={documentPreviewPdfPages}
   pdfText={documentPreviewPdfText}
   doc={documentPreviewDoc}
+  canDeleteDocuments={canCurrentAdminDelete}
   onClose={closeDocumentPreview}
   onToggleFullscreen={toggleDocumentPreviewFullscreen}
   onZoomOut={() => (documentPreviewZoom = Math.max(0.25, Number((documentPreviewZoom - 0.25).toFixed(2))))}

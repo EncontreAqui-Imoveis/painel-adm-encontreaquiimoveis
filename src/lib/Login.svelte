@@ -2,7 +2,7 @@
     import { requestAdminLogin } from './adminSessionService';
     import { reportObservedError } from './observability';
     import { readErrorContext } from './httpError';
-    import { setSessionToken } from './sessionState';
+    import { setAdminSession } from './sessionState';
     import Logo from './Logo.svelte';
     
     let email = '';
@@ -55,7 +55,7 @@
                     window.history.replaceState({}, '', window.location.pathname);
                 }
             }
-            setSessionToken(data.token);
+            setAdminSession(data.token, data.admin);
             
         } catch (err) {
             error = 'Erro de conexão. Verifique sua internet.';

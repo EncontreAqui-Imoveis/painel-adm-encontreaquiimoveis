@@ -7,6 +7,9 @@
   export let documents: ContractDocument[] = [];
   export let downloadingAllDocuments = false;
   export let deletingFinalizedDocumentId: number | null = null;
+  export let canDeleteDocuments = true;
+  export let canReplaceDocuments = true;
+  export let canCreateDocuments = true;
   export let downloadingDocumentId: number | null = null;
   export let deletingContract = false;
   export let reopeningContract = false;
@@ -118,17 +121,19 @@
               <Button size="sm" variant="outline" on:click={() => prepareSignedDocumentReplacement(doc)}>
                 Substituir
               </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                on:click={() => deleteFinalizedDocument(doc)}
-                disabled={deletingFinalizedDocumentId === doc.id}
-              >
-                {#if deletingFinalizedDocumentId === doc.id}
-                  <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                {/if}
-                Excluir
-              </Button>
+              {#if canDeleteDocuments}
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  on:click={() => deleteFinalizedDocument(doc)}
+                  disabled={deletingFinalizedDocumentId === doc.id}
+                >
+                  {#if deletingFinalizedDocumentId === doc.id}
+                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                  {/if}
+                  Excluir
+                </Button>
+              {/if}
             </div>
           </div>
         {/each}
@@ -136,6 +141,7 @@
     {/if}
   </div>
 
+  {#if canReplaceDocuments && (canCreateDocuments || pendingReplacementDocumentId)}
   <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
     <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
       Adicionar documento
@@ -212,6 +218,7 @@
     </div>
     {/if}
   </div>
+  {/if}
 
   <div class="flex justify-end gap-2">
     <Button
@@ -221,15 +228,17 @@
     >
       Fechar
     </Button>
-    <Button
-      variant="outline"
-      on:click={releaseFinalizedContract}
-      disabled={reopeningContract || deletingContract || uploadingSignedDoc}
-    >
-      {#if reopeningContract}
-        <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-      {/if}
-      Liberar imóvel e excluir contrato
-    </Button>
+    {#if canDeleteDocuments}
+      <Button
+        variant="outline"
+        on:click={releaseFinalizedContract}
+        disabled={reopeningContract || deletingContract || uploadingSignedDoc}
+      >
+        {#if reopeningContract}
+          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+        {/if}
+        Liberar imóvel e excluir contrato
+      </Button>
+    {/if}
   </div>
 </div>

@@ -22,6 +22,7 @@ export type ContractDocumentRejection = {
   reason: string;
   uploadedByUserId: number | null;
   rejectedByAdminId: number | null;
+  rejectedByAdminName?: string | null;
   rejectedAt: string | null;
 };
 

@@ -19,6 +19,7 @@
   export let uploadingDraft = false;
   export let movingToPreviousStage = false;
   export let deletingDraftDocumentId: number | null = null;
+  export let canDeleteDocuments = true;
   export let downloadingDocumentId: number | null = null;
   export let documentFileName: (doc: ContractDocument | null) => string = () => 'Documento';
   export let documentLabel: (documentType: string | null | undefined) => string = () => 'Documento';
@@ -110,21 +111,23 @@
             {/if}
             Baixar
           </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            on:click={() => {
-              if (currentDraftDocument) {
-                void deleteDraftDocument(currentDraftDocument);
-              }
-            }}
-            disabled={deletingDraftDocumentId === currentDraftDocument.id || uploadingDraft || movingToPreviousStage}
-          >
-            {#if deletingDraftDocumentId === currentDraftDocument.id}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Excluir minuta
-          </Button>
+          {#if canDeleteDocuments}
+            <Button
+              size="sm"
+              variant="destructive"
+              on:click={() => {
+                if (currentDraftDocument) {
+                  void deleteDraftDocument(currentDraftDocument);
+                }
+              }}
+              disabled={deletingDraftDocumentId === currentDraftDocument.id || uploadingDraft || movingToPreviousStage}
+            >
+              {#if deletingDraftDocumentId === currentDraftDocument.id}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Excluir minuta
+            </Button>
+          {/if}
         </div>
       </div>
     </div>

@@ -37,6 +37,7 @@
   export let onDownload: () => void = () => {};
   export let onReplace: () => void = () => {};
   export let onDelete: () => void | Promise<void> = () => {};
+  export let canDeleteDocuments = true;
 
   let closeButtonEl: HTMLButtonElement | null = null;
   let confirmationCancelEl: HTMLButtonElement | null = null;
@@ -392,9 +393,11 @@
                     <Button size="sm" variant="outline" className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10" on:click={() => requestConfirmation('replace')} ariaLabel="Substituir documento" title="Substituir documento">
                       <RefreshCcw class="h-4 w-4" />
                     </Button>
-                    <Button size="sm" variant="destructive" className="h-9 w-9 rounded-full p-0" on:click={() => requestConfirmation('delete')} ariaLabel="Excluir documento" title="Excluir documento">
-                      <Trash2 class="h-4 w-4" />
-                    </Button>
+                    {#if canDeleteDocuments}
+                      <Button size="sm" variant="destructive" className="h-9 w-9 rounded-full p-0" on:click={() => requestConfirmation('delete')} ariaLabel="Excluir documento" title="Excluir documento">
+                        <Trash2 class="h-4 w-4" />
+                      </Button>
+                    {/if}
                   {/if}
                   <Button size="sm" variant="outline" className="h-9 w-9 rounded-full p-0 border-white/20 text-white hover:bg-white/10" on:click={onToggleFullscreen} title="Sair da tela cheia">
                     <X class="h-4 w-4" />
@@ -450,9 +453,11 @@
                     <Button size="sm" variant="outline" className="h-9 w-9 rounded-full p-0" on:click={() => requestConfirmation('replace')} ariaLabel="Substituir documento" title="Substituir documento">
                       <RefreshCcw class="h-4 w-4" />
                     </Button>
-                    <Button size="sm" variant="destructive" className="h-9 w-9 rounded-full p-0" on:click={() => requestConfirmation('delete')} ariaLabel="Excluir documento" title="Excluir documento">
-                      <Trash2 class="h-4 w-4" />
-                    </Button>
+                    {#if canDeleteDocuments}
+                      <Button size="sm" variant="destructive" className="h-9 w-9 rounded-full p-0" on:click={() => requestConfirmation('delete')} ariaLabel="Excluir documento" title="Excluir documento">
+                        <Trash2 class="h-4 w-4" />
+                      </Button>
+                    {/if}
                   {/if}
                   <Button size="sm" variant="outline" on:click={onToggleFullscreen} title="Alternar tela cheia">
                     <Maximize2 class="h-4 w-4" />
