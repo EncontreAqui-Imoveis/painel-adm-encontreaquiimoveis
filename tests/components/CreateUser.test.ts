@@ -49,8 +49,8 @@ describe('CreateUser', () => {
     await fireEvent.input(screen.getByLabelText('Telefone *'), {
       target: { value: '+55 (64) 99999-9999' },
     });
-    await fireEvent.input(screen.getByLabelText('Senha *'), {
-      target: { value: 'SenhaSegura123' },
+    await fireEvent.input(screen.getByPlaceholderText('Senha inicial'), {
+      target: { value: 'SenhaMuitoSegura123' },
     });
     await fireEvent.input(screen.getByLabelText('Rua *'), {
       target: { value: 'Rua das Flores' },

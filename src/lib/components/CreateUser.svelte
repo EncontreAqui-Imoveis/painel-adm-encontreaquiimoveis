@@ -92,6 +92,8 @@
     if (!isValidEmail(email)) return 'Informe um email válido (exemplo: nome@dominio.com).';
     if (!hasValidPhoneBr(phone)) return 'Informe telefone no formato +55 (00) 00000-0000.';
     if (!password.trim()) return 'Informe a senha.';
+    if (password.length < 12) return 'A senha deve ter pelo menos 12 caracteres.';
+    if (password.length > 128) return 'A senha deve ter no máximo 128 caracteres.';
     if (!street.trim()) return 'Informe o endereço.';
     if (!semNumero && !number.trim()) return 'Informe o número.';
     if (!semNumero && !onlyDigits(number)) return 'Número deve conter apenas dígitos.';
@@ -321,6 +323,8 @@
         <input
           id="create-user-password"
           name="password"
+          minlength="12"
+          maxlength="128"
           class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           type={showPassword ? 'text' : 'password'}
           bind:value={password}
@@ -335,6 +339,11 @@
           {showPassword ? 'Ocultar' : 'Mostrar'}
         </button>
       </div>
+      <p class:text-red-600={password.length > 0 && password.length < 12} class="text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
+        {password.length > 0 && password.length < 12
+          ? `Faltam ${12 - password.length} caracteres para o mínimo.`
+          : 'Use entre 12 e 128 caracteres.'}
+      </p>
     </label>
 
     {#if userKind === 'broker'}
