@@ -99,7 +99,7 @@
     },
     {
       view: 'create_user',
-      label: 'Cadastrar Usuário',
+      label: 'Cadastrar Cliente ou Corretor',
       icon: UserPlus
     }
   ];

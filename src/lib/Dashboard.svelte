@@ -12,6 +12,7 @@
     import SreExternalServices from "./components/SreExternalServices.svelte";
     import DashboardHomeOverview from "./components/dashboard/DashboardHomeOverview.svelte";
     import { fetchPlatformResponse } from "./adminFetchService";
+    import { adminSession } from "./sessionState";
     import { clearSessionToken, hasSessionToken } from "./sessionState";
     import { onMount, onDestroy } from "svelte";
     import { fade, slide } from "svelte/transition";
@@ -100,6 +101,9 @@
     }
     let stats: Stats | null = null;
     let sreStats: any = null;
+    $: canViewSre =
+        $adminSession?.role === "admin" &&
+        $adminSession.capabilities.canManageAdministration !== false;
     let timeLabels = Array.from(
         { length: 12 },
         (_, i) => `${i * 2}h atrás`,
@@ -413,12 +417,15 @@
                     throw new Error("Falha ao buscar estatísticas");
                 stats = parseDashboardStatsPayload(await response.json());
 
-                // Fetch SRE stats using the standard platform fetch service
-                const sreResponse = await fetchPlatformResponse(
-                    "/admin/dashboard/sre",
-                );
-                if (sreResponse && sreResponse.ok) {
-                    sreStats = parseSreDashboardPayload(await sreResponse.json());
+                if (canViewSre) {
+                    const sreResponse = await fetchPlatformResponse(
+                        "/admin/dashboard/sre",
+                    );
+                    if (sreResponse && sreResponse.ok) {
+                        sreStats = parseSreDashboardPayload(await sreResponse.json());
+                    }
+                } else {
+                    sreStats = null;
                 }
             } catch (error) {
                 console.error(
@@ -1187,7 +1194,7 @@
                     changeView={changeView}
                 />
 
-                    {#if false && sreStats}
+                    {#if canViewSre && sreStats}
                         <!-- SRE Command Center Enclosure -->
                         <section
                             class="bg-white dark:bg-[#05070a] rounded-[2.5rem] p-6 lg:p-8 shadow-sm dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)] border border-gray-200 dark:border-gray-800/60 relative overflow-hidden"
@@ -1308,13 +1315,13 @@
                                         <h3
                                             class="text-[12px] font-black uppercase tracking-[0.2em] text-gray-900 dark:text-white"
                                         >
-                                            Status Global do Ecossistema
+                                            Status dos Provedores
                                         </h3>
                                         <p
                                             class="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 mt-1"
                                         >
-                                            Monitoramento contínuo de
-                                            disponibilidade de provedores
+                                            Atalhos oficiais para consulta de
+                                            disponibilidade dos provedores
                                         </p>
                                     </div>
                                     <div
@@ -1327,9 +1334,9 @@
                                             class="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gray-900 dark:bg-emerald-500/10 text-white dark:text-emerald-400 font-black text-[10px] sm:text-xs uppercase tracking-widest border border-transparent dark:border-emerald-500/20 hover:bg-gray-800 dark:hover:bg-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-md dark:shadow-[0_0_15px_rgba(16,185,129,0.3)] w-full sm:w-auto"
                                         >
                                             <div
-                                                class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"
+                                                class="w-2 h-2 rounded-full bg-gray-400"
                                             ></div>
-                                            Status da Railway
+                                            Abrir status da Railway
                                             <svg
                                                 class="w-4 h-4 ml-1 opacity-80 group-hover:translate-x-1 transition-transform"
                                                 fill="none"
@@ -1351,9 +1358,9 @@
                                             class="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white dark:bg-black text-gray-900 dark:text-white font-black text-[10px] sm:text-xs uppercase tracking-widest border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shadow-sm dark:shadow-[0_0_15px_rgba(255,255,255,0.05)] w-full sm:w-auto"
                                         >
                                             <div
-                                                class="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.8)]"
+                                                class="w-2 h-2 rounded-full bg-gray-400"
                                             ></div>
-                                            Status da Vercel
+                                            Abrir status da Vercel
                                             <svg
                                                 class="w-4 h-4 ml-1 opacity-80 group-hover:translate-x-1 transition-transform"
                                                 fill="none"

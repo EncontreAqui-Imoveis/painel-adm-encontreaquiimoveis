@@ -16,7 +16,7 @@
   } from './create-property-helpers';
   import { formatBrokerStatusLabel } from '$lib/utils/brokerStatus';
 
-  type UserKind = 'client' | 'broker' | 'auxiliary_administrative';
+  type UserKind = 'client' | 'broker';
 
   const states = [
     'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS',
@@ -178,7 +178,7 @@
     try {
       const normalizedCep = semCep ? '' : onlyDigits(cep);
       const normalizedNumber = semNumero ? '' : onlyDigits(number);
-      if (userKind === 'client' || userKind === 'auxiliary_administrative') {
+      if (userKind === 'client') {
         await api.post('/admin/users', {
           name: name.trim(),
           email: email.trim(),
@@ -193,15 +193,8 @@
           cep: normalizedCep,
           sem_numero: semNumero ? 1 : 0,
           sem_cep: semCep ? 1 : 0,
-          ...(userKind === 'auxiliary_administrative'
-            ? { profileType: 'auxiliary_administrative' }
-            : {}),
         });
-        toast.success(
-          userKind === 'auxiliary_administrative'
-            ? 'Auxiliar administrativo cadastrado com sucesso.'
-            : 'Cliente cadastrado com sucesso.'
-        );
+        toast.success('Cliente cadastrado com sucesso.');
         resetForm();
         return;
       }
@@ -254,9 +247,9 @@
 
 <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
   <div class="mb-6">
-    <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Cadastrar usuário</h2>
+    <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Cadastrar cliente ou corretor</h2>
     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-      Selecione o tipo de usuário. Para corretor, CRECI e os 3 documentos são obrigatórios.
+      Contas administrativas sao provisionadas separadamente. Para corretor, CRECI e os 3 documentos sao obrigatorios.
     </p>
   </div>
 
@@ -271,7 +264,6 @@
       >
         <option value="client">Cliente</option>
         <option value="broker">Corretor</option>
-        <option value="auxiliary_administrative">Auxiliar Administrativo</option>
       </select>
     </label>
 

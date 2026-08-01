@@ -69,15 +69,15 @@ describe('CreateUser', () => {
     });
   }
 
-  it('exibe Cliente, Corretor e Auxiliar Administrativo no select de tipo', () => {
+  it('exibe somente Cliente e Corretor no select de tipo', () => {
     render(CreateUser);
 
     const kindSelect = screen.getByLabelText('Tipo de usuário *') as HTMLSelectElement;
     const optionValues = Array.from(kindSelect.options).map((option) => option.value);
     const optionLabels = Array.from(kindSelect.options).map((option) => option.textContent?.trim());
 
-    expect(optionValues).toEqual(['client', 'broker', 'auxiliary_administrative']);
-    expect(optionLabels).toEqual(['Cliente', 'Corretor', 'Auxiliar Administrativo']);
+    expect(optionValues).toEqual(['client', 'broker']);
+    expect(optionLabels).toEqual(['Cliente', 'Corretor']);
   });
 
   it('exibe status inicial do corretor com labels normalizadas', async () => {
@@ -91,44 +91,6 @@ describe('CreateUser', () => {
     const optionLabels = Array.from(brokerStatusSelect.options).map((option) => option.textContent?.trim());
 
     expect(optionLabels).toEqual(['Aprovado', 'Pendente de verificação']);
-  });
-
-  it('envia profileType auxiliary_administrative e mantém UX de sucesso', async () => {
-    render(CreateUser);
-
-    await fireEvent.change(screen.getByLabelText('Tipo de usuário *'), {
-      target: { value: 'auxiliary_administrative' },
-    });
-    await fillCommonRequiredFields();
-    await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar usuário' }));
-
-    await waitFor(() => {
-      expect(apiPostMock).toHaveBeenCalledWith(
-        '/admin/users',
-        expect.objectContaining({
-          name: 'Auxiliar Teste',
-          email: 'auxiliar@teste.com',
-          profileType: 'auxiliary_administrative',
-        })
-      );
-    });
-
-    expect(toastSuccessMock).toHaveBeenCalledWith('Auxiliar administrativo cadastrado com sucesso.');
-  });
-
-  it('nao exige CRECI quando tipo e auxiliar administrativo', async () => {
-    render(CreateUser);
-
-    await fireEvent.change(screen.getByLabelText('Tipo de usuário *'), {
-      target: { value: 'auxiliary_administrative' },
-    });
-    await fillCommonRequiredFields();
-    await fireEvent.click(screen.getByRole('button', { name: 'Cadastrar usuário' }));
-
-    await waitFor(() => {
-      expect(apiPostMock).toHaveBeenCalled();
-    });
-    expect(toastErrorMock).not.toHaveBeenCalledWith('CRECI deve conter entre 4 e 8 números.');
   });
 
   it('aceita cadastro sem CEP quando marcado Sem CEP', async () => {

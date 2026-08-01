@@ -50,7 +50,7 @@ export const dashboardViewConfig: Record<View, ViewConfig> = {
     title: 'Cadastrar Imóvel',
   },
   create_user: {
-    title: 'Cadastrar Usuário',
+    title: 'Cadastrar Cliente ou Corretor',
   },
   brokers: {
     endpoint: '/admin/brokers',

@@ -12,6 +12,7 @@ export type AdminCapabilities = {
   canDeleteDocuments: boolean;
   canDeleteEntities: boolean;
   canClearNotifications: boolean;
+  canManageAdministration?: boolean;
 };
 
 export type AdminSession = {
