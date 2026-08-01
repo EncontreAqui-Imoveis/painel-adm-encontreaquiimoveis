@@ -4,16 +4,10 @@
   export let pendingCounts: {
     propertyRequests?: number | null;
     brokerRequests?: number | null;
+    proposalRequests?: number | null;
   } = {};
-  export let sreStats: any = null;
   export let chartData: any = null;
   export let NewPropertiesLineChartComponent: any = null;
-  export let externalDashboardShortcuts: ReadonlyArray<{
-    name: string;
-    url: string;
-    description: string;
-    badgeClass: string;
-  }> = [];
   export let changeView: (view: View) => void;
 </script>
 
@@ -44,17 +38,13 @@
       class="rounded-xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-900/50 dark:bg-blue-950/20"
     >
       <p class="text-sm font-semibold text-blue-900 dark:text-blue-200">
-        Novas propostas do dia
+        Propostas para análise
       </p>
       <p class="mt-2 text-3xl font-black text-blue-700 dark:text-blue-300">
-        {Number(
-          sreStats?.business?.newProposalsToday ??
-            sreStats?.newProposalsToday ??
-            0,
-        )}
+        {Number(pendingCounts.proposalRequests ?? 0)}
       </p>
       <p class="mt-1 text-xs text-blue-800 dark:text-blue-200/90">
-        Volume diário para triagem rápida de negociação.
+        Propostas aguardando triagem administrativa.
       </p>
       <button
         class="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -90,44 +80,4 @@
     {/if}
   </section>
 
-  <div
-    class="mb-6 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#0b0f1a]"
-  >
-    <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
-      <div>
-        <h3
-          class="text-sm font-black uppercase tracking-[0.18em] text-gray-900 dark:text-white"
-        >
-          Atalhos Operacionais
-        </h3>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Acessos rápidos para monitoramento, deploy e canais oficiais.
-        </p>
-      </div>
-    </div>
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {#each externalDashboardShortcuts as shortcut}
-        <a
-          href={shortcut.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="group rounded-2xl border border-gray-200 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900/60 dark:hover:border-indigo-500/40"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {shortcut.name}
-            </p>
-            <span
-              class={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${shortcut.badgeClass}`}
-            >
-              Link
-            </span>
-          </div>
-          <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            {shortcut.description}
-          </p>
-        </a>
-      {/each}
-    </div>
-  </div>
 </div>

@@ -12,7 +12,6 @@
     import SreExternalServices from "./components/SreExternalServices.svelte";
     import DashboardHomeOverview from "./components/dashboard/DashboardHomeOverview.svelte";
     import { fetchPlatformResponse } from "./adminFetchService";
-    import { adminSession } from "./sessionState";
     import { clearSessionToken, hasSessionToken } from "./sessionState";
     import { onMount, onDestroy } from "svelte";
     import { fade, slide } from "svelte/transition";
@@ -37,7 +36,6 @@
         parseAnnouncementFeedPayload,
         parseDashboardListPayload,
         parseDashboardStatsPayload,
-        parseSreDashboardPayload,
         parseVerificationBrokersPayload,
         shouldSkipListFetch,
     } from "./dashboardDataHelpers";
@@ -100,10 +98,9 @@
         totalUsers: number;
     }
     let stats: Stats | null = null;
+    // Telemetria fica na infraestrutura; não faz parte da operação imobiliária.
+    const showSrePanel = false;
     let sreStats: any = null;
-    $: canViewSre =
-        $adminSession?.role === "admin" &&
-        $adminSession.capabilities.canManageAdministration !== false;
     let timeLabels = Array.from(
         { length: 12 },
         (_, i) => `${i * 2}h atrás`,
@@ -417,16 +414,7 @@
                     throw new Error("Falha ao buscar estatísticas");
                 stats = parseDashboardStatsPayload(await response.json());
 
-                if (canViewSre) {
-                    const sreResponse = await fetchPlatformResponse(
-                        "/admin/dashboard/sre",
-                    );
-                    if (sreResponse && sreResponse.ok) {
-                        sreStats = parseSreDashboardPayload(await sreResponse.json());
-                    }
-                } else {
-                    sreStats = null;
-                }
+                sreStats = null;
             } catch (error) {
                 console.error(
                     "Erro ao buscar estatísticas do dashboard:",
@@ -1187,14 +1175,12 @@
             {:else if activeView === "dashboard"}
                 <DashboardHomeOverview
                     {pendingCounts}
-                    {sreStats}
                     {chartData}
                     {NewPropertiesLineChartComponent}
-                    {externalDashboardShortcuts}
                     changeView={changeView}
                 />
 
-                    {#if canViewSre && sreStats}
+                    {#if showSrePanel && sreStats}
                         <!-- SRE Command Center Enclosure -->
                         <section
                             class="bg-white dark:bg-[#05070a] rounded-[2.5rem] p-6 lg:p-8 shadow-sm dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)] border border-gray-200 dark:border-gray-800/60 relative overflow-hidden"
