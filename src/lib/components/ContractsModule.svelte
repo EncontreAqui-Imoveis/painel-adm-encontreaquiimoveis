@@ -1103,6 +1103,7 @@
   function resolveModalMode(item: ContractItem): ModalMode {
     if (item.status === 'AWAITING_DOCS') return 'review_docs';
     if (item.status === 'IN_DRAFT') return 'upload_draft';
+    if (item.status === 'AWAITING_MINUTE_REVIEW') return 'upload_draft';
     if (item.status === 'AWAITING_SIGNATURES') return 'finalize';
     return 'edit_finalized';
   }
@@ -1611,10 +1612,10 @@
       await submitContractDraft(selected.id, selectedDraftFile, reuseCurrentDraft);
       toast.success(
         reuseCurrentDraft
-          ? 'Minuta atual mantida e contrato avançado para assinaturas.'
+          ? 'Minuta atual reenviada para conferência das partes.'
           : hasCurrentDraftDocument(selected)
-            ? 'Minuta substituída e contrato avançado para assinaturas.'
-            : 'Minuta anexada e contrato avançado para assinaturas.'
+            ? 'Minuta substituída e reenviada para conferência das partes.'
+            : 'Minuta anexada e enviada para conferência das partes.'
       );
       closeModal(true);
       refresh();

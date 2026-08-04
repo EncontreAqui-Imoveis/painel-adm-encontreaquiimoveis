@@ -1,6 +1,8 @@
 import { authToken, clearStoredAuthToken } from './store';
 
-const metaEnv = (import.meta as { env?: Record<string, string | boolean | undefined> })?.env ?? {};
+// Vite injeta as variaveis apenas pela forma direta `import.meta.env`.
+// Optional chaining aqui faz o cliente ignorar VITE_API_URL e cair no fallback.
+const metaEnv = import.meta.env as Record<string, string | boolean | undefined>;
 const envBase =
   metaEnv.VITE_API_URL ??
   '';

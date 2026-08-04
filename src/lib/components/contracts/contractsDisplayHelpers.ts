@@ -5,6 +5,7 @@ export type ContractStatus = ContractItem['status'];
 export const tabs: { key: ContractStatus; label: string }[] = [
   { key: 'AWAITING_DOCS', label: 'Aguardando Documentos' },
   { key: 'IN_DRAFT', label: 'Em Confecção' },
+  { key: 'AWAITING_MINUTE_REVIEW', label: 'Conferência da Minuta' },
   { key: 'AWAITING_SIGNATURES', label: 'Aguardando Assinaturas' },
   { key: 'FINALIZED', label: 'Finalizados' },
 ];
@@ -183,6 +184,7 @@ export function tableActionLabel(status?: string | null): string {
   const normalized = String(status ?? '').trim().toUpperCase();
   if (normalized === 'AWAITING_DOCS') return 'Analisar Documentação';
   if (normalized === 'IN_DRAFT') return 'Anexar Minuta';
+  if (normalized === 'AWAITING_MINUTE_REVIEW') return 'Conferir Minuta';
   if (normalized === 'AWAITING_SIGNATURES') return 'Finalizar Venda/Locação';
   return 'Editar';
 }
@@ -197,8 +199,11 @@ export function previousStageLabel(currentStatus?: string | null): string {
   if (normalized === 'IN_DRAFT') {
     return 'a aba de documentos pendentes';
   }
-  if (normalized === 'AWAITING_SIGNATURES') {
+  if (normalized === 'AWAITING_MINUTE_REVIEW') {
     return 'a aba de confecção da minuta';
+  }
+  if (normalized === 'AWAITING_SIGNATURES') {
+    return 'a conferência da minuta';
   }
   return 'a etapa anterior';
 }

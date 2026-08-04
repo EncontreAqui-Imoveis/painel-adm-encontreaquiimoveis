@@ -28,3 +28,13 @@ coverage
 *.tsbuildinfo
 app-imobiliario.code-workspace
 src/lib/app-imobiliario.code-workspace
+
+# Resultados locais de testes E2E
+test-results/
+playwright-report/
+blob-report/
+
+# Saídas geradas a partir de vite.config.ts
+vite.config.js
+vite.config.js.map
+vite.config.d.ts

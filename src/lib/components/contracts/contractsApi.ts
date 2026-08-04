@@ -1,6 +1,11 @@
 import { api } from '$lib/apiClient';
 
-export type ContractStatus = 'AWAITING_DOCS' | 'IN_DRAFT' | 'AWAITING_SIGNATURES' | 'FINALIZED';
+export type ContractStatus =
+  | 'AWAITING_DOCS'
+  | 'IN_DRAFT'
+  | 'AWAITING_MINUTE_REVIEW'
+  | 'AWAITING_SIGNATURES'
+  | 'FINALIZED';
 
 export type ContractListItem = {
   id: string;

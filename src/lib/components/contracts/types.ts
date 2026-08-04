@@ -26,6 +26,7 @@ export type ContractItem = {
   status:
     | 'AWAITING_DOCS'
     | 'IN_DRAFT'
+    | 'AWAITING_MINUTE_REVIEW'
     | 'AWAITING_SIGNATURES'
     | 'FINALIZED';
   negotiationId: string;
@@ -71,6 +72,18 @@ export type ContractItem = {
   identityCapabilities?: {
     seller?: { canEditName?: boolean; canEditCpf?: boolean } | null;
     buyer?: { canEditName?: boolean; canEditCpf?: boolean } | null;
+  } | null;
+  draftReview?: {
+    revisionId?: number | null;
+    revisionNumber?: number | null;
+    documentId?: number | null;
+    originalFileName?: string | null;
+    createdAt?: string | null;
+    sellerDecision?: 'CONSENTED' | 'CHANGES_REQUESTED' | null;
+    sellerReason?: string | null;
+    buyerDecision?: 'CONSENTED' | 'CHANGES_REQUESTED' | null;
+    buyerReason?: string | null;
+    allConsented?: boolean;
   } | null;
   responsibleUserIds?: number[] | null;
   documents?: ContractDocument[];

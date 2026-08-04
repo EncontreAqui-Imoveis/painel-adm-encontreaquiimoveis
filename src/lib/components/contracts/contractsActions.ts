@@ -83,11 +83,9 @@ export async function uploadFinalizedContractDocument(
 export async function submitContractDraft(
   contractId: string,
   file: File | null,
-  reuseCurrentDraft: boolean,
-  side: 'seller' | 'buyer' = 'seller'
+  reuseCurrentDraft: boolean
 ): Promise<void> {
   const form = new FormData();
-  form.append('side', side);
   if (file) {
     form.append('file', file);
   }

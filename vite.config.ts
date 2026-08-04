@@ -7,10 +7,20 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     tailwindcss(),
-    svelte()
+    svelte(),
+    {
+      name: 'local-smoke-csp',
+      transformIndexHtml(html) {
+        if (mode !== 'smoke') return html
+        return html.replace(
+          "connect-src 'self' https: ws: wss: https://api.cloudinary.com",
+          "connect-src 'self' http://127.0.0.1:3335 https: ws: wss: https://api.cloudinary.com",
+        )
+      },
+    },
   ],
   resolve: {
     alias: {
@@ -35,4 +45,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
