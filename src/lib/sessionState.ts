@@ -18,6 +18,9 @@ export type AdminCapabilities = {
 export type AdminSession = {
   role: 'admin' | 'document_operator';
   capabilities: AdminCapabilities;
+  id?: number;
+  name?: string;
+  email?: string;
 };
 
 function readAdminSession(): AdminSession | null {
@@ -30,6 +33,9 @@ function readAdminSession(): AdminSession | null {
     return {
       role: parsed.role === 'document_operator' ? 'document_operator' : 'admin',
       capabilities: parsed.capabilities as AdminCapabilities,
+      id: typeof parsed.id === 'number' ? parsed.id : undefined,
+      name: typeof parsed.name === 'string' ? parsed.name : undefined,
+      email: typeof parsed.email === 'string' ? parsed.email : undefined,
     };
   } catch {
     return null;
@@ -70,6 +76,9 @@ export function setAdminSession(token: string, admin: unknown): void {
   adminSession.set({
     role: candidate.role === 'document_operator' ? 'document_operator' : 'admin',
     capabilities: candidate.capabilities as AdminCapabilities,
+    id: typeof candidate.id === 'number' ? candidate.id : undefined,
+    name: typeof candidate.name === 'string' ? candidate.name : undefined,
+    email: typeof candidate.email === 'string' ? candidate.email : undefined,
   });
 }
 

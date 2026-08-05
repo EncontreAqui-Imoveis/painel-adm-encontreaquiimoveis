@@ -12,6 +12,7 @@
     import SreExternalServices from "./components/SreExternalServices.svelte";
     import DashboardHomeOverview from "./components/dashboard/DashboardHomeOverview.svelte";
     import { fetchPlatformResponse } from "./adminFetchService";
+    import { api } from "./apiClient";
     import { clearSessionToken, hasSessionToken } from "./sessionState";
     import { onMount, onDestroy } from "svelte";
     import { fade, slide } from "svelte/transition";
@@ -58,6 +59,16 @@
     let itemToDelete: { id: number; type: string } | null = null;
     let isSidebarOpen = false;
     let showGoldenSignalsHelp = false;
+
+    async function handleHeaderLogout() {
+        try {
+            await api.post('/admin/logout', {});
+        } catch {
+            // A sessao local precisa ser removida mesmo quando a revogacao remota falhar.
+        } finally {
+            clearSessionToken();
+        }
+    }
 
     let searchTerm = "";
     let searchColumn = "all";
@@ -1163,6 +1174,7 @@
         <Header
             pageTitle={getViewConfig(activeView).title}
             onToggleSidebar={() => (isSidebarOpen = !isSidebarOpen)}
+            onLogout={handleHeaderLogout}
         />
 
         <main class="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">
