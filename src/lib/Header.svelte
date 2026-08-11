@@ -1,6 +1,8 @@
 <script lang="ts">
-    import { LogOut, ShieldCheck } from 'lucide-svelte';
-    import { adminSession } from './sessionState';
+    import { KeyRound, LogOut, ShieldCheck } from 'lucide-svelte';
+    import { api } from './apiClient';
+    import { adminSession, setSessionToken } from './sessionState';
+    import { toast } from 'svelte-sonner';
 
     export let pageTitle: string;
     export let onToggleSidebar: () => void = () => {};
@@ -9,10 +11,14 @@
     let isProfileOpen = false;
     let profileMenu: HTMLDivElement | null = null;
     let profileButton: HTMLButtonElement | null = null;
+    let isPasswordDialogOpen = false;
+    let currentPassword = '';
+    let newPassword = '';
+    let isChangingPassword = false;
 
     $: session = $adminSession;
     $: isDocumentOperator = session?.role === 'document_operator';
-    $: roleLabel = isDocumentOperator ? 'Operador documental' : 'Administrador';
+    $: roleLabel = isDocumentOperator ? 'Auxiliar administrativo' : 'Administrador';
     $: displayName = session?.name?.trim() || session?.email?.split('@')[0] || 'Conta administrativa';
     $: initials = displayName
         .split(/\s+/)
@@ -43,6 +49,26 @@
     async function handleLogout() {
         closeProfileMenu();
         await onLogout();
+    }
+
+    async function changePassword() {
+        if (newPassword.length < 14 || newPassword.length > 128) {
+            toast.error('A nova senha deve ter entre 14 e 128 caracteres.');
+            return;
+        }
+        isChangingPassword = true;
+        try {
+            const response = await api.put<{ token?: string }>('/admin/me/password', { currentPassword, newPassword });
+            if (typeof response.token === 'string') setSessionToken(response.token);
+            currentPassword = '';
+            newPassword = '';
+            isPasswordDialogOpen = false;
+            toast.success('Senha atualizada.');
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error ?? 'Não foi possível atualizar a senha.');
+        } finally {
+            isChangingPassword = false;
+        }
     }
 </script>
 
@@ -104,6 +130,11 @@
                         </div>
                     {/if}
 
+                    <button type="button" role="menuitem" class="mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-slate-200 dark:hover:bg-slate-700" on:click={() => { closeProfileMenu(); isPasswordDialogOpen = true; }}>
+                        <KeyRound class="h-4 w-4" />
+                        Alterar minha senha
+                    </button>
+
                     <button type="button" role="menuitem" class="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-400 dark:hover:bg-red-950/40" on:click={handleLogout}>
                         <LogOut class="h-4 w-4" />
                         Sair
@@ -113,3 +144,15 @@
         </div>
     </div>
 </header>
+
+{#if isPasswordDialogOpen}
+    <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4" role="presentation">
+        <form class="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-slate-800" on:submit|preventDefault={changePassword}>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Alterar minha senha</h2>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">A nova senha deve ter entre 14 e 128 caracteres.</p>
+            <label class="mt-4 block text-sm font-medium text-slate-700 dark:text-slate-200">Senha atual<input type="password" autocomplete="current-password" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" bind:value={currentPassword} required disabled={isChangingPassword} /></label>
+            <label class="mt-3 block text-sm font-medium text-slate-700 dark:text-slate-200">Nova senha<input type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" bind:value={newPassword} minlength="14" maxlength="128" required disabled={isChangingPassword} /></label>
+            <div class="mt-5 flex justify-end gap-2"><button type="button" class="rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700" on:click={() => (isPasswordDialogOpen = false)} disabled={isChangingPassword}>Cancelar</button><button class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60" disabled={isChangingPassword}>{isChangingPassword ? 'Salvando...' : 'Salvar senha'}</button></div>
+        </form>
+    </div>
+{/if}

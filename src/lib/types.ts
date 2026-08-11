@@ -151,6 +151,7 @@ export type View =
   | 'create_user'
   | 'brokers'
   | 'clients'
+  | 'administrative_assistants'
   | 'verification'
   | 'notifications';
 

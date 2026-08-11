@@ -130,6 +130,7 @@
     let PropertyHighlightsComponent: LazySvelteComponent | null = null;
     let PropertyRequestsModuleComponent: LazySvelteComponent | null = null;
     let ClientManagementComponent: LazySvelteComponent | null = null;
+    let AdministrativeAssistantsComponent: LazySvelteComponent | null = null;
     let BrokerManagementComponent: LazySvelteComponent | null = null;
     let CreatePropertyComponent: LazySvelteComponent | null = null;
     let CreateUserComponent: LazySvelteComponent | null = null;
@@ -355,6 +356,13 @@
                     "./components/ClientManagement.svelte"
                 );
                 ClientManagementComponent = module.default;
+            }
+            return;
+        }
+        if (view === "administrative_assistants") {
+            if (!AdministrativeAssistantsComponent) {
+                const module = await import("./components/AdministrativeAssistantsManagement.svelte");
+                AdministrativeAssistantsComponent = module.default;
             }
             return;
         }
@@ -2125,6 +2133,14 @@
                         <div
                             class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"
                         ></div>
+                    </div>
+                {/if}
+            {:else if activeView === "administrative_assistants"}
+                {#if AdministrativeAssistantsComponent}
+                    <svelte:component this={AdministrativeAssistantsComponent} />
+                {:else}
+                    <div class="flex justify-center items-center h-64">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
                     </div>
                 {/if}
             {:else if activeView === "notifications"}

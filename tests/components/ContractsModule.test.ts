@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { within } from '@testing-library/dom';
 import { tick } from 'svelte';
+import { adminSession } from '$lib/sessionState';
 
 const {
   apiGetMock,
@@ -74,6 +75,19 @@ import ContractsModule from '../../src/lib/components/ContractsModule.svelte';
 describe('ContractsModule', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    adminSession.set({
+      role: 'admin',
+      capabilities: {
+        canReviewDocuments: true,
+        canReplaceDocuments: true,
+        canCreateDocuments: true,
+        canManageContractWorkflow: true,
+        canDeleteDocuments: true,
+        canDeleteEntities: true,
+        canClearNotifications: true,
+        canManageAdministration: true,
+      },
+    });
     pdfGetDocumentMock.mockReturnValue({
       promise: Promise.resolve({
         numPages: 1,
@@ -639,7 +653,6 @@ describe('ContractsModule', () => {
     expect(formData.get('documentType')).toBe('doc_identidade_conjuge');
     expect(formData.get('documentCategory')).toBe('conjuge_documentos');
     expect(formData.get('side')).toBe('buyer');
-    expect(screen.getByLabelText('Editar documento')).toBeInTheDocument();
   });
 
   it.skip('bloqueia o Aprovar normal e mantém Aprovar c/ ressalvas ativo quando faltam dados obrigatórios', async () => {
@@ -1098,9 +1111,9 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Em Confecção' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
 
-    expect(screen.getByRole('button', { name: 'Prosseguir com a mesma minuta' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Prosseguir com a mesma minuta' })).toHaveLength(2);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Prosseguir com a mesma minuta' }));
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Prosseguir com a mesma minuta' })[0]);
 
     await waitFor(() => {
       expect(apiClientPostMock).toHaveBeenCalledWith(
@@ -1178,7 +1191,8 @@ describe('ContractsModule', () => {
     });
 
     const form = apiClientPostMock.mock.calls[0][1] as FormData;
-    expect(form.get('side')).toBe('seller');
+    // A minuta e anexada pelo administrador, portanto nao pertence ao lado comprador/vendedor.
+    expect(form.get('side')).toBeNull();
     expect(form.get('file')).toBeInstanceOf(File);
     expect((form.get('file') as File).name).toBe('minuta.pdf');
   });
@@ -1229,7 +1243,7 @@ describe('ContractsModule', () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText('minuta_atual.pdf').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Trocar minuta' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Prosseguir com a mesma minuta' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Prosseguir com a mesma minuta' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Excluir minuta' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Substituir minuta' })
@@ -1620,7 +1634,7 @@ describe('ContractsModule', () => {
       );
     });
     expect(toastSuccessMock).toHaveBeenCalledWith(
-      'Contrato voltou para a aba de confecção da minuta.'
+      'Contrato voltou para a conferência da minuta.'
     );
   });
 
@@ -1676,6 +1690,10 @@ describe('ContractsModule', () => {
       name: 'Finalizar Venda/Locação',
     });
     await fireEvent.click(finalizeButton);
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar comissões' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na comissão captador' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na comissão do vendedor' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na taxa Encontre Aqui' }));
 
     const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
@@ -1691,6 +1709,8 @@ describe('ContractsModule', () => {
     expect(captadorInput.value).toBe('500,00');
     expect(vendedorInput.value).toBe('500,00');
     expect(taxaInput.value).toBe('234,56');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Salvar edição' }));
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',
@@ -1709,7 +1729,7 @@ describe('ContractsModule', () => {
     });
   });
 
-  it('permite editar os nomes do captador e do vendedor na visualização do VGV', async () => {
+  it('exibe os nomes do captador e do vendedor na visualização do VGV sem permitir alterá-los', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_SIGNATURES')) {
         return {
@@ -1763,23 +1783,8 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(openFinalizeButton);
 
-    const captadorNomeInput = (await screen.findByLabelText('Nome do captador')) as HTMLInputElement;
-    const vendedorNomeInput = (await screen.findByLabelText('Nome do vendedor')) as HTMLInputElement;
-
-    expect(captadorNomeInput.value).toBe('Captador Original');
-    expect(vendedorNomeInput.value).toBe('Vendedor Original');
-    expect(screen.getByText('Captador:')).toBeInTheDocument();
-    expect(screen.getByText('Vendedor:')).toBeInTheDocument();
-    expect(screen.getAllByText('Captador Original').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Vendedor Original').length).toBeGreaterThan(0);
-
-    await fireEvent.input(captadorNomeInput, { target: { value: 'Captador Editado' } });
-    await fireEvent.input(vendedorNomeInput, { target: { value: 'Vendedor Editado' } });
-
-    expect(captadorNomeInput.value).toBe('Captador Editado');
-    expect(vendedorNomeInput.value).toBe('Vendedor Editado');
-    expect(screen.getAllByText('Captador Editado').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Vendedor Editado').length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText('Nome do captador')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Nome do vendedor')).not.toBeInTheDocument();
   });
 
   it('bloqueia a finalização quando a soma das comissões não fecha o valor da venda', async () => {
@@ -1836,6 +1841,10 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(openFinalizeButton);
     await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar comissões' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na comissão captador' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na comissão do vendedor' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na taxa Encontre Aqui' }));
 
     const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorInput = (await screen.findByLabelText('Comissão Captador')) as HTMLInputElement;
@@ -1850,14 +1859,10 @@ describe('ContractsModule', () => {
     expect(vendedorInput.value).toBe('250');
     expect(taxaInput.value).toBe('25');
 
-    const submitFinalizeButton = screen.getAllByRole('button', {
-      name: 'Finalizar Venda/Locação',
-    })[1];
-    await fireEvent.click(submitFinalizeButton);
-
+    await fireEvent.click(screen.getByRole('button', { name: 'Salvar edição' }));
     expect(apiPostMock).not.toHaveBeenCalled();
     expect(toastErrorMock).toHaveBeenCalledWith(
-      'Na venda, a soma das comissões precisa fechar exatamente 100% do valor.'
+      'A soma das comissões e da taxa Encontre Aqui precisa fechar exatamente 100% do valor base.'
     );
   });
 
@@ -1914,15 +1919,16 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(openFinalizeButton);
     await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar comissões' }));
 
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Alternar modo da comissão captador' })
+      screen.getByRole('button', { name: 'Usar porcentagem na comissão captador' })
     );
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Alternar modo da comissão do vendedor' })
+      screen.getByRole('button', { name: 'Usar porcentagem na comissão do vendedor' })
     );
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Alternar modo da taxa da plataforma' })
+      screen.getByRole('button', { name: 'Usar porcentagem na taxa Encontre Aqui' })
     );
     await tick();
 
@@ -1935,6 +1941,7 @@ describe('ContractsModule', () => {
     await fireEvent.input(captadorInput, { target: { value: '50' } });
     await fireEvent.input(vendedorInput, { target: { value: '25' } });
     await fireEvent.input(taxaInput, { target: { value: '25' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Salvar edição' }));
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',
@@ -2006,10 +2013,13 @@ describe('ContractsModule', () => {
     });
     await fireEvent.click(openFinalizeButton);
     await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar comissões' }));
 
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Alternar modo da comissão captador' })
+      screen.getByRole('button', { name: 'Usar porcentagem na comissão captador' })
     );
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na comissão do vendedor' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na taxa Encontre Aqui' }));
     await tick();
 
     const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
@@ -2021,6 +2031,7 @@ describe('ContractsModule', () => {
     await fireEvent.input(captadorInput, { target: { value: '50' } });
     await fireEvent.input(vendedorInput, { target: { value: '250,00' } });
     await fireEvent.input(taxaInput, { target: { value: '250,00' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Salvar edição' }));
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',
@@ -2099,6 +2110,10 @@ describe('ContractsModule', () => {
       name: 'Finalizar Venda/Locação',
     });
     await fireEvent.click(openFinalizeButton);
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar comissões' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na comissão captador' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na comissão do vendedor' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Usar reais na taxa Encontre Aqui' }));
 
     const valorInput = screen.getByLabelText('Valor de venda (base da comissão) (R$)') as HTMLInputElement;
     const captadorInput = screen.getByLabelText('Comissão Captador') as HTMLInputElement;
@@ -2109,6 +2124,7 @@ describe('ContractsModule', () => {
     await fireEvent.input(captadorInput, { target: { value: '500' } });
     await fireEvent.input(vendedorInput, { target: { value: '300' } });
     await fireEvent.input(taxaInput, { target: { value: '200' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Salvar edição' }));
 
     const submitFinalizeButton = screen.getAllByRole('button', {
       name: 'Finalizar Venda/Locação',

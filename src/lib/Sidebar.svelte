@@ -15,11 +15,12 @@
     ShieldCheck,
     Sparkles,
     UserPlus,
+    UserRoundCog,
     UserRound,
     Users
   } from 'lucide-svelte';
   import { onMount } from 'svelte';
-  import { clearSessionToken } from './sessionState';
+  import { adminSession, clearSessionToken } from './sessionState';
   import { api } from './apiClient';
   import ThemeToggle from './ThemeToggle.svelte';
   import type { NotificationsSubTab, View } from './types';
@@ -49,6 +50,7 @@
     'create_user',
     'brokers',
     'clients',
+    'administrative_assistants',
     'verification',
     'notifications'
   ];
@@ -101,6 +103,11 @@
       view: 'create_user',
       label: 'Cadastrar Cliente ou Corretor',
       icon: UserPlus
+    },
+    {
+      view: 'administrative_assistants',
+      label: 'Auxiliares administrativos',
+      icon: UserRoundCog
     }
   ];
 
@@ -443,7 +450,7 @@
       </button>
       {#if openGroups.usuarios}
         <div class="space-y-1">
-          {#each usuariosItems as item}
+          {#each usuariosItems.filter((item) => item.view !== 'administrative_assistants' || $adminSession?.capabilities?.canManageAdministration) as item}
             <button
               class={navItemClass(item.view as View, 'pl-10')}
               on:click={() => handleNavigation(item.view as View)}

@@ -52,6 +52,9 @@ export const dashboardViewConfig: Record<View, ViewConfig> = {
   create_user: {
     title: 'Cadastrar Cliente ou Corretor',
   },
+  administrative_assistants: {
+    title: 'Auxiliares administrativos',
+  },
   brokers: {
     endpoint: '/admin/brokers',
     title: 'Gerenciamento de Corretores',
