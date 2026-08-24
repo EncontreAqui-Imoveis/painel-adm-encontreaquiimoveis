@@ -185,7 +185,7 @@
         id="draft-pdf"
         bind:this={draftUploadInputEl}
         type="file"
-        accept="application/pdf,.pdf"
+        accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
         on:change={handleDraftFileChange}
         class="sr-only"
         aria-hidden="true"
