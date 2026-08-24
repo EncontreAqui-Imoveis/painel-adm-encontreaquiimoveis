@@ -3240,21 +3240,28 @@
               {/if}
 
               {#each rejectionList as rejection (rejection.id ?? Math.random())}
+                {@const docType = rejection.document_type || rejection.documentType || ''}
+                {@const docTitle = rejection.document_label || rejection.documentLabel || documentLabel(docType) || 'Documento'}
+                {@const fileName = rejection.original_file_name || rejection.originalFileName}
+                {@const side = rejection.owner_side || rejection.ownerSide}
+                {@const adminName = rejection.rejected_by_admin_name || rejection.rejectedByAdminName}
+                {@const rejDate = rejection.rejected_at || rejection.rejectedAt}
                 <div class="rounded-lg border border-gray-200 bg-gray-50 p-3.5 dark:border-gray-700 dark:bg-gray-800/50">
                   <div class="flex items-start justify-between gap-2">
                     <div>
                       <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                        {rejection.document_label || documentLabel(rejection.document_type ?? '') || 'Documento'}
+                        {docTitle}
                       </p>
-                      {#if rejection.original_file_name}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 break-all mt-0.5">
-                          {rejection.original_file_name}
+                      {#if fileName}
+                        <p class="text-xs font-mono font-medium text-slate-700 dark:text-slate-300 break-all mt-1 flex items-center gap-1.5 bg-slate-200/60 dark:bg-slate-700/50 px-2 py-1 rounded">
+                          <FileText class="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                          <span>{fileName}</span>
                         </p>
                       {/if}
                     </div>
-                    {#if rejection.owner_side}
+                    {#if side}
                       <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-200 shrink-0">
-                        {rejection.owner_side === 'seller' ? selectedSellerLabel : selectedBuyerLabel}
+                        {side === 'seller' ? selectedSellerLabel : selectedBuyerLabel}
                       </span>
                     {/if}
                   </div>
@@ -3265,8 +3272,8 @@
                     </p>
                   </div>
                   <div class="mt-2 flex flex-wrap items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                    <span>{rejection.rejected_by_admin_name ? `Rejeitado por: ${rejection.rejected_by_admin_name}` : ''}</span>
-                    <span>{rejection.rejected_at ? formatDate(rejection.rejected_at) : ''}</span>
+                    <span>{adminName ? `Rejeitado por: ${adminName}` : ''}</span>
+                    <span>{rejDate ? formatDate(rejDate) : ''}</span>
                   </div>
                 </div>
               {/each}
