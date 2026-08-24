@@ -7,6 +7,7 @@
     Eye,
     FileText,
     Loader2,
+    List,
     Maximize2,
     RefreshCcw,
     Trash2,
@@ -114,6 +115,7 @@
   import {
     canAddAnotherMatrixDocument,
     computeApprovalLockReasons,
+    computeApprovalLockReasonsForSide,
     draftSubmitLabel,
     draftUploadInputLabel,
     getAllContractDocuments,
@@ -1865,9 +1867,12 @@
     fetchContracts();
   }
 
+  $: sellerLockReasons = computeApprovalLockReasonsForSide(selected, 'seller', modalMode);
+  $: buyerLockReasons = computeApprovalLockReasonsForSide(selected, 'buyer', modalMode);
   $: approvalLockReasons = computeApprovalLockReasons(selected, modalMode);
   $: isReadyToApprove = approvalLockReasons.length === 0;
-  $: sellerApprovalDisabled = evaluatingSide === 'seller' || !isReadyToApprove;
+  $: sellerApprovalDisabled = evaluatingSide === 'seller' || sellerLockReasons.length > 0;
+  $: buyerApprovalDisabled = evaluatingSide === 'buyer' || buyerLockReasons.length > 0;
 </script>
 
 <svelte:window on:resize={syncIsMobileLayout} />
@@ -2183,14 +2188,37 @@
             </p>
           {/if}
         </div>
-          <button
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-            on:click={() => closeModal()}
-            aria-label="Fechar modal"
-          >
-            ×
-          </button>
+          <div class="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              on:click={() => selected && reloadSelectedContract(selected.id)}
+              disabled={isLoading}
+              title="Atualizar dados do contrato e documentos"
+            >
+              <RefreshCcw class="mr-1.5 h-3.5 w-3.5" />
+              Atualizar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              on:click={() => closeModal()}
+              title="Voltar para a lista de contratos"
+            >
+              <List class="mr-1.5 h-3.5 w-3.5" />
+              Lista
+            </Button>
+            <button
+              type="button"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+              on:click={() => closeModal()}
+              aria-label="Fechar modal"
+            >
+              ×
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2398,9 +2426,12 @@
             <ContractApprovalActions
               contract={selected}
               approvalLockReasons={approvalLockReasons}
+              sellerLockReasons={sellerLockReasons}
+              buyerLockReasons={buyerLockReasons}
               isReadyToApprove={isReadyToApprove}
               evaluatingSide={evaluatingSide}
               sellerApprovalDisabled={sellerApprovalDisabled}
+              buyerApprovalDisabled={buyerApprovalDisabled}
               isDoubleEndedDeal={isDoubleEndedDeal}
               getSideApprovalUiState={getSideApprovalUiState}
               evaluateContractSide={evaluateContractSide}

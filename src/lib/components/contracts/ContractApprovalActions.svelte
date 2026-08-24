@@ -8,9 +8,12 @@
 
   export let contract: ContractItem | null = null;
   export let approvalLockReasons: string[] = [];
+  export let sellerLockReasons: string[] = [];
+  export let buyerLockReasons: string[] = [];
   export let isReadyToApprove = false;
   export let evaluatingSide: "seller" | "buyer" | null = null;
   export let sellerApprovalDisabled = false;
+  export let buyerApprovalDisabled = false;
   export let isDoubleEndedDeal: (value: ContractItem | null) => boolean = () =>
     false;
   export let getSideApprovalUiState: (
@@ -20,25 +23,29 @@
     side: "seller" | "buyer",
     action: "APPROVED" | "APPROVED_WITH_RES" | "REJECTED" | "PENDING",
   ) => void = () => {};
+
+  $: effectiveSellerDisabled = sellerApprovalDisabled || sellerLockReasons.length > 0 || evaluatingSide === "seller";
+  $: effectiveBuyerDisabled = buyerApprovalDisabled || buyerLockReasons.length > 0 || evaluatingSide === "buyer";
+  $: allLockReasons = approvalLockReasons.length > 0 ? approvalLockReasons : [...sellerLockReasons, ...buyerLockReasons];
 </script>
 
 <div
   class="space-y-3 rounded-md border border-gray-200 p-3 dark:border-gray-700"
 >
-  {#if !isReadyToApprove}
+  {#if allLockReasons.length > 0}
     <div
-      class="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900/60 dark:bg-red-950/30"
+      class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30"
       role="status"
       aria-live="polite"
       aria-atomic="true"
     >
-      <p class="text-sm font-medium text-red-700 dark:text-red-300">
+      <p class="text-sm font-medium text-amber-800 dark:text-amber-300">
         Aprovação bloqueada.
       </p>
       <ul
-        class="mt-2 list-disc space-y-1 pl-5 text-sm text-red-600 dark:text-red-300"
+        class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-700 dark:text-amber-300"
       >
-        {#each approvalLockReasons as reason}
+        {#each allLockReasons as reason}
           <li>{reason}</li>
         {/each}
       </ul>
@@ -57,9 +64,9 @@
           size="sm"
           className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
           on:click={() => evaluateContractSide("seller", "APPROVED")}
-          disabled={sellerApprovalDisabled}
-          title={!isReadyToApprove
-            ? approvalLockReasons.join(" | ")
+          disabled={effectiveSellerDisabled}
+          title={sellerLockReasons.length > 0
+            ? sellerLockReasons.join(" | ")
             : undefined}
         >
           Aprovar<span class="sr-only"> vendedor</span>
@@ -142,9 +149,9 @@
             size="sm"
             className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
             on:click={() => evaluateContractSide("buyer", "APPROVED")}
-            disabled={evaluatingSide === "buyer" || !isReadyToApprove}
-            title={!isReadyToApprove
-              ? approvalLockReasons.join(" | ")
+            disabled={effectiveBuyerDisabled}
+            title={buyerLockReasons.length > 0
+              ? buyerLockReasons.join(" | ")
               : undefined}
           >
             Aprovar<span class="sr-only"> comprador</span>
@@ -187,9 +194,9 @@
             size="sm"
             className="bg-green-600 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400 disabled:opacity-50 disabled:hover:bg-gray-400"
             on:click={() => evaluateContractSide("buyer", "APPROVED")}
-            disabled={evaluatingSide === "buyer" || !isReadyToApprove}
-            title={!isReadyToApprove
-              ? approvalLockReasons.join(" | ")
+            disabled={effectiveBuyerDisabled}
+            title={buyerLockReasons.length > 0
+              ? buyerLockReasons.join(" | ")
               : undefined}
           >
             Aprovar<span class="sr-only"> comprador</span>

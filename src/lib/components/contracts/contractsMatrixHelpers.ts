@@ -380,6 +380,56 @@ export function listBlockingDocumentStatuses(contract: ContractItem): string[] {
     .filter((item): item is string => item != null);
 }
 
+export function computeApprovalLockReasonsForSide(
+  contract: ContractItem | null,
+  side: 'seller' | 'buyer',
+  modalMode: string = 'review_docs'
+): string[] {
+  if (!contract || modalMode !== 'review_docs') {
+    return [];
+  }
+
+  const reasons: string[] = [];
+  const missingInfo = side === 'seller' ? listMissingSellerInfo(contract) : listMissingBuyerInfo(contract);
+  if (missingInfo.length > 0) {
+    reasons.push(`${contractSideLabel(contract, side)} sem: ${missingInfo.join(', ')}`);
+  }
+
+  const rows = getMatrixRows(contract);
+  const missingDocs: string[] = [];
+  for (const row of rows) {
+    const isRequired = side === 'seller' ? row.sellerRequired : row.buyerRequired;
+    if (row.documentType !== 'outro' && isRequired) {
+      const doc = getDocumentForMatrixCell(contract, row.documentType, side);
+      if (doc == null) {
+        missingDocs.push(documentLabel(row.documentType));
+      }
+    }
+  }
+  if (missingDocs.length > 0) {
+    reasons.push(`Documentos (${contractSideLabel(contract, side)}) faltando: ${missingDocs.join(', ')}`);
+  }
+
+  const blockingDocs = getNonProposalDocuments(contract)
+    .filter((doc) => {
+      const docSide = getDocumentSide(doc);
+      return docSide === side || docSide == null;
+    })
+    .map((doc) => {
+      const status = String(doc.status ?? doc.categoryStatus ?? '').trim().toUpperCase();
+      if (isOutroMatrixDocumentType(doc.documentType) || !status) return null;
+      if (status !== 'REJECTED' && status !== 'PENDING') return null;
+      return `${documentLabel(doc.documentType)}: ${status === 'REJECTED' ? 'rejeitado' : 'pendente'}`;
+    })
+    .filter((item): item is string => item != null);
+
+  if (blockingDocs.length > 0) {
+    reasons.push(`Documentos (${contractSideLabel(contract, side)}) bloqueados: ${blockingDocs.join(', ')}`);
+  }
+
+  return reasons;
+}
+
 export function computeApprovalLockReasons(
   contract: ContractItem | null,
   modalMode: string = 'review_docs'
@@ -388,29 +438,10 @@ export function computeApprovalLockReasons(
     return [];
   }
 
-  const reasons: string[] = [];
-  const missingSellerInfo = listMissingSellerInfo(contract);
-  const missingBuyerInfo = listMissingBuyerInfo(contract);
-  const missingDocuments = listMissingRequiredDocuments(contract);
-  const blockingDocuments = listBlockingDocumentStatuses(contract);
-
-  if (missingSellerInfo.length > 0) {
-      reasons.push(`${contractSideLabel(contract, 'seller')} sem: ${missingSellerInfo.join(', ')}`);
-  }
-
-  if (missingBuyerInfo.length > 0) {
-    reasons.push(`${contractSideLabel(contract, 'buyer')} sem: ${missingBuyerInfo.join(', ')}`);
-  }
-
-  if (missingDocuments.length > 0) {
-    reasons.push(`Documentos faltando: ${missingDocuments.join(', ')}`);
-  }
-
-  if (blockingDocuments.length > 0) {
-    reasons.push(`Documentos bloqueados: ${blockingDocuments.join(', ')}`);
-  }
-
-  return reasons;
+  return [
+    ...computeApprovalLockReasonsForSide(contract, 'seller', modalMode),
+    ...computeApprovalLockReasonsForSide(contract, 'buyer', modalMode),
+  ];
 }
 
 export function getDocumentForMatrixCell(
