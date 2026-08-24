@@ -106,3 +106,17 @@ export type ContractMatrixRowView = {
   sellerDocs: ContractMatrixCellDoc[];
   buyerDocs: ContractMatrixCellDoc[];
 };
+
+export type ContractDocumentRejection = {
+  id?: number;
+  source_document_id?: number;
+  document_type?: string;
+  document_label?: string;
+  original_file_name?: string;
+  owner_side?: 'seller' | 'buyer' | null;
+  reason?: string;
+  uploaded_by_user_id?: number;
+  rejected_by_admin_id?: number;
+  rejected_at?: string;
+  rejected_by_admin_name?: string;
+};

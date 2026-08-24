@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import {
-    ChevronLeft,
-    ChevronRight,
+    CircleAlert,
     Download,
     Eye,
     FileText,
+    FileX,
     Loader2,
     List,
     Maximize2,
@@ -137,9 +137,9 @@
   import type {
     ContractApprovalStatus,
     ContractDocument,
+    ContractDocumentRejection,
     ContractItem,
   } from '$lib/components/contracts/types';
-  import type { ContractDocumentRejection } from '$lib/components/contracts/contractsApi';
 
   /** TS do IDE: tipo inferido do `Input` costuma omitir `id`/handlers; aqui usamos o contrato explícito. */
   const LabeledTextInput = Input as unknown as Component<InputProps, {}, 'value'>;
@@ -1867,6 +1867,28 @@
     fetchContracts();
   }
 
+  let showRejectionsModal = false;
+  let isFetchingRejections = false;
+  let rejectionList: ContractDocumentRejection[] = [];
+
+  async function openRejectionsModal() {
+    if (!selected) return;
+    showRejectionsModal = true;
+    isFetchingRejections = true;
+    try {
+      rejectionList = await listContractDocumentRejections(selected.id);
+    } catch (error) {
+      console.error('Erro ao carregar motivos de rejeição:', error);
+      rejectionList = [];
+    } finally {
+      isFetchingRejections = false;
+    }
+  }
+
+  function closeRejectionsModal() {
+    showRejectionsModal = false;
+  }
+
   $: sellerLockReasons = computeApprovalLockReasonsForSide(selected, 'seller', modalMode);
   $: buyerLockReasons = computeApprovalLockReasonsForSide(selected, 'buyer', modalMode);
   $: approvalLockReasons = computeApprovalLockReasons(selected, modalMode);
@@ -2204,11 +2226,11 @@
               type="button"
               variant="outline"
               size="sm"
-              on:click={() => closeModal()}
-              title="Voltar para a lista de contratos"
+              on:click={() => openRejectionsModal()}
+              title="Ver histórico com todos os motivos de rejeição"
             >
-              <List class="mr-1.5 h-3.5 w-3.5" />
-              Lista
+              <FileX class="mr-1.5 h-3.5 w-3.5 text-red-500" />
+              Motivos de rejeição
             </Button>
             <button
               type="button"
@@ -3133,3 +3155,131 @@
   onReplace={replacePreviewDocument}
   onDelete={deletePreviewDocument}
 />
+
+{#if showRejectionsModal && selected}
+  <div
+    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="rejections-modal-title"
+  >
+    <div class="flex w-full max-w-xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-gray-900">
+      <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-800">
+        <div>
+          <h3 id="rejections-modal-title" class="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <FileX class="h-5 w-5 text-red-500" />
+            Motivos de Rejeição
+          </h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            {#if selected.propertyCode}Cód. {selected.propertyCode}{:else}Contrato{/if}{#if selected.propertyTitle} — {selected.propertyTitle}{/if}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
+          on:click={closeRejectionsModal}
+          aria-label="Fechar motivos de rejeição"
+        >
+          ×
+        </button>
+      </div>
+
+      <div class="max-h-[60vh] overflow-y-auto p-5">
+        {#if isFetchingRejections}
+          <div class="flex flex-col items-center justify-center py-8 text-sm text-gray-500 dark:text-gray-400">
+            <Loader2 class="mb-2 h-6 w-6 animate-spin text-emerald-600" />
+            Carregando motivos de rejeição...
+          </div>
+        {:else}
+          {@const sellerSideReason = readReasonText(selected.sellerApprovalReason)}
+          {@const buyerSideReason = readReasonText(selected.buyerApprovalReason)}
+          {@const hasAnyRejection = rejectionList.length > 0 || sellerSideReason.length > 0 || buyerSideReason.length > 0}
+
+          {#if !hasAnyRejection}
+            <div class="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
+              <CircleAlert class="mx-auto h-10 w-10 text-gray-400 dark:text-gray-500" />
+              <p class="mt-3 text-base font-semibold text-gray-900 dark:text-gray-100">
+                Nenhum motivo de rejeição encontrado
+              </p>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Não existem registros de rejeição de documentos ou de etapas para este contrato.
+              </p>
+            </div>
+          {:else}
+            <div class="space-y-3">
+              {#if sellerSideReason.length > 0}
+                <div class="rounded-lg border border-red-200 bg-red-50/80 p-3.5 dark:border-red-900/60 dark:bg-red-950/30">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-semibold uppercase text-red-800 dark:text-red-300">
+                      Rejeição do Vendedor
+                    </span>
+                    <span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-900/50 dark:text-red-300">
+                      {selectedSellerLabel}
+                    </span>
+                  </div>
+                  <p class="mt-2 text-sm text-red-900 dark:text-red-200 font-medium">
+                    {sellerSideReason}
+                  </p>
+                </div>
+              {/if}
+
+              {#if buyerSideReason.length > 0}
+                <div class="rounded-lg border border-red-200 bg-red-50/80 p-3.5 dark:border-red-900/60 dark:bg-red-950/30">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-semibold uppercase text-red-800 dark:text-red-300">
+                      Rejeição do Comprador
+                    </span>
+                    <span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-900/50 dark:text-red-300">
+                      {selectedBuyerLabel}
+                    </span>
+                  </div>
+                  <p class="mt-2 text-sm text-red-900 dark:text-red-200 font-medium">
+                    {buyerSideReason}
+                  </p>
+                </div>
+              {/if}
+
+              {#each rejectionList as rejection (rejection.id ?? Math.random())}
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-3.5 dark:border-gray-700 dark:bg-gray-800/50">
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {rejection.document_label || documentLabel(rejection.document_type ?? '') || 'Documento'}
+                      </p>
+                      {#if rejection.original_file_name}
+                        <p class="text-xs text-gray-500 dark:text-gray-400 break-all mt-0.5">
+                          {rejection.original_file_name}
+                        </p>
+                      {/if}
+                    </div>
+                    {#if rejection.owner_side}
+                      <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-200 shrink-0">
+                        {rejection.owner_side === 'seller' ? selectedSellerLabel : selectedBuyerLabel}
+                      </span>
+                    {/if}
+                  </div>
+                  <div class="mt-2.5 rounded-md border border-red-200 bg-red-50/70 p-2.5 dark:border-red-900/50 dark:bg-red-950/20">
+                    <p class="text-xs font-semibold text-red-800 dark:text-red-300 uppercase">Motivo:</p>
+                    <p class="text-sm text-red-900 dark:text-red-200 mt-0.5 font-medium">
+                      {rejection.reason || 'Nenhum detalhe informado'}
+                    </p>
+                  </div>
+                  <div class="mt-2 flex flex-wrap items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span>{rejection.rejected_by_admin_name ? `Rejeitado por: ${rejection.rejected_by_admin_name}` : ''}</span>
+                    <span>{rejection.rejected_at ? formatDate(rejection.rejected_at) : ''}</span>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        {/if}
+      </div>
+
+      <div class="border-t border-gray-200 px-5 py-3 text-right dark:border-gray-800">
+        <Button variant="outline" size="sm" on:click={closeRejectionsModal}>
+          Fechar
+        </Button>
+      </div>
+    </div>
+  </div>
+{/if}
