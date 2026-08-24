@@ -16,20 +16,21 @@ export type AdminCapabilities = {
 };
 
 export type AdminSession = {
-  role: 'admin' | 'document_operator';
+  role: 'admin' | 'document_operator' | 'operational_assistant';
   capabilities: AdminCapabilities;
   id?: number;
   name?: string;
   email?: string;
 };
 
-export function getDefaultAdminCapabilities(role: 'admin' | 'document_operator' = 'admin'): AdminCapabilities {
+export function getDefaultAdminCapabilities(role: 'admin' | 'document_operator' | 'operational_assistant' = 'admin'): AdminCapabilities {
   const isAdmin = role === 'admin';
+  const canManageWorkflow = isAdmin || role === 'operational_assistant';
   return {
     canReviewDocuments: true,
     canReplaceDocuments: true,
-    canCreateDocuments: isAdmin,
-    canManageContractWorkflow: isAdmin,
+    canCreateDocuments: canManageWorkflow,
+    canManageContractWorkflow: canManageWorkflow,
     canDeleteDocuments: isAdmin,
     canDeleteEntities: isAdmin,
     canClearNotifications: isAdmin,
@@ -37,7 +38,7 @@ export function getDefaultAdminCapabilities(role: 'admin' | 'document_operator' 
   };
 }
 
-function resolveCapabilities(role: 'admin' | 'document_operator', rawCapabilities?: unknown): AdminCapabilities {
+function resolveCapabilities(role: 'admin' | 'document_operator' | 'operational_assistant', rawCapabilities?: unknown): AdminCapabilities {
   const defaults = getDefaultAdminCapabilities(role);
   if (!rawCapabilities || typeof rawCapabilities !== 'object') {
     return defaults;
@@ -61,7 +62,12 @@ function readAdminSession(): AdminSession | null {
     const raw = window.sessionStorage.getItem(ADMIN_SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<AdminSession>;
-    const role: 'admin' | 'document_operator' = parsed.role === 'document_operator' ? 'document_operator' : 'admin';
+    const role: 'admin' | 'document_operator' | 'operational_assistant' =
+      parsed.role === 'document_operator'
+        ? 'document_operator'
+        : parsed.role === 'operational_assistant'
+          ? 'operational_assistant'
+          : 'admin';
     return {
       role,
       capabilities: resolveCapabilities(role, parsed.capabilities),
@@ -101,7 +107,12 @@ export function setSessionToken(token: string | null): void {
 export function setAdminSession(token: string, admin: unknown): void {
   authToken.set(token);
   const candidate = admin as Partial<AdminSession> | null;
-  const role: 'admin' | 'document_operator' = candidate?.role === 'document_operator' ? 'document_operator' : 'admin';
+  const role: 'admin' | 'document_operator' | 'operational_assistant' =
+    candidate?.role === 'document_operator'
+      ? 'document_operator'
+      : candidate?.role === 'operational_assistant'
+        ? 'operational_assistant'
+        : 'admin';
   adminSession.set({
     role,
     capabilities: resolveCapabilities(role, candidate?.capabilities),
