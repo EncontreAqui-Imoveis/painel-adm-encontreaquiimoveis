@@ -23,16 +23,48 @@ export type AdminSession = {
   email?: string;
 };
 
+export function getDefaultAdminCapabilities(role: 'admin' | 'document_operator' = 'admin'): AdminCapabilities {
+  const isAdmin = role === 'admin';
+  return {
+    canReviewDocuments: true,
+    canReplaceDocuments: true,
+    canCreateDocuments: isAdmin,
+    canManageContractWorkflow: isAdmin,
+    canDeleteDocuments: isAdmin,
+    canDeleteEntities: isAdmin,
+    canClearNotifications: isAdmin,
+    canManageAdministration: isAdmin,
+  };
+}
+
+function resolveCapabilities(role: 'admin' | 'document_operator', rawCapabilities?: unknown): AdminCapabilities {
+  const defaults = getDefaultAdminCapabilities(role);
+  if (!rawCapabilities || typeof rawCapabilities !== 'object') {
+    return defaults;
+  }
+  const caps = rawCapabilities as Record<string, unknown>;
+  return {
+    canReviewDocuments: typeof caps.canReviewDocuments === 'boolean' ? caps.canReviewDocuments : defaults.canReviewDocuments,
+    canReplaceDocuments: typeof caps.canReplaceDocuments === 'boolean' ? caps.canReplaceDocuments : defaults.canReplaceDocuments,
+    canCreateDocuments: typeof caps.canCreateDocuments === 'boolean' ? caps.canCreateDocuments : defaults.canCreateDocuments,
+    canManageContractWorkflow: typeof caps.canManageContractWorkflow === 'boolean' ? caps.canManageContractWorkflow : defaults.canManageContractWorkflow,
+    canDeleteDocuments: typeof caps.canDeleteDocuments === 'boolean' ? caps.canDeleteDocuments : defaults.canDeleteDocuments,
+    canDeleteEntities: typeof caps.canDeleteEntities === 'boolean' ? caps.canDeleteEntities : defaults.canDeleteEntities,
+    canClearNotifications: typeof caps.canClearNotifications === 'boolean' ? caps.canClearNotifications : defaults.canClearNotifications,
+    canManageAdministration: typeof caps.canManageAdministration === 'boolean' ? caps.canManageAdministration : defaults.canManageAdministration,
+  };
+}
+
 function readAdminSession(): AdminSession | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.sessionStorage.getItem(ADMIN_SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<AdminSession>;
-    if (!parsed.capabilities || typeof parsed.capabilities !== 'object') return null;
+    const role: 'admin' | 'document_operator' = parsed.role === 'document_operator' ? 'document_operator' : 'admin';
     return {
-      role: parsed.role === 'document_operator' ? 'document_operator' : 'admin',
-      capabilities: parsed.capabilities as AdminCapabilities,
+      role,
+      capabilities: resolveCapabilities(role, parsed.capabilities),
       id: typeof parsed.id === 'number' ? parsed.id : undefined,
       name: typeof parsed.name === 'string' ? parsed.name : undefined,
       email: typeof parsed.email === 'string' ? parsed.email : undefined,
@@ -69,16 +101,13 @@ export function setSessionToken(token: string | null): void {
 export function setAdminSession(token: string, admin: unknown): void {
   authToken.set(token);
   const candidate = admin as Partial<AdminSession> | null;
-  if (!candidate?.capabilities || typeof candidate.capabilities !== 'object') {
-    adminSession.set(null);
-    return;
-  }
+  const role: 'admin' | 'document_operator' = candidate?.role === 'document_operator' ? 'document_operator' : 'admin';
   adminSession.set({
-    role: candidate.role === 'document_operator' ? 'document_operator' : 'admin',
-    capabilities: candidate.capabilities as AdminCapabilities,
-    id: typeof candidate.id === 'number' ? candidate.id : undefined,
-    name: typeof candidate.name === 'string' ? candidate.name : undefined,
-    email: typeof candidate.email === 'string' ? candidate.email : undefined,
+    role,
+    capabilities: resolveCapabilities(role, candidate?.capabilities),
+    id: typeof candidate?.id === 'number' ? candidate.id : undefined,
+    name: typeof candidate?.name === 'string' ? candidate.name : undefined,
+    email: typeof candidate?.email === 'string' ? candidate.email : undefined,
   });
 }
 

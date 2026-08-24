@@ -39,6 +39,7 @@ vi.mock('svelte-sonner', () => ({
 }));
 
 import NegotiationRequests from '../../src/lib/components/NegotiationRequests.svelte';
+import { clearSessionToken, setAdminSession } from '../../src/lib/sessionState';
 
 describe('NegotiationRequests', () => {
   let unexpectedGetEndpoints: string[] = [];
@@ -53,10 +54,26 @@ describe('NegotiationRequests', () => {
     vi.clearAllMocks();
     unexpectedGetEndpoints = [];
     vi.spyOn(window, 'confirm').mockReturnValue(true);
+    setAdminSession('test-admin-token', {
+      id: 1,
+      role: 'admin',
+      name: 'Admin de teste',
+      capabilities: {
+        canReviewDocuments: true,
+        canReplaceDocuments: true,
+        canCreateDocuments: true,
+        canManageContractWorkflow: true,
+        canDeleteDocuments: true,
+        canDeleteEntities: true,
+        canClearNotifications: true,
+        canManageAdministration: true,
+      },
+    });
   });
 
   afterEach(() => {
     cleanup();
+    clearSessionToken();
     expect(unexpectedGetEndpoints).toEqual([]);
     vi.clearAllTimers();
     vi.useRealTimers();

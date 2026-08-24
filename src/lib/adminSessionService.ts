@@ -18,4 +18,12 @@ export async function requestAdminDashboardStats(token: string): Promise<Respons
   });
 }
 
+export async function fetchAdminProfile(token: string): Promise<Response> {
+  return fetch(`${baseURL}/admin/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 

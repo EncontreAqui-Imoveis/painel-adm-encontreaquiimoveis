@@ -10,6 +10,7 @@
 
   export let showDetailModal = false;
   export let selectedProposal: NegotiationItem | null = null;
+  export let canManageContractWorkflow = false;
   export let isApproveBusy: () => boolean;
   export let closeDetailModal: () => void;
 
@@ -1000,7 +1001,7 @@
           {/if}
         </p>
         <div class="flex flex-wrap items-center justify-end gap-2">
-          {#if !proposalInlineEditMode && !hasSignedProposalDocument(selectedProposal)}
+          {#if canManageContractWorkflow && !proposalInlineEditMode && !hasSignedProposalDocument(selectedProposal)}
             <Button
               variant="outline"
               on:click={openEditProposalModal}
@@ -1010,7 +1011,7 @@
               Editar Proposta
             </Button>
           {/if}
-          {#if proposalInlineEditMode}
+          {#if canManageContractWorkflow && proposalInlineEditMode}
             <Button
               variant="outline"
               on:click={cancelProposalInlineEdit}
@@ -1019,39 +1020,45 @@
               Cancelar edição
             </Button>
           {/if}
-          <Button
-            variant="destructive"
-            className="bg-red-600 text-white hover:bg-red-700"
-            on:click={rejectSelected}
-            disabled={isApproveBusy() ||
-              !hasSignedProposalDocument(selectedProposal) ||
-              requiresSignedPdf()}
-            title={!hasSignedProposalDocument(selectedProposal) ||
-            requiresSignedPdf()
-              ? "Exija PDF assinado anexado"
-              : "Rejeitar proposta com motivo abaixo"}
-          >
-            {#if processingAction}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Rejeitar
-          </Button>
-          <Button
-            variant="outline"
-            className="bg-green-600 text-white hover:bg-green-700"
-            on:click={approveSelected}
-            disabled={isApproveBusy() ||
-              requiresSignedPdf() ||
-              !hasSignedProposalDocument(selectedProposal)}
-            title={requiresSignedPdf()
-              ? "Anexe o PDF assinado"
-              : "Aprovar e seguir para contratos"}
-          >
-            {#if processingAction || savingResponsibles}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-            {/if}
-            Aprovar
-          </Button>
+          {#if canManageContractWorkflow}
+            <Button
+              variant="destructive"
+              className="bg-red-600 text-white hover:bg-red-700"
+              on:click={rejectSelected}
+              disabled={isApproveBusy() ||
+                !hasSignedProposalDocument(selectedProposal) ||
+                requiresSignedPdf()}
+              title={!hasSignedProposalDocument(selectedProposal) ||
+              requiresSignedPdf()
+                ? "Exija PDF assinado anexado"
+                : "Rejeitar proposta com motivo abaixo"}
+            >
+              {#if processingAction}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Rejeitar
+            </Button>
+            <Button
+              variant="outline"
+              className="bg-green-600 text-white hover:bg-green-700"
+              on:click={approveSelected}
+              disabled={isApproveBusy() ||
+                requiresSignedPdf() ||
+                !hasSignedProposalDocument(selectedProposal)}
+              title={requiresSignedPdf()
+                ? "Anexe o PDF assinado"
+                : "Aprovar e seguir para contratos"}
+            >
+              {#if processingAction || savingResponsibles}
+                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+              {/if}
+              Aprovar
+            </Button>
+          {:else}
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              Perfil de apoio: aprovação e rejeição ficam disponíveis apenas para o administrador.
+            </p>
+          {/if}
         </div>
       </div>
     </div>

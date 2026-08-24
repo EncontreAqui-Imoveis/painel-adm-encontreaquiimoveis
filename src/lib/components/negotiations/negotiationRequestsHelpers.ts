@@ -284,6 +284,9 @@ export function normalizeErrorMessage(error: unknown, fallback: string): string 
     const apiMessage =
       maybeError.response?.data?.message ?? maybeError.response?.data?.error ?? maybeError.message;
     if (typeof apiMessage === 'string' && apiMessage.trim().length > 0) {
+      if (apiMessage.includes('Data truncated for column') || apiMessage.includes('%s') || apiMessage.includes('%d')) {
+        return 'Erro de compatibilidade ao atualizar o status da negociação. Tente novamente.';
+      }
       return apiMessage;
     }
   }

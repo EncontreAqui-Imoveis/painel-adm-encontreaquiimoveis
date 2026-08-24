@@ -38,7 +38,25 @@
     }
   }
 
+  import { fetchAdminProfile } from './lib/adminSessionService';
+  import { setAdminSession } from './lib/sessionState';
+
+  async function syncAdminProfile(token: string) {
+    try {
+      const res = await fetchAdminProfile(token);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.admin) {
+          setAdminSession(token, data.admin);
+        }
+      }
+    } catch (err) {
+      console.warn('Não foi possível sincronizar perfil do admin:', err);
+    }
+  }
+
   $: if ($authToken) {
+    syncAdminProfile($authToken);
     loadDashboard();
   }
 </script>

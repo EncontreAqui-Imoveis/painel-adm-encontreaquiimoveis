@@ -4,6 +4,7 @@
   import { Loader2, X } from 'lucide-svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import { api, apiClient } from '$lib/apiClient';
+  import { adminSession } from '$lib/sessionState';
   import { Button } from '$lib/components/ui/button';
   import Pagination from '$lib/Pagination.svelte';
   import ProposalDetailModal from '$lib/components/negotiations/ProposalDetailModal.svelte';
@@ -156,6 +157,9 @@
   let responsibleSearchDebounce: ReturnType<typeof setTimeout> | null = null;
   let responsibleDropdownOpen = false;
   let responsibleBlurTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  $: canManageContractWorkflow = $adminSession?.capabilities?.canManageContractWorkflow === true;
+  $: canDeleteEntities = $adminSession?.capabilities?.canDeleteEntities === true;
   let isImagePreviewOpen = false;
   let previewImageUrl: string | null = null;
   let previewImageAlt = 'Pré-visualização do imóvel';
@@ -277,6 +281,10 @@
   }
 
   function togglePropertyBulkDeleteMode() {
+    if (!canDeleteEntities) {
+      toast.error('Seu perfil não pode excluir propostas.');
+      return;
+    }
     if (selectedProposalFilter !== 'received') return;
     propertyBulkDeleteMode = !propertyBulkDeleteMode;
     selectedPropertyIdsToDelete = [];
@@ -602,6 +610,10 @@
   }
 
   function openEditProposalModal() {
+    if (!canManageContractWorkflow) {
+      toast.error('Seu perfil não pode editar o fluxo de propostas.');
+      return;
+    }
     if (!selectedProposal) return;
     proposalInlineEditMode = true;
     fillProposalFormFromNegotiation(selectedProposal);
@@ -1104,6 +1116,10 @@
   }
 
   async function deleteDraftPdf() {
+    if (!canManageContractWorkflow) {
+      toast.error('Seu perfil não pode alterar a minuta.');
+      return;
+    }
     if (!selectedProposal?.id || selectedProposal.draftDocumentId == null) {
       toast.error('Não há minuta para excluir.');
       return;
@@ -1129,6 +1145,10 @@
   }
 
   async function deleteSelectedUnsignedProposals() {
+    if (!canDeleteEntities) {
+      toast.error('Seu perfil não pode excluir propostas.');
+      return;
+    }
     const deletableProposals = propertyRequests.filter(
       (item) => selectedPropertyIdsToDelete.includes(item.id) && canDeleteUnsignedProposal(item)
     );
@@ -1391,6 +1411,10 @@
   }
 
   async function approveSelected() {
+    if (!canManageContractWorkflow) {
+      toast.error('Seu perfil não pode aprovar propostas.');
+      return;
+    }
     if (!selectedProposal) return;
     const proposal = selectedProposal;
     if (!isSignedProposal(proposal)) {
@@ -1444,6 +1468,10 @@
   }
 
   async function rejectSelected() {
+    if (!canManageContractWorkflow) {
+      toast.error('Seu perfil não pode rejeitar propostas.');
+      return;
+    }
     if (!selectedProposal) return;
     if (!isSignedProposal(selectedProposal)) {
       toast.error('A rejeição está disponível apenas para propostas assinadas.');
@@ -1696,7 +1724,7 @@
             {/if}
             Atualizar
           </Button>
-          {#if selectedProposalFilter === 'received'}
+          {#if selectedProposalFilter === 'received' && canDeleteEntities}
             <Button variant="outline" size="sm" on:click={togglePropertyBulkDeleteMode} disabled={propertyLoading || deletingSelectedProposals}>
               {propertyBulkDeleteMode ? 'Cancelar edição' : 'Editar'}
             </Button>
@@ -1817,6 +1845,7 @@
   <ProposalDetailModal
     {showDetailModal}
     {selectedProposal}
+    {canManageContractWorkflow}
     {closeDetailModal}
     {isApproveBusy}
     {formatDate}
