@@ -2087,7 +2087,7 @@ function parseNullableNumber(value: unknown): number | null {
     advertiserQuery = adv.name ?? '';
     advertiserDropdownOpen = false;
     if (editableProperty) {
-      editableProperty.broker_id = adv.role === 'broker' ? adv.id : null;
+      editableProperty.broker_id = adv.id;
       editableProperty.broker_creci = adv.creci ?? null;
       editableProperty.owner_id = adv.id;
       editableProperty.owner_name = adv.name;

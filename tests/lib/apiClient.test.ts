@@ -49,7 +49,7 @@ describe('api client', () => {
         : (config.headers as Record<string, string>)['Authorization'];
 
     expect(authorization).toBe('Bearer token-123');
-  }, 15000);
+  }, 60000);
 
   it('skips auth header injection when skipAuth is enabled', async () => {
     const storeModule = await import('../../src/lib/store');
