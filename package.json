@@ -33,7 +33,7 @@
     "axe-core": "^4.11.1",
     "cross-env": "^10.1.0",
     "jsdom": "^28.1.0",
-    "postcss": "^8.5.8",
+    "postcss": "^8.5.12",
     "svelte": "^5.53.10",
     "svelte-check": "^4.4.5",
     "tailwindcss": "^4.2.1",
