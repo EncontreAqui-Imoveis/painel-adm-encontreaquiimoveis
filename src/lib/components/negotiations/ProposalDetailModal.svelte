@@ -11,6 +11,7 @@
   export let showDetailModal = false;
   export let selectedProposal: NegotiationItem | null = null;
   export let canManageContractWorkflow = false;
+  export let canReviewProposals = false;
   export let isApproveBusy: () => boolean;
   export let closeDetailModal: () => void;
 
@@ -1020,7 +1021,7 @@
               Cancelar edição
             </Button>
           {/if}
-          {#if canManageContractWorkflow}
+          {#if canReviewProposals}
             <Button
               variant="destructive"
               className="bg-red-600 text-white hover:bg-red-700"
@@ -1056,7 +1057,7 @@
             </Button>
           {:else}
             <p class="text-sm text-gray-500 dark:text-gray-400">
-              Perfil de apoio: aprovação e rejeição ficam disponíveis apenas para o administrador.
+              Seu perfil não possui permissão para aprovar ou rejeitar propostas.
             </p>
           {/if}
         </div>

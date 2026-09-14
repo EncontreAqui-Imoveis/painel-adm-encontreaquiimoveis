@@ -159,6 +159,7 @@
   let responsibleBlurTimeout: ReturnType<typeof setTimeout> | null = null;
 
   $: canManageContractWorkflow = $adminSession?.capabilities?.canManageContractWorkflow === true;
+  $: canReviewProposals = $adminSession?.capabilities?.canReviewProposals === true;
   $: canDeleteEntities = $adminSession?.capabilities?.canDeleteEntities === true;
   let isImagePreviewOpen = false;
   let previewImageUrl: string | null = null;
@@ -1411,7 +1412,7 @@
   }
 
   async function approveSelected() {
-    if (!canManageContractWorkflow) {
+    if (!canReviewProposals) {
       toast.error('Seu perfil não pode aprovar propostas.');
       return;
     }
@@ -1468,7 +1469,7 @@
   }
 
   async function rejectSelected() {
-    if (!canManageContractWorkflow) {
+    if (!canReviewProposals) {
       toast.error('Seu perfil não pode rejeitar propostas.');
       return;
     }
@@ -1846,6 +1847,7 @@
     {showDetailModal}
     {selectedProposal}
     {canManageContractWorkflow}
+    {canReviewProposals}
     {closeDetailModal}
     {isApproveBusy}
     {formatDate}

@@ -7,6 +7,7 @@ const ADMIN_SESSION_KEY = 'adminSession';
 export type AdminCapabilities = {
   canReviewDocuments: boolean;
   canReplaceDocuments: boolean;
+  canReviewProposals: boolean;
   canCreateDocuments: boolean;
   canManageContractWorkflow: boolean;
   canDeleteDocuments: boolean;
@@ -29,6 +30,7 @@ export function getDefaultAdminCapabilities(role: 'admin' | 'document_operator' 
   return {
     canReviewDocuments: true,
     canReplaceDocuments: true,
+    canReviewProposals: true,
     canCreateDocuments: canManageWorkflow,
     canManageContractWorkflow: canManageWorkflow,
     canDeleteDocuments: isAdmin,
@@ -47,6 +49,7 @@ function resolveCapabilities(role: 'admin' | 'document_operator' | 'operational_
   return {
     canReviewDocuments: typeof caps.canReviewDocuments === 'boolean' ? caps.canReviewDocuments : defaults.canReviewDocuments,
     canReplaceDocuments: typeof caps.canReplaceDocuments === 'boolean' ? caps.canReplaceDocuments : defaults.canReplaceDocuments,
+    canReviewProposals: typeof caps.canReviewProposals === 'boolean' ? caps.canReviewProposals : defaults.canReviewProposals,
     canCreateDocuments: typeof caps.canCreateDocuments === 'boolean' ? caps.canCreateDocuments : defaults.canCreateDocuments,
     canManageContractWorkflow: typeof caps.canManageContractWorkflow === 'boolean' ? caps.canManageContractWorkflow : defaults.canManageContractWorkflow,
     canDeleteDocuments: typeof caps.canDeleteDocuments === 'boolean' ? caps.canDeleteDocuments : defaults.canDeleteDocuments,

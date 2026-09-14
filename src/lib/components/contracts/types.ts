@@ -110,13 +110,22 @@ export type ContractMatrixRowView = {
 export type ContractDocumentRejection = {
   id?: number;
   source_document_id?: number;
+  sourceDocumentId?: number | null;
   document_type?: string;
+  documentType?: string | null;
   document_label?: string;
+  documentLabel?: string | null;
   original_file_name?: string;
+  originalFileName?: string | null;
   owner_side?: 'seller' | 'buyer' | null;
+  ownerSide?: 'seller' | 'buyer' | null;
   reason?: string;
   uploaded_by_user_id?: number;
+  uploadedByUserId?: number | null;
   rejected_by_admin_id?: number;
+  rejectedByAdminId?: number | null;
   rejected_at?: string;
+  rejectedAt?: string | null;
   rejected_by_admin_name?: string;
+  rejectedByAdminName?: string | null;
 };
