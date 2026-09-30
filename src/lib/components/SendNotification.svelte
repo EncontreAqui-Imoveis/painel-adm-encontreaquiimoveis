@@ -11,6 +11,19 @@
     role?: string | null;
   }
 
+  type NotificationTarget =
+    | 'home'
+    | 'none'
+    | 'notifications'
+    | 'proposal_list'
+    | 'contracts_tab'
+    | 'property_details';
+
+  interface PropertyOption {
+    id: number;
+    title: string;
+  }
+
   const RECIPIENT_FIELD_ID = 'recipient';
   const PAGE_SIZE = 50;
   const MAX_MESSAGE_LENGTH = 500;
@@ -29,6 +42,20 @@
   let message = '';
   let isSubmitting = false;
   let feedback: { type: 'success' | 'error'; text: string } | null = null;
+  let target: NotificationTarget = 'home';
+  let selectedPropertyId = '';
+  let properties: PropertyOption[] = [];
+  let propertiesLoading = false;
+  let propertiesError: string | null = null;
+  let hasLoadedProperties = false;
+
+  $: requiresProperty = target === 'property_details';
+  $: propertyId = Number(selectedPropertyId);
+  $: propertySelectionMissing = requiresProperty &&
+    (!Number.isSafeInteger(propertyId) || propertyId <= 0);
+  $: if (!requiresProperty && selectedPropertyId) {
+    selectedPropertyId = '';
+  }
 
   onMount(loadClients);
 
@@ -75,6 +102,45 @@
       clientsTotal = 0;
     } finally {
       clientsLoading = false;
+    }
+  }
+
+  async function loadProperties() {
+    if (hasLoadedProperties || propertiesLoading) return;
+    propertiesLoading = true;
+    propertiesError = null;
+
+    try {
+      const response = await api.get<{ data?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>(
+        '/admin/properties-with-brokers?paginate=false&sortBy=p.created_at&sortOrder=desc'
+      );
+      const raw = Array.isArray(response) ? response : response?.data ?? [];
+      properties = raw
+        .map((item): PropertyOption | null => {
+          const id = Number(item?.id);
+          if (!Number.isSafeInteger(id) || id <= 0) return null;
+          const title = typeof item?.title === 'string' && item.title.trim()
+            ? item.title.trim()
+            : 'Imóvel sem título';
+          return { id, title };
+        })
+        .filter((item): item is PropertyOption => item !== null);
+      hasLoadedProperties = true;
+    } catch (error) {
+      console.error('Erro ao buscar imóveis para notificação:', error);
+      propertiesError =
+        error instanceof Error ? error.message : 'Falha ao carregar imóveis.';
+      properties = [];
+    } finally {
+      propertiesLoading = false;
+    }
+  }
+
+  function handleTargetChange(event: Event) {
+    const nextTarget = (event.currentTarget as HTMLSelectElement).value as NotificationTarget;
+    target = nextTarget;
+    if (target === 'property_details') {
+      void loadProperties();
     }
   }
 
@@ -141,6 +207,11 @@
       return;
     }
 
+    if (propertySelectionMissing) {
+      feedback = { type: 'error', text: 'Selecione um imóvel para continuar.' };
+      return;
+    }
+
     isSubmitting = true;
     try {
       if (!hasSessionToken()) {
@@ -154,12 +225,23 @@
           ? null
           : Array.from(selectedRecipients).map((id) => Number(id));
 
-      const payload = {
+      const payload: {
+        message: string;
+        recipientIds: number[] | null;
+        audience: 'all' | 'client' | 'broker';
+        related_entity_type: 'announcement';
+        target: NotificationTarget;
+        property_id?: number;
+      } = {
         message: message.trim(),
         recipientIds,
         audience,
-        related_entity_type: 'announcement'
+        related_entity_type: 'announcement',
+        target,
       };
+      if (target === 'property_details') {
+        payload.property_id = propertyId;
+      }
 
       await api.post('/admin/notifications/send', payload);
       toast.success('Notificação enviada com sucesso!');
@@ -167,6 +249,8 @@
       message = '';
       selectedRecipients = new Set();
       sendToAll = true;
+      target = 'home';
+      selectedPropertyId = '';
     } catch (error) {
       console.error('Erro ao enviar notificação:', error);
     } finally {
@@ -295,11 +379,63 @@
         </p>
       </div>
 
+      <div class="space-y-2">
+        <label for="notification-target" class="text-sm font-medium text-gray-700 dark:text-gray-200">
+          Ao tocar na notificação
+        </label>
+        <select
+          id="notification-target"
+          name="target"
+          class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          value={target}
+          on:change={handleTargetChange}
+          disabled={isSubmitting}
+        >
+          <option value="home">Início</option>
+          <option value="none">Nenhuma ação</option>
+          <option value="notifications">Notificações</option>
+          <option value="proposal_list">Propostas</option>
+          <option value="contracts_tab">Contratos</option>
+          <option value="property_details">Imóvel específico</option>
+        </select>
+      </div>
+
+      {#if requiresProperty}
+        <div class="space-y-2">
+          <label for="notification-property" class="text-sm font-medium text-gray-700 dark:text-gray-200">
+            Imóvel
+          </label>
+          {#if propertiesLoading}
+            <div class="text-sm text-gray-500 dark:text-gray-400">Carregando imóveis...</div>
+          {:else if propertiesError}
+            <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+              {propertiesError}
+            </div>
+          {:else}
+            <select
+              id="notification-property"
+              name="property_id"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              bind:value={selectedPropertyId}
+              disabled={isSubmitting || properties.length === 0}
+            >
+              <option value="">Selecione um imóvel</option>
+              {#each properties as property}
+                <option value={String(property.id)}>{property.title} — ID {property.id}</option>
+              {/each}
+            </select>
+            {#if properties.length === 0}
+              <p class="text-xs text-gray-500 dark:text-gray-400">Nenhum imóvel disponível para seleção.</p>
+            {/if}
+          {/if}
+        </div>
+      {/if}
+
       <div class="flex items-center gap-3">
         <button
           type="submit"
           class="inline-flex items-center justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:ring-offset-gray-900"
-          disabled={isSubmitting || clientsLoading || Boolean(clientsError)}
+          disabled={isSubmitting || clientsLoading || Boolean(clientsError) || propertySelectionMissing}
         >
           {#if isSubmitting}
             Enviando...
@@ -315,6 +451,8 @@
       message = '';
       selectedRecipients = new Set();
       sendToAll = true;
+      target = 'home';
+      selectedPropertyId = '';
       feedback = null;
           }}
           disabled={isSubmitting}
