@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
 import ContractDocumentMatrix from '../../src/lib/components/contracts/ContractDocumentMatrix.svelte';
@@ -38,8 +38,20 @@ describe('ContractDocumentMatrix', () => {
     expect(documentCard).not.toBeNull();
     const card = within(documentCard as HTMLElement);
     expect(card.getByLabelText('Baixar documento aprovado')).toBeInTheDocument();
+    expect(card.getByLabelText('Reabrir análise')).toHaveAttribute('title', 'Reabrir análise');
     expect(card.queryByLabelText('Editar documento')).not.toBeInTheDocument();
     expect(card.queryByLabelText('Aprovar documento')).not.toBeInTheDocument();
     expect(card.queryByLabelText('Rejeitar documento')).not.toBeInTheDocument();
+  });
+
+  it('mostra reabertura apenas para documento aprovado', async () => {
+    const reopen = vi.fn();
+    render(ContractDocumentMatrix, {
+      rows: [{ documentType: 'doc_identidade', sellerRequired: true, buyerRequired: false,
+        sellerDocs: [{ id: 9, documentType: 'doc_identidade', side: 'seller', status: 'APPROVED', originalFileName: 'id.pdf' }], buyerDocs: [] }],
+      documentLabel: () => 'Documento Pessoal', documentFileName: () => 'id.pdf', onReopen: reopen,
+    });
+    await fireEvent.click(screen.getByLabelText('Reabrir análise'));
+    expect(reopen).toHaveBeenCalledTimes(1);
   });
 });

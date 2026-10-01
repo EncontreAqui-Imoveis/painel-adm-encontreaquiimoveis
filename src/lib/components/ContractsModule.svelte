@@ -18,6 +18,7 @@
   import { toast } from 'svelte-sonner';
   import { adminSession } from '$lib/sessionState';
   import { Button } from '$lib/components/ui/button';
+  import * as Dialog from '$lib/components/ui/dialog';
   import { Input } from '$lib/components/ui/input';
   import Pagination from '$lib/Pagination.svelte';
   import ContractDocumentPreview from '$lib/components/contracts/ContractDocumentPreview.svelte';
@@ -42,6 +43,7 @@
     evaluateContractSide as evaluateContractSideRequest,
     finalizeContract,
     reviewContractDocument,
+    reopenContractDocumentReview,
     submitContractDraft,
     transitionContractById,
     uploadFinalizedContractDocument,
@@ -192,6 +194,8 @@
   let matrixUploadingCounts: Record<string, number> = {};
   let matrixDeletingDocumentId: number | null = null;
   let reviewingDocumentId: number | null = null;
+  let reopenDocument: ContractDocument | null = null;
+  let showReopenDocumentDialog = false;
   let documentPreviewOpen = false;
   let documentPreviewLoading = false;
   let documentPreviewError = '';
@@ -1424,6 +1428,25 @@
     }
   }
 
+  async function confirmReopenDocument() {
+    if (!selected || !reopenDocument || reviewingDocumentId != null) return;
+    const doc = reopenDocument;
+    reviewingDocumentId = doc.id;
+    try {
+      await reopenContractDocumentReview(selected.id, doc.id);
+      toast.success('Análise do documento reaberta com sucesso.');
+      reopenDocument = null;
+      showReopenDocumentDialog = false;
+      await reloadSelectedContract(selected.id);
+      if (selected) syncSelectedContractInList(selected);
+    } catch (error) {
+      console.error('Erro ao reabrir análise do documento:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível reabrir a análise.'));
+    } finally {
+      reviewingDocumentId = null;
+    }
+  }
+
   function handleDraftFileChange(event: Event) {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0] ?? null;
@@ -2598,6 +2621,7 @@
             onDelete={deleteMatrixDocument}
             onUpload={triggerMatrixUpload}
             onReview={(doc, status) => reviewMatrixDocument(doc, status)}
+            onReopen={(doc) => { reopenDocument = doc; showReopenDocumentDialog = true; }}
           />
 
           <footer class="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-700">
@@ -3312,6 +3336,26 @@
   onReplace={replacePreviewDocument}
   onDelete={deletePreviewDocument}
 />
+
+<Dialog.Root bind:open={showReopenDocumentDialog}>
+  <Dialog.Content className="max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Reabrir análise?</Dialog.Title>
+      <Dialog.Description>
+        Este documento deixará de ser considerado aprovado e poderá ser substituído por uma nova versão.
+      </Dialog.Description>
+    </Dialog.Header>
+    <Dialog.Footer className="flex gap-2">
+      <Button variant="outline" on:click={() => { showReopenDocumentDialog = false; reopenDocument = null; }} disabled={reviewingDocumentId !== null}>
+        Cancelar
+      </Button>
+      <Button variant="destructive" on:click={() => { void confirmReopenDocument(); }} disabled={reviewingDocumentId !== null}>
+        {#if reviewingDocumentId !== null}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
+        Reabrir análise
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
 
 {#if showRejectionsModal && selected}
   <div

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, CircleAlert, Clock3, Download, Loader2, Pencil, Trash2, Upload, X } from 'lucide-svelte';
+  import { Check, CircleAlert, Clock3, Download, Loader2, Pencil, RefreshCcw, Trash2, Upload, X } from 'lucide-svelte';
   import { clickOutside } from '$lib/actions/clickOutside';
   import { Button } from '$lib/components/ui/button';
   import type { ContractMatrixRowView, ContractItem } from '$lib/components/contracts/types';
@@ -28,6 +28,7 @@
   export let documentStatusLabel: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => '';
   export let documentStatusClass: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => '';
   export let onReview: (doc: ContractMatrixRowView['sellerDocs'][number], status: 'APPROVED' | 'REJECTED') => void = () => {};
+  export let onReopen: (doc: ContractMatrixRowView['sellerDocs'][number]) => void = () => {};
 
   let openDocumentMenuId: number | null = null;
 
@@ -158,6 +159,9 @@
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento aprovado" title="Baixar documento aprovado" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
                               {#if downloadingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
                             </button>
+                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/50" aria-label="Reabrir análise" title="Reabrir análise" on:click={() => onReopen(sellerDoc)} disabled={reviewDocumentId === sellerDoc.id}>
+                              <RefreshCcw class="h-4 w-4" />
+                            </button>
                           {:else}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-50 dark:hover:bg-emerald-950/50" aria-label="Aprovar documento" title="Aprovar documento" on:click={() => onReview(sellerDoc, 'APPROVED')} disabled={reviewDocumentId === sellerDoc.id}>
                               {#if reviewDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Check class="h-4 w-4" />{/if}
@@ -264,6 +268,9 @@
                           {#if isApproved(buyerDoc)}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento aprovado" title="Baixar documento aprovado" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
                               {#if downloadingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
+                            </button>
+                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/50" aria-label="Reabrir análise" title="Reabrir análise" on:click={() => onReopen(buyerDoc)} disabled={reviewDocumentId === buyerDoc.id}>
+                              <RefreshCcw class="h-4 w-4" />
                             </button>
                           {:else}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-50 dark:hover:bg-emerald-950/50" aria-label="Aprovar documento" title="Aprovar documento" on:click={() => onReview(buyerDoc, 'APPROVED')} disabled={reviewDocumentId === buyerDoc.id}>

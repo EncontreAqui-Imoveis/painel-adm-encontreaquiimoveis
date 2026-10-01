@@ -152,6 +152,13 @@ export async function reviewContractDocument(
   });
 }
 
+export async function reopenContractDocumentReview(
+  contractId: string,
+  documentId: number
+): Promise<void> {
+  await api.put(`/admin/contracts/${contractId}/documents/${documentId}/reopen-review`, {});
+}
+
 export async function downloadContractDocumentsZip(contractId: string): Promise<Blob> {
   const response = await apiClient.get(`/admin/contracts/${contractId}/documents.zip`, {
     responseType: 'blob',
