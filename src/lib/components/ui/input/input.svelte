@@ -6,11 +6,10 @@
   import { createEventDispatcher } from 'svelte';
   import type { InputProps as InputBindings } from './input-props';
 
-  type NativeInputEvent = Event & { currentTarget: HTMLInputElement };
   const dispatch = createEventDispatcher<{
-    input: NativeInputEvent;
-    keydown: KeyboardEvent & { currentTarget: HTMLInputElement };
-    keyup: KeyboardEvent & { currentTarget: HTMLInputElement };
+    input: string;
+    keydown: KeyboardEvent;
+    keyup: KeyboardEvent;
   }>();
 
   let {
@@ -32,17 +31,17 @@
 
   function handleInput(event: Event): void {
     oninput?.(event as Event & { currentTarget: HTMLInputElement });
-    dispatch('input', event as NativeInputEvent);
+    dispatch('input', (event.currentTarget as HTMLInputElement).value);
   }
 
   function handleKeydown(event: KeyboardEvent): void {
     onkeydown?.(event as KeyboardEvent & { currentTarget: HTMLInputElement });
-    dispatch('keydown', event as KeyboardEvent & { currentTarget: HTMLInputElement });
+    dispatch('keydown', event);
   }
 
   function handleKeyup(event: KeyboardEvent): void {
     onkeyup?.(event as KeyboardEvent & { currentTarget: HTMLInputElement });
-    dispatch('keyup', event as KeyboardEvent & { currentTarget: HTMLInputElement });
+    dispatch('keyup', event);
   }
 </script>
 
