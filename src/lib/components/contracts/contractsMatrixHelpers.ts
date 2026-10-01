@@ -412,8 +412,14 @@ export function computeApprovalLockReasonsForSide(
 
   const blockingDocs = getNonProposalDocuments(contract)
     .filter((doc) => {
-      const docSide = getDocumentSide(doc);
-      return docSide === side || docSide == null;
+      if (getDocumentSide(doc) !== side) {
+        return false;
+      }
+
+      return rows.some((row) => {
+        const isRequired = side === 'seller' ? row.sellerRequired : row.buyerRequired;
+        return isRequired && documentBelongsToMatrixCell(doc, row.documentType);
+      });
     })
     .map((doc) => {
       const status = String(doc.status ?? doc.categoryStatus ?? '').trim().toUpperCase();

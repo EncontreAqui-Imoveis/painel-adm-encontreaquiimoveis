@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  computeApprovalLockReasonsForSide,
   getDocumentsForMatrixCell,
   getMatrixRows,
+  listMissingRequiredDocuments,
   resolveMatrixUploadCategory,
 } from '../../src/lib/components/contracts/contractsMatrixHelpers';
+import { documentLabel } from '../../src/lib/components/contracts/contractsDisplayHelpers';
 import type { ContractItem } from '../../src/lib/components/contracts/types';
 
 const contract: ContractItem = {
@@ -37,6 +40,41 @@ const contract: ContractItem = {
 };
 
 describe('contractsMatrixHelpers', () => {
+  const rentalContractWithMatrix: ContractItem = {
+    id: 'contract-rental-1',
+    status: 'AWAITING_DOCS',
+    negotiationId: 'negotiation-rental-1',
+    propertyId: 2,
+    dealType: 'rent',
+    sellerInfo: {
+      estado_civil: 'Solteiro(a)',
+      profissao: 'Locador',
+      dados_bancarios: 'Banco',
+    },
+    buyerInfo: {
+      estado_civil: 'Solteiro(a)',
+      profissao: 'Locatário',
+      garantia_locacao: 'Caução',
+    },
+    documentRequirementMatrix: {
+      seller: [
+        {
+          category: 'identidade',
+          applicability: 'required',
+          preferredDocumentType: 'doc_identidade',
+        },
+      ],
+      buyer: [
+        {
+          category: 'comprovante_endereco',
+          applicability: 'required',
+          preferredDocumentType: 'comprovante_endereco',
+        },
+      ],
+    },
+    documents: [],
+  };
+
   it('mantém Dados Bancários separado de Outro e reconhece o upload legado', () => {
     const rows = getMatrixRows(contract);
     const bankRow = rows.find((row) => row.documentType === 'dados_bancarios');
@@ -96,5 +134,89 @@ describe('contractsMatrixHelpers', () => {
       buyerRequired: true,
     });
     expect(rows.find((row) => row.documentType === 'certidao_onus_acoes')).toBeUndefined();
+  });
+
+  it('não bloqueia nenhum lado por documentos compartilhados de etapas futuras', () => {
+    const rentalWithFutureDocuments: ContractItem = {
+      ...rentalContractWithMatrix,
+      documents: [
+        {
+          id: 11,
+          documentType: 'contrato_assinado',
+          status: 'PENDING',
+          side: null,
+        },
+        {
+          id: 12,
+          documentType: 'contrato_minuta',
+          status: 'PENDING',
+          side: null,
+        },
+        {
+          id: 13,
+          documentType: 'comprovante_pagamento',
+          status: 'PENDING',
+          side: null,
+        },
+      ],
+    };
+
+    expect(computeApprovalLockReasonsForSide(rentalWithFutureDocuments, 'seller')).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('Contrato Assinado')])
+    );
+    expect(computeApprovalLockReasonsForSide(rentalWithFutureDocuments, 'buyer')).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('Contrato Assinado')])
+    );
+    expect(computeApprovalLockReasonsForSide(rentalWithFutureDocuments, 'seller')).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('Contrato (Minuta)')])
+    );
+    expect(computeApprovalLockReasonsForSide(rentalWithFutureDocuments, 'buyer')).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('Comprovante de Pagamento')])
+    );
+  });
+
+  it('mantém o bloqueio para documento pendente que pertence à matriz do lado', () => {
+    const rentalWithPendingSellerIdentity: ContractItem = {
+      ...rentalContractWithMatrix,
+      documents: [
+        {
+          id: 14,
+          documentType: 'doc_identidade',
+          status: 'PENDING',
+          side: 'seller',
+        },
+      ],
+    };
+
+    expect(
+      computeApprovalLockReasonsForSide(rentalWithPendingSellerIdentity, 'seller')
+    ).toContain('Documentos (Locador) bloqueados: Documento Pessoal: pendente');
+    expect(
+      computeApprovalLockReasonsForSide(rentalWithPendingSellerIdentity, 'buyer')
+    ).not.toEqual(expect.arrayContaining([expect.stringContaining('Documento Pessoal: pendente')]));
+  });
+
+  it('usa Seguro Incêndio em toda apresentação da categoria', () => {
+    const rentalWithMissingInsurance: ContractItem = {
+      ...rentalContractWithMatrix,
+      documentRequirementMatrix: {
+        seller: [
+          {
+            category: 'seguro_incendio',
+            applicability: 'required',
+            preferredDocumentType: 'seguro_incendio',
+          },
+        ],
+        buyer: [],
+      },
+    };
+
+    expect(documentLabel('seguro_incendio')).toBe('Seguro Incêndio');
+    expect(listMissingRequiredDocuments(rentalWithMissingInsurance)).toContain(
+      'Seguro Incêndio (Locador)'
+    );
+    expect(computeApprovalLockReasonsForSide(rentalWithMissingInsurance, 'seller')).toContain(
+      'Documentos (Locador) faltando: Seguro Incêndio'
+    );
   });
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Loader2 } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
+  import { contractSideLabel } from "$lib/components/contracts/contractsDisplayHelpers";
   import type {
     ContractItem,
     ContractApprovalStatus,
@@ -56,7 +57,7 @@
     <p
       class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
     >
-      Avaliação Vendedor
+      Avaliação {contractSideLabel(contract, "seller")}
     </p>
     <div class="flex flex-wrap gap-2">
       {#if getSideApprovalUiState(contract?.sellerApprovalStatus) === "pending"}
@@ -69,7 +70,7 @@
             ? sellerLockReasons.join(" | ")
             : undefined}
         >
-          Aprovar<span class="sr-only"> vendedor</span>
+          Aprovar<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>
         </Button>
         <Button
           size="sm"
@@ -77,7 +78,7 @@
           className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
           on:click={() => evaluateContractSide("seller", "APPROVED_WITH_RES")}
         >
-          Aprovar c/ ressalvas<span class="sr-only"> vendedor</span>
+          Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>
         </Button>
         <Button
           size="sm"
@@ -114,7 +115,7 @@
             ? approvalLockReasons.join(" | ")
             : undefined}
         >
-          Aprovar<span class="sr-only"> vendedor</span>
+          Aprovar<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>
         </Button>
         <Button
           size="sm"
@@ -122,7 +123,7 @@
           className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
           on:click={() => evaluateContractSide("seller", "APPROVED_WITH_RES")}
         >
-          Aprovar c/ ressalvas<span class="sr-only"> vendedor</span>
+          Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>
         </Button>
         <Button
           size="sm"
@@ -141,7 +142,7 @@
       <p
         class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
       >
-        Avaliação Comprador
+        Avaliação {contractSideLabel(contract, "buyer")}
       </p>
       <div class="flex flex-wrap gap-2">
         {#if getSideApprovalUiState(contract?.buyerApprovalStatus) === "pending"}
@@ -154,7 +155,7 @@
               ? buyerLockReasons.join(" | ")
               : undefined}
           >
-            Aprovar<span class="sr-only"> comprador</span>
+            Aprovar<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>
           </Button>
           <Button
             size="sm"
@@ -162,7 +163,7 @@
             className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
             on:click={() => evaluateContractSide("buyer", "APPROVED_WITH_RES")}
           >
-            Aprovar c/ ressalvas<span class="sr-only"> comprador</span>
+            Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>
           </Button>
           <Button
             size="sm"
@@ -199,7 +200,7 @@
               ? buyerLockReasons.join(" | ")
               : undefined}
           >
-            Aprovar<span class="sr-only"> comprador</span>
+            Aprovar<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>
           </Button>
           <Button
             size="sm"
@@ -207,7 +208,7 @@
             className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
             on:click={() => evaluateContractSide("buyer", "APPROVED_WITH_RES")}
           >
-            Aprovar c/ ressalvas<span class="sr-only"> comprador</span>
+            Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>
           </Button>
           <Button
             size="sm"

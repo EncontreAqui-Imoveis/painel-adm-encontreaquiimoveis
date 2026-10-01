@@ -3033,7 +3033,7 @@
                   <div class="rounded-md border border-rose-100 bg-white px-3 py-2 text-sm dark:border-rose-900/50 dark:bg-slate-900">
                     <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                       <p class="font-medium text-slate-900 dark:text-slate-100">
-                        {rejection.documentLabel || documentLabel(rejection.documentType || '')}
+                        {documentLabel(rejection.documentType || rejection.documentLabel || '')}
                       </p>
                       <span class="text-xs text-slate-500 dark:text-slate-400">
                         {rejection.rejectedAt ? formatDate(rejection.rejectedAt) : 'Data não disponível'}
@@ -3241,7 +3241,7 @@
 
               {#each rejectionList as rejection (rejection.id ?? Math.random())}
                 {@const docType = rejection.document_type || rejection.documentType || ''}
-                {@const docTitle = rejection.document_label || rejection.documentLabel || documentLabel(docType) || 'Documento'}
+                {@const docTitle = documentLabel(docType || rejection.document_label || rejection.documentLabel || '') || 'Documento'}
                 {@const fileName = rejection.original_file_name || rejection.originalFileName}
                 {@const side = rejection.owner_side || rejection.ownerSide}
                 {@const adminName = rejection.rejected_by_admin_name || rejection.rejectedByAdminName}

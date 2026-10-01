@@ -1,4 +1,4 @@
-import { documentLabel } from './contractsDisplayHelpers';
+import { documentLabel, documentTypeLabels } from './contractsDisplayHelpers';
 import type { ContractDocument, ContractItem } from './types';
 
 export type RequiredFieldDescriptor = {
@@ -19,26 +19,7 @@ export type MatrixRow = {
   buyerRequired: boolean;
 };
 
-export const documentTypeLabels: Record<string, string> = {
-  doc_identidade: 'Documento Pessoal',
-  doc_identidade_conjuge: 'Documento Pessoal do Cônjuge',
-  comprovante_endereco: 'Comprovante de Endereço',
-  certidao_casamento_nascimento: 'Certidão de Estado Civil',
-  certidao_inteiro_teor: 'Certidão de Inteiro Teor',
-  certidao_inteiro_teor_escritura: 'Certidão de Inteiro Teor/Escritura',
-  certidao_onus_acoes: 'Certidão de Ônus/Ações',
-  comprovante_renda: 'Comprovante de Renda',
-  seguro_incendio: 'Apólice/Comprovante de Seguro Incêndio',
-  dados_bancarios: 'Dados Bancários',
-  contrato_minuta: 'Contrato (Minuta)',
-  contrato_assinado: 'Contrato Assinado',
-  comprovante_pagamento: 'Comprovante de Pagamento',
-  boleto_vistoria: 'Boleto de Vistoria',
-  outro: 'Outro',
-  cliente_cnh: 'CNH do Cliente',
-  cliente_identidade: 'Identidade (RG) do Cliente',
-  cliente_cpf: 'CPF do Cliente',
-};
+export { documentTypeLabels };
 
 export const outroMatrixSlotTypes = Array.from({ length: 15 }, (_, index) =>
   `cliente_outro_${String(index + 1).padStart(2, '0')}`
