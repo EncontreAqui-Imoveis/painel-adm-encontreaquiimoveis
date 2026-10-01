@@ -3,7 +3,15 @@
 </script>
 
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
   import type { InputProps as InputBindings } from './input-props';
+
+  type NativeInputEvent = Event & { currentTarget: HTMLInputElement };
+  const dispatch = createEventDispatcher<{
+    input: NativeInputEvent;
+    keydown: KeyboardEvent & { currentTarget: HTMLInputElement };
+    keyup: KeyboardEvent & { currentTarget: HTMLInputElement };
+  }>();
 
   let {
     className = '',
@@ -14,10 +22,28 @@
     disabled = false,
     name = '',
     maxLength = undefined,
+    inputMode = undefined,
+    ariaInvalid = undefined,
+    ariaDescribedby = undefined,
     oninput,
     onkeydown,
     onkeyup,
   }: InputBindings = $props();
+
+  function handleInput(event: Event): void {
+    oninput?.(event as Event & { currentTarget: HTMLInputElement });
+    dispatch('input', event as NativeInputEvent);
+  }
+
+  function handleKeydown(event: KeyboardEvent): void {
+    onkeydown?.(event as KeyboardEvent & { currentTarget: HTMLInputElement });
+    dispatch('keydown', event as KeyboardEvent & { currentTarget: HTMLInputElement });
+  }
+
+  function handleKeyup(event: KeyboardEvent): void {
+    onkeyup?.(event as KeyboardEvent & { currentTarget: HTMLInputElement });
+    dispatch('keyup', event as KeyboardEvent & { currentTarget: HTMLInputElement });
+  }
 </script>
 
 <input
@@ -29,7 +55,10 @@
   {disabled}
   {name}
   maxlength={maxLength}
-  {oninput}
-  {onkeydown}
-  {onkeyup}
+  inputmode={inputMode}
+  aria-invalid={ariaInvalid}
+  aria-describedby={ariaDescribedby}
+  oninput={handleInput}
+  onkeydown={handleKeydown}
+  onkeyup={handleKeyup}
 />

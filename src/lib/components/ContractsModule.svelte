@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import {
     CircleAlert,
     Download,
@@ -19,8 +19,6 @@
   import { adminSession } from '$lib/sessionState';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
-  import type { InputProps } from '$lib/components/ui/input/input-props';
-  import type { Component } from 'svelte';
   import Pagination from '$lib/Pagination.svelte';
   import ContractDocumentPreview from '$lib/components/contracts/ContractDocumentPreview.svelte';
   import ContractDocumentMatrix from '$lib/components/contracts/ContractDocumentMatrix.svelte';
@@ -93,7 +91,16 @@
     sanitizeManualDecimalInput,
     type FinalizeCommissionField,
     type FinalizeFieldMode,
+    type PartyInfoFormState,
   } from '$lib/components/contracts/contractsFormHelpers';
+  import {
+    contractPartyFieldLimits,
+    formatCpf,
+    formatPhoneBr,
+    isValidCpf,
+    isValidEmail,
+    isValidPhoneBr,
+  } from '$lib/components/contracts/contractPartyValidators';
   import {
     type MatrixRequirement,
     type MatrixRow,
@@ -141,8 +148,8 @@
     ContractItem,
   } from '$lib/components/contracts/types';
 
-  /** TS do IDE: tipo inferido do `Input` costuma omitir `id`/handlers; aqui usamos o contrato explícito. */
-  const LabeledTextInput = Input as unknown as Component<InputProps, {}, 'value'>;
+  /** O componente encaminha eventos nativos para a validação inline. */
+  const LabeledTextInput = Input;
 
   type ModalMode = 'review_docs' | 'upload_draft' | 'finalize' | 'edit_finalized';
 
@@ -245,7 +252,7 @@
   let savingPartyData = false;
   let isEditingData = false;
   let isDataSectionExpanded = false;
-  let ownerInfoForm = {
+  let ownerInfoForm: PartyInfoFormState = {
     nome: '',
     cpf: '',
     estadoCivil: '',
@@ -265,7 +272,7 @@
     nome: false,
     cpf: false,
   };
-  let buyerInfoForm = {
+  let buyerInfoForm: PartyInfoFormState = {
     nome: '',
     cpf: '',
     estadoCivil: '',
@@ -277,6 +284,7 @@
     conjugeCpf: '',
     conjugeProfissao: '',
   };
+  let partyFormErrors: Record<string, string> = {};
 
   let contractSearchQuery = '';
 
@@ -1010,6 +1018,112 @@
     items = items.map((item) => (item.id === contract.id ? { ...item, ...contract } : item));
   }
 
+  function partyFieldId(side: 'owner' | 'buyer', field: string): string {
+    return `${side}-${field.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+  }
+
+  function clearPartyFieldError(id: string): void {
+    if (!partyFormErrors[id]) return;
+    const { [id]: _ignored, ...remaining } = partyFormErrors;
+    partyFormErrors = remaining;
+  }
+
+  function partyFieldClass(id: string): string {
+    return partyFormErrors[id]
+      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+      : '';
+  }
+
+  function partyFieldErrorId(id: string): string {
+    return `${id}-error`;
+  }
+
+  function readInputValue(event: Event): string {
+    const target = event.currentTarget as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+    return target?.value ?? '';
+  }
+
+  function setPartyFormValue(
+    side: 'owner' | 'buyer',
+    field: keyof PartyInfoFormState,
+    value: string,
+  ): void {
+    if (side === 'owner') ownerInfoForm = { ...ownerInfoForm, [field]: value };
+    else buyerInfoForm = { ...buyerInfoForm, [field]: value };
+    clearPartyFieldError(partyFieldId(side, field));
+  }
+
+  function validatePartyData(): Record<string, string> {
+    const errors: Record<string, string> = {};
+    const add = (id: string, message: string) => {
+      if (!errors[id]) errors[id] = message;
+    };
+    const validateText = (
+      side: 'owner' | 'buyer',
+      field: keyof PartyInfoFormState,
+      label: string,
+      limit: number,
+      required = true,
+    ) => {
+      const value = String((side === 'owner' ? ownerInfoForm : buyerInfoForm)[field] ?? '').trim();
+      const id = partyFieldId(side, field);
+      if (!value) {
+        if (required) add(id, `${label} é obrigatório.`);
+      } else if (value.length > limit) {
+        add(id, `${label} deve ter no máximo ${limit} caracteres.`);
+      }
+    };
+    const validateSide = (side: 'owner' | 'buyer', form: PartyInfoFormState) => {
+      const inherited = side === 'owner' ? inheritedSellerIdentity : inheritedBuyerIdentity;
+      if (!inherited.nome) validateText(side, 'nome', 'Nome', contractPartyFieldLimits.name);
+      if (!inherited.cpf) {
+        const cpf = String(form.cpf ?? '').trim();
+        if (!cpf) add(partyFieldId(side, 'cpf'), 'CPF é obrigatório.');
+        else if (!isValidCpf(cpf)) add(partyFieldId(side, 'cpf'), 'Informe um CPF válido.');
+      }
+      validateText(side, 'profissao', 'Profissão', contractPartyFieldLimits.profession);
+      const email = String(form.email ?? '').trim();
+      if (!email) add(partyFieldId(side, 'email'), 'E-mail é obrigatório.');
+      else if (email.length > contractPartyFieldLimits.email) {
+        add(partyFieldId(side, 'email'), `E-mail deve ter no máximo ${contractPartyFieldLimits.email} caracteres.`);
+      } else if (!isValidEmail(email)) add(partyFieldId(side, 'email'), 'Informe um e-mail válido.');
+      const phone = String(form.telefone ?? '').trim();
+      if (!phone) add(partyFieldId(side, 'telefone'), 'Telefone é obrigatório.');
+      else if (!isValidPhoneBr(phone)) add(partyFieldId(side, 'telefone'), 'Informe um telefone válido com DDD.');
+      if (!form.estadoCivil) add(partyFieldId(side, 'estadoCivil'), 'Selecione o estado civil.');
+      if (side === 'owner') {
+        validateText(side, 'dadosBancarios', 'Dados bancários', contractPartyFieldLimits.bankDetails);
+      } else if (selected?.dealType === 'rent' && !form.garantiaLocacao) {
+        add(partyFieldId(side, 'garantiaLocacao'), 'Selecione a garantia de locação.');
+      }
+      if (requiresSpouseFields(form.estadoCivil)) {
+        validateText(side, 'conjugeNome', 'Nome do cônjuge', contractPartyFieldLimits.name);
+        const spouseCpf = String(form.conjugeCpf ?? '').trim();
+        if (!spouseCpf) add(partyFieldId(side, 'conjugeCpf'), 'CPF do cônjuge é obrigatório.');
+        else if (!isValidCpf(spouseCpf)) add(partyFieldId(side, 'conjugeCpf'), 'Informe um CPF válido.');
+        validateText(side, 'conjugeProfissao', 'Profissão do cônjuge', contractPartyFieldLimits.profession);
+      }
+    };
+
+    validateSide('owner', ownerInfoForm);
+    validateSide('buyer', buyerInfoForm);
+    const ownerCpf = ownerInfoForm.cpf;
+    const buyerCpf = buyerInfoForm.cpf;
+    if (isValidCpf(ownerCpf) && isValidCpf(buyerCpf) &&
+      ownerCpf.replace(/\D/g, '') === buyerCpf.replace(/\D/g, '')) {
+      add(partyFieldId('owner', 'cpf'), 'O CPF do locador e do locatário deve ser diferente.');
+      add(partyFieldId('buyer', 'cpf'), 'O CPF do locador e do locatário deve ser diferente.');
+    }
+    return errors;
+  }
+
+  async function focusFirstPartyFieldError(errors: Record<string, string>): Promise<void> {
+    const firstId = Object.keys(errors)[0];
+    if (!firstId) return;
+    await tick();
+    document.getElementById(firstId)?.focus();
+  }
+
   function hydratePartyInfoFormsFromSelected() {
     if (!selected) return;
     const ownerInfo = selected.ownerInfo ?? selected.sellerInfo;
@@ -1021,32 +1135,33 @@
     };
     ownerInfoForm = {
       nome: sellerName,
-      cpf: sellerCpf,
+      cpf: formatCpf(sellerCpf),
       estadoCivil: getRecordValueRaw(ownerInfo, ['estado_civil', 'estadoCivil']),
       profissao: getRecordValueRaw(ownerInfo, ['profissao']),
       email: getRecordValueRaw(ownerInfo, ['email']),
-      telefone: getRecordValueRaw(ownerInfo, ['telefone', 'phone']),
+      telefone: formatPhoneBr(getRecordValueRaw(ownerInfo, ['telefone', 'phone'])),
       dadosBancarios: getRecordValueRaw(ownerInfo, ['dados_bancarios', 'dadosBancarios']),
       conjugeNome: getRecordValueRaw(ownerInfo, ['conjuge_nome', 'conjugeNome', 'spouse_name', 'spouseName']),
-      conjugeCpf: getRecordValueRaw(ownerInfo, ['conjuge_cpf', 'conjugeCpf', 'spouse_cpf', 'spouseCpf']),
+      conjugeCpf: formatCpf(getRecordValueRaw(ownerInfo, ['conjuge_cpf', 'conjugeCpf', 'spouse_cpf', 'spouseCpf'])),
       conjugeProfissao: getRecordValueRaw(ownerInfo, ['conjuge_profissao', 'conjugeProfissao', 'spouse_profession', 'spouseProfession']),
     };
     buyerInfoForm = {
       nome: getRecordValueRaw(selected.buyerInfo, ['nome', 'clientName', 'name', 'fullName', 'full_name']),
-      cpf: getRecordValueRaw(selected.buyerInfo, ['cpf', 'clientCpf']),
+      cpf: formatCpf(getRecordValueRaw(selected.buyerInfo, ['cpf', 'clientCpf'])),
       estadoCivil: getRecordValueRaw(selected.buyerInfo, ['estado_civil', 'estadoCivil']),
       profissao: getRecordValueRaw(selected.buyerInfo, ['profissao']),
       email: getRecordValueRaw(selected.buyerInfo, ['email']),
-      telefone: getRecordValueRaw(selected.buyerInfo, ['telefone', 'phone']),
+      telefone: formatPhoneBr(getRecordValueRaw(selected.buyerInfo, ['telefone', 'phone'])),
       garantiaLocacao: getRecordValueRaw(selected.buyerInfo, ['garantia_locacao', 'garantiaLocacao']),
       conjugeNome: getRecordValueRaw(selected.buyerInfo, ['conjuge_nome', 'conjugeNome', 'spouse_name', 'spouseName']),
-      conjugeCpf: getRecordValueRaw(selected.buyerInfo, ['conjuge_cpf', 'conjugeCpf', 'spouse_cpf', 'spouseCpf']),
+      conjugeCpf: formatCpf(getRecordValueRaw(selected.buyerInfo, ['conjuge_cpf', 'conjugeCpf', 'spouse_cpf', 'spouseCpf'])),
       conjugeProfissao: getRecordValueRaw(selected.buyerInfo, ['conjuge_profissao', 'conjugeProfissao', 'spouse_profession', 'spouseProfession']),
     };
     inheritedBuyerIdentity = {
       nome: selected.identityCapabilities?.buyer?.canEditName === false,
       cpf: selected.identityCapabilities?.buyer?.canEditCpf === false,
     };
+    partyFormErrors = {};
   }
 
   function contractActorName(
@@ -1067,6 +1182,14 @@
 
   async function saveContractPartyData() {
     if (!selected) return;
+    const localErrors = validatePartyData();
+    if (Object.keys(localErrors).length > 0) {
+      partyFormErrors = localErrors;
+      await focusFirstPartyFieldError(localErrors);
+      toast.error('Revise os campos destacados.');
+      return;
+    }
+    partyFormErrors = {};
     savingPartyData = true;
     try {
       await saveContractPartyInfo(selected.id, {
@@ -1083,6 +1206,36 @@
       isDataSectionExpanded = false;
     } catch (error) {
       console.error('Erro ao salvar dados do contrato:', error);
+      const responseData = (error as { response?: { data?: { fields?: unknown } } })?.response?.data;
+      const apiFields = responseData?.fields;
+      if (apiFields && typeof apiFields === 'object' && !Array.isArray(apiFields)) {
+        const fieldAliases: Record<string, string> = {
+          nome: 'nome', name: 'nome', fullName: 'nome', full_name: 'nome', clientName: 'nome',
+          cpf: 'cpf', clientCpf: 'cpf',
+          profissao: 'profissao', email: 'email', telefone: 'telefone', phone: 'telefone',
+          estado_civil: 'estadoCivil', estadoCivil: 'estadoCivil',
+          dados_bancarios: 'dadosBancarios', dadosBancarios: 'dadosBancarios',
+          garantia_locacao: 'garantiaLocacao', garantiaLocacao: 'garantiaLocacao',
+          conjuge_nome: 'conjugeNome', conjugeNome: 'conjugeNome', spouse_name: 'conjugeNome', spouseName: 'conjugeNome',
+          conjuge_cpf: 'conjugeCpf', conjugeCpf: 'conjugeCpf', spouse_cpf: 'conjugeCpf', spouseCpf: 'conjugeCpf',
+          conjuge_profissao: 'conjugeProfissao', conjugeProfissao: 'conjugeProfissao', spouse_profession: 'conjugeProfissao', spouseProfession: 'conjugeProfissao',
+        };
+        const mapped: Record<string, string> = {};
+        for (const [path, message] of Object.entries(apiFields as Record<string, unknown>)) {
+          const [source, field] = path.split('.');
+          const side = source === 'sellerInfo' ? 'owner' : source === 'buyerInfo' ? 'buyer' : null;
+          const mappedField = fieldAliases[field ?? ''];
+          if (side && mappedField && typeof message === 'string') {
+            mapped[partyFieldId(side, mappedField)] = message;
+          }
+        }
+        if (Object.keys(mapped).length > 0) {
+          partyFormErrors = mapped;
+          await focusFirstPartyFieldError(mapped);
+          toast.error('Revise os campos destacados.');
+          return;
+        }
+      }
       toast.error(resolveApiErrorMessage(error, 'Não foi possível salvar os dados.'));
     } finally {
       savingPartyData = false;
@@ -2362,15 +2515,15 @@
                 <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">Motivo: {readReasonText(selected.sellerApprovalReason)}</p>
               {/if}
               <div class="mt-3 space-y-3 text-sm">
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-nome">{inheritedSellerIdentity.nome ? 'Nome (herdado do perfil)' : 'Nome'}</label><LabeledTextInput id="owner-nome" bind:value={ownerInfoForm.nome} disabled={savingPartyData || !isEditingData || inheritedSellerIdentity.nome} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-cpf">{inheritedSellerIdentity.cpf ? 'CPF (herdado do perfil)' : 'CPF'}</label><LabeledTextInput id="owner-cpf" bind:value={ownerInfoForm.cpf} disabled={savingPartyData || !isEditingData || inheritedSellerIdentity.cpf} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-profissao">Profissão</label><LabeledTextInput id="owner-profissao" bind:value={ownerInfoForm.profissao} disabled={savingPartyData || !isEditingData} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-email">Email</label><LabeledTextInput id="owner-email" bind:value={ownerInfoForm.email} disabled={savingPartyData || !isEditingData} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-telefone">Telefone</label><LabeledTextInput id="owner-telefone" bind:value={ownerInfoForm.telefone} disabled={savingPartyData || !isEditingData} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-banco">Dados bancários</label><textarea id="owner-banco" bind:value={ownerInfoForm.dadosBancarios} disabled={savingPartyData || !isEditingData} rows="3" class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"></textarea></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-estado-civil">Estado civil</label><select id="owner-estado-civil" bind:value={ownerInfoForm.estadoCivil} disabled={savingPartyData || !isEditingData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800">{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-nome">{inheritedSellerIdentity.nome ? 'Nome (herdado do perfil)' : 'Nome'}</label><LabeledTextInput id="owner-nome" value={ownerInfoForm.nome} maxLength={contractPartyFieldLimits.name} ariaInvalid={Boolean(partyFormErrors['owner-nome'])} ariaDescribedby={partyFormErrors['owner-nome'] ? partyFieldErrorId('owner-nome') : undefined} className={partyFieldClass('owner-nome')} on:input={(event) => setPartyFormValue('owner', 'nome', readInputValue(event))} disabled={savingPartyData || !isEditingData || inheritedSellerIdentity.nome} />{#if partyFormErrors['owner-nome']}<p id={partyFieldErrorId('owner-nome')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['owner-nome']}</p>{/if}</div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-cpf">{inheritedSellerIdentity.cpf ? 'CPF (herdado do perfil)' : 'CPF'}</label><LabeledTextInput id="owner-cpf" value={ownerInfoForm.cpf} maxLength={14} inputMode="numeric" ariaInvalid={Boolean(partyFormErrors['owner-cpf'])} ariaDescribedby={partyFormErrors['owner-cpf'] ? partyFieldErrorId('owner-cpf') : undefined} className={partyFieldClass('owner-cpf')} on:input={(event) => setPartyFormValue('owner', 'cpf', formatCpf(readInputValue(event)))} disabled={savingPartyData || !isEditingData || inheritedSellerIdentity.cpf} />{#if partyFormErrors['owner-cpf']}<p id={partyFieldErrorId('owner-cpf')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['owner-cpf']}</p>{/if}</div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-profissao">Profissão</label><LabeledTextInput id="owner-profissao" value={ownerInfoForm.profissao} maxLength={contractPartyFieldLimits.profession} ariaInvalid={Boolean(partyFormErrors['owner-profissao'])} ariaDescribedby={partyFormErrors['owner-profissao'] ? partyFieldErrorId('owner-profissao') : undefined} className={partyFieldClass('owner-profissao')} on:input={(event) => setPartyFormValue('owner', 'profissao', readInputValue(event))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['owner-profissao']}<p id={partyFieldErrorId('owner-profissao')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['owner-profissao']}</p>{/if}</div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-email">E-mail</label><LabeledTextInput id="owner-email" type="email" value={ownerInfoForm.email} maxLength={contractPartyFieldLimits.email} inputMode="email" ariaInvalid={Boolean(partyFormErrors['owner-email'])} ariaDescribedby={partyFormErrors['owner-email'] ? partyFieldErrorId('owner-email') : undefined} className={partyFieldClass('owner-email')} on:input={(event) => setPartyFormValue('owner', 'email', readInputValue(event))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['owner-email']}<p id={partyFieldErrorId('owner-email')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['owner-email']}</p>{/if}</div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-telefone">Telefone</label><LabeledTextInput id="owner-telefone" type="tel" value={ownerInfoForm.telefone} maxLength={15} inputMode="numeric" ariaInvalid={Boolean(partyFormErrors['owner-telefone'])} ariaDescribedby={partyFormErrors['owner-telefone'] ? partyFieldErrorId('owner-telefone') : undefined} className={partyFieldClass('owner-telefone')} on:input={(event) => setPartyFormValue('owner', 'telefone', formatPhoneBr(readInputValue(event)))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['owner-telefone']}<p id={partyFieldErrorId('owner-telefone')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['owner-telefone']}</p>{/if}</div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-banco">Dados bancários</label><textarea id="owner-banco" value={ownerInfoForm.dadosBancarios} maxlength={contractPartyFieldLimits.bankDetails} aria-invalid={Boolean(partyFormErrors['owner-dados-bancarios'])} aria-describedby={partyFormErrors['owner-dados-bancarios'] ? partyFieldErrorId('owner-dados-bancarios') : undefined} on:input={(event) => setPartyFormValue('owner', 'dadosBancarios', readInputValue(event))} disabled={savingPartyData || !isEditingData} rows="3" class={`w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800 ${partyFieldClass('owner-dados-bancarios')}`}></textarea>{#if partyFormErrors['owner-dados-bancarios']}<p id={partyFieldErrorId('owner-dados-bancarios')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['owner-dados-bancarios']}</p>{/if}</div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="owner-estado-civil">Estado civil</label><select id="owner-estado-civil" value={ownerInfoForm.estadoCivil} aria-invalid={Boolean(partyFormErrors['owner-estado-civil'])} aria-describedby={partyFormErrors['owner-estado-civil'] ? partyFieldErrorId('owner-estado-civil') : undefined} on:change={(event) => setPartyFormValue('owner', 'estadoCivil', readInputValue(event))} disabled={savingPartyData || !isEditingData} class={`w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800 ${partyFieldClass('owner-estado-civil')}`}>{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select>{#if partyFormErrors['owner-estado-civil']}<p id={partyFieldErrorId('owner-estado-civil')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['owner-estado-civil']}</p>{/if}</div>
                 {#if requiresSpouseFields(ownerInfoForm.estadoCivil)}
-                  <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="owner-conjuge-nome" placeholder="Nome do cônjuge" bind:value={ownerInfoForm.conjugeNome} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="owner-conjuge-cpf" placeholder="CPF do cônjuge" bind:value={ownerInfoForm.conjugeCpf} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="owner-conjuge-profissao" placeholder="Profissão do cônjuge" bind:value={ownerInfoForm.conjugeProfissao} disabled={savingPartyData || !isEditingData} /></div></div>
+                  <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="owner-conjuge-nome" placeholder="Nome do cônjuge" value={ownerInfoForm.conjugeNome} maxLength={contractPartyFieldLimits.name} ariaInvalid={Boolean(partyFormErrors['owner-conjuge-nome'])} ariaDescribedby={partyFormErrors['owner-conjuge-nome'] ? partyFieldErrorId('owner-conjuge-nome') : undefined} className={partyFieldClass('owner-conjuge-nome')} on:input={(event) => setPartyFormValue('owner', 'conjugeNome', readInputValue(event))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['owner-conjuge-nome']}<p id={partyFieldErrorId('owner-conjuge-nome')} class="text-xs text-red-600 dark:text-red-400">{partyFormErrors['owner-conjuge-nome']}</p>{/if}<LabeledTextInput id="owner-conjuge-cpf" placeholder="CPF do cônjuge" value={ownerInfoForm.conjugeCpf} maxLength={14} inputMode="numeric" ariaInvalid={Boolean(partyFormErrors['owner-conjuge-cpf'])} ariaDescribedby={partyFormErrors['owner-conjuge-cpf'] ? partyFieldErrorId('owner-conjuge-cpf') : undefined} className={partyFieldClass('owner-conjuge-cpf')} on:input={(event) => setPartyFormValue('owner', 'conjugeCpf', formatCpf(readInputValue(event)))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['owner-conjuge-cpf']}<p id={partyFieldErrorId('owner-conjuge-cpf')} class="text-xs text-red-600 dark:text-red-400">{partyFormErrors['owner-conjuge-cpf']}</p>{/if}<LabeledTextInput id="owner-conjuge-profissao" placeholder="Profissão do cônjuge" value={ownerInfoForm.conjugeProfissao} maxLength={contractPartyFieldLimits.profession} ariaInvalid={Boolean(partyFormErrors['owner-conjuge-profissao'])} ariaDescribedby={partyFormErrors['owner-conjuge-profissao'] ? partyFieldErrorId('owner-conjuge-profissao') : undefined} className={partyFieldClass('owner-conjuge-profissao')} on:input={(event) => setPartyFormValue('owner', 'conjugeProfissao', readInputValue(event))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['owner-conjuge-profissao']}<p id={partyFieldErrorId('owner-conjuge-profissao')} class="text-xs text-red-600 dark:text-red-400">{partyFormErrors['owner-conjuge-profissao']}</p>{/if}</div></div>
                 {/if}
               </div>
             </div>
@@ -2385,17 +2538,17 @@
                 <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">Motivo: {readReasonText(selected.buyerApprovalReason)}</p>
               {/if}
               <div class="mt-3 space-y-3 text-sm">
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-nome">{inheritedBuyerIdentity.nome ? 'Nome (herdado do perfil)' : 'Nome'}</label><LabeledTextInput id="buyer-nome" bind:value={buyerInfoForm.nome} disabled={savingPartyData || !isEditingData || inheritedBuyerIdentity.nome} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-cpf">{inheritedBuyerIdentity.cpf ? 'CPF (herdado do perfil)' : 'CPF'}</label><LabeledTextInput id="buyer-cpf" bind:value={buyerInfoForm.cpf} disabled={savingPartyData || !isEditingData || inheritedBuyerIdentity.cpf} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-profissao">Profissão</label><LabeledTextInput id="buyer-profissao" bind:value={buyerInfoForm.profissao} disabled={savingPartyData || !isEditingData} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-email">Email</label><LabeledTextInput id="buyer-email" bind:value={buyerInfoForm.email} disabled={savingPartyData || !isEditingData} /></div>
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-telefone">Telefone</label><LabeledTextInput id="buyer-telefone" bind:value={buyerInfoForm.telefone} disabled={savingPartyData || !isEditingData} /></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-nome">{inheritedBuyerIdentity.nome ? 'Nome (herdado do perfil)' : 'Nome'}</label><LabeledTextInput id="buyer-nome" value={buyerInfoForm.nome} maxLength={contractPartyFieldLimits.name} ariaInvalid={Boolean(partyFormErrors['buyer-nome'])} ariaDescribedby={partyFormErrors['buyer-nome'] ? partyFieldErrorId('buyer-nome') : undefined} className={partyFieldClass('buyer-nome')} on:input={(event) => setPartyFormValue('buyer', 'nome', readInputValue(event))} disabled={savingPartyData || !isEditingData || inheritedBuyerIdentity.nome} />{#if partyFormErrors['buyer-nome']}<p id={partyFieldErrorId('buyer-nome')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['buyer-nome']}</p>{/if}</div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-cpf">{inheritedBuyerIdentity.cpf ? 'CPF (herdado do perfil)' : 'CPF'}</label><LabeledTextInput id="buyer-cpf" value={buyerInfoForm.cpf} maxLength={14} inputMode="numeric" ariaInvalid={Boolean(partyFormErrors['buyer-cpf'])} ariaDescribedby={partyFormErrors['buyer-cpf'] ? partyFieldErrorId('buyer-cpf') : undefined} className={partyFieldClass('buyer-cpf')} on:input={(event) => setPartyFormValue('buyer', 'cpf', formatCpf(readInputValue(event)))} disabled={savingPartyData || !isEditingData || inheritedBuyerIdentity.cpf} />{#if partyFormErrors['buyer-cpf']}<p id={partyFieldErrorId('buyer-cpf')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['buyer-cpf']}</p>{/if}</div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-profissao">Profissão</label><LabeledTextInput id="buyer-profissao" value={buyerInfoForm.profissao} maxLength={contractPartyFieldLimits.profession} ariaInvalid={Boolean(partyFormErrors['buyer-profissao'])} ariaDescribedby={partyFormErrors['buyer-profissao'] ? partyFieldErrorId('buyer-profissao') : undefined} className={partyFieldClass('buyer-profissao')} on:input={(event) => setPartyFormValue('buyer', 'profissao', readInputValue(event))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['buyer-profissao']}<p id={partyFieldErrorId('buyer-profissao')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['buyer-profissao']}</p>{/if}</div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-email">E-mail</label><LabeledTextInput id="buyer-email" type="email" value={buyerInfoForm.email} maxLength={contractPartyFieldLimits.email} inputMode="email" ariaInvalid={Boolean(partyFormErrors['buyer-email'])} ariaDescribedby={partyFormErrors['buyer-email'] ? partyFieldErrorId('buyer-email') : undefined} className={partyFieldClass('buyer-email')} on:input={(event) => setPartyFormValue('buyer', 'email', readInputValue(event))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['buyer-email']}<p id={partyFieldErrorId('buyer-email')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['buyer-email']}</p>{/if}</div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-telefone">Telefone</label><LabeledTextInput id="buyer-telefone" type="tel" value={buyerInfoForm.telefone} maxLength={15} inputMode="numeric" ariaInvalid={Boolean(partyFormErrors['buyer-telefone'])} ariaDescribedby={partyFormErrors['buyer-telefone'] ? partyFieldErrorId('buyer-telefone') : undefined} className={partyFieldClass('buyer-telefone')} on:input={(event) => setPartyFormValue('buyer', 'telefone', formatPhoneBr(readInputValue(event)))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['buyer-telefone']}<p id={partyFieldErrorId('buyer-telefone')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['buyer-telefone']}</p>{/if}</div>
                 {#if selected.dealType === 'rent'}
-                  <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-garantia-locacao">Garantia de locação</label><select id="buyer-garantia-locacao" bind:value={buyerInfoForm.garantiaLocacao} disabled={savingPartyData || !isEditingData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800"><option value="">Selecione</option><option value="Fiador">Fiador</option><option value="Seguro Fiança">Seguro Fiança</option><option value="Caução">Caução</option></select></div>
+                  <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-garantia-locacao">Garantia de locação</label><select id="buyer-garantia-locacao" value={buyerInfoForm.garantiaLocacao} aria-invalid={Boolean(partyFormErrors['buyer-garantia-locacao'])} aria-describedby={partyFormErrors['buyer-garantia-locacao'] ? partyFieldErrorId('buyer-garantia-locacao') : undefined} on:change={(event) => setPartyFormValue('buyer', 'garantiaLocacao', readInputValue(event))} disabled={savingPartyData || !isEditingData} class={`w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800 ${partyFieldClass('buyer-garantia-locacao')}`}><option value="">Selecione</option><option value="Fiador">Fiador</option><option value="Seguro Fiança">Seguro Fiança</option><option value="Caução">Caução</option></select>{#if partyFormErrors['buyer-garantia-locacao']}<p id={partyFieldErrorId('buyer-garantia-locacao')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['buyer-garantia-locacao']}</p>{/if}</div>
                 {/if}
-                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-estado-civil">Estado civil</label><select id="buyer-estado-civil" bind:value={buyerInfoForm.estadoCivil} disabled={savingPartyData || !isEditingData} class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800">{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select></div>
+                <div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400" for="buyer-estado-civil">Estado civil</label><select id="buyer-estado-civil" value={buyerInfoForm.estadoCivil} aria-invalid={Boolean(partyFormErrors['buyer-estado-civil'])} aria-describedby={partyFormErrors['buyer-estado-civil'] ? partyFieldErrorId('buyer-estado-civil') : undefined} on:change={(event) => setPartyFormValue('buyer', 'estadoCivil', readInputValue(event))} disabled={savingPartyData || !isEditingData} class={`w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:disabled:bg-gray-800 ${partyFieldClass('buyer-estado-civil')}`}>{#each maritalStatusOptions as option}<option value={option}>{option || 'Selecione'}</option>{/each}</select>{#if partyFormErrors['buyer-estado-civil']}<p id={partyFieldErrorId('buyer-estado-civil')} class="mt-1 text-xs text-red-600 dark:text-red-400">{partyFormErrors['buyer-estado-civil']}</p>{/if}</div>
                 {#if requiresSpouseFields(buyerInfoForm.estadoCivil)}
-                  <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="buyer-conjuge-nome" placeholder="Nome do cônjuge" bind:value={buyerInfoForm.conjugeNome} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="buyer-conjuge-cpf" placeholder="CPF do cônjuge" bind:value={buyerInfoForm.conjugeCpf} disabled={savingPartyData || !isEditingData} /><LabeledTextInput id="buyer-conjuge-profissao" placeholder="Profissão do cônjuge" bind:value={buyerInfoForm.conjugeProfissao} disabled={savingPartyData || !isEditingData} /></div></div>
+                  <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"><p class="mb-2 text-xs font-semibold uppercase text-amber-800 dark:text-amber-200">Dados do Cônjuge</p><div class="space-y-2"><LabeledTextInput id="buyer-conjuge-nome" placeholder="Nome do cônjuge" value={buyerInfoForm.conjugeNome} maxLength={contractPartyFieldLimits.name} ariaInvalid={Boolean(partyFormErrors['buyer-conjuge-nome'])} ariaDescribedby={partyFormErrors['buyer-conjuge-nome'] ? partyFieldErrorId('buyer-conjuge-nome') : undefined} className={partyFieldClass('buyer-conjuge-nome')} on:input={(event) => setPartyFormValue('buyer', 'conjugeNome', readInputValue(event))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['buyer-conjuge-nome']}<p id={partyFieldErrorId('buyer-conjuge-nome')} class="text-xs text-red-600 dark:text-red-400">{partyFormErrors['buyer-conjuge-nome']}</p>{/if}<LabeledTextInput id="buyer-conjuge-cpf" placeholder="CPF do cônjuge" value={buyerInfoForm.conjugeCpf} maxLength={14} inputMode="numeric" ariaInvalid={Boolean(partyFormErrors['buyer-conjuge-cpf'])} ariaDescribedby={partyFormErrors['buyer-conjuge-cpf'] ? partyFieldErrorId('buyer-conjuge-cpf') : undefined} className={partyFieldClass('buyer-conjuge-cpf')} on:input={(event) => setPartyFormValue('buyer', 'conjugeCpf', formatCpf(readInputValue(event)))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['buyer-conjuge-cpf']}<p id={partyFieldErrorId('buyer-conjuge-cpf')} class="text-xs text-red-600 dark:text-red-400">{partyFormErrors['buyer-conjuge-cpf']}</p>{/if}<LabeledTextInput id="buyer-conjuge-profissao" placeholder="Profissão do cônjuge" value={buyerInfoForm.conjugeProfissao} maxLength={contractPartyFieldLimits.profession} ariaInvalid={Boolean(partyFormErrors['buyer-conjuge-profissao'])} ariaDescribedby={partyFormErrors['buyer-conjuge-profissao'] ? partyFieldErrorId('buyer-conjuge-profissao') : undefined} className={partyFieldClass('buyer-conjuge-profissao')} on:input={(event) => setPartyFormValue('buyer', 'conjugeProfissao', readInputValue(event))} disabled={savingPartyData || !isEditingData} />{#if partyFormErrors['buyer-conjuge-profissao']}<p id={partyFieldErrorId('buyer-conjuge-profissao')} class="text-xs text-red-600 dark:text-red-400">{partyFormErrors['buyer-conjuge-profissao']}</p>{/if}</div></div>
                 {/if}
               </div>
             </div>

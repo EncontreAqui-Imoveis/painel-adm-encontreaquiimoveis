@@ -5,12 +5,15 @@
 export type InputProps = {
   className?: string;
   id?: string;
-  type?: 'text' | 'number' | 'search';
+  type?: 'text' | 'number' | 'search' | 'email' | 'tel';
   value?: string | number | undefined;
   placeholder?: string;
   disabled?: boolean;
   name?: string;
   maxLength?: number | undefined;
+  inputMode?: 'text' | 'numeric' | 'tel' | 'email' | undefined;
+  ariaInvalid?: boolean | undefined;
+  ariaDescribedby?: string | undefined;
   oninput?: (event: Event & { currentTarget: HTMLInputElement }) => void;
   onkeydown?: (event: KeyboardEvent & { currentTarget: HTMLInputElement }) => void;
   onkeyup?: (event: KeyboardEvent & { currentTarget: HTMLInputElement }) => void;

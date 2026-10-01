@@ -154,16 +154,16 @@ function buildPartyInfoPayload(
   return {
     ...previous,
     nome: trimInfoValue(form.nome),
-    cpf: trimInfoValue(form.cpf),
+    cpf: trimInfoValue(normalizeCpfDigits(form.cpf)),
     profissao: trimInfoValue(form.profissao),
     email: trimInfoValue(form.email),
-    telefone: trimInfoValue(form.telefone),
+    telefone: trimInfoValue(normalizePhoneDigits(form.telefone)),
     ...(includeBankDetails
       ? { dados_bancarios: trimInfoValue(form.dadosBancarios ?? '') }
       : {}),
     estado_civil: trimInfoValue(form.estadoCivil),
     conjuge_nome: spouseRequired ? trimInfoValue(form.conjugeNome) : null,
-    conjuge_cpf: spouseRequired ? trimInfoValue(form.conjugeCpf) : null,
+    conjuge_cpf: spouseRequired ? trimInfoValue(normalizeCpfDigits(form.conjugeCpf)) : null,
     conjuge_profissao: spouseRequired ? trimInfoValue(form.conjugeProfissao) : null,
     ...extra,
   };
@@ -308,3 +308,7 @@ export function calculateCommissionRemaining(
     toCents(values.taxaPlataforma);
   return remainingCents / 100;
 }
+import {
+  normalizeCpfDigits,
+  normalizePhoneDigits,
+} from './contractPartyValidators';
