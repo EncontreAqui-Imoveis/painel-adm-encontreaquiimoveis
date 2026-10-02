@@ -61,6 +61,13 @@
   function isRejected(doc: ContractMatrixRowView['sellerDocs'][number]): boolean {
     return documentStatus(doc) === 'REJECTED';
   }
+
+  function isSideReadOnly(side: 'seller' | 'buyer'): boolean {
+    const status = String(
+      side === 'seller' ? contract?.sellerApprovalStatus : contract?.buyerApprovalStatus
+    ).trim().toUpperCase();
+    return status === 'APPROVED' || status === 'APPROVED_WITH_RES';
+  }
 </script>
 
 <svelte:window on:keydown={closeDocumentMenuOnEscape} />
@@ -92,12 +99,14 @@
                         <Clock3 class="h-3 w-3" />
                         Pendente
                       </span>
-                      <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')}>
-                        {#if isMatrixUploading(`seller:${documentType}`)}
-                          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                        {/if}
-                        Enviar
-                      </Button>
+                      {#if !isSideReadOnly('seller')}
+                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')}>
+                          {#if isMatrixUploading(`seller:${documentType}`)}
+                            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                          {/if}
+                          Enviar
+                        </Button>
+                      {/if}
                     </div>
                   {:else}
                     {#each row.sellerDocs as sellerDoc (sellerDoc.id)}
@@ -124,7 +133,7 @@
                           {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
-                          {#if !isApproved(sellerDoc)}
+                          {#if !isApproved(sellerDoc) && !isSideReadOnly('seller')}
                           <div class="relative" use:clickOutside={closeDocumentMenu}>
                             <button
                               type="button"
@@ -155,14 +164,20 @@
                             {/if}
                           </div>
                           {/if}
-                          {#if isApproved(sellerDoc)}
+                          {#if isSideReadOnly('seller') && !isApproved(sellerDoc)}
+                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento" title="Baixar documento" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
+                              {#if downloadingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
+                            </button>
+                          {:else if isApproved(sellerDoc)}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento aprovado" title="Baixar documento aprovado" on:click={() => onDownload(sellerDoc)} disabled={downloadingDocumentId === sellerDoc.id}>
                               {#if downloadingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
                             </button>
-                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/50" aria-label="Reabrir análise" title="Reabrir análise" on:click={() => onReopen(sellerDoc)} disabled={reviewDocumentId === sellerDoc.id}>
-                              <RefreshCcw class="h-4 w-4" />
-                            </button>
-                          {:else}
+                            {#if !isSideReadOnly('seller')}
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/50" aria-label="Reabrir análise" title="Reabrir análise" on:click={() => onReopen(sellerDoc)} disabled={reviewDocumentId === sellerDoc.id}>
+                                <RefreshCcw class="h-4 w-4" />
+                              </button>
+                            {/if}
+                          {:else if !isSideReadOnly('seller')}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-50 dark:hover:bg-emerald-950/50" aria-label="Aprovar documento" title="Aprovar documento" on:click={() => onReview(sellerDoc, 'APPROVED')} disabled={reviewDocumentId === sellerDoc.id}>
                               {#if reviewDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Check class="h-4 w-4" />{/if}
                             </button>
@@ -173,7 +188,7 @@
                         </div>
                       </div>
                     {/each}
-                    {#if documentType.trim().toLowerCase() === 'outro'}
+                    {#if documentType.trim().toLowerCase() === 'outro' && !isSideReadOnly('seller')}
                       <div class="mt-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700">
                         {#if canAddAnotherMatrixDocument(contract, documentType, 'seller')}
                           <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')}>
@@ -202,12 +217,14 @@
                         <Clock3 class="h-3 w-3" />
                         Pendente
                       </span>
-                      <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')}>
-                        {#if isMatrixUploading(`buyer:${documentType}`)}
-                          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-                        {/if}
-                        Enviar
-                      </Button>
+                      {#if !isSideReadOnly('buyer')}
+                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')}>
+                          {#if isMatrixUploading(`buyer:${documentType}`)}
+                            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                          {/if}
+                          Enviar
+                        </Button>
+                      {/if}
                     </div>
                   {:else}
                     {#each row.buyerDocs as buyerDoc (buyerDoc.id)}
@@ -234,7 +251,7 @@
                           {/if}
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
-                          {#if !isApproved(buyerDoc)}
+                          {#if !isApproved(buyerDoc) && !isSideReadOnly('buyer')}
                           <div class="relative" use:clickOutside={closeDocumentMenu}>
                             <button
                               type="button"
@@ -265,14 +282,20 @@
                             {/if}
                           </div>
                           {/if}
-                          {#if isApproved(buyerDoc)}
+                          {#if isSideReadOnly('buyer') && !isApproved(buyerDoc)}
+                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento" title="Baixar documento" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
+                              {#if downloadingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
+                            </button>
+                          {:else if isApproved(buyerDoc)}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/50" aria-label="Baixar documento aprovado" title="Baixar documento aprovado" on:click={() => onDownload(buyerDoc)} disabled={downloadingDocumentId === buyerDoc.id}>
                               {#if downloadingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
                             </button>
-                            <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/50" aria-label="Reabrir análise" title="Reabrir análise" on:click={() => onReopen(buyerDoc)} disabled={reviewDocumentId === buyerDoc.id}>
-                              <RefreshCcw class="h-4 w-4" />
-                            </button>
-                          {:else}
+                            {#if !isSideReadOnly('buyer')}
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/50" aria-label="Reabrir análise" title="Reabrir análise" on:click={() => onReopen(buyerDoc)} disabled={reviewDocumentId === buyerDoc.id}>
+                                <RefreshCcw class="h-4 w-4" />
+                              </button>
+                            {/if}
+                          {:else if !isSideReadOnly('buyer')}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-50 dark:hover:bg-emerald-950/50" aria-label="Aprovar documento" title="Aprovar documento" on:click={() => onReview(buyerDoc, 'APPROVED')} disabled={reviewDocumentId === buyerDoc.id}>
                               {#if reviewDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Check class="h-4 w-4" />{/if}
                             </button>
@@ -283,7 +306,7 @@
                         </div>
                       </div>
                     {/each}
-                    {#if documentType.trim().toLowerCase() === 'outro'}
+                    {#if documentType.trim().toLowerCase() === 'outro' && !isSideReadOnly('buyer')}
                       <div class="mt-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700">
                         {#if canAddAnotherMatrixDocument(contract, documentType, 'buyer')}
                           <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')}>

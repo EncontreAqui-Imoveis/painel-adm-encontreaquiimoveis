@@ -28,4 +28,22 @@ describe('ContractApprovalActions', () => {
     expect(screen.getByText('Avaliação Vendedor')).toBeInTheDocument();
     expect(screen.getByText('Avaliação Comprador')).toBeInTheDocument();
   });
+
+  it('mantém somente Reiniciar para o lado aprovado', () => {
+    render(ContractApprovalActions, {
+      contract: {
+        ...buildContract('rent'),
+        sellerApprovalStatus: 'APPROVED',
+        buyerApprovalStatus: 'PENDING',
+      },
+      getSideApprovalUiState: (status) =>
+        status === 'APPROVED' || status === 'APPROVED_WITH_RES' ? 'approved' : 'pending',
+    });
+
+    const sellerSection = screen.getByText('Avaliação Locador').parentElement;
+    expect(sellerSection).not.toBeNull();
+    expect(sellerSection).toHaveTextContent('Reiniciar');
+    expect(sellerSection).not.toHaveTextContent('Rejeitar');
+    expect(sellerSection).not.toHaveTextContent('Aprovar c/ ressalvas');
+  });
 });

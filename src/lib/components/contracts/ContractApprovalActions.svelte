@@ -91,14 +91,6 @@
       {:else if getSideApprovalUiState(contract?.sellerApprovalStatus) === "approved"}
         <Button
           size="sm"
-          variant="destructive"
-          on:click={() => evaluateContractSide("seller", "REJECTED")}
-          disabled={evaluatingSide === "seller"}
-        >
-          Rejeitar
-        </Button>
-        <Button
-          size="sm"
           variant="outline"
           className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
           on:click={() => evaluateContractSide("seller", "PENDING")}
@@ -174,14 +166,6 @@
             Rejeitar
           </Button>
         {:else if getSideApprovalUiState(contract?.buyerApprovalStatus) === "approved"}
-          <Button
-            size="sm"
-            variant="destructive"
-            on:click={() => evaluateContractSide("buyer", "REJECTED")}
-            disabled={evaluatingSide === "buyer"}
-          >
-            Rejeitar
-          </Button>
           <Button
             size="sm"
             variant="outline"
