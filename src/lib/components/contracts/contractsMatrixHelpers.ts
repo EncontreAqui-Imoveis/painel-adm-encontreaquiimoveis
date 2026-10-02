@@ -410,6 +410,7 @@ export function computeApprovalLockReasonsForSide(
     reasons.push(`Documentos (${contractSideLabel(contract, side)}) faltando: ${missingDocs.join(', ')}`);
   }
 
+  const pendingDocs: string[] = [];
   const blockingDocs = getNonProposalDocuments(contract)
     .filter((doc) => {
       if (getDocumentSide(doc) !== side) {
@@ -424,10 +425,18 @@ export function computeApprovalLockReasonsForSide(
     .map((doc) => {
       const status = String(doc.status ?? doc.categoryStatus ?? '').trim().toUpperCase();
       if (isOutroMatrixDocumentType(doc.documentType) || !status) return null;
-      if (status !== 'REJECTED' && status !== 'PENDING') return null;
-      return `${documentLabel(doc.documentType)}: ${status === 'REJECTED' ? 'rejeitado' : 'pendente'}`;
+      if (status === 'PENDING') {
+        pendingDocs.push(documentLabel(doc.documentType));
+        return null;
+      }
+      if (status !== 'REJECTED') return null;
+      return `${documentLabel(doc.documentType)}: rejeitado`;
     })
     .filter((item): item is string => item != null);
+
+  if (pendingDocs.length > 0) {
+    reasons.push(`Documentos (${contractSideLabel(contract, side)}) para análise: ${pendingDocs.join(', ')}`);
+  }
 
   if (blockingDocs.length > 0) {
     reasons.push(`Documentos (${contractSideLabel(contract, side)}) bloqueados: ${blockingDocs.join(', ')}`);

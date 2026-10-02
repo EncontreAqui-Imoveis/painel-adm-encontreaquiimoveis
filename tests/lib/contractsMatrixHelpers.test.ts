@@ -175,7 +175,7 @@ describe('contractsMatrixHelpers', () => {
     );
   });
 
-  it('mantém o bloqueio para documento pendente que pertence à matriz do lado', () => {
+  it('separa documento pendente enviado como item para análise', () => {
     const rentalWithPendingSellerIdentity: ContractItem = {
       ...rentalContractWithMatrix,
       documents: [
@@ -190,7 +190,10 @@ describe('contractsMatrixHelpers', () => {
 
     expect(
       computeApprovalLockReasonsForSide(rentalWithPendingSellerIdentity, 'seller')
-    ).toContain('Documentos (Locador) bloqueados: Documento Pessoal: pendente');
+    ).toContain('Documentos (Locador) para análise: Documento Pessoal');
+    expect(
+      computeApprovalLockReasonsForSide(rentalWithPendingSellerIdentity, 'seller')
+    ).not.toEqual(expect.arrayContaining([expect.stringContaining('bloqueados')]));
     expect(
       computeApprovalLockReasonsForSide(rentalWithPendingSellerIdentity, 'buyer')
     ).not.toEqual(expect.arrayContaining([expect.stringContaining('Documento Pessoal: pendente')]));
