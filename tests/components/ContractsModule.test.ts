@@ -2699,6 +2699,22 @@ describe('ContractsModule', () => {
     expect(screen.getByRole('button', { name: 'Reiniciar' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Aprovaranunciante$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Aprovar c\/ ressalvasanunciante$/i })).not.toBeInTheDocument();
+
+    const callsBeforeRestart = apiPutMock.mock.calls.length;
+    await fireEvent.click(screen.getByRole('button', { name: 'Reiniciar' }));
+    expect(screen.getByText('Reiniciar análise?')).toBeInTheDocument();
+    expect(apiPutMock).toHaveBeenCalledTimes(callsBeforeRestart);
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(apiPutMock).toHaveBeenCalledTimes(callsBeforeRestart);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Reiniciar' }));
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reiniciar', exact: true }));
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledWith(
+        '/admin/contracts/contract-test-side-1/evaluate-side',
+        { side: 'seller', status: 'PENDING', reason: undefined }
+      );
+    });
   });
 
   it.skip('bloqueia aprovação com ressalvas quando o motivo é curto demais', async () => {

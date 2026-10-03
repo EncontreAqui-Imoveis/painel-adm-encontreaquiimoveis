@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, CircleAlert, Clock3, Download, Loader2, Pencil, RefreshCcw, Trash2, Upload, X } from 'lucide-svelte';
+  import { Check, CircleAlert, Clock3, Download, Loader2, Pencil, RefreshCcw, Upload, X } from 'lucide-svelte';
   import { clickOutside } from '$lib/actions/clickOutside';
   import { Button } from '$lib/components/ui/button';
   import type { ContractMatrixRowView, ContractItem } from '$lib/components/contracts/types';
@@ -17,13 +17,10 @@
     side: 'seller' | 'buyer'
   ) => boolean = () => false;
   export let downloadingDocumentId: number | null = null;
-  export let matrixDeletingDocumentId: number | null = null;
-  export let canDeleteDocuments = true;
   export let reviewDocumentId: number | null = null;
   export let onOpenPreview: (doc: ContractMatrixRowView['sellerDocs'][number]) => void = () => {};
   export let onDownload: (doc: ContractMatrixRowView['sellerDocs'][number]) => void = () => {};
-  export let onReplace: (documentType: string, side: 'seller' | 'buyer', existingDocumentType?: string | null) => void = () => {};
-  export let onDelete: (doc: ContractMatrixRowView['sellerDocs'][number]) => void = () => {};
+  export let onReplace: (documentType: string, side: 'seller' | 'buyer', existingDocumentType?: string | null, replaceDocumentId?: number | null) => void = () => {};
   export let onUpload: (documentType: string, side: 'seller' | 'buyer') => void = () => {};
   export let documentStatusLabel: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => '';
   export let documentStatusClass: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => '';
@@ -66,7 +63,7 @@
     const status = String(
       side === 'seller' ? contract?.sellerApprovalStatus : contract?.buyerApprovalStatus
     ).trim().toUpperCase();
-    return status === 'APPROVED' || status === 'APPROVED_WITH_RES';
+    return status === 'APPROVED' || status === 'APPROVED_WITH_RES' || status === 'REJECTED';
   }
 </script>
 
@@ -152,14 +149,9 @@
                                   {#if downloadingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
                                 </button>
                               {/if}
-                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase()); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'seller')}>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase(), sellerDoc.id); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'seller')}>
                                 {#if isMatrixUploading(`seller:${documentType}`)}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
                               </button>
-                              {#if canDeleteDocuments}
-                                <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40" aria-label="Excluir documento" title="Excluir" on:click={() => { onDelete(sellerDoc); closeDocumentMenu(); }} disabled={matrixDeletingDocumentId === sellerDoc.id}>
-                                  {#if matrixDeletingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
-                                </button>
-                              {/if}
                             </div>
                             {/if}
                           </div>
@@ -270,14 +262,9 @@
                                   {#if downloadingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
                                 </button>
                               {/if}
-                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase()); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'buyer')}>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase(), buyerDoc.id); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'buyer')}>
                                 {#if isMatrixUploading(`buyer:${documentType}`)}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
                               </button>
-                              {#if canDeleteDocuments}
-                                <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40" aria-label="Excluir documento" title="Excluir" on:click={() => { onDelete(buyerDoc); closeDocumentMenu(); }} disabled={matrixDeletingDocumentId === buyerDoc.id}>
-                                  {#if matrixDeletingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
-                                </button>
-                              {/if}
                             </div>
                             {/if}
                           </div>

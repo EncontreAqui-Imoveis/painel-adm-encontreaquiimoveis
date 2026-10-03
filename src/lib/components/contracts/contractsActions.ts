@@ -4,6 +4,7 @@ export type MatrixUploadContext = {
   documentType: string;
   side: 'seller' | 'buyer';
   existingDocumentType?: string | null;
+  replaceDocumentId?: number | null;
 };
 
 export type PreviewDownloadResult = {
@@ -35,6 +36,9 @@ export async function uploadMatrixDocument(
   form.append('documentType', context.existingDocumentType?.trim() || context.documentType);
   form.append('documentCategory', documentCategory);
   form.append('side', context.side);
+  if (context.replaceDocumentId) {
+    form.append('replaceDocumentId', String(context.replaceDocumentId));
+  }
   form.append('file', file);
   await apiClient.post(`/contracts/${contractId}/documents`, form);
 }

@@ -81,4 +81,65 @@ describe('ContractDocumentMatrix', () => {
     expect(within(buyerCard as HTMLElement).getByLabelText('Editar documento')).toBeInTheDocument();
     expect(within(buyerCard as HTMLElement).getByLabelText('Aprovar documento')).toBeInTheDocument();
   });
+
+  it('mantém o lado rejeitado somente para leitura e não oferece upload em slot vazio', () => {
+    const view = render(ContractDocumentMatrix, {
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'REJECTED', buyerApprovalStatus: 'PENDING',
+      },
+      rows: [{
+        documentType: 'doc_identidade', sellerRequired: true, buyerRequired: true,
+        sellerDocs: [{ id: 1, documentType: 'doc_identidade', side: 'seller', status: 'PENDING', originalFileName: 'seller.pdf' }],
+        buyerDocs: [{ id: 2, documentType: 'doc_identidade', side: 'buyer', status: 'PENDING', originalFileName: 'buyer.pdf' }],
+      }, {
+        documentType: 'comprovante_renda', sellerRequired: true, buyerRequired: false,
+        sellerDocs: [], buyerDocs: [],
+      }],
+      documentLabel: () => 'Documento Pessoal',
+      documentFileName: (doc: { originalFileName?: string | null }) => doc.originalFileName ?? 'Documento',
+    });
+
+    const sellerCard = screen.getByRole('button', { name: 'seller.pdf' }).parentElement?.parentElement;
+    expect(within(sellerCard as HTMLElement).queryByLabelText('Editar documento')).not.toBeInTheDocument();
+    expect(within(sellerCard as HTMLElement).getByLabelText('Baixar documento')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Enviar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Substituir documento' })).not.toBeInTheDocument();
+
+    view.rerender({
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING',
+      },
+      rows: [{
+        documentType: 'doc_identidade', sellerRequired: true, buyerRequired: false,
+        sellerDocs: [{ id: 1, documentType: 'doc_identidade', side: 'seller', status: 'PENDING', originalFileName: 'seller.pdf' }], buyerDocs: [],
+      }],
+      documentLabel: () => 'Documento Pessoal',
+      documentFileName: (doc: { originalFileName?: string | null }) => doc.originalFileName ?? 'Documento',
+    });
+    expect(within(sellerCard as HTMLElement).getByLabelText('Editar documento')).toBeInTheDocument();
+  });
+
+  it('envia o documento e a URL corretos ao baixar e o id ao substituir', async () => {
+    const onDownload = vi.fn();
+    const onReplace = vi.fn();
+    render(ContractDocumentMatrix, {
+      contract: { id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1 },
+      rows: [{
+        documentType: 'doc_identidade', sellerRequired: true, buyerRequired: false,
+        sellerDocs: [{ id: 9, documentType: 'doc_identidade', side: 'seller', status: 'PENDING', originalFileName: 'id.pdf', downloadUrl: '/negotiations/neg-1/documents/9/download' }], buyerDocs: [],
+      }],
+      documentLabel: () => 'Documento Pessoal', documentFileName: () => 'id.pdf',
+      onDownload, onReplace,
+    });
+    await fireEvent.click(screen.getByLabelText('Editar documento'));
+    await fireEvent.click(screen.getByLabelText('Baixar documento'));
+    expect(onDownload).toHaveBeenCalledWith(expect.objectContaining({ id: 9, downloadUrl: '/negotiations/neg-1/documents/9/download' }));
+
+    await fireEvent.click(screen.getByLabelText('Editar documento'));
+    await fireEvent.click(screen.getByLabelText('Substituir documento'));
+    expect(onReplace).toHaveBeenCalledWith('doc_identidade', 'seller', 'doc_identidade', 9);
+    expect(screen.queryByLabelText('Excluir documento')).not.toBeInTheDocument();
+  });
 });

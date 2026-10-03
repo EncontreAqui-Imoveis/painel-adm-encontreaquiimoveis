@@ -48,7 +48,7 @@ describe('ContractApprovalActions', () => {
   });
 
   it('mantém somente Reiniciar para o lado rejeitado até a análise ser reiniciada', async () => {
-    const evaluateContractSide = vi.fn();
+    const requestSideRestart = vi.fn();
     const uiState = (status?: ContractItem['sellerApprovalStatus']) =>
       status === 'REJECTED'
         ? 'rejected'
@@ -62,7 +62,7 @@ describe('ContractApprovalActions', () => {
         buyerApprovalStatus: 'PENDING',
       },
       getSideApprovalUiState: uiState,
-      evaluateContractSide,
+      requestSideRestart,
     });
 
     const sellerSection = screen.getByText('Avaliação Locador').parentElement;
@@ -70,7 +70,7 @@ describe('ContractApprovalActions', () => {
     expect(sellerSection).not.toHaveTextContent('Aprovar');
     expect(sellerSection).not.toHaveTextContent('Rejeitar');
     await fireEvent.click(screen.getByRole('button', { name: 'Reiniciar' }));
-    expect(evaluateContractSide).toHaveBeenCalledWith('seller', 'PENDING');
+    expect(requestSideRestart).toHaveBeenCalledWith('seller');
 
     await view.rerender({
       contract: {
@@ -79,7 +79,7 @@ describe('ContractApprovalActions', () => {
         buyerApprovalStatus: 'PENDING',
       },
       getSideApprovalUiState: uiState,
-      evaluateContractSide,
+      requestSideRestart,
     });
     expect(sellerSection).toHaveTextContent('Aprovar');
     expect(sellerSection).toHaveTextContent('Aprovar c/ ressalvas');

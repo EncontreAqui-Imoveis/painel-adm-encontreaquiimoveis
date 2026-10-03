@@ -24,6 +24,7 @@
     side: "seller" | "buyer",
     action: "APPROVED" | "APPROVED_WITH_RES" | "REJECTED" | "PENDING",
   ) => void = () => {};
+  export let requestSideRestart: (side: "seller" | "buyer") => void = () => {};
 
   $: effectiveSellerDisabled = sellerApprovalDisabled || sellerLockReasons.length > 0 || evaluatingSide === "seller";
   $: effectiveBuyerDisabled = buyerApprovalDisabled || buyerLockReasons.length > 0 || evaluatingSide === "buyer";
@@ -93,7 +94,7 @@
           size="sm"
           variant="outline"
           className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-          on:click={() => evaluateContractSide("seller", "PENDING")}
+          on:click={() => requestSideRestart("seller")}
         >
           Reiniciar
         </Button>
@@ -102,7 +103,7 @@
           size="sm"
           variant="outline"
           className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-          on:click={() => evaluateContractSide("seller", "PENDING")}
+          on:click={() => requestSideRestart("seller")}
         >
           Reiniciar
         </Button>
@@ -130,7 +131,7 @@
           size="sm"
           variant="outline"
           className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-          on:click={() => evaluateContractSide("seller", "PENDING")}
+          on:click={() => requestSideRestart("seller")}
         >
           Reiniciar
         </Button>
@@ -179,7 +180,7 @@
             size="sm"
             variant="outline"
             className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-            on:click={() => evaluateContractSide("buyer", "PENDING")}
+            on:click={() => requestSideRestart("buyer")}
           >
             Reiniciar
           </Button>
@@ -188,7 +189,7 @@
             size="sm"
             variant="outline"
             className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-            on:click={() => evaluateContractSide("buyer", "PENDING")}
+            on:click={() => requestSideRestart("buyer")}
           >
             Reiniciar
           </Button>
@@ -216,7 +217,7 @@
             size="sm"
             variant="outline"
             className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
-            on:click={() => evaluateContractSide("buyer", "PENDING")}
+            on:click={() => requestSideRestart("buyer")}
           >
             Reiniciar
           </Button>

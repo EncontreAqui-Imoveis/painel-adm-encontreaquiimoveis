@@ -189,13 +189,15 @@
   let loadingDocumentRejections = false;
   let matrixUploadInputEl: HTMLInputElement | null = null;
   let matrixUploadContext:
-    | { documentType: string; side: 'seller' | 'buyer'; existingDocumentType?: string | null }
+    | { documentType: string; side: 'seller' | 'buyer'; existingDocumentType?: string | null; replaceDocumentId?: number | null }
     | null = null;
   let matrixUploadingCounts: Record<string, number> = {};
   let matrixDeletingDocumentId: number | null = null;
   let reviewingDocumentId: number | null = null;
   let reopenDocument: ContractDocument | null = null;
   let showReopenDocumentDialog = false;
+  let restartSide: 'seller' | 'buyer' | null = null;
+  let showRestartSideDialog = false;
   let documentPreviewOpen = false;
   let documentPreviewLoading = false;
   let documentPreviewError = '';
@@ -1346,8 +1348,8 @@
   async function evaluateContractSide(
     side: 'seller' | 'buyer',
     status: ContractApprovalStatus
-  ) {
-    if (!selected) return;
+  ): Promise<boolean> {
+    if (!selected) return false;
 
     let reason = '';
     if (status === 'APPROVED_WITH_RES' || status === 'REJECTED') {
@@ -1357,12 +1359,12 @@
           : 'Informe a ressalva da aprovação:';
       const value = window.prompt(promptMessage, '');
       if (value == null) {
-        return;
+        return false;
       }
       reason = value.trim();
       if (reason.length < 3) {
         toast.error('Motivo deve ter ao menos 3 caracteres.');
-        return;
+        return false;
       }
     }
 
@@ -1378,17 +1380,29 @@
       if (response?.movedToDraft === true) {
         closeModal(true);
         refresh();
-        return;
+        return true;
       }
       await reloadSelectedContract(selected.id);
       if (selected) {
         syncSelectedContractInList(selected);
       }
+      return true;
     } catch (error) {
       console.error('Erro ao avaliar documentação por lado:', error);
       toast.error('Não foi possível registrar a avaliação.');
+      return false;
     } finally {
       evaluatingSide = null;
+    }
+  }
+
+  async function confirmRestartSide() {
+    if (!restartSide || evaluatingSide !== null) return;
+    const side = restartSide;
+    const completed = await evaluateContractSide(side, 'PENDING');
+    if (completed) {
+      showRestartSideDialog = false;
+      restartSide = null;
     }
   }
 
@@ -1475,9 +1489,17 @@
   function triggerMatrixUpload(
     documentType: string,
     side: 'seller' | 'buyer',
-    existingDocumentType: string | null = null
+    existingDocumentType: string | null = null,
+    replaceDocumentId: number | null = null
   ) {
-    matrixUploadContext = { documentType, side, existingDocumentType };
+    const sideStatus = String(
+      side === 'seller' ? selected?.sellerApprovalStatus : selected?.buyerApprovalStatus
+    ).trim().toUpperCase();
+    if (sideStatus === 'REJECTED') {
+      toast.error('Reinicie a análise deste lado antes de enviar ou substituir documentos.');
+      return;
+    }
+    matrixUploadContext = { documentType, side, existingDocumentType, replaceDocumentId };
     if (matrixUploadInputEl) {
       matrixUploadInputEl.multiple =
         isOutroMatrixDocumentType(documentType) && !existingDocumentType;
@@ -1488,7 +1510,7 @@
 
   async function uploadMatrixDocumentFile(
     file: File,
-    context: { documentType: string; side: 'seller' | 'buyer'; existingDocumentType?: string | null }
+    context: { documentType: string; side: 'seller' | 'buyer'; existingDocumentType?: string | null; replaceDocumentId?: number | null }
   ): Promise<boolean> {
     if (!selected || !file) {
       return false;
@@ -1512,6 +1534,7 @@
         documentType: storageDocumentType,
         side: context.side,
         existingDocumentType: context.existingDocumentType,
+        replaceDocumentId: context.replaceDocumentId,
       },
       resolveMatrixUploadCategory(storageDocumentType, context.side)
     );
@@ -2610,15 +2633,12 @@
             isMatrixUploading={isMatrixUploading}
             canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
             downloadingDocumentId={downloadingDocumentId}
-            matrixDeletingDocumentId={matrixDeletingDocumentId}
-            canDeleteDocuments={canCurrentAdminDelete}
             reviewDocumentId={reviewingDocumentId}
             onOpenPreview={(doc) => selected && openDocumentPreview(doc, selected)}
             onDownload={(doc) => selected && viewDocument(doc, selected)}
-            onReplace={(documentType, side, existingDocumentType) => {
-              triggerMatrixUpload(documentType, side, existingDocumentType ?? null);
+            onReplace={(documentType, side, existingDocumentType, replaceDocumentId) => {
+              triggerMatrixUpload(documentType, side, existingDocumentType ?? null, replaceDocumentId ?? null);
             }}
-            onDelete={deleteMatrixDocument}
             onUpload={triggerMatrixUpload}
             onReview={(doc, status) => reviewMatrixDocument(doc, status)}
             onReopen={(doc) => { reopenDocument = doc; showReopenDocumentDialog = true; }}
@@ -2638,6 +2658,7 @@
               isDoubleEndedDeal={isDoubleEndedDeal}
               getSideApprovalUiState={getSideApprovalUiState}
               evaluateContractSide={evaluateContractSide}
+              requestSideRestart={(side) => { restartSide = side; showRestartSideDialog = true; }}
             />
 
             <div class="flex justify-end">
@@ -3336,6 +3357,34 @@
   onReplace={replacePreviewDocument}
   onDelete={deletePreviewDocument}
 />
+
+<Dialog.Root bind:open={showRestartSideDialog}>
+  <Dialog.Content className="max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Reiniciar análise?</Dialog.Title>
+      <Dialog.Description>
+        A análise deste lado será reaberta e os documentos voltarão para revisão. Deseja continuar?
+      </Dialog.Description>
+    </Dialog.Header>
+    <Dialog.Footer className="flex gap-2">
+      <Button
+        variant="outline"
+        on:click={() => { showRestartSideDialog = false; restartSide = null; }}
+        disabled={evaluatingSide !== null}
+      >
+        Cancelar
+      </Button>
+      <Button
+        variant="destructive"
+        on:click={() => { void confirmRestartSide(); }}
+        disabled={evaluatingSide !== null || restartSide === null}
+      >
+        {#if evaluatingSide !== null}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
+        Reiniciar
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
 
 <Dialog.Root bind:open={showReopenDocumentDialog}>
   <Dialog.Content className="max-w-md">
