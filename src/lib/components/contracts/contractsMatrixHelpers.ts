@@ -566,6 +566,11 @@ export function isOutroMatrixDocumentType(value: unknown): boolean {
   return normalized === 'outro' || normalized.startsWith('cliente_outro_');
 }
 
+/** The matrix exposes "Outro" as an uploadable, but non-blocking, slot. */
+export function isOptionalMatrixDocumentType(value: unknown): boolean {
+  return isOutroMatrixDocumentType(value);
+}
+
 export function documentTypeMatchesMatrixCell(documentType: string, matrixType: string): boolean {
   if (matrixType === 'outro') {
     return isOutroMatrixDocumentType(documentType);

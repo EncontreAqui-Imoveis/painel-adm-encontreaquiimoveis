@@ -4,6 +4,7 @@ import {
   computeApprovalLockReasonsForSide,
   getDocumentsForMatrixCell,
   getMatrixRows,
+  isOptionalMatrixDocumentType,
   listMissingRequiredDocuments,
   resolveMatrixUploadCategory,
 } from '../../src/lib/components/contracts/contractsMatrixHelpers';
@@ -40,6 +41,25 @@ const contract: ContractItem = {
 };
 
 describe('contractsMatrixHelpers', () => {
+  it('mantém Outro como slot opcional e fora dos bloqueios de aprovação', () => {
+    const optionalOnlyContract: ContractItem = {
+      id: 'contract-optional',
+      status: 'AWAITING_DOCS',
+      negotiationId: 'negotiation-optional',
+      propertyId: 3,
+      documentRequirements: {
+        seller: [{ category: 'outro', applicability: 'optional' }],
+        buyer: [],
+      },
+      documents: [],
+    };
+
+    expect(isOptionalMatrixDocumentType('outro')).toBe(true);
+    expect(computeApprovalLockReasonsForSide(optionalOnlyContract, 'seller')).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('Outro')])
+    );
+  });
+
   const rentalContractWithMatrix: ContractItem = {
     id: 'contract-rental-1',
     status: 'AWAITING_DOCS',

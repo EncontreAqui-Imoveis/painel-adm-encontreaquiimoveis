@@ -2,6 +2,7 @@
   import { Check, CircleAlert, Clock3, Download, Loader2, Pencil, RefreshCcw, Upload, X } from 'lucide-svelte';
   import { clickOutside } from '$lib/actions/clickOutside';
   import { Button } from '$lib/components/ui/button';
+  import { isOptionalMatrixDocumentType } from '$lib/components/contracts/contractsMatrixHelpers';
   import type { ContractMatrixRowView, ContractItem } from '$lib/components/contracts/types';
 
   export let contract: ContractItem | null = null;
@@ -85,6 +86,7 @@
       <tbody>
         {#each rows as row}
           {@const documentType = row.documentType}
+          {@const isOptional = isOptionalMatrixDocumentType(documentType)}
           <tr class="border-b border-gray-100 dark:border-gray-800">
             <td class="px-3 py-3 text-gray-700 dark:text-gray-200">{documentLabel(documentType)}</td>
             <td class="px-3 py-3">
@@ -92,10 +94,12 @@
                 <div class="space-y-2">
                   {#if row.sellerDocs.length === 0}
                     <div class="flex flex-wrap items-center gap-2">
-                      <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                        <Clock3 class="h-3 w-3" />
-                        Pendente
-                      </span>
+                      {#if !isOptional}
+                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                          <Clock3 class="h-3 w-3" />
+                          Pendente
+                        </span>
+                      {/if}
                       {#if !isSideReadOnly('seller')}
                         <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')}>
                           {#if isMatrixUploading(`seller:${documentType}`)}
@@ -205,10 +209,12 @@
                 <div class="space-y-2">
                   {#if row.buyerDocs.length === 0}
                     <div class="flex flex-wrap items-center gap-2">
-                      <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                        <Clock3 class="h-3 w-3" />
-                        Pendente
-                      </span>
+                      {#if !isOptional}
+                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                          <Clock3 class="h-3 w-3" />
+                          Pendente
+                        </span>
+                      {/if}
                       {#if !isSideReadOnly('buyer')}
                         <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')}>
                           {#if isMatrixUploading(`buyer:${documentType}`)}

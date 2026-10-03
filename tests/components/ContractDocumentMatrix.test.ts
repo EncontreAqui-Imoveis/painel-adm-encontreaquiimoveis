@@ -4,6 +4,42 @@ import { describe, expect, it, vi } from 'vitest';
 import ContractDocumentMatrix from '../../src/lib/components/contracts/ContractDocumentMatrix.svelte';
 
 describe('ContractDocumentMatrix', () => {
+  it('não marca Outro vazio como pendente e mantém o envio disponível', () => {
+    render(ContractDocumentMatrix, {
+      rows: [{ documentType: 'outro', sellerRequired: true, buyerRequired: false, sellerDocs: [], buyerDocs: [] }],
+      documentLabel: () => 'Outro',
+    });
+
+    expect(screen.getByText('Outro')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeInTheDocument();
+    expect(screen.queryByText('Pendente')).not.toBeInTheDocument();
+  });
+
+  it('mostra o status real quando Outro possui arquivo pendente', () => {
+    render(ContractDocumentMatrix, {
+      rows: [{
+        documentType: 'outro', sellerRequired: true, buyerRequired: false,
+        sellerDocs: [{ id: 71, documentType: 'cliente_outro_01', side: 'seller', status: 'PENDING', originalFileName: 'anexo.pdf' }], buyerDocs: [],
+      }],
+      documentLabel: () => 'Outro',
+      documentFileName: () => 'anexo.pdf',
+      documentStatusLabel: () => 'Em análise',
+      documentStatusClass: () => 'bg-amber-100',
+    });
+
+    expect(screen.getByText('Em análise')).toBeInTheDocument();
+  });
+
+  it('mantém Pendente em documento obrigatório vazio', () => {
+    render(ContractDocumentMatrix, {
+      rows: [{ documentType: 'doc_identidade', sellerRequired: true, buyerRequired: false, sellerDocs: [], buyerDocs: [] }],
+      documentLabel: () => 'Documento Pessoal',
+    });
+
+    expect(screen.getByText('Pendente')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeInTheDocument();
+  });
+
   it('trata aprovação com ressalvas como documento bloqueado', () => {
     render(ContractDocumentMatrix, {
       rows: [
