@@ -250,21 +250,33 @@ export function getSideApprovalUiState(
 }
 
 export function canApproveSide(status?: ContractApprovalStatus | null): boolean {
-  const uiState = getSideApprovalUiState(status);
-  return uiState === 'pending' || uiState === 'rejected';
+  return getSideApprovalUiState(status) === 'pending';
 }
 
 export function canRejectSide(status?: ContractApprovalStatus | null): boolean {
-  const uiState = getSideApprovalUiState(status);
-  return uiState === 'pending' || uiState === 'approved';
+  return getSideApprovalUiState(status) === 'pending';
 }
 
 export function canRestartSide(status?: ContractApprovalStatus | null): boolean {
   return getSideApprovalUiState(status) !== 'pending';
 }
 
+function hasDocumentarySideRejection(
+  contract: ContractItem | null | undefined
+): boolean {
+  if (String(contract?.status ?? '').trim().toUpperCase() !== 'AWAITING_DOCS') {
+    return false;
+  }
+  const sellerStatus = String(contract?.sellerApprovalStatus ?? '').trim().toUpperCase();
+  const buyerStatus = String(contract?.buyerApprovalStatus ?? '').trim().toUpperCase();
+  return sellerStatus === 'REJECTED' || buyerStatus === 'REJECTED';
+}
+
 export function getApprovalProgressLabel(contract: ContractItem | null | undefined): string {
   if (!contract) return 'Pendente';
+  if (hasDocumentarySideRejection(contract)) {
+    return 'Aguardando correção documental';
+  }
   const backendLabel = contract.approvalProgress?.label?.trim();
   if (backendLabel) return backendLabel;
 
@@ -291,23 +303,16 @@ export function getApprovalProgressLabel(contract: ContractItem | null | undefin
 }
 
 export function isRejectedContract(contract: ContractItem | null | undefined): boolean {
-  if (!contract) return false;
-
-  const backendStatus = String(contract.approvalProgress?.status ?? '').trim().toUpperCase();
-  const backendLabel = String(contract.approvalProgress?.label ?? '').trim().toLowerCase();
-  const sellerStatus = String(contract.sellerApprovalStatus ?? '').trim().toUpperCase();
-  const buyerStatus = String(contract.buyerApprovalStatus ?? '').trim().toUpperCase();
-
-  if (backendStatus === 'REJECTED') return true;
-  if (backendLabel === 'rejeitado') return true;
-  return sellerStatus === 'REJECTED' || buyerStatus === 'REJECTED';
+  return String(contract?.status ?? '').trim().toUpperCase() === 'REJECTED';
 }
 
 export function getApprovalProgressToneClass(contract: ContractItem | null | undefined): string {
   const backendStatus = String(contract?.approvalProgress?.status ?? '').trim().toUpperCase();
   const sellerStatus = String(contract?.sellerApprovalStatus ?? '').trim().toUpperCase();
   const buyerStatus = String(contract?.buyerApprovalStatus ?? '').trim().toUpperCase();
-  const status = backendStatus || sellerStatus || buyerStatus;
+  const status = hasDocumentarySideRejection(contract)
+    ? 'IN_PROGRESS'
+    : backendStatus || sellerStatus || buyerStatus;
 
   if (status === 'REJECTED') {
     return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';

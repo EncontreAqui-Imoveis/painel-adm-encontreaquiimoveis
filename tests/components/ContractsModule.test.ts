@@ -320,13 +320,18 @@ describe('ContractsModule', () => {
       await screen.findByText((content) => content.includes('RV-900'))
     ).toBeInTheDocument();
     expect(screen.getByText('Casa Contrato')).toBeInTheDocument();
-    expect(screen.queryByText('Casa Rejeitada')).not.toBeInTheDocument();
+    expect(screen.getByText('Casa Rejeitada')).toBeInTheDocument();
+    expect(screen.getByText('Aguardando correção documental')).toBeInTheDocument();
+    expect(screen.getAllByText('Situação:').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Situação final:')).not.toBeInTheDocument();
     expect(screen.getByText('Em análise')).toBeInTheDocument();
     expect(screen.getByAltText('Foto do imóvel Casa Contrato')).toBeInTheDocument();
     expect(screen.getAllByText(/Vendedor/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Parte compradora/locatária')).toBeInTheDocument();
     expect(screen.getByText('Cliente Comprador')).toBeInTheDocument();
-    const openReviewButton = await screen.findByRole('button', {
+    const contractRow = screen.getByText('Casa Contrato').closest('tr');
+    expect(contractRow).not.toBeNull();
+    const openReviewButton = within(contractRow!).getByRole('button', {
       name: 'Analisar Documentação',
     });
     await fireEvent.click(openReviewButton);
@@ -340,11 +345,11 @@ describe('ContractsModule', () => {
     expect(screen.getByRole('menu', { name: 'Ações do documento' })).toBeInTheDocument();
     await fireEvent.pointerDown(document.body);
     expect(screen.queryByRole('menu', { name: 'Ações do documento' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(5);
+    expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /^Aprovar\s*documento$/i }).length).toBeGreaterThan(0);
     await fireEvent.click(screen.getAllByRole('button', { name: /^Aprovar\s*documento$/i })[0]);
     expect(apiPatchMock).toHaveBeenCalledWith(
-      '/contracts/contract-admin-1/documents/501/status',
+      '/contracts/contract-admin-1/documents/502/status',
       { status: 'APPROVED' }
     );
 

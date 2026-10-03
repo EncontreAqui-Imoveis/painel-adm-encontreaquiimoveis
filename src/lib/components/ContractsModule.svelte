@@ -2293,7 +2293,7 @@
                       {item.propertyTitle ?? '-'}
                     </div>
                     <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium">
-                      <span class="text-gray-500 dark:text-gray-400">Situação final:</span>
+                      <span class="text-gray-500 dark:text-gray-400">Situação:</span>
                       <span class={`rounded-full px-2 py-1 ${getApprovalProgressToneClass(item)}`}>
                         {getApprovalProgressLabel(item)}
                       </span>

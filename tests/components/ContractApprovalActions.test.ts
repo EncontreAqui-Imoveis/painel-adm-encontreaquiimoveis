@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 
 import ContractApprovalActions from '../../src/lib/components/contracts/ContractApprovalActions.svelte';
@@ -45,5 +45,44 @@ describe('ContractApprovalActions', () => {
     expect(sellerSection).toHaveTextContent('Reiniciar');
     expect(sellerSection).not.toHaveTextContent('Rejeitar');
     expect(sellerSection).not.toHaveTextContent('Aprovar c/ ressalvas');
+  });
+
+  it('mantém somente Reiniciar para o lado rejeitado até a análise ser reiniciada', async () => {
+    const evaluateContractSide = vi.fn();
+    const uiState = (status?: ContractItem['sellerApprovalStatus']) =>
+      status === 'REJECTED'
+        ? 'rejected'
+        : status === 'APPROVED' || status === 'APPROVED_WITH_RES'
+          ? 'approved'
+          : 'pending';
+    const view = render(ContractApprovalActions, {
+      contract: {
+        ...buildContract('rent'),
+        sellerApprovalStatus: 'REJECTED',
+        buyerApprovalStatus: 'PENDING',
+      },
+      getSideApprovalUiState: uiState,
+      evaluateContractSide,
+    });
+
+    const sellerSection = screen.getByText('Avaliação Locador').parentElement;
+    expect(sellerSection).toHaveTextContent('Reiniciar');
+    expect(sellerSection).not.toHaveTextContent('Aprovar');
+    expect(sellerSection).not.toHaveTextContent('Rejeitar');
+    await fireEvent.click(screen.getByRole('button', { name: 'Reiniciar' }));
+    expect(evaluateContractSide).toHaveBeenCalledWith('seller', 'PENDING');
+
+    await view.rerender({
+      contract: {
+        ...buildContract('rent'),
+        sellerApprovalStatus: 'PENDING',
+        buyerApprovalStatus: 'PENDING',
+      },
+      getSideApprovalUiState: uiState,
+      evaluateContractSide,
+    });
+    expect(sellerSection).toHaveTextContent('Aprovar');
+    expect(sellerSection).toHaveTextContent('Aprovar c/ ressalvas');
+    expect(sellerSection).toHaveTextContent('Rejeitar');
   });
 });

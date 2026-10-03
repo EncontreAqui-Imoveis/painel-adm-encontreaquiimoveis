@@ -97,6 +97,15 @@
         >
           Reiniciar
         </Button>
+      {:else if getSideApprovalUiState(contract?.sellerApprovalStatus) === "rejected"}
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
+          on:click={() => evaluateContractSide("seller", "PENDING")}
+        >
+          Reiniciar
+        </Button>
       {:else}
         <Button
           size="sm"
@@ -166,6 +175,15 @@
             Rejeitar
           </Button>
         {:else if getSideApprovalUiState(contract?.buyerApprovalStatus) === "approved"}
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-900/30"
+            on:click={() => evaluateContractSide("buyer", "PENDING")}
+          >
+            Reiniciar
+          </Button>
+        {:else if getSideApprovalUiState(contract?.buyerApprovalStatus) === "rejected"}
           <Button
             size="sm"
             variant="outline"
