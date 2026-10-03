@@ -261,6 +261,24 @@ export function canRestartSide(status?: ContractApprovalStatus | null): boolean 
   return getSideApprovalUiState(status) !== 'pending';
 }
 
+export function isAwaitingDocumentResubmission(
+  contract: ContractItem | null | undefined,
+  side?: 'seller' | 'buyer'
+): boolean {
+  if (String(contract?.status ?? '').trim().toUpperCase() !== 'AWAITING_DOCS') {
+    return false;
+  }
+
+  const metadata = contract?.workflowMetadata;
+  const marker = metadata?.awaiting_document_resubmission ?? metadata?.awaitingDocumentResubmission;
+  if (!marker || typeof marker !== 'object') return false;
+
+  if (side) {
+    return Boolean(marker[side]);
+  }
+  return Boolean(marker.seller || marker.buyer);
+}
+
 function hasDocumentarySideRejection(
   contract: ContractItem | null | undefined
 ): boolean {
@@ -274,6 +292,9 @@ function hasDocumentarySideRejection(
 
 export function getApprovalProgressLabel(contract: ContractItem | null | undefined): string {
   if (!contract) return 'Pendente';
+  if (isAwaitingDocumentResubmission(contract)) {
+    return 'Aguardando reenvio documental';
+  }
   if (hasDocumentarySideRejection(contract)) {
     return 'Aguardando correção documental';
   }
@@ -331,6 +352,9 @@ export function getApprovalProgressToneClass(contract: ContractItem | null | und
 
 export function getApprovalNextStepLabel(contract: ContractItem | null | undefined): string {
   if (!contract) return 'Aguardando avaliação dos dois lados';
+  if (isAwaitingDocumentResubmission(contract)) {
+    return 'Aguardando novos documentos do lado solicitado';
+  }
   const backendNextStep = contract.approvalProgress?.nextStep?.trim();
   if (backendNextStep) return backendNextStep;
 

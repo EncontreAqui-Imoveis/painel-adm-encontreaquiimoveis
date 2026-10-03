@@ -2228,6 +2228,10 @@
               <dt>Data</dt>
               <dd class="text-right">{formatDate(item.updatedAt ?? item.createdAt)}</dd>
             </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt>Situação</dt>
+              <dd class="text-right">{getApprovalProgressLabel(item)}</dd>
+            </div>
           </dl>
           {#if getApprovalRemarkSummaries(item).length > 0}
             <div class="mt-3 flex flex-wrap gap-2">
@@ -3461,7 +3465,7 @@
                 <div class="rounded-lg border border-red-200 bg-red-50/80 p-3.5 dark:border-red-900/60 dark:bg-red-950/30">
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-xs font-semibold uppercase text-red-800 dark:text-red-300">
-                      Rejeição do Vendedor
+                      Rejeição do {selectedSellerLabel}
                     </span>
                     <span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-900/50 dark:text-red-300">
                       {selectedSellerLabel}
@@ -3477,7 +3481,7 @@
                 <div class="rounded-lg border border-red-200 bg-red-50/80 p-3.5 dark:border-red-900/60 dark:bg-red-950/30">
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-xs font-semibold uppercase text-red-800 dark:text-red-300">
-                      Rejeição do Comprador
+                      Rejeição do {selectedBuyerLabel}
                     </span>
                     <span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-900/50 dark:text-red-300">
                       {selectedBuyerLabel}

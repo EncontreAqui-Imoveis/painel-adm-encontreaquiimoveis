@@ -41,6 +41,33 @@ const contract: ContractItem = {
 };
 
 describe('contractsMatrixHelpers', () => {
+  it('não recoloca documentos rejeitados nos slots ativos após pedido de reenvio', () => {
+    const awaitingResubmission: ContractItem = {
+      ...rentalContractWithMatrix,
+      workflowMetadata: {
+        awaiting_document_resubmission: {
+          seller: {
+            reason: 'Documento ilegível.',
+            requestedAt: '2026-10-03T12:00:00.000Z',
+            requestedBy: 1,
+            rejectedDocumentIds: [71],
+          },
+        },
+      },
+      documents: [{
+        id: 71,
+        documentType: 'doc_identidade',
+        side: 'seller',
+        status: 'REJECTED',
+      }],
+    };
+
+    expect(getDocumentsForMatrixCell(awaitingResubmission, 'doc_identidade', 'seller')).toEqual([]);
+    expect(listMissingRequiredDocuments(awaitingResubmission)).toContain(
+      'Documento Pessoal (Locador)'
+    );
+  });
+
   it('mantém Outro como slot opcional e fora dos bloqueios de aprovação', () => {
     const optionalOnlyContract: ContractItem = {
       id: 'contract-optional',

@@ -5,6 +5,13 @@ export type ContractApprovalStatus =
   | 'REJECTED'
   | 'NOT_APPLICABLE';
 
+export type ContractDocumentResubmissionRequest = {
+  reason?: string | null;
+  requestedAt?: string | null;
+  requestedBy?: number | null;
+  rejectedDocumentIds?: number[] | null;
+};
+
 export type ContractDocument = {
   id: number;
   type?: string | null;
@@ -68,7 +75,16 @@ export type ContractItem = {
     nextStep?: string | null;
   } | null;
   commissionData?: Record<string, unknown> | null;
-  workflowMetadata?: Record<string, unknown> | null;
+  workflowMetadata?: (Record<string, unknown> & {
+    awaiting_document_resubmission?: {
+      seller?: ContractDocumentResubmissionRequest | null;
+      buyer?: ContractDocumentResubmissionRequest | null;
+    } | null;
+    awaitingDocumentResubmission?: {
+      seller?: ContractDocumentResubmissionRequest | null;
+      buyer?: ContractDocumentResubmissionRequest | null;
+    } | null;
+  }) | null;
   identityCapabilities?: {
     seller?: { canEditName?: boolean; canEditCpf?: boolean } | null;
     buyer?: { canEditName?: boolean; canEditCpf?: boolean } | null;

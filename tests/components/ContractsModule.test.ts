@@ -193,11 +193,21 @@ describe('ContractsModule', () => {
               sellingBrokerId: 30002,
               capturingBrokerName: 'Captador',
               sellingBrokerName: 'Vendedor',
-              sellerApprovalStatus: 'REJECTED',
+              sellerApprovalStatus: 'PENDING',
               buyerApprovalStatus: 'PENDING',
+              workflowMetadata: {
+                awaiting_document_resubmission: {
+                  seller: {
+                    reason: 'Documentos ilegíveis.',
+                    requestedAt: '2026-10-03T12:00:00.000Z',
+                    requestedBy: 1,
+                    rejectedDocumentIds: [901],
+                  },
+                },
+              },
               approvalProgress: {
-                status: 'REJECTED',
-                label: 'Rejeitado',
+                status: 'IN_PROGRESS',
+                label: 'Aguardando reenvio documental',
               },
               documents: [],
               createdAt: '2026-03-02T09:00:00.000Z',
@@ -321,7 +331,7 @@ describe('ContractsModule', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Casa Contrato')).toBeInTheDocument();
     expect(screen.getByText('Casa Rejeitada')).toBeInTheDocument();
-    expect(screen.getByText('Aguardando correção documental')).toBeInTheDocument();
+    expect(screen.getByText('Aguardando reenvio documental')).toBeInTheDocument();
     expect(screen.getAllByText('Situação:').length).toBeGreaterThan(0);
     expect(screen.queryByText('Situação final:')).not.toBeInTheDocument();
     expect(screen.getByText('Em análise')).toBeInTheDocument();
@@ -356,6 +366,92 @@ describe('ContractsModule', () => {
     // A file name now opens the browser's native viewer rather than an in-app PDF modal.
     await fireEvent.click(screen.getByRole('button', { name: /danfe/i }));
     expect(screen.queryByRole('dialog', { name: /visualiza/i })).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: /Motivos de rejeição/i }));
+    expect(await screen.findByText('Rejeição do Vendedor')).toBeInTheDocument();
+  });
+
+  it('mantém o lado pendente após rejeição, orienta o reenvio e libera os slots vazios', async () => {
+    let awaitingResubmission = false;
+    const baseContract = {
+      id: 'contract-resubmission-1',
+      status: 'AWAITING_DOCS',
+      negotiationId: 'neg-resubmission-1',
+      propertyId: 911,
+      propertyCode: 'RV-911',
+      propertyTitle: 'Casa para Reenvio',
+      dealType: 'rent' as const,
+      sellerApprovalStatus: 'PENDING' as const,
+      buyerApprovalStatus: 'PENDING' as const,
+      documentRequirementMatrix: {
+        seller: [{ category: 'identidade', applicability: 'required', preferredDocumentType: 'doc_identidade' }],
+        buyer: [],
+      },
+    };
+
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
+        return { data: [baseContract], total: 1 };
+      }
+      if (endpoint === '/contracts/contract-resubmission-1') {
+        return {
+          contract: {
+            ...baseContract,
+            sellerApprovalReason: awaitingResubmission
+              ? { reason: 'Documento ilegível.' }
+              : null,
+            workflowMetadata: awaitingResubmission
+              ? {
+                  awaiting_document_resubmission: {
+                    seller: {
+                      reason: 'Documento ilegível.',
+                      requestedAt: '2026-10-03T12:00:00.000Z',
+                      requestedBy: 1,
+                      rejectedDocumentIds: [81],
+                    },
+                  },
+                }
+              : {},
+            approvalProgress: awaitingResubmission
+              ? { status: 'IN_PROGRESS', label: 'Aguardando reenvio documental' }
+              : { status: 'IN_PROGRESS', label: 'Em análise' },
+          },
+          documents: awaitingResubmission
+            ? [{
+                id: 81,
+                documentType: 'doc_identidade',
+                side: 'seller',
+                status: 'REJECTED',
+                originalFileName: 'documento-rejeitado.pdf',
+              }]
+            : [],
+        };
+      }
+      if (endpoint.includes('/document-rejections')) return { rejections: [] };
+      return { data: [], total: 0 };
+    });
+    apiPutMock.mockImplementation(async () => {
+      awaitingResubmission = true;
+      return { data: { movedToDraft: false } };
+    });
+    vi.spyOn(window, 'prompt').mockReturnValue('Documento ilegível.');
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Analisar Documentação' }));
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Rejeitar' })[0]);
+
+    await waitFor(() => {
+      expect(apiPutMock).toHaveBeenCalledWith(
+        '/admin/contracts/contract-resubmission-1/evaluate-side',
+        { side: 'seller', status: 'REJECTED', reason: 'Documento ilegível.' }
+      );
+    });
+    expect(await screen.findByText('Aguardando reenvio de documentos')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reiniciar' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Enviar' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'documento-rejeitado.pdf' })).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: /Motivos de rejeição/i }));
+    expect(await screen.findByText('Rejeição do Locador')).toBeInTheDocument();
   });
 
   it('hidrata os detalhes completos ao abrir o modal quando a listagem vier incompleta', async () => {

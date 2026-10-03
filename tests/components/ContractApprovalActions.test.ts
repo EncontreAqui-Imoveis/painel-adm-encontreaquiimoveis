@@ -47,6 +47,50 @@ describe('ContractApprovalActions', () => {
     expect(sellerSection).not.toHaveTextContent('Aprovar c/ ressalvas');
   });
 
+  it('mantém somente Reiniciar para aprovação com ressalvas', () => {
+    render(ContractApprovalActions, {
+      contract: {
+        ...buildContract('sale'),
+        sellerApprovalStatus: 'APPROVED_WITH_RES',
+        buyerApprovalStatus: 'PENDING',
+      },
+      getSideApprovalUiState: (status) =>
+        status === 'APPROVED' || status === 'APPROVED_WITH_RES' ? 'approved' : 'pending',
+    });
+
+    const sellerSection = screen.getByText('Avaliação Vendedor').parentElement;
+    expect(sellerSection).toHaveTextContent('Reiniciar');
+    expect(sellerSection).not.toHaveTextContent('Rejeitar');
+    expect(sellerSection).not.toHaveTextContent('Aprovar');
+  });
+
+  it('mantém o lado pendente aguardando reenvio com ações normais, sem Reiniciar', () => {
+    render(ContractApprovalActions, {
+      contract: {
+        ...buildContract('rent'),
+        sellerApprovalStatus: 'PENDING',
+        buyerApprovalStatus: 'PENDING',
+        workflowMetadata: {
+          awaiting_document_resubmission: {
+            seller: {
+              reason: 'Documentos ilegíveis.',
+              requestedAt: '2026-10-03T12:00:00.000Z',
+              requestedBy: 1,
+              rejectedDocumentIds: [11],
+            },
+          },
+        },
+      },
+    });
+
+    const sellerSection = screen.getByText('Avaliação Locador').parentElement;
+    expect(sellerSection).toHaveTextContent('Aguardando reenvio de documentos');
+    expect(sellerSection).toHaveTextContent('Aprovar');
+    expect(sellerSection).toHaveTextContent('Aprovar c/ ressalvas');
+    expect(sellerSection).toHaveTextContent('Rejeitar');
+    expect(sellerSection).not.toHaveTextContent('Reiniciar');
+  });
+
   it('mantém somente Reiniciar para o lado rejeitado até a análise ser reiniciada', async () => {
     const requestSideRestart = vi.fn();
     const uiState = (status?: ContractItem['sellerApprovalStatus']) =>

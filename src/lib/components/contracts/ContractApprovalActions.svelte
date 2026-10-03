@@ -1,7 +1,10 @@
 <script lang="ts">
   import { Loader2 } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
-  import { contractSideLabel } from "$lib/components/contracts/contractsDisplayHelpers";
+  import {
+    contractSideLabel,
+    isAwaitingDocumentResubmission,
+  } from "$lib/components/contracts/contractsDisplayHelpers";
   import type {
     ContractItem,
     ContractApprovalStatus,
@@ -29,6 +32,8 @@
   $: effectiveSellerDisabled = sellerApprovalDisabled || sellerLockReasons.length > 0 || evaluatingSide === "seller";
   $: effectiveBuyerDisabled = buyerApprovalDisabled || buyerLockReasons.length > 0 || evaluatingSide === "buyer";
   $: allLockReasons = approvalLockReasons.length > 0 ? approvalLockReasons : [...sellerLockReasons, ...buyerLockReasons];
+  $: sellerAwaitingResubmission = isAwaitingDocumentResubmission(contract, "seller");
+  $: buyerAwaitingResubmission = isAwaitingDocumentResubmission(contract, "buyer");
 </script>
 
 <div
@@ -60,6 +65,11 @@
     >
       Avaliação {contractSideLabel(contract, "seller")}
     </p>
+    {#if sellerAwaitingResubmission}
+      <p class="-mt-1 mb-2 text-xs text-amber-700 dark:text-amber-300">
+        Aguardando reenvio de documentos
+      </p>
+    {/if}
     <div class="flex flex-wrap gap-2">
       {#if getSideApprovalUiState(contract?.sellerApprovalStatus) === "pending"}
         <Button
@@ -144,8 +154,13 @@
       <p
         class="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400"
       >
-        Avaliação {contractSideLabel(contract, "buyer")}
-      </p>
+      Avaliação {contractSideLabel(contract, "buyer")}
+    </p>
+      {#if buyerAwaitingResubmission}
+        <p class="-mt-1 mb-2 text-xs text-amber-700 dark:text-amber-300">
+          Aguardando reenvio de documentos
+        </p>
+      {/if}
       <div class="flex flex-wrap gap-2">
         {#if getSideApprovalUiState(contract?.buyerApprovalStatus) === "pending"}
           <Button
