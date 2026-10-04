@@ -215,4 +215,67 @@ describe('ContractDocumentMatrix', () => {
     expect(onReplace).toHaveBeenCalledWith('doc_identidade', 'seller', 'doc_identidade', 9);
     expect(screen.queryByLabelText('Excluir documento')).not.toBeInTheDocument();
   });
+
+  it('reage à limpeza do loading de Substituir depois de uma atualização do contrato', async () => {
+    const props = {
+      contract: { id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1 },
+      rows: [{
+        documentType: 'doc_identidade', sellerRequired: true, buyerRequired: false,
+        sellerDocs: [{ id: 9, documentType: 'doc_identidade', side: 'seller', status: 'PENDING', originalFileName: 'id.pdf' }], buyerDocs: [],
+      }],
+      documentLabel: () => 'Documento Pessoal',
+      documentFileName: () => 'id.pdf',
+      matrixSlotKey: (documentType: string, side: string, existingDocumentType: string | null = null) =>
+        `contract-1:${side}:${existingDocumentType ?? documentType}`,
+    };
+    const view = render(ContractDocumentMatrix, {
+      ...props,
+      matrixUploadingCounts: {},
+    });
+
+    await fireEvent.click(screen.getByLabelText('Editar documento'));
+    expect(screen.getByLabelText('Substituir documento').querySelector('.animate-spin')).toBeNull();
+
+    view.rerender({
+      ...props,
+      matrixUploadingCounts: { 'contract-1:seller:doc_identidade': 1 },
+    });
+    expect(screen.getByLabelText('Substituir documento').querySelector('.animate-spin')).not.toBeNull();
+
+    view.rerender({
+      ...props,
+      matrixUploadingCounts: {},
+    });
+    expect(screen.getByLabelText('Substituir documento').querySelector('.animate-spin')).toBeNull();
+  });
+
+  it('associa o loading de Outro ao tipo efetivo do documento', async () => {
+    render(ContractDocumentMatrix, {
+      contract: { id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1 },
+      rows: [{
+        documentType: 'outro', sellerRequired: true, buyerRequired: false,
+        sellerDocs: [
+          { id: 1, documentType: 'cliente_outro_01', side: 'seller', status: 'PENDING', originalFileName: 'primeiro.pdf' },
+          { id: 2, documentType: 'cliente_outro_02', side: 'seller', status: 'PENDING', originalFileName: 'segundo.pdf' },
+        ],
+        buyerDocs: [],
+      }],
+      documentLabel: () => 'Outro',
+      documentFileName: (doc: { originalFileName?: string | null }) => doc.originalFileName ?? 'Documento',
+      matrixUploadingCounts: { 'contract-1:seller:cliente_outro_01': 1 },
+      matrixSlotKey: (documentType: string, side: string, existingDocumentType: string | null = null) =>
+        `contract-1:${side}:${existingDocumentType ?? documentType}`,
+    });
+
+    const firstDocument = screen.getByRole('button', { name: 'primeiro.pdf' }).parentElement?.parentElement;
+    const secondDocument = screen.getByRole('button', { name: 'segundo.pdf' }).parentElement?.parentElement;
+    expect(firstDocument).not.toBeNull();
+    expect(secondDocument).not.toBeNull();
+
+    await fireEvent.click(within(firstDocument as HTMLElement).getByLabelText('Editar documento'));
+    expect(within(firstDocument as HTMLElement).getByLabelText('Substituir documento').querySelector('.animate-spin')).not.toBeNull();
+
+    await fireEvent.click(within(secondDocument as HTMLElement).getByLabelText('Editar documento'));
+    expect(within(secondDocument as HTMLElement).getByLabelText('Substituir documento').querySelector('.animate-spin')).toBeNull();
+  });
 });

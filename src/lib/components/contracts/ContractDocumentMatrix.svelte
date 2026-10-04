@@ -11,7 +11,13 @@
   export let buyerLabel = 'Comprador';
   export let documentLabel: (documentType: string) => string = (value) => value;
   export let documentFileName: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => 'Documento';
-  export let isMatrixUploading: (key: string) => boolean = () => false;
+  export let matrixUploadingCounts: Record<string, number> = {};
+  export let matrixSlotKey: (
+    documentType: string,
+    side: 'seller' | 'buyer',
+    existingDocumentType?: string | null
+  ) => string = (documentType, side, existingDocumentType = null) =>
+    `${contract?.id ?? 'contract'}:${side}:${String(existingDocumentType ?? documentType).trim().toLowerCase()}`;
   export let isMatrixSlotBusy: (
     documentType: string,
     side: 'seller' | 'buyer',
@@ -71,6 +77,14 @@
     ).trim().toUpperCase();
     return status === 'APPROVED' || status === 'APPROVED_WITH_RES' || status === 'REJECTED';
   }
+
+  function isMatrixSlotUploading(
+    documentType: string,
+    side: 'seller' | 'buyer',
+    existingDocumentType: string | null = null
+  ): boolean {
+    return Number(matrixUploadingCounts[matrixSlotKey(documentType, side, existingDocumentType)] ?? 0) > 0;
+  }
 </script>
 
 <svelte:window on:keydown={closeDocumentMenuOnEscape} />
@@ -107,7 +121,7 @@
                       {/if}
                       {#if !isSideReadOnly('seller')}
                         <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')} disabled={isMatrixSlotBusy(documentType, 'seller')}>
-                          {#if isMatrixUploading(`seller:${documentType}`)}
+                          {#if isMatrixSlotUploading(documentType, 'seller')}
                             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                           {/if}
                           Enviar
@@ -159,7 +173,7 @@
                                 </button>
                               {/if}
                               <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase(), sellerDoc.id); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'seller') || isMatrixSlotBusy(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase())}>
-                                {#if isMatrixUploading(`seller:${documentType}`)}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
+                                {#if isMatrixSlotUploading(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase())}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
                               </button>
                             </div>
                             {/if}
@@ -193,7 +207,7 @@
                       <div class="mt-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700">
                         {#if canAddAnotherMatrixDocument(contract, documentType, 'seller')}
                           <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')} disabled={isMatrixSlotBusy(documentType, 'seller')}>
-                            {#if isMatrixUploading(`seller:${documentType}`)}
+                            {#if isMatrixSlotUploading(documentType, 'seller')}
                               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                             {/if}
                             Adicionar outro
@@ -222,7 +236,7 @@
                       {/if}
                       {#if !isSideReadOnly('buyer')}
                         <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')} disabled={isMatrixSlotBusy(documentType, 'buyer')}>
-                          {#if isMatrixUploading(`buyer:${documentType}`)}
+                          {#if isMatrixSlotUploading(documentType, 'buyer')}
                             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                           {/if}
                           Enviar
@@ -274,7 +288,7 @@
                                 </button>
                               {/if}
                               <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase(), buyerDoc.id); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'buyer') || isMatrixSlotBusy(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase())}>
-                                {#if isMatrixUploading(`buyer:${documentType}`)}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
+                                {#if isMatrixSlotUploading(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase())}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
                               </button>
                             </div>
                             {/if}
@@ -308,7 +322,7 @@
                       <div class="mt-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700">
                         {#if canAddAnotherMatrixDocument(contract, documentType, 'buyer')}
                           <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')} disabled={isMatrixSlotBusy(documentType, 'buyer')}>
-                            {#if isMatrixUploading(`buyer:${documentType}`)}
+                            {#if isMatrixSlotUploading(documentType, 'buyer')}
                               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                             {/if}
                             Adicionar outro

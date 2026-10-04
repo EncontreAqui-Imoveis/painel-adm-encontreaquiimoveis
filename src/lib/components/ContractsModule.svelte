@@ -937,16 +937,18 @@
         }))
       : [];
 
-  function isMatrixUploading(key: string): boolean {
-    return Number(matrixUploadingCounts[key] ?? 0) > 0;
-  }
-
   function matrixSlotKey(
     documentType: string,
     side: 'seller' | 'buyer',
     existingDocumentType: string | null = null
   ): string {
-    const effectiveType = String(existingDocumentType ?? documentType).trim().toLowerCase();
+    const normalizedType = String(documentType ?? '').trim().toLowerCase();
+    const effectiveType = String(
+      existingDocumentType?.trim() ||
+        (normalizedType === 'outro'
+          ? resolveOutroMatrixDocumentType(selected, side) ?? normalizedType
+          : normalizedType)
+    ).toLowerCase();
     return `${selected?.id ?? 'contract'}:${side}:${effectiveType}`;
   }
 
@@ -1597,7 +1599,7 @@
     }
 
     matrixUploadContext = null;
-    const uploadKey = `${currentUploadContext.side}:${currentUploadContext.documentType}`;
+    const uploadKey = currentUploadContext.slotKey;
     bumpMatrixUploading(uploadKey, 1);
     try {
       await uploadMatrixDocumentFile(files[0], currentUploadContext);
@@ -2640,7 +2642,8 @@
             documentFileName={documentFileName}
             documentStatusLabel={documentStatusLabel}
             documentStatusClass={documentStatusClass}
-            isMatrixUploading={isMatrixUploading}
+            matrixUploadingCounts={matrixUploadingCounts}
+            matrixSlotKey={matrixSlotKey}
             isMatrixSlotBusy={isMatrixSlotBusy}
             canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
             downloadingDocumentId={downloadingDocumentId}
