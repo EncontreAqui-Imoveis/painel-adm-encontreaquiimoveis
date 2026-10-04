@@ -30,14 +30,51 @@ describe('ContractDocumentMatrix', () => {
     expect(screen.getByText('Em análise')).toBeInTheDocument();
   });
 
-  it('mantém Pendente em documento obrigatório vazio', () => {
+  it('mantém Pendente e dispara o upload em documento obrigatório vazio pendente', async () => {
+    const onUpload = vi.fn();
     render(ContractDocumentMatrix, {
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING',
+      },
+      rows: [{ documentType: 'doc_identidade', sellerRequired: true, buyerRequired: false, sellerDocs: [], buyerDocs: [] }],
+      documentLabel: () => 'Documento Pessoal',
+      onUpload,
+    });
+
+    expect(screen.getByText('Pendente')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    expect(onUpload).toHaveBeenCalledTimes(1);
+    expect(onUpload).toHaveBeenCalledWith('doc_identidade', 'seller');
+  });
+
+  it('mantém o envio disponível durante o reenvio documental', () => {
+    render(ContractDocumentMatrix, {
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING',
+        workflowMetadata: { awaiting_document_resubmission: { seller: { reason: 'Reenviar documentos' } } },
+      },
       rows: [{ documentType: 'doc_identidade', sellerRequired: true, buyerRequired: false, sellerDocs: [], buyerDocs: [] }],
       documentLabel: () => 'Documento Pessoal',
     });
 
     expect(screen.getByText('Pendente')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeInTheDocument();
+  });
+
+  it('não mostra envio em slot vazio de lado aprovado', () => {
+    render(ContractDocumentMatrix, {
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'APPROVED', buyerApprovalStatus: 'PENDING',
+      },
+      rows: [{ documentType: 'doc_identidade', sellerRequired: true, buyerRequired: false, sellerDocs: [], buyerDocs: [] }],
+      documentLabel: () => 'Documento Pessoal',
+    });
+
+    expect(screen.getByText('Pendente')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Enviar' })).not.toBeInTheDocument();
   });
 
   it('trata aprovação com ressalvas como documento bloqueado', () => {
