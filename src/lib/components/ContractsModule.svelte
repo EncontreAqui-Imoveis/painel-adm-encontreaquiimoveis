@@ -178,6 +178,8 @@
   let draftUploadInputEl: HTMLInputElement | null = null;
   let uploadingDraft = false;
   let evaluatingSide: 'seller' | 'buyer' | null = null;
+  let evaluatingSideAction: ContractApprovalStatus | null = null;
+  let isReloadingSelectedContract = false;
   let uploadingSignedDoc = false;
   let signedDocType = 'contrato_assinado';
   let selectedSignedFile: File | null = null;
@@ -200,6 +202,7 @@
   let matrixBusySlots: Record<string, true> = {};
   let matrixDeletingDocumentId: number | null = null;
   let reviewingDocumentId: number | null = null;
+  let reviewingDocumentAction: 'APPROVED' | 'REJECTED' | 'REOPEN' | null = null;
   let reopenDocument: ContractDocument | null = null;
   let showReopenDocumentDialog = false;
   let restartSide: 'seller' | 'buyer' | null = null;
@@ -1054,6 +1057,21 @@
     }
   }
 
+  async function refreshSelectedContract(): Promise<void> {
+    if (!selected || isReloadingSelectedContract) return;
+
+    isReloadingSelectedContract = true;
+    try {
+      await reloadSelectedContract(selected.id);
+      if (selected) syncSelectedContractInList(selected);
+    } catch (error) {
+      console.error('Erro ao atualizar contrato selecionado:', error);
+      toast.error('Não foi possível atualizar o contrato.');
+    } finally {
+      isReloadingSelectedContract = false;
+    }
+  }
+
   function syncSelectedContractInList(contract: ContractItem): void {
     items = items.map((item) => (item.id === contract.id ? { ...item, ...contract } : item));
   }
@@ -1329,6 +1347,7 @@
     deletingFinalizedDocumentId = null;
     downloadingAllDocuments = false;
     evaluatingSide = null;
+    evaluatingSideAction = null;
     finalizingContract = false;
     savingPartyData = false;
     isEditingData = false;
@@ -1402,7 +1421,10 @@
       }
     }
 
+    if (evaluatingSide === side) return false;
+
     evaluatingSide = side;
+    evaluatingSideAction = status;
     try {
       const response = await evaluateContractSideRequest(
         selected.id,
@@ -1426,7 +1448,10 @@
       toast.error('Não foi possível registrar a avaliação.');
       return false;
     } finally {
-      evaluatingSide = null;
+      if (evaluatingSide === side) {
+        evaluatingSide = null;
+        evaluatingSideAction = null;
+      }
     }
   }
 
@@ -1457,6 +1482,7 @@
     }
 
     reviewingDocumentId = doc.id;
+    reviewingDocumentAction = status;
     try {
       await reviewContractDocument(selected.id, doc.id, status, reason || undefined);
       toast.success(
@@ -1473,6 +1499,7 @@
       toast.error(resolveApiErrorMessage(error, 'Não foi possível revisar o documento.'));
     } finally {
       reviewingDocumentId = null;
+      reviewingDocumentAction = null;
     }
   }
 
@@ -1480,6 +1507,7 @@
     if (!selected || !reopenDocument || reviewingDocumentId != null) return;
     const doc = reopenDocument;
     reviewingDocumentId = doc.id;
+    reviewingDocumentAction = 'REOPEN';
     try {
       await reopenContractDocumentReview(selected.id, doc.id);
       toast.success('Análise do documento reaberta com sucesso.');
@@ -1492,6 +1520,7 @@
       toast.error(resolveApiErrorMessage(error, 'Não foi possível reabrir a análise.'));
     } finally {
       reviewingDocumentId = null;
+      reviewingDocumentAction = null;
     }
   }
 
@@ -2176,7 +2205,7 @@
       {#if isLoading}
         <Loader2 class="mr-2 h-4 w-4 animate-spin" />
       {/if}
-      Atualizar
+      {isLoading ? 'Atualizando…' : 'Atualizar'}
     </Button>
   </div>
 
@@ -2430,12 +2459,16 @@
               type="button"
               variant="outline"
               size="sm"
-              on:click={() => selected && reloadSelectedContract(selected.id)}
-              disabled={isLoading}
+              on:click={() => { void refreshSelectedContract(); }}
+              disabled={isReloadingSelectedContract}
               title="Atualizar dados do contrato e documentos"
             >
-              <RefreshCcw class="mr-1.5 h-3.5 w-3.5" />
-              Atualizar
+              {#if isReloadingSelectedContract}
+                <Loader2 class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              {:else}
+                <RefreshCcw class="mr-1.5 h-3.5 w-3.5" />
+              {/if}
+              {isReloadingSelectedContract ? 'Atualizando…' : 'Atualizar'}
             </Button>
             <Button
               type="button"
@@ -2648,6 +2681,7 @@
             canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
             downloadingDocumentId={downloadingDocumentId}
             reviewDocumentId={reviewingDocumentId}
+            reviewDocumentAction={reviewingDocumentAction}
             onOpenPreview={(doc) => selected && openDocumentPreview(doc, selected)}
             onDownload={(doc) => selected && viewDocument(doc, selected)}
             onReplace={(documentType, side, existingDocumentType, replaceDocumentId) => {
@@ -2667,6 +2701,7 @@
               buyerLockReasons={buyerLockReasons}
               isReadyToApprove={isReadyToApprove}
               evaluatingSide={evaluatingSide}
+              evaluatingSideAction={evaluatingSideAction}
               sellerApprovalDisabled={sellerApprovalDisabled}
               buyerApprovalDisabled={buyerApprovalDisabled}
               isDoubleEndedDeal={isDoubleEndedDeal}
@@ -3395,7 +3430,7 @@
         disabled={evaluatingSide !== null || restartSide === null}
       >
         {#if evaluatingSide !== null}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
-        Reiniciar
+        {evaluatingSide !== null ? 'Reiniciando…' : 'Reiniciar'}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>
@@ -3415,7 +3450,7 @@
       </Button>
       <Button variant="destructive" on:click={() => { void confirmReopenDocument(); }} disabled={reviewingDocumentId !== null}>
         {#if reviewingDocumentId !== null}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
-        Reabrir análise
+        {reviewingDocumentId !== null ? 'Reabrindo…' : 'Reabrir análise'}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

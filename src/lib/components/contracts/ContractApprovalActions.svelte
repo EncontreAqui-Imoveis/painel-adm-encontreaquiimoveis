@@ -16,6 +16,7 @@
   export let buyerLockReasons: string[] = [];
   export let isReadyToApprove = false;
   export let evaluatingSide: "seller" | "buyer" | null = null;
+  export let evaluatingSideAction: ContractApprovalStatus | null = null;
   export let sellerApprovalDisabled = false;
   export let buyerApprovalDisabled = false;
   export let isDoubleEndedDeal: (value: ContractItem | null) => boolean = () =>
@@ -34,6 +35,14 @@
   $: allLockReasons = approvalLockReasons.length > 0 ? approvalLockReasons : [...sellerLockReasons, ...buyerLockReasons];
   $: sellerAwaitingResubmission = isAwaitingDocumentResubmission(contract, "seller");
   $: buyerAwaitingResubmission = isAwaitingDocumentResubmission(contract, "buyer");
+  $: sellerIsEvaluating = evaluatingSide === "seller";
+  $: buyerIsEvaluating = evaluatingSide === "buyer";
+  $: sellerIsApproving = sellerIsEvaluating && evaluatingSideAction === "APPROVED";
+  $: buyerIsApproving = buyerIsEvaluating && evaluatingSideAction === "APPROVED";
+  $: sellerIsApprovingWithRemarks = sellerIsEvaluating && evaluatingSideAction === "APPROVED_WITH_RES";
+  $: buyerIsApprovingWithRemarks = buyerIsEvaluating && evaluatingSideAction === "APPROVED_WITH_RES";
+  $: sellerIsRejecting = sellerIsEvaluating && evaluatingSideAction === "REJECTED";
+  $: buyerIsRejecting = buyerIsEvaluating && evaluatingSideAction === "REJECTED";
 </script>
 
 <div
@@ -81,23 +90,24 @@
             ? sellerLockReasons.join(" | ")
             : undefined}
         >
-          Aprovar<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>
+          {#if sellerIsApproving}<Loader2 class="mr-2 h-4 w-4 animate-spin" />Aprovando…{:else}Aprovar<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>{/if}
         </Button>
         <Button
           size="sm"
           variant="outline"
           className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
           on:click={() => evaluateContractSide("seller", "APPROVED_WITH_RES")}
+          disabled={sellerIsEvaluating}
         >
-          Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>
+          {#if sellerIsApprovingWithRemarks}<Loader2 class="mr-2 h-4 w-4 animate-spin" />Aprovando…{:else}Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>{/if}
         </Button>
         <Button
           size="sm"
           variant="destructive"
           on:click={() => evaluateContractSide("seller", "REJECTED")}
-          disabled={evaluatingSide === "seller"}
+          disabled={sellerIsEvaluating}
         >
-          Rejeitar
+          {#if sellerIsRejecting}<Loader2 class="mr-2 h-4 w-4 animate-spin" />Rejeitando…{:else}Rejeitar{/if}
         </Button>
       {:else if getSideApprovalUiState(contract?.sellerApprovalStatus) === "approved"}
         <Button
@@ -172,23 +182,24 @@
               ? buyerLockReasons.join(" | ")
               : undefined}
           >
-            Aprovar<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>
+            {#if buyerIsApproving}<Loader2 class="mr-2 h-4 w-4 animate-spin" />Aprovando…{:else}Aprovar<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>{/if}
           </Button>
           <Button
             size="sm"
             variant="outline"
             className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
             on:click={() => evaluateContractSide("buyer", "APPROVED_WITH_RES")}
+            disabled={buyerIsEvaluating}
           >
-            Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>
+            {#if buyerIsApprovingWithRemarks}<Loader2 class="mr-2 h-4 w-4 animate-spin" />Aprovando…{:else}Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>{/if}
           </Button>
           <Button
             size="sm"
             variant="destructive"
             on:click={() => evaluateContractSide("buyer", "REJECTED")}
-            disabled={evaluatingSide === "buyer"}
+            disabled={buyerIsEvaluating}
           >
-            Rejeitar
+            {#if buyerIsRejecting}<Loader2 class="mr-2 h-4 w-4 animate-spin" />Rejeitando…{:else}Rejeitar{/if}
           </Button>
         {:else if getSideApprovalUiState(contract?.buyerApprovalStatus) === "approved"}
           <Button

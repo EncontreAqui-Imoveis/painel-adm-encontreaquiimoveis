@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 
 import ContractApprovalActions from '../../src/lib/components/contracts/ContractApprovalActions.svelte';
@@ -89,6 +89,32 @@ describe('ContractApprovalActions', () => {
     expect(sellerSection).toHaveTextContent('Aprovar c/ ressalvas');
     expect(sellerSection).toHaveTextContent('Rejeitar');
     expect(sellerSection).not.toHaveTextContent('Reiniciar');
+  });
+
+  it('mostra o loading da ação atual e bloqueia somente as ações do mesmo lado', () => {
+    render(ContractApprovalActions, {
+      contract: { ...buildContract('sale'), sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING' },
+      evaluatingSide: 'seller',
+      evaluatingSideAction: 'APPROVED_WITH_RES',
+    });
+
+    const sellerSection = screen.getByText('Avaliação Vendedor').parentElement as HTMLElement;
+    const buyerSection = screen.getByText('Avaliação Comprador').parentElement as HTMLElement;
+    expect(within(sellerSection).getByRole('button', { name: 'Aprovando…' })).toBeDisabled();
+    expect(within(sellerSection).getByRole('button', { name: 'Rejeitar' })).toBeDisabled();
+    expect(within(buyerSection).getByRole('button', { name: /^Aprovarcomprador$/i })).toBeEnabled();
+  });
+
+  it('mostra Rejeitando somente na ação de rejeição em andamento', () => {
+    render(ContractApprovalActions, {
+      contract: { ...buildContract('sale'), sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING' },
+      evaluatingSide: 'seller',
+      evaluatingSideAction: 'REJECTED',
+    });
+
+    const sellerSection = screen.getByText('Avaliação Vendedor').parentElement as HTMLElement;
+    expect(within(sellerSection).getByRole('button', { name: 'Rejeitando…' })).toBeDisabled();
+    expect(within(sellerSection).getByRole('button', { name: /^Aprovarvendedor$/i })).toBeDisabled();
   });
 
   it('mantém somente Reiniciar para o lado rejeitado até a análise ser reiniciada', async () => {

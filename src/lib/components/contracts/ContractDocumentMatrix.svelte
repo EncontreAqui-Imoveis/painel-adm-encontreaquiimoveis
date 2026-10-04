@@ -30,6 +30,7 @@
   ) => boolean = () => false;
   export let downloadingDocumentId: number | null = null;
   export let reviewDocumentId: number | null = null;
+  export let reviewDocumentAction: 'APPROVED' | 'REJECTED' | 'REOPEN' | null = null;
   export let onOpenPreview: (doc: ContractMatrixRowView['sellerDocs'][number]) => void = () => {};
   export let onDownload: (doc: ContractMatrixRowView['sellerDocs'][number]) => void = () => {};
   export let onReplace: (documentType: string, side: 'seller' | 'buyer', existingDocumentType?: string | null, replaceDocumentId?: number | null) => void = () => {};
@@ -197,10 +198,10 @@
                             {/if}
                           {:else if !isSideReadOnly('seller')}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-50 dark:hover:bg-emerald-950/50" aria-label="Aprovar documento" title="Aprovar documento" on:click={() => onReview(sellerDoc, 'APPROVED')} disabled={reviewDocumentId === sellerDoc.id}>
-                              {#if reviewDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Check class="h-4 w-4" />{/if}
+                              {#if reviewDocumentId === sellerDoc.id && reviewDocumentAction === 'APPROVED'}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Check class="h-4 w-4" />{/if}
                             </button>
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-red-600 hover:bg-red-100 hover:text-red-700 disabled:opacity-50 dark:hover:bg-red-950/50" aria-label="Rejeitar documento" title="Rejeitar documento" on:click={() => onReview(sellerDoc, 'REJECTED')} disabled={reviewDocumentId === sellerDoc.id}>
-                              <X class="h-4 w-4" />
+                              {#if reviewDocumentId === sellerDoc.id && reviewDocumentAction === 'REJECTED'}<Loader2 class="h-4 w-4 animate-spin" />{:else}<X class="h-4 w-4" />{/if}
                             </button>
                           {/if}
                         </div>
@@ -315,10 +316,10 @@
                             {/if}
                           {:else if !isSideReadOnly('buyer')}
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-50 dark:hover:bg-emerald-950/50" aria-label="Aprovar documento" title="Aprovar documento" on:click={() => onReview(buyerDoc, 'APPROVED')} disabled={reviewDocumentId === buyerDoc.id}>
-                              {#if reviewDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Check class="h-4 w-4" />{/if}
+                              {#if reviewDocumentId === buyerDoc.id && reviewDocumentAction === 'APPROVED'}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Check class="h-4 w-4" />{/if}
                             </button>
                             <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-full p-2 text-red-600 hover:bg-red-100 hover:text-red-700 disabled:opacity-50 dark:hover:bg-red-950/50" aria-label="Rejeitar documento" title="Rejeitar documento" on:click={() => onReview(buyerDoc, 'REJECTED')} disabled={reviewDocumentId === buyerDoc.id}>
-                              <X class="h-4 w-4" />
+                              {#if reviewDocumentId === buyerDoc.id && reviewDocumentAction === 'REJECTED'}<Loader2 class="h-4 w-4 animate-spin" />{:else}<X class="h-4 w-4" />{/if}
                             </button>
                           {/if}
                         </div>

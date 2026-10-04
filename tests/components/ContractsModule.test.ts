@@ -801,6 +801,181 @@ describe('ContractsModule', () => {
     });
   });
 
+  it('mostra Atualizando ao recarregar o contrato selecionado e limpa em sucesso ou erro', async () => {
+    const contract = {
+      id: 'contract-selected-refresh-1',
+      status: 'AWAITING_DOCS',
+      negotiationId: 'neg-selected-refresh-1',
+      propertyId: 703,
+      propertyCode: 'RV-703',
+      propertyTitle: 'Casa Atualização',
+      propertyPurpose: 'Venda',
+      sellerApprovalStatus: 'PENDING',
+      buyerApprovalStatus: 'PENDING',
+      sellerInfo: {},
+      buyerInfo: {},
+      documents: [],
+      createdAt: '2026-03-01T10:00:00.000Z',
+      updatedAt: '2026-03-01T10:00:00.000Z',
+    };
+    let holdSelectedReload = false;
+    let shouldRejectSelectedReload = false;
+    let resolveSelectedReload: ((value: unknown) => void) | null = null;
+    let rejectSelectedReload: ((error: unknown) => void) | null = null;
+    let selectedDetailRequests = 0;
+    apiGetMock.mockImplementation((endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) return { data: [contract], total: 1 };
+      if (endpoint.includes('/document-rejections')) return { rejections: [] };
+      if (endpoint.includes('/contracts/contract-selected-refresh-1')) {
+        selectedDetailRequests += 1;
+        if (holdSelectedReload) {
+          return new Promise((resolve, reject) => {
+            resolveSelectedReload = resolve;
+            rejectSelectedReload = shouldRejectSelectedReload ? reject : resolve;
+          });
+        }
+        return { contract, documents: [] };
+      }
+      return { data: [], total: 0 };
+    });
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Analisar Documentação' }));
+    const dialog = screen.getByRole('dialog', { name: 'Análise de Documentação' });
+    const updateButton = within(dialog).getByRole('button', { name: 'Atualizar' });
+
+    holdSelectedReload = true;
+    await fireEvent.click(updateButton);
+    await tick();
+    const updatingButton = within(dialog).getByRole('button', { name: 'Atualizando…' });
+    expect(updatingButton).toBeDisabled();
+    const requestsDuringPendingSuccess = selectedDetailRequests;
+    await fireEvent.click(updatingButton);
+    expect(selectedDetailRequests).toBe(requestsDuringPendingSuccess);
+
+    resolveSelectedReload?.({ contract: { ...contract, propertyTitle: 'Casa Atualizada' }, documents: [] });
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+    expect(screen.getByText('Casa Atualizada')).toBeInTheDocument();
+
+    shouldRejectSelectedReload = true;
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Atualizar' }));
+    await tick();
+    expect(within(dialog).getByRole('button', { name: 'Atualizando…' })).toBeDisabled();
+    rejectSelectedReload?.(new Error('Falha de atualização simulada.'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Não foi possível atualizar o contrato.'));
+    expect(within(dialog).getByRole('button', { name: 'Atualizar' })).toBeEnabled();
+  });
+
+  it('mostra Reiniciando durante a confirmação de reinício', async () => {
+    const contract = {
+      id: 'contract-restart-loading-1', status: 'AWAITING_DOCS', negotiationId: 'neg-restart-loading-1', propertyId: 704,
+      propertyCode: 'RV-704', propertyTitle: 'Casa Reiniciar', propertyPurpose: 'Venda',
+      sellerApprovalStatus: 'APPROVED', buyerApprovalStatus: 'PENDING', sellerInfo: {}, buyerInfo: {}, documents: [],
+      createdAt: '2026-03-01T10:00:00.000Z', updatedAt: '2026-03-01T10:00:00.000Z',
+    };
+    let resolveRestart: (() => void) | null = null;
+    apiGetMock.mockImplementation((endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) return { data: [contract], total: 1 };
+      if (endpoint.includes('/document-rejections')) return { rejections: [] };
+      if (endpoint.includes('/contracts/contract-restart-loading-1')) return { contract, documents: [] };
+      return { data: [], total: 0 };
+    });
+    apiPutMock.mockImplementation(() => new Promise<void>((resolve) => { resolveRestart = resolve; }));
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Analisar Documentação' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Reiniciar' }));
+    const restartDialog = screen.getByText('Reiniciar análise?').closest('[role="dialog"]') as HTMLElement;
+    expect(restartDialog).not.toBeNull();
+    await fireEvent.click(within(restartDialog).getByRole('button', { name: 'Reiniciar', exact: true }));
+    await tick();
+    expect(within(restartDialog).getByRole('button', { name: 'Reiniciando…' })).toBeDisabled();
+    expect(within(restartDialog).getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+
+    resolveRestart?.();
+    await waitFor(() => expect(screen.queryByText('Reiniciar análise?')).not.toBeInTheDocument());
+  });
+
+  it('mostra Reabrindo durante a confirmação de reabertura documental', async () => {
+    const contract = {
+      id: 'contract-reopen-loading-1', status: 'AWAITING_DOCS', negotiationId: 'neg-reopen-loading-1', propertyId: 705,
+      propertyCode: 'RV-705', propertyTitle: 'Casa Reabrir', propertyPurpose: 'Venda',
+      sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING', sellerInfo: {}, buyerInfo: {},
+      documentRequirements: { seller: [{ category: 'identidade', applicability: 'required' }], buyer: [] },
+      documents: [{ id: 90, documentType: 'doc_identidade', side: 'seller', status: 'APPROVED', originalFileName: 'identidade.pdf' }],
+      createdAt: '2026-03-01T10:00:00.000Z', updatedAt: '2026-03-01T10:00:00.000Z',
+    };
+    let resolveReopen: (() => void) | null = null;
+    apiGetMock.mockImplementation((endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) return { data: [contract], total: 1 };
+      if (endpoint.includes('/document-rejections')) return { rejections: [] };
+      if (endpoint.includes('/contracts/contract-reopen-loading-1')) return { contract, documents: contract.documents };
+      return { data: [], total: 0 };
+    });
+    apiPutMock.mockImplementation(() => new Promise<void>((resolve) => { resolveReopen = resolve; }));
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Analisar Documentação' }));
+    await fireEvent.click(screen.getByLabelText('Reabrir análise'));
+    const reopenDialog = screen.getByText('Reabrir análise?').closest('[role="dialog"]') as HTMLElement;
+    expect(reopenDialog).not.toBeNull();
+    await fireEvent.click(within(reopenDialog).getByRole('button', { name: 'Reabrir análise', exact: true }));
+    await tick();
+    expect(within(reopenDialog).getByRole('button', { name: 'Reabrindo…' })).toBeDisabled();
+    expect(within(reopenDialog).getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+
+    resolveReopen?.();
+    await waitFor(() => expect(screen.queryByText('Reabrir análise?')).not.toBeInTheDocument());
+  });
+
+  it('mostra o loading da decisão do lado e bloqueia uma segunda mutação do mesmo lado', async () => {
+    const completeSellerInfo = { nome: 'Vendedor', cpf: '111', estado_civil: 'Solteiro', profissao: 'Corretor', email: 'seller@test.com', telefone: '62999999999', dados_bancarios: 'Banco' };
+    const completeBuyerInfo = { nome: 'Comprador', cpf: '222', estado_civil: 'Solteiro', profissao: 'Cliente', email: 'buyer@test.com', telefone: '62999999998' };
+    const contract = {
+      id: 'contract-side-loading-1', status: 'AWAITING_DOCS', negotiationId: 'neg-side-loading-1', propertyId: 706,
+      propertyCode: 'RV-706', propertyTitle: 'Casa Decisão', propertyPurpose: 'Venda',
+      sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING', sellerInfo: completeSellerInfo, buyerInfo: completeBuyerInfo,
+      documentRequirements: { seller: [{ category: 'outro', applicability: 'optional' }], buyer: [{ category: 'outro', applicability: 'optional' }] },
+      documents: [], createdAt: '2026-03-01T10:00:00.000Z', updatedAt: '2026-03-01T10:00:00.000Z',
+    };
+    const pendingSideRequests: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
+    apiGetMock.mockImplementation((endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) return { data: [contract], total: 1 };
+      if (endpoint.includes('/document-rejections')) return { rejections: [] };
+      if (endpoint.includes('/contracts/contract-side-loading-1')) return { contract, documents: [] };
+      return { data: [], total: 0 };
+    });
+    apiPutMock.mockImplementation(() => new Promise<void>((resolve, reject) => pendingSideRequests.push({ resolve, reject })));
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('Motivo válido.');
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Analisar Documentação' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Aprovarvendedor$/i }));
+    await tick();
+    expect(screen.getByRole('button', { name: 'Aprovando…' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: 'Rejeitar' })[0]).toBeDisabled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Aprovando…' }));
+    expect(pendingSideRequests).toHaveLength(1);
+    pendingSideRequests[0].resolve();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Aprovarvendedor$/i })).toBeEnabled());
+
+    await fireEvent.click(screen.getByRole('button', { name: /^Aprovar c\/ ressalvasvendedor$/i }));
+    await tick();
+    expect(screen.getByRole('button', { name: 'Aprovando…' })).toBeDisabled();
+    expect(pendingSideRequests).toHaveLength(2);
+    pendingSideRequests[1].resolve();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Aprovar c\/ ressalvasvendedor$/i })).toBeEnabled());
+
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Rejeitar' })[0]);
+    await tick();
+    expect(screen.getByRole('button', { name: 'Rejeitando…' })).toBeDisabled();
+    expect(pendingSideRequests).toHaveLength(3);
+    pendingSideRequests[2].reject(new Error('Falha de rejeição simulada.'));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Rejeitar' })[0]).toBeEnabled());
+    expect(toastErrorMock).toHaveBeenCalledWith('Não foi possível registrar a avaliação.');
+    promptSpy.mockRestore();
+  });
+
   it('envia o documento pessoal explícito do cônjuge para buyer', async () => {
     const buyerOutroDocs: Array<Record<string, unknown>> = [];
     apiGetMock.mockImplementation(async (endpoint: string) => {

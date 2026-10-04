@@ -370,6 +370,30 @@ describe('ContractDocumentMatrix', () => {
     expect(screen.getByLabelText('Substituir documento').querySelector('.animate-spin')).toBeNull();
   });
 
+  it('mostra o spinner de revisão na ação individual que está em andamento', async () => {
+    const props = {
+      contract: { id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1 },
+      rows: [{
+        documentType: 'doc_identidade', sellerRequired: true, buyerRequired: false,
+        sellerDocs: [{ id: 9, documentType: 'doc_identidade', side: 'seller', status: 'PENDING', originalFileName: 'id.pdf' }], buyerDocs: [],
+      }],
+      documentLabel: () => 'Documento Pessoal',
+      documentFileName: () => 'id.pdf',
+      reviewDocumentId: 9,
+    };
+
+    const approvingView = render(ContractDocumentMatrix, { ...props, reviewDocumentAction: 'APPROVED' as const });
+    await fireEvent.click(screen.getByLabelText('Editar documento'));
+    expect(screen.getByLabelText('Aprovar documento').querySelector('.animate-spin')).not.toBeNull();
+    expect(screen.getByLabelText('Rejeitar documento').querySelector('.animate-spin')).toBeNull();
+    approvingView.unmount();
+
+    render(ContractDocumentMatrix, { ...props, reviewDocumentAction: 'REJECTED' as const });
+    await fireEvent.click(screen.getByLabelText('Editar documento'));
+    expect(screen.getByLabelText('Aprovar documento').querySelector('.animate-spin')).toBeNull();
+    expect(screen.getByLabelText('Rejeitar documento').querySelector('.animate-spin')).not.toBeNull();
+  });
+
   it('associa o loading de Outro ao tipo efetivo do documento', async () => {
     render(ContractDocumentMatrix, {
       contract: { id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1 },
