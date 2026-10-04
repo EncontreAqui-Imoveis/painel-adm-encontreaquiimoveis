@@ -26,6 +26,55 @@ describe('ContractDocumentMatrix', () => {
     expect(screen.queryByText('Pendente')).not.toBeInTheDocument();
   });
 
+  it('mostra Enviando somente no slot vazio que está em upload e o restaura ao limpar o estado', () => {
+    const props = {
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING',
+      },
+      rows: [{
+        documentType: 'doc_identidade', sellerRequired: true, buyerRequired: true, sellerDocs: [], buyerDocs: [],
+      }],
+      documentLabel: () => 'Documento Pessoal',
+      matrixSlotKey: (documentType: string, side: string, existingDocumentType: string | null = null) =>
+        `contract-1:${side}:${existingDocumentType ?? documentType}`,
+    };
+    const view = render(ContractDocumentMatrix, { ...props, matrixUploadingCounts: {} });
+    expect(screen.getAllByRole('button', { name: 'Enviar' })).toHaveLength(2);
+
+    view.unmount();
+    const uploadingView = render(ContractDocumentMatrix, {
+      ...props,
+      matrixUploadingCounts: { 'contract-1:seller:doc_identidade': 1 },
+    });
+    expect(screen.getByRole('button', { name: 'Enviando…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Enviando…' }).querySelector('.animate-spin')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled();
+
+    uploadingView.unmount();
+    render(ContractDocumentMatrix, { ...props, matrixUploadingCounts: {} });
+    expect(screen.getAllByRole('button', { name: 'Enviar' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Enviando…' })).not.toBeInTheDocument();
+  });
+
+  it('mantém o loading de Outro isolado por lado e tipo efetivo', () => {
+    render(ContractDocumentMatrix, {
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING',
+      },
+      rows: [{ documentType: 'outro', sellerRequired: true, buyerRequired: true, sellerDocs: [], buyerDocs: [] }],
+      documentLabel: () => 'Outro',
+      matrixUploadingCounts: { 'contract-1:seller:cliente_outro_01': 1 },
+      matrixSlotKey: (_documentType: string, side: string, existingDocumentType: string | null = null) =>
+        `contract-1:${side}:${existingDocumentType ?? 'cliente_outro_01'}`,
+    });
+
+    expect(screen.getByRole('button', { name: 'Enviando…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled();
+    expect(screen.queryByText('Pendente')).not.toBeInTheDocument();
+  });
+
   it('mantém Enviar no lado sem arquivo quando Outro existe apenas no outro lado', async () => {
     const onUpload = vi.fn();
     render(ContractDocumentMatrix, {

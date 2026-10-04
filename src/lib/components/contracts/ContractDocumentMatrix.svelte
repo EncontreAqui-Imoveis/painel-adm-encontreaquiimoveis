@@ -120,11 +120,13 @@
                         </span>
                       {/if}
                       {#if !isSideReadOnly('seller')}
-                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')} disabled={isMatrixSlotBusy(documentType, 'seller')}>
+                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')} disabled={isMatrixSlotBusy(documentType, 'seller') || isMatrixSlotUploading(documentType, 'seller')}>
                           {#if isMatrixSlotUploading(documentType, 'seller')}
                             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                            Enviando…
+                          {:else}
+                            Enviar
                           {/if}
-                          Enviar
                         </Button>
                       {/if}
                     </div>
@@ -235,11 +237,13 @@
                         </span>
                       {/if}
                       {#if !isSideReadOnly('buyer')}
-                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')} disabled={isMatrixSlotBusy(documentType, 'buyer')}>
+                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')} disabled={isMatrixSlotBusy(documentType, 'buyer') || isMatrixSlotUploading(documentType, 'buyer')}>
                           {#if isMatrixSlotUploading(documentType, 'buyer')}
                             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                            Enviando…
+                          {:else}
+                            Enviar
                           {/if}
-                          Enviar
                         </Button>
                       {/if}
                     </div>
