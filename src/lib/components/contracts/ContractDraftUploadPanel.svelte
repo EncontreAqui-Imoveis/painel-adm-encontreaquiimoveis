@@ -38,6 +38,9 @@
   export let handleDraftFileChange: (event: Event) => void = () => {};
   export let draftUploadInputEl: HTMLInputElement | null = null;
 
+  let isAwaitingMinuteReview = false;
+  $: isAwaitingMinuteReview = contract?.status === 'AWAITING_MINUTE_REVIEW';
+
   function onPickDraftFile() {
     if (draftUploadInputEl) {
       draftUploadInputEl.click();
@@ -65,7 +68,7 @@
   {#if currentDraftDocument}
     <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
       <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-        Minuta atual
+        {isAwaitingMinuteReview ? 'Minuta em revisão pelas partes' : 'Minuta atual'}
       </p>
       <div class="mt-2 flex flex-col gap-3 rounded bg-gray-50 px-3 py-3 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between">
         <div class="min-w-0">
@@ -111,7 +114,7 @@
             {/if}
             Baixar
           </Button>
-          {#if canDeleteDocuments}
+          {#if canDeleteDocuments && !isAwaitingMinuteReview}
             <Button
               size="sm"
               variant="destructive"
@@ -130,7 +133,7 @@
           {/if}
         </div>
       </div>
-      {#if contract?.draftReview}
+      {#if contract?.draftReview && !isAwaitingMinuteReview}
         <div class="mt-3 grid gap-2 sm:grid-cols-2">
           <p class="rounded bg-slate-100 px-3 py-2 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">
             {buyerLabel}: {contract.draftReview.buyerDecision === 'CONSENTED'
@@ -161,6 +164,78 @@
     </div>
   {/if}
 
+  {#if isAwaitingMinuteReview}
+    <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+      {#if !currentDraftDocument}
+        <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+          Minuta em revisão pelas partes
+        </p>
+        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          A minuta atual não está disponível.
+        </p>
+      {/if}
+
+      {#if contract?.draftReview}
+        <div class={currentDraftDocument ? 'grid gap-2 sm:grid-cols-2' : 'mt-3 grid gap-2 sm:grid-cols-2'}>
+          <p class="rounded bg-slate-100 px-3 py-2 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            {buyerLabel}: {contract.draftReview.buyerDecision === 'CONSENTED'
+              ? 'De acordo'
+              : contract.draftReview.buyerDecision === 'CHANGES_REQUESTED'
+                ? 'Solicitou correção'
+                : 'Aguardando'}
+          </p>
+          {#if contract.draftReview.buyerDecision === 'CHANGES_REQUESTED' && contract.draftReview.buyerReason}
+            <p class="-mt-1 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              Motivo do {buyerLabel.toLowerCase()}: {contract.draftReview.buyerReason}
+            </p>
+          {/if}
+          <p class="rounded bg-slate-100 px-3 py-2 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            {sellerLabel}: {contract.draftReview.sellerDecision === 'CONSENTED'
+              ? 'De acordo'
+              : contract.draftReview.sellerDecision === 'CHANGES_REQUESTED'
+                ? 'Solicitou correção'
+                : 'Aguardando'}
+          </p>
+          {#if contract.draftReview.sellerDecision === 'CHANGES_REQUESTED' && contract.draftReview.sellerReason}
+            <p class="-mt-1 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              Motivo do {sellerLabel.toLowerCase()}: {contract.draftReview.sellerReason}
+            </p>
+          {/if}
+        </div>
+      {:else}
+        <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
+          Aguardando a conferência das partes.
+        </p>
+      {/if}
+
+      <div class="mt-3 flex flex-wrap items-center gap-3">
+        <input
+          id="draft-pdf"
+          bind:this={draftUploadInputEl}
+          type="file"
+          accept="application/pdf,.pdf"
+          on:change={handleDraftFileChange}
+          class="sr-only"
+          aria-hidden="true"
+          tabindex="-1"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          on:click={() => selectedDraftFile ? submitDraft() : onPickDraftFile()}
+          disabled={uploadingDraft || movingToPreviousStage}
+        >
+          {#if uploadingDraft}
+            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+          {/if}
+          {uploadingDraft ? 'Substituindo…' : 'Substituir minuta'}
+        </Button>
+        {#if selectedDraftFile}
+          <span class="text-xs text-gray-500 dark:text-gray-400">{selectedDraftFile.name}</span>
+        {/if}
+      </div>
+    </div>
+  {:else}
   <div class="rounded-2xl border border-dashed border-gray-300 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-950/20">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0">
@@ -219,6 +294,7 @@
       {/if}
     </div>
   </div>
+  {/if}
 
   <div id="finalized-document-upload" class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
     <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
@@ -316,7 +392,7 @@
     >
       Fechar
     </Button>
-    {#if hasCurrentDraftDocument(contract)}
+    {#if !isAwaitingMinuteReview && hasCurrentDraftDocument(contract)}
       {#if selectedDraftFile}
         <Button
           className="bg-green-600 text-white hover:bg-green-700"
@@ -340,7 +416,7 @@
           Prosseguir com a mesma minuta
         </Button>
       {/if}
-    {:else}
+    {:else if !isAwaitingMinuteReview}
       <Button
         className="bg-green-600 text-white hover:bg-green-700"
         on:click={() => submitDraft()}

@@ -1716,6 +1716,115 @@ describe('ContractsModule', () => {
     expect(await screen.findByRole('button', { name: 'Substituir minuta' })).toBeInTheDocument();
   });
 
+  it('acompanha a revisão da minuta sem repetir o formulário de publicação', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_MINUTE_REVIEW')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-draft-review-1',
+              status: 'AWAITING_MINUTE_REVIEW',
+              negotiationId: 'neg-test-draft-review-1',
+              propertyId: 615,
+              propertyCode: 'AL-615',
+              propertyTitle: 'Casa em Revisão',
+              propertyPurpose: 'Aluguel',
+              dealType: 'rent',
+              documents: [
+                {
+                  id: 6151,
+                  documentType: 'contrato_minuta',
+                  originalFileName: 'minuta_revisao.pdf',
+                  downloadUrl: '/negotiations/neg-test-draft-review-1/documents/6151/download',
+                  metadata: { contractId: 'contract-test-draft-review-1' },
+                  createdAt: '2026-03-01T09:00:00.000Z',
+                },
+              ],
+              draftReview: {
+                buyerDecision: 'CONSENTED',
+                sellerDecision: null,
+              },
+            },
+          ],
+          total: 1,
+        };
+      }
+      return { data: [], total: 0 };
+    });
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Conferir Minuta' }));
+
+    expect(screen.getByText('Minuta em revisão pelas partes')).toBeInTheDocument();
+    expect(screen.getAllByText('minuta_revisao.pdf').length).toBeGreaterThan(0);
+    expect(screen.getByText('Locatário: De acordo')).toBeInTheDocument();
+    expect(screen.getByText('Locador: Aguardando')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Visualizar' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Baixar' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Substituir minuta' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Prosseguir com a mesma minuta' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Excluir minuta' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Minuta anexada')).not.toBeInTheDocument();
+    expect(screen.queryByText('Selecione um arquivo apenas se quiser substituir a minuta atual.')).not.toBeInTheDocument();
+  });
+
+  it('substitui a minuta durante a revisão pelo fluxo de upload existente', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_MINUTE_REVIEW')) {
+        return {
+          data: [
+            {
+              id: 'contract-test-draft-review-replace-1',
+              status: 'AWAITING_MINUTE_REVIEW',
+              negotiationId: 'neg-test-draft-review-replace-1',
+              propertyId: 616,
+              propertyTitle: 'Casa Corrigida',
+              propertyPurpose: 'Venda',
+              documents: [
+                {
+                  id: 6161,
+                  documentType: 'contrato_minuta',
+                  originalFileName: 'minuta_antiga.pdf',
+                  downloadUrl: '/negotiations/neg-test-draft-review-replace-1/documents/6161/download',
+                  metadata: { contractId: 'contract-test-draft-review-replace-1' },
+                },
+              ],
+              draftReview: {},
+            },
+          ],
+          total: 1,
+        };
+      }
+      return { data: [], total: 0 };
+    });
+    apiClientPostMock.mockResolvedValue({ data: {} });
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Conferir Minuta' }));
+
+    const draftFileInput = document.querySelector('#draft-pdf') as HTMLInputElement;
+    await fireEvent.change(draftFileInput, {
+      target: {
+        files: [new File(['%PDF-1.4 replacement%'], 'minuta_corrigida.pdf', {
+          type: 'application/pdf',
+        })],
+      },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Substituir minuta' }));
+
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledWith(
+        '/admin/contracts/contract-test-draft-review-replace-1/draft',
+        expect.any(FormData)
+      );
+    });
+    const form = apiClientPostMock.mock.calls[0][1] as FormData;
+    expect((form.get('file') as File).name).toBe('minuta_corrigida.pdf');
+    expect(form.get('reuseCurrentDraft')).toBeNull();
+  });
+
   it('permite voltar de IN_DRAFT para a etapa anterior pelo modal', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=IN_DRAFT')) {
