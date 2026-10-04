@@ -641,7 +641,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Analisar Documentação' }));
 
     const uploadButtons = screen.getAllByRole('button', { name: 'Enviar' });
-    expect(uploadButtons).toHaveLength(1);
+    expect(uploadButtons).toHaveLength(2);
 
     const hiddenInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     expect(hiddenInput).toBeTruthy();

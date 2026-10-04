@@ -4,19 +4,35 @@ import { describe, expect, it, vi } from 'vitest';
 import ContractDocumentMatrix from '../../src/lib/components/contracts/ContractDocumentMatrix.svelte';
 
 describe('ContractDocumentMatrix', () => {
-  it('não marca Outro vazio como pendente e mantém o envio disponível', () => {
+  it('mantém Outro vazio disponível para os dois lados sem marcar pendência', async () => {
+    const onUpload = vi.fn();
     render(ContractDocumentMatrix, {
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING',
+      },
       rows: [{ documentType: 'outro', sellerRequired: true, buyerRequired: false, sellerDocs: [], buyerDocs: [] }],
       documentLabel: () => 'Outro',
+      onUpload,
     });
 
     expect(screen.getByText('Outro')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Enviar' })).toBeInTheDocument();
+    const uploadButtons = screen.getAllByRole('button', { name: 'Enviar' });
+    expect(uploadButtons).toHaveLength(2);
+    await fireEvent.click(uploadButtons[0]);
+    await fireEvent.click(uploadButtons[1]);
+    expect(onUpload).toHaveBeenNthCalledWith(1, 'outro', 'seller');
+    expect(onUpload).toHaveBeenNthCalledWith(2, 'outro', 'buyer');
     expect(screen.queryByText('Pendente')).not.toBeInTheDocument();
   });
 
-  it('mostra o status real quando Outro possui arquivo pendente', () => {
+  it('mantém Enviar no lado sem arquivo quando Outro existe apenas no outro lado', async () => {
+    const onUpload = vi.fn();
     render(ContractDocumentMatrix, {
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING',
+      },
       rows: [{
         documentType: 'outro', sellerRequired: true, buyerRequired: false,
         sellerDocs: [{ id: 71, documentType: 'cliente_outro_01', side: 'seller', status: 'PENDING', originalFileName: 'anexo.pdf' }], buyerDocs: [],
@@ -25,9 +41,65 @@ describe('ContractDocumentMatrix', () => {
       documentFileName: () => 'anexo.pdf',
       documentStatusLabel: () => 'Em análise',
       documentStatusClass: () => 'bg-amber-100',
+      onUpload,
     });
 
     expect(screen.getByText('Em análise')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    expect(onUpload).toHaveBeenCalledWith('outro', 'buyer');
+  });
+
+  it('mantém Outro independente quando um dos lados está readonly', async () => {
+    const onUpload = vi.fn();
+    const props = {
+      rows: [{ documentType: 'outro', sellerRequired: true, buyerRequired: false, sellerDocs: [], buyerDocs: [] }],
+      documentLabel: () => 'Outro',
+      onUpload,
+    };
+    const view = render(ContractDocumentMatrix, {
+      ...props,
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'APPROVED', buyerApprovalStatus: 'PENDING',
+      },
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    expect(onUpload).toHaveBeenCalledWith('outro', 'buyer');
+
+    view.unmount();
+    render(ContractDocumentMatrix, {
+      ...props,
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'APPROVED',
+      },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    expect(onUpload).toHaveBeenLastCalledWith('outro', 'seller');
+  });
+
+  it('mantém Enviar no seller quando Outro existe apenas no buyer', async () => {
+    const onUpload = vi.fn();
+    render(ContractDocumentMatrix, {
+      contract: {
+        id: 'contract-1', status: 'AWAITING_DOCS', negotiationId: 'neg-1', propertyId: 1,
+        sellerApprovalStatus: 'PENDING', buyerApprovalStatus: 'PENDING',
+      },
+      rows: [{
+        documentType: 'outro', sellerRequired: false, buyerRequired: true,
+        sellerDocs: [], buyerDocs: [{ id: 72, documentType: 'cliente_outro_01', side: 'buyer', status: 'PENDING', originalFileName: 'anexo-buyer.pdf' }],
+      }],
+      documentLabel: () => 'Outro',
+      documentFileName: () => 'anexo-buyer.pdf',
+      documentStatusLabel: () => 'Em análise',
+      documentStatusClass: () => 'bg-amber-100',
+      onUpload,
+    });
+
+    expect(screen.getByText('anexo-buyer.pdf')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    expect(onUpload).toHaveBeenCalledWith('outro', 'seller');
   });
 
   it('mantém Pendente e dispara o upload em documento obrigatório vazio pendente', async () => {

@@ -109,7 +109,7 @@
           <tr class="border-b border-gray-100 dark:border-gray-800">
             <td class="px-3 py-3 text-gray-700 dark:text-gray-200">{documentLabel(documentType)}</td>
             <td class="px-3 py-3">
-              {#if row.sellerRequired}
+              {#if row.sellerRequired || isOptional}
                 <div class="space-y-2">
                   {#if row.sellerDocs.length === 0}
                     <div class="flex flex-wrap items-center gap-2">
@@ -224,7 +224,7 @@
               {/if}
             </td>
             <td class="px-3 py-3">
-              {#if row.buyerRequired}
+              {#if row.buyerRequired || isOptional}
                 <div class="space-y-2">
                   {#if row.buyerDocs.length === 0}
                     <div class="flex flex-wrap items-center gap-2">
