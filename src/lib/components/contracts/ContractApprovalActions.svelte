@@ -36,10 +36,12 @@
   $: buyerAwaitingResubmission = isAwaitingDocumentResubmission(contract, "buyer");
 </script>
 
-<section class="space-y-5 border-y border-gray-200 py-4 dark:border-gray-700">
+<div
+  class="space-y-3 rounded-md border border-gray-200 p-3 dark:border-gray-700"
+>
   {#if allLockReasons.length > 0}
     <div
-      class="border-l-4 border-amber-400 py-1 pl-3 dark:border-amber-600"
+      class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30"
       role="status"
       aria-live="polite"
       aria-atomic="true"
@@ -238,4 +240,4 @@
       </div>
     </div>
   {/if}
-</section>
+</div>

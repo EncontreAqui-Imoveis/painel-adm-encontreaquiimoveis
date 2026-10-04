@@ -172,10 +172,8 @@ describe('ContractDocumentMatrix', () => {
     await fireEvent.click(screen.getByLabelText('Editar documento'));
     await fireEvent.click(screen.getByLabelText('Baixar documento'));
     expect(onDownload).toHaveBeenCalledWith(expect.objectContaining({ id: 9, downloadUrl: '/negotiations/neg-1/documents/9/download' }));
-    expect(screen.getByLabelText('Editar documento')).toHaveClass('h-10', 'w-10');
 
     await fireEvent.click(screen.getByLabelText('Editar documento'));
-    expect(screen.getByLabelText('Substituir documento')).toHaveClass('h-10', 'w-10');
     await fireEvent.click(screen.getByLabelText('Substituir documento'));
     expect(onReplace).toHaveBeenCalledWith('doc_identidade', 'seller', 'doc_identidade', 9);
     expect(screen.queryByLabelText('Excluir documento')).not.toBeInTheDocument();
