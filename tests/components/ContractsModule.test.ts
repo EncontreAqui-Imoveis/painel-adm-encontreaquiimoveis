@@ -1570,7 +1570,10 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
 
     expect(screen.getByRole('button', { name: 'PDF da minuta' })).toBeInTheDocument();
+    expect(screen.getByText('Minuta atual')).toBeInTheDocument();
+    expect(screen.getByText(/Nenhuma minuta anexada/)).toBeInTheDocument();
     expect(screen.getByText('Nenhum arquivo selecionado.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Prosseguir com a mesma minuta' })).not.toBeInTheDocument();
 
     const draftFileInput = document.querySelector('#draft-pdf') as HTMLInputElement | null;
     expect(draftFileInput).not.toBeNull();
@@ -1605,6 +1608,40 @@ describe('ContractsModule', () => {
     expect(form.get('side')).toBeNull();
     expect(form.get('file')).toBeInstanceOf(File);
     expect((form.get('file') as File).name).toBe('minuta.pdf');
+  });
+
+  it('rejects a non-PDF draft before sending it to the API', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=IN_DRAFT')) {
+        return {
+          data: [{
+            id: 'contract-test-draft-pdf-only-1',
+            status: 'IN_DRAFT',
+            negotiationId: 'neg-test-draft-pdf-only-1',
+            propertyId: 614,
+            propertyTitle: 'Casa PDF',
+            propertyPurpose: 'Venda',
+            documents: [],
+          }],
+          total: 1,
+        };
+      }
+      return { data: [], total: 0 };
+    });
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Em Confecção' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
+
+    const draftFileInput = document.querySelector('#draft-pdf') as HTMLInputElement;
+    expect(draftFileInput.accept).toBe('application/pdf,.pdf');
+    await fireEvent.change(draftFileInput, {
+      target: { files: [new File(['image'], 'minuta.png', { type: 'image/png' })] },
+    });
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Selecione um arquivo PDF para a minuta.');
+    expect(apiClientPostMock).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('button', { name: 'Anexar Minuta' }).at(-1)).toBeDisabled();
   });
 
   it('mostra a minuta atual e muda o CTA para atualizar quando já existe PDF', async () => {

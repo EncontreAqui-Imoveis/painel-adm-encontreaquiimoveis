@@ -165,13 +165,13 @@
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="min-w-0">
         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          PDF da minuta
+          {hasCurrentDraftDocument(contract) ? 'PDF da minuta' : 'Minuta atual'}
         </p>
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
           {#if hasCurrentDraftDocument(contract)}
             Se quiser trocar a minuta atual, selecione um novo PDF abaixo.
           {:else}
-            Selecione o PDF que será usado como minuta oficial deste contrato.
+            Nenhuma minuta anexada. Selecione o PDF que será usado como minuta oficial deste contrato.
           {/if}
         </p>
       </div>
@@ -185,7 +185,7 @@
         id="draft-pdf"
         bind:this={draftUploadInputEl}
         type="file"
-        accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+        accept="application/pdf,.pdf"
         on:change={handleDraftFileChange}
         class="sr-only"
         aria-hidden="true"

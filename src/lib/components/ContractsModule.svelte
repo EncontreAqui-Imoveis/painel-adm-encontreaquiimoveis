@@ -1527,6 +1527,22 @@
   function handleDraftFileChange(event: Event) {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0] ?? null;
+    if (!file) {
+      selectedDraftFile = null;
+      return;
+    }
+
+    const mime = String(file.type ?? '').trim().toLowerCase();
+    const isPdfName = file.name.trim().toLowerCase().endsWith('.pdf');
+    const isPdfMime =
+      !mime || mime === 'application/pdf' || mime === 'application/octet-stream';
+    if (!isPdfName || !isPdfMime) {
+      selectedDraftFile = null;
+      target.value = '';
+      toast.error('Selecione um arquivo PDF para a minuta.');
+      return;
+    }
+
     selectedDraftFile = file;
   }
 
