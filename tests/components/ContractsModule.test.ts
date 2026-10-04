@@ -645,8 +645,26 @@ describe('ContractsModule', () => {
 
     const hiddenInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     expect(hiddenInput).toBeTruthy();
+    expect(hiddenInput.multiple).toBe(false);
+    const pickerClick = vi.spyOn(hiddenInput, 'click');
 
     await fireEvent.click(uploadButtons[0]);
+    expect(pickerClick).toHaveBeenCalledTimes(1);
+    await fireEvent.click(uploadButtons[0]);
+    expect(pickerClick).toHaveBeenCalledTimes(1);
+    await fireEvent.change(hiddenInput, {
+      target: {
+        files: [
+          new File(['seller-doc-1'], 'seller-1.pdf', { type: 'application/pdf' }),
+          new File(['seller-doc-2'], 'seller-2.pdf', { type: 'application/pdf' }),
+        ],
+      },
+    });
+    expect(toastErrorMock).toHaveBeenCalledWith('Selecione apenas um arquivo por vez.');
+    expect(apiClientPostMock).not.toHaveBeenCalled();
+
+    await fireEvent.click(uploadButtons[0]);
+    expect(hiddenInput.multiple).toBe(false);
     await fireEvent.change(hiddenInput, {
       target: {
         files: [new File(['seller-doc-1'], 'seller-1.pdf', { type: 'application/pdf' })],
@@ -665,6 +683,19 @@ describe('ContractsModule', () => {
       expect(screen.getAllByLabelText('Editar documento')).toHaveLength(1);
       expect(screen.getByRole('button', { name: 'Adicionar outro' })).toBeInTheDocument();
     });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Adicionar outro' }));
+    expect(hiddenInput.multiple).toBe(false);
+    await fireEvent.change(hiddenInput, {
+      target: {
+        files: [new File(['seller-doc-2'], 'seller-2.pdf', { type: 'application/pdf' })],
+      },
+    });
+    await waitFor(() => {
+      expect(apiClientPostMock).toHaveBeenCalledTimes(2);
+    });
+    const secondFormData = apiClientPostMock.mock.calls[1][1] as FormData;
+    expect(secondFormData.get('documentType')).toBe('cliente_outro_02');
   });
 
   it('envia o documento pessoal explícito do cônjuge para buyer', async () => {

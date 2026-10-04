@@ -141,7 +141,6 @@
     listMissingSellerInfo,
     resolveMatrixUploadCategory,
     resolveOutroMatrixDocumentType,
-    resolveOutroMatrixDocumentTypes,
   } from '$lib/components/contracts/contractsMatrixHelpers';
   import type {
     ContractApprovalStatus,
@@ -189,9 +188,16 @@
   let loadingDocumentRejections = false;
   let matrixUploadInputEl: HTMLInputElement | null = null;
   let matrixUploadContext:
-    | { documentType: string; side: 'seller' | 'buyer'; existingDocumentType?: string | null; replaceDocumentId?: number | null }
+    | {
+        documentType: string;
+        side: 'seller' | 'buyer';
+        existingDocumentType?: string | null;
+        replaceDocumentId?: number | null;
+        slotKey: string;
+      }
     | null = null;
   let matrixUploadingCounts: Record<string, number> = {};
+  let matrixBusySlots: Record<string, true> = {};
   let matrixDeletingDocumentId: number | null = null;
   let reviewingDocumentId: number | null = null;
   let reopenDocument: ContractDocument | null = null;
@@ -935,6 +941,32 @@
     return Number(matrixUploadingCounts[key] ?? 0) > 0;
   }
 
+  function matrixSlotKey(
+    documentType: string,
+    side: 'seller' | 'buyer',
+    existingDocumentType: string | null = null
+  ): string {
+    const effectiveType = String(existingDocumentType ?? documentType).trim().toLowerCase();
+    return `${selected?.id ?? 'contract'}:${side}:${effectiveType}`;
+  }
+
+  function isMatrixSlotBusy(
+    documentType: string,
+    side: 'seller' | 'buyer',
+    existingDocumentType: string | null = null
+  ): boolean {
+    return Boolean(matrixBusySlots[matrixSlotKey(documentType, side, existingDocumentType)]);
+  }
+
+  function setMatrixSlotBusy(slotKey: string, busy: boolean): void {
+    if (busy) {
+      matrixBusySlots = { ...matrixBusySlots, [slotKey]: true };
+      return;
+    }
+    const { [slotKey]: _, ...remaining } = matrixBusySlots;
+    matrixBusySlots = remaining;
+  }
+
   function bumpMatrixUploading(key: string, delta: 1 | -1): void {
     const nextCount = Math.max(0, Number(matrixUploadingCounts[key] ?? 0) + delta);
     if (nextCount === 0) {
@@ -1499,13 +1531,20 @@
       toast.error('Reinicie a análise deste lado antes de enviar ou substituir documentos.');
       return;
     }
-    matrixUploadContext = { documentType, side, existingDocumentType, replaceDocumentId };
+    const slotKey = matrixSlotKey(documentType, side, existingDocumentType);
+    if (matrixUploadContext || matrixBusySlots[slotKey]) {
+      return;
+    }
+    matrixUploadContext = { documentType, side, existingDocumentType, replaceDocumentId, slotKey };
+    setMatrixSlotBusy(slotKey, true);
     if (matrixUploadInputEl) {
-      matrixUploadInputEl.multiple =
-        isOutroMatrixDocumentType(documentType) && !existingDocumentType;
+      matrixUploadInputEl.multiple = false;
       matrixUploadInputEl.value = '';
       matrixUploadInputEl.click();
+      return;
     }
+    setMatrixSlotBusy(slotKey, false);
+    matrixUploadContext = null;
   }
 
   async function uploadMatrixDocumentFile(
@@ -1544,74 +1583,41 @@
   async function handleMatrixFileSelection(event: Event) {
     const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []);
-    if (!selected || files.length === 0 || !matrixUploadContext) {
+    const currentUploadContext = matrixUploadContext;
+    if (!selected || !currentUploadContext || files.length !== 1) {
+      if (files.length > 1) {
+        toast.error('Selecione apenas um arquivo por vez.');
+      }
+      if (currentUploadContext) {
+        setMatrixSlotBusy(currentUploadContext.slotKey, false);
+      }
+      matrixUploadContext = null;
       if (input) input.value = '';
       return;
     }
 
-    const uploadKey = `${matrixUploadContext.side}:${matrixUploadContext.documentType}`;
+    matrixUploadContext = null;
+    const uploadKey = `${currentUploadContext.side}:${currentUploadContext.documentType}`;
     bumpMatrixUploading(uploadKey, 1);
     try {
-      const currentUploadContext = matrixUploadContext;
-      if (!currentUploadContext) {
-        return;
-      }
-      const batchUpload =
-        isOutroMatrixDocumentType(currentUploadContext.documentType) &&
-        !currentUploadContext.existingDocumentType &&
-        files.length > 1;
-
-      if (batchUpload) {
-        const nextOutroTypes = resolveOutroMatrixDocumentTypes(
-          selected,
-          currentUploadContext.side,
-          files.length
-        );
-        if (nextOutroTypes.length === 0) {
-          toast.error('Limite de documentos outros atingido para este lado.');
-          return;
-        }
-
-        const filesToUpload = files.slice(0, nextOutroTypes.length);
-        if (filesToUpload.length < files.length) {
-          toast.error(
-            `Limite de documentos outros atingido para este lado. Serão enviados apenas ${filesToUpload.length}.`
-          );
-        }
-        const results = await Promise.allSettled(
-          filesToUpload.map((file, index) =>
-            uploadMatrixDocumentFile(file, {
-              documentType: currentUploadContext.documentType,
-              side: currentUploadContext.side,
-              existingDocumentType: nextOutroTypes[index],
-            })
-          )
-        );
-
-        const uploadedCount = results.filter((result) => result.status === 'fulfilled' && result.value).length;
-        const failedCount = results.length - uploadedCount;
-        if (uploadedCount > 0) {
-          toast.success(
-            `${uploadedCount} documento${uploadedCount > 1 ? 's' : ''} enviado${uploadedCount > 1 ? 's' : ''} com sucesso.`
-          );
-        }
-        if (failedCount > 0) {
-          toast.error('Alguns documentos não puderam ser enviados.');
-        }
-        await reloadSelectedContract(selected.id);
-      } else {
-        await uploadMatrixDocumentFile(files[0], matrixUploadContext);
-        toast.success('Documento enviado com sucesso.');
-        await reloadSelectedContract(selected.id);
-      }
+      await uploadMatrixDocumentFile(files[0], currentUploadContext);
+      toast.success('Documento enviado com sucesso.');
+      await reloadSelectedContract(selected.id);
     } catch (error) {
       console.error('Erro ao enviar documento na matriz:', error);
       toast.error(resolveApiErrorMessage(error, 'Não foi possível enviar o documento.'));
     } finally {
       bumpMatrixUploading(uploadKey, -1);
-      matrixUploadContext = null;
+      setMatrixSlotBusy(currentUploadContext.slotKey, false);
       if (input) input.value = '';
     }
+  }
+
+  function handleMatrixFilePickerCancel() {
+    if (!matrixUploadContext) return;
+    setMatrixSlotBusy(matrixUploadContext.slotKey, false);
+    matrixUploadContext = null;
+    if (matrixUploadInputEl) matrixUploadInputEl.value = '';
   }
 
   async function deleteMatrixDocument(doc: ContractDocument) {
@@ -2635,6 +2641,7 @@
             documentStatusLabel={documentStatusLabel}
             documentStatusClass={documentStatusClass}
             isMatrixUploading={isMatrixUploading}
+            isMatrixSlotBusy={isMatrixSlotBusy}
             canAddAnotherMatrixDocument={canAddAnotherMatrixDocument}
             downloadingDocumentId={downloadingDocumentId}
             reviewDocumentId={reviewingDocumentId}
@@ -2677,6 +2684,7 @@
             tabindex="-1"
             bind:this={matrixUploadInputEl}
             on:change={handleMatrixFileSelection}
+            on:cancel={handleMatrixFilePickerCancel}
           />
         </div>
         {:else if modalMode === 'upload_draft'}

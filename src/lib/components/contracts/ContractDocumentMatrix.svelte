@@ -12,6 +12,11 @@
   export let documentLabel: (documentType: string) => string = (value) => value;
   export let documentFileName: (doc: ContractMatrixRowView['sellerDocs'][number]) => string = () => 'Documento';
   export let isMatrixUploading: (key: string) => boolean = () => false;
+  export let isMatrixSlotBusy: (
+    documentType: string,
+    side: 'seller' | 'buyer',
+    existingDocumentType?: string | null
+  ) => boolean = () => false;
   export let canAddAnotherMatrixDocument: (
     contract: ContractItem | null,
     documentType: string,
@@ -101,7 +106,7 @@
                         </span>
                       {/if}
                       {#if !isSideReadOnly('seller')}
-                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')}>
+                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')} disabled={isMatrixSlotBusy(documentType, 'seller')}>
                           {#if isMatrixUploading(`seller:${documentType}`)}
                             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                           {/if}
@@ -153,7 +158,7 @@
                                   {#if downloadingDocumentId === sellerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
                                 </button>
                               {/if}
-                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase(), sellerDoc.id); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'seller')}>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase(), sellerDoc.id); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'seller') || isMatrixSlotBusy(documentType, 'seller', String(sellerDoc.documentType ?? '').trim().toLowerCase())}>
                                 {#if isMatrixUploading(`seller:${documentType}`)}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
                               </button>
                             </div>
@@ -187,7 +192,7 @@
                     {#if documentType.trim().toLowerCase() === 'outro' && !isSideReadOnly('seller')}
                       <div class="mt-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700">
                         {#if canAddAnotherMatrixDocument(contract, documentType, 'seller')}
-                          <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')}>
+                          <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')} disabled={isMatrixSlotBusy(documentType, 'seller')}>
                             {#if isMatrixUploading(`seller:${documentType}`)}
                               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                             {/if}
@@ -216,7 +221,7 @@
                         </span>
                       {/if}
                       {#if !isSideReadOnly('buyer')}
-                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')}>
+                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')} disabled={isMatrixSlotBusy(documentType, 'buyer')}>
                           {#if isMatrixUploading(`buyer:${documentType}`)}
                             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                           {/if}
@@ -268,7 +273,7 @@
                                   {#if downloadingDocumentId === buyerDoc.id}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Download class="h-4 w-4" />{/if}
                                 </button>
                               {/if}
-                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase(), buyerDoc.id); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'buyer')}>
+                              <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800" aria-label="Substituir documento" title="Substituir" on:click={() => { onReplace(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase(), buyerDoc.id); closeDocumentMenu(); }} disabled={!canAddAnotherMatrixDocument(contract, documentType, 'buyer') || isMatrixSlotBusy(documentType, 'buyer', String(buyerDoc.documentType ?? '').trim().toLowerCase())}>
                                 {#if isMatrixUploading(`buyer:${documentType}`)}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Upload class="h-4 w-4" />{/if}
                               </button>
                             </div>
@@ -302,7 +307,7 @@
                     {#if documentType.trim().toLowerCase() === 'outro' && !isSideReadOnly('buyer')}
                       <div class="mt-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-700">
                         {#if canAddAnotherMatrixDocument(contract, documentType, 'buyer')}
-                          <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')}>
+                          <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')} disabled={isMatrixSlotBusy(documentType, 'buyer')}>
                             {#if isMatrixUploading(`buyer:${documentType}`)}
                               <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                             {/if}
