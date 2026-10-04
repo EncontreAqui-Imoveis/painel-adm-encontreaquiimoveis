@@ -112,6 +112,7 @@
               {#if row.sellerRequired || isOptional}
                 <div class="space-y-2">
                   {#if row.sellerDocs.length === 0}
+                    {@const sellerSlotIsUploading = Number(matrixUploadingCounts[matrixSlotKey(documentType, 'seller')] ?? 0) > 0}
                     <div class="flex flex-wrap items-center gap-2">
                       {#if !isOptional}
                         <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
@@ -120,8 +121,8 @@
                         </span>
                       {/if}
                       {#if !isSideReadOnly('seller')}
-                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')} disabled={isMatrixSlotBusy(documentType, 'seller') || isMatrixSlotUploading(documentType, 'seller')}>
-                          {#if isMatrixSlotUploading(documentType, 'seller')}
+                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'seller')} disabled={isMatrixSlotBusy(documentType, 'seller') || sellerSlotIsUploading}>
+                          {#if sellerSlotIsUploading}
                             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                             Enviando…
                           {:else}
@@ -229,6 +230,7 @@
               {#if row.buyerRequired || isOptional}
                 <div class="space-y-2">
                   {#if row.buyerDocs.length === 0}
+                    {@const buyerSlotIsUploading = Number(matrixUploadingCounts[matrixSlotKey(documentType, 'buyer')] ?? 0) > 0}
                     <div class="flex flex-wrap items-center gap-2">
                       {#if !isOptional}
                         <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
@@ -237,8 +239,8 @@
                         </span>
                       {/if}
                       {#if !isSideReadOnly('buyer')}
-                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')} disabled={isMatrixSlotBusy(documentType, 'buyer') || isMatrixSlotUploading(documentType, 'buyer')}>
-                          {#if isMatrixSlotUploading(documentType, 'buyer')}
+                        <Button size="sm" variant="outline" on:click={() => onUpload(documentType, 'buyer')} disabled={isMatrixSlotBusy(documentType, 'buyer') || buyerSlotIsUploading}>
+                          {#if buyerSlotIsUploading}
                             <Loader2 class="mr-2 h-4 w-4 animate-spin" />
                             Enviando…
                           {:else}

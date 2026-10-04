@@ -698,6 +698,109 @@ describe('ContractsModule', () => {
     expect(secondFormData.get('documentType')).toBe('cliente_outro_02');
   });
 
+  it('mostra Enviando durante o POST pendente e restaura a matriz após sucesso ou erro', async () => {
+    const documents: Array<Record<string, unknown>> = [];
+    const contract = {
+      id: 'contract-upload-feedback-1',
+      status: 'AWAITING_DOCS',
+      negotiationId: 'neg-upload-feedback-1',
+      propertyId: 702,
+      propertyCode: 'RV-702',
+      propertyTitle: 'Casa Feedback Upload',
+      propertyPurpose: 'Venda',
+      capturingBrokerName: 'Captador',
+      sellingBrokerName: 'Vendedor',
+      sellerApprovalStatus: 'PENDING',
+      buyerApprovalStatus: 'PENDING',
+      sellerInfo: {},
+      buyerInfo: {},
+      documentRequirements: {
+        seller: [
+          { category: 'identidade', applicability: 'required' },
+          { category: 'comprovante_endereco', applicability: 'required' },
+        ],
+        buyer: [{ category: 'conjuge_documentos', applicability: 'not_applicable' }],
+      },
+      documents,
+      createdAt: '2026-03-01T10:00:00.000Z',
+      updatedAt: '2026-03-01T10:00:00.000Z',
+    };
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/admin/contracts?status=AWAITING_DOCS')) {
+        return { data: [contract], total: 1 };
+      }
+      if (endpoint.includes('/contracts/contract-upload-feedback-1')) {
+        return { contract, documents };
+      }
+      return { data: [], total: 0 };
+    });
+
+    const pendingPosts: Array<{
+      form: FormData;
+      resolve: () => void;
+      reject: (error: unknown) => void;
+    }> = [];
+    apiClientPostMock.mockImplementation(async (_endpoint: string, form: FormData) =>
+      new Promise<void>((resolve, reject) => {
+        pendingPosts.push({ form, resolve, reject });
+      })
+    );
+
+    const { container } = render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Analisar Documentação' }));
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const uploadButtons = screen.getAllByRole('button', { name: 'Enviar' });
+    expect(uploadButtons).toHaveLength(2);
+
+    await fireEvent.click(uploadButtons[0]);
+    await fireEvent.change(input, {
+      target: { files: [new File(['identidade'], 'identidade.pdf', { type: 'application/pdf' })] },
+    });
+    await tick();
+
+    expect(pendingPosts).toHaveLength(1);
+    expect(pendingPosts[0].form.get('documentType')).toBe('doc_identidade');
+    const sendingButton = screen.queryByRole('button', { name: 'Enviando…' });
+    const displayedDuringPendingSuccess = sendingButton != null;
+    const disabledDuringPendingSuccess = sendingButton?.disabled ?? false;
+    expect(uploadButtons[1]).toBeEnabled();
+    await fireEvent.click(sendingButton ?? uploadButtons[0]);
+    expect(pendingPosts).toHaveLength(1);
+
+    documents.push({
+      id: 801,
+      documentType: 'doc_identidade',
+      documentCategory: 'identidade',
+      side: 'seller',
+      status: 'PENDING',
+      originalFileName: 'identidade.pdf',
+    });
+    pendingPosts[0].resolve();
+    await waitFor(() => expect(screen.getByText('identidade.pdf')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Enviando…' })).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    await fireEvent.change(input, {
+      target: { files: [new File(['endereço'], 'endereco.pdf', { type: 'application/pdf' })] },
+    });
+    await tick();
+
+    expect(pendingPosts).toHaveLength(2);
+    const displayedDuringPendingError = screen.queryByRole('button', { name: 'Enviando…' });
+    const disabledDuringPendingError = displayedDuringPendingError?.disabled ?? false;
+    pendingPosts[1].reject({ response: { data: { error: 'Falha de upload simulada.' } } });
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Falha de upload simulada.'));
+    expect(screen.queryByRole('button', { name: 'Enviando…' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled();
+    expect({
+      success: { visible: displayedDuringPendingSuccess, disabled: disabledDuringPendingSuccess },
+      error: { visible: displayedDuringPendingError != null, disabled: disabledDuringPendingError },
+    }).toEqual({
+      success: { visible: true, disabled: true },
+      error: { visible: true, disabled: true },
+    });
+  });
+
   it('envia o documento pessoal explícito do cônjuge para buyer', async () => {
     const buyerOutroDocs: Array<Record<string, unknown>> = [];
     apiGetMock.mockImplementation(async (endpoint: string) => {
