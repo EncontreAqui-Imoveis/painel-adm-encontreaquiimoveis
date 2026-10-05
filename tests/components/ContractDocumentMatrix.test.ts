@@ -220,7 +220,7 @@ describe('ContractDocumentMatrix', () => {
       documentLabel: () => 'Documento Pessoal',
       documentFileName: (doc: { originalFileName?: string | null }) =>
         doc.originalFileName ?? 'Documento',
-      documentStatusLabel: () => 'Aprovado com ressalvas',
+      documentStatusLabel: () => 'Aprovado com observação',
       documentStatusClass: () => 'bg-amber-100 text-amber-800',
       onDownload: vi.fn(),
     });

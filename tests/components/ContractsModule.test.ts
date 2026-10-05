@@ -959,12 +959,12 @@ describe('ContractsModule', () => {
     pendingSideRequests[0].resolve();
     await waitFor(() => expect(screen.getByRole('button', { name: /^Aprovarvendedor$/i })).toBeEnabled());
 
-    await fireEvent.click(screen.getByRole('button', { name: /^Aprovar c\/ ressalvasvendedor$/i }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Aprovar com observaçãovendedor$/i }));
     await tick();
     expect(screen.getByRole('button', { name: 'Aprovando…' })).toBeDisabled();
     expect(pendingSideRequests).toHaveLength(2);
     pendingSideRequests[1].resolve();
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Aprovar c\/ ressalvasvendedor$/i })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Aprovar com observaçãovendedor$/i })).toBeEnabled());
 
     await fireEvent.click(screen.getAllByRole('button', { name: 'Rejeitar' })[0]);
     await tick();
@@ -1123,8 +1123,8 @@ describe('ContractsModule', () => {
     }
 
     const approveWithRemarksButtons = [
-      screen.getByRole('button', { name: /^Aprovar c\/ ressalvasanunciante$/i }),
-      screen.getByRole('button', { name: /^Aprovar c\/ ressalvascomprador$/i }),
+      screen.getByRole('button', { name: /^Aprovar com observaçãoanunciante$/i }),
+      screen.getByRole('button', { name: /^Aprovar com observaçãocomprador$/i }),
     ];
     for (const button of approveWithRemarksButtons) {
       expect(button).toBeEnabled();
@@ -1208,8 +1208,8 @@ describe('ContractsModule', () => {
     }
 
     const approveWithRemarksButtons = [
-      screen.getByRole('button', { name: /^Aprovar c\/ ressalvasanunciante$/i }),
-      screen.getByRole('button', { name: /^Aprovar c\/ ressalvascomprador$/i }),
+      screen.getByRole('button', { name: /^Aprovar com observaçãoanunciante$/i }),
+      screen.getByRole('button', { name: /^Aprovar com observaçãocomprador$/i }),
     ];
     for (const button of approveWithRemarksButtons) {
       expect(button).toBeEnabled();
@@ -2841,13 +2841,13 @@ describe('ContractsModule', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Finalizados' }));
 
-    expect(await screen.findByText('Aprovado com ressalvas')).toBeInTheDocument();
+    expect(await screen.findByText('Aprovado com observação')).toBeInTheDocument();
     expect(screen.queryByText('Vendedor com ressalvas')).not.toBeInTheDocument();
     expect(screen.queryByText('Comprador com ressalvas')).not.toBeInTheDocument();
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
 
-    expect(await screen.findByText('Aprovação com ressalvas')).toBeInTheDocument();
+    expect(await screen.findByText('Aprovação com observação')).toBeInTheDocument();
     expect(
       screen.getByText('Atualizar CPF e reenviar certidão na próxima revisão.')
     ).toBeInTheDocument();
@@ -2919,10 +2919,10 @@ describe('ContractsModule', () => {
       return row;
     };
 
-    expect(within(rowFor('Sem Ressalvas')).queryByText('Aprovado com ressalvas')).not.toBeInTheDocument();
-    expect(within(rowFor('Ressalva Vendedor')).getByText('Aprovado com ressalvas')).toBeInTheDocument();
-    expect(within(rowFor('Ressalva Comprador')).getByText('Aprovado com ressalvas')).toBeInTheDocument();
-    expect(within(rowFor('Ressalvas de Ambos')).getByText('Aprovado com ressalvas')).toBeInTheDocument();
+    expect(within(rowFor('Sem Ressalvas')).queryByText('Aprovado com observação')).not.toBeInTheDocument();
+    expect(within(rowFor('Ressalva Vendedor')).getByText('Aprovado com observação')).toBeInTheDocument();
+    expect(within(rowFor('Ressalva Comprador')).getByText('Aprovado com observação')).toBeInTheDocument();
+    expect(within(rowFor('Ressalvas de Ambos')).getByText('Aprovado com observação')).toBeInTheDocument();
     expect(screen.queryByText(/(Vendedor|Comprador|Locador|Locatário) com ressalvas/)).not.toBeInTheDocument();
   });
 
@@ -3343,7 +3343,7 @@ describe('ContractsModule', () => {
     expect(screen.getAllByRole('button', { name: 'Rejeitar' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Reiniciar' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Aprovaranunciante$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Aprovar c\/ ressalvasanunciante$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Aprovar com observaçãoanunciante$/i })).not.toBeInTheDocument();
 
     const callsBeforeRestart = apiPutMock.mock.calls.length;
     await fireEvent.click(screen.getByRole('button', { name: 'Reiniciar' }));
@@ -3399,7 +3399,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(openReviewButton);
 
     const approveWithRemarksButton = screen.getByRole('button', {
-      name: /^Aprovar c\/ ressalvasanunciante$/i,
+      name: /^Aprovar com observaçãoanunciante$/i,
     });
     await fireEvent.click(approveWithRemarksButton);
 
@@ -3450,6 +3450,6 @@ describe('ContractsModule', () => {
     await fireEvent.click(openReviewButton);
 
     expect(screen.getByText('Não aplicável')).toBeInTheDocument();
-    expect(screen.getByText('Aprovado com ressalvas')).toBeInTheDocument();
+    expect(screen.getByText('Aprovado com observação')).toBeInTheDocument();
   });
 });

@@ -1409,7 +1409,7 @@
       const promptMessage =
         status === 'REJECTED'
           ? 'Informe o motivo da rejeição:'
-          : 'Informe a ressalva da aprovação:';
+          : 'Informe a observação da aprovação:';
       const value = window.prompt(promptMessage, '');
       if (value == null) {
         return false;
@@ -2547,7 +2547,7 @@
         {#if modalMode !== 'review_docs' && getApprovalRemarkSummaries(selected).length > 0}
           <div class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
           <p class="text-xs font-semibold uppercase text-amber-800 dark:text-amber-300">
-            Aprovação com ressalvas
+            Aprovação com observação
           </p>
           <div class="mt-2 space-y-2">
             {#each getApprovalRemarkSummaries(selected) as summary (summary.key)}

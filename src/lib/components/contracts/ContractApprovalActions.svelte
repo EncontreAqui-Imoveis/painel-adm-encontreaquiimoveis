@@ -99,7 +99,7 @@
           on:click={() => evaluateContractSide("seller", "APPROVED_WITH_RES")}
           disabled={sellerIsEvaluating}
         >
-          {#if sellerIsApprovingWithRemarks}<Loader2 class="mr-2 h-4 w-4 animate-spin" />Aprovando…{:else}Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>{/if}
+          {#if sellerIsApprovingWithRemarks}<Loader2 class="mr-2 h-4 w-4 animate-spin" />Aprovando…{:else}Aprovar com observação<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>{/if}
         </Button>
         <Button
           size="sm"
@@ -145,7 +145,7 @@
           className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
           on:click={() => evaluateContractSide("seller", "APPROVED_WITH_RES")}
         >
-          Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>
+          Aprovar com observação<span class="sr-only"> {contractSideLabel(contract, "seller").toLocaleLowerCase("pt-BR")}</span>
         </Button>
         <Button
           size="sm"
@@ -191,7 +191,7 @@
             on:click={() => evaluateContractSide("buyer", "APPROVED_WITH_RES")}
             disabled={buyerIsEvaluating}
           >
-            {#if buyerIsApprovingWithRemarks}<Loader2 class="mr-2 h-4 w-4 animate-spin" />Aprovando…{:else}Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>{/if}
+            {#if buyerIsApprovingWithRemarks}<Loader2 class="mr-2 h-4 w-4 animate-spin" />Aprovando…{:else}Aprovar com observação<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>{/if}
           </Button>
           <Button
             size="sm"
@@ -237,7 +237,7 @@
             className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
             on:click={() => evaluateContractSide("buyer", "APPROVED_WITH_RES")}
           >
-            Aprovar c/ ressalvas<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>
+            Aprovar com observação<span class="sr-only"> {contractSideLabel(contract, "buyer").toLocaleLowerCase("pt-BR")}</span>
           </Button>
           <Button
             size="sm"

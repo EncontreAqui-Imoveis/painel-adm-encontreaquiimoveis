@@ -44,7 +44,7 @@ describe('ContractApprovalActions', () => {
     expect(sellerSection).not.toBeNull();
     expect(sellerSection).toHaveTextContent('Reiniciar');
     expect(sellerSection).not.toHaveTextContent('Rejeitar');
-    expect(sellerSection).not.toHaveTextContent('Aprovar c/ ressalvas');
+    expect(sellerSection).not.toHaveTextContent('Aprovar com observação');
   });
 
   it('mantém somente Reiniciar para aprovação com ressalvas', () => {
@@ -86,7 +86,7 @@ describe('ContractApprovalActions', () => {
     const sellerSection = screen.getByText('Avaliação Locador').parentElement;
     expect(sellerSection).toHaveTextContent('Aguardando reenvio de documentos');
     expect(sellerSection).toHaveTextContent('Aprovar');
-    expect(sellerSection).toHaveTextContent('Aprovar c/ ressalvas');
+    expect(sellerSection).toHaveTextContent('Aprovar com observação');
     expect(sellerSection).toHaveTextContent('Rejeitar');
     expect(sellerSection).not.toHaveTextContent('Reiniciar');
   });
@@ -152,7 +152,7 @@ describe('ContractApprovalActions', () => {
       requestSideRestart,
     });
     expect(sellerSection).toHaveTextContent('Aprovar');
-    expect(sellerSection).toHaveTextContent('Aprovar c/ ressalvas');
+    expect(sellerSection).toHaveTextContent('Aprovar com observação');
     expect(sellerSection).toHaveTextContent('Rejeitar');
   });
 });

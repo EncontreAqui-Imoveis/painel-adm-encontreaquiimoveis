@@ -67,7 +67,7 @@ export function hasDocumentReviewStatus(doc?: ContractDocument | null): boolean 
 export function documentStatusLabel(doc?: ContractDocument | null): string {
   const status = normalizeDocumentStatus(doc);
   if (status === 'APPROVED') return 'Aprovado';
-  if (status === 'APPROVED_WITH_RES') return 'Aprovado com ressalvas';
+  if (status === 'APPROVED_WITH_RES') return 'Aprovado com observação';
   if (status === 'REJECTED') return 'Rejeitado';
   if (status === 'NOT_APPLICABLE') return 'Não aplicável';
   if (status === 'PENDING') return 'Pendente';
@@ -214,7 +214,7 @@ export function approvalLabel(status?: ContractApprovalStatus | null): string {
     case 'APPROVED':
       return 'Aprovado';
     case 'APPROVED_WITH_RES':
-      return 'Aprovado com ressalvas';
+      return 'Aprovado com observação';
     case 'REJECTED':
       return 'Rejeitado';
     default:
@@ -312,7 +312,7 @@ export function getApprovalProgressLabel(contract: ContractItem | null | undefin
 
   if (sellerProgress && buyerProgress) {
     return sellerStatus === 'APPROVED_WITH_RES' || buyerStatus === 'APPROVED_WITH_RES'
-      ? 'Aprovado com ressalvas'
+      ? 'Aprovado com observação'
       : 'Aprovado';
   }
 
