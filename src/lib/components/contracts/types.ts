@@ -12,6 +12,24 @@ export type ContractDocumentResubmissionRequest = {
   rejectedDocumentIds?: number[] | null;
 };
 
+export type ContractDraftReviewResolution = {
+  id?: number | null;
+  resolution?: 'KEPT_CURRENT_DRAFT' | null;
+  reason?: string | null;
+  resolvedAt?: string | null;
+  resolvedByAdminId?: number | null;
+};
+
+export type ContractDraftChangeRequest = {
+  id?: number | null;
+  reviewerSide?: 'seller' | 'buyer' | null;
+  decision?: 'CHANGES_REQUESTED' | null;
+  reason?: string | null;
+  requestedAt?: string | null;
+  pendingResolution?: boolean;
+  resolution?: ContractDraftReviewResolution | null;
+};
+
 export type ContractDocument = {
   id: number;
   type?: string | null;
@@ -97,8 +115,14 @@ export type ContractItem = {
     createdAt?: string | null;
     sellerDecision?: 'CONSENTED' | 'CHANGES_REQUESTED' | null;
     sellerReason?: string | null;
+    sellerDecisionAt?: string | null;
+    sellerEffectiveDecision?: 'CONSENTED' | null;
+    sellerChangeRequest?: ContractDraftChangeRequest | null;
     buyerDecision?: 'CONSENTED' | 'CHANGES_REQUESTED' | null;
     buyerReason?: string | null;
+    buyerDecisionAt?: string | null;
+    buyerEffectiveDecision?: 'CONSENTED' | null;
+    buyerChangeRequest?: ContractDraftChangeRequest | null;
     allConsented?: boolean;
   } | null;
   responsibleUserIds?: number[] | null;

@@ -99,6 +99,17 @@ export async function submitContractDraft(
   await apiClient.post(`/admin/contracts/${contractId}/draft`, form);
 }
 
+export async function keepCurrentContractDraft(
+  contractId: string,
+  reviewId: number,
+  reason: string
+): Promise<void> {
+  await api.post(
+    `/admin/contracts/${contractId}/draft-review-requests/${reviewId}/keep`,
+    { reason }
+  );
+}
+
 export async function finalizeContract(
   contractId: string,
   commissionData: Record<string, unknown>

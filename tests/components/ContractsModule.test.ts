@@ -1844,6 +1844,166 @@ describe('ContractsModule', () => {
     resolveDraftUpload?.({ data: {} });
   });
 
+  it('destaca correção pendente, preserva o motivo textual e pede confirmação antes de substituir', async () => {
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_MINUTE_REVIEW')) {
+        return {
+          data: [{
+            id: 'contract-change-request-1',
+            status: 'AWAITING_MINUTE_REVIEW',
+            negotiationId: 'neg-change-request-1',
+            propertyId: 617,
+            propertyTitle: 'Casa com correção',
+            propertyPurpose: 'Aluguel',
+            dealType: 'rent',
+            documents: [{
+              id: 6171,
+              documentType: 'contrato_minuta',
+              originalFileName: 'minuta_corrigir.pdf',
+              metadata: { contractId: 'contract-change-request-1' },
+            }],
+            draftReview: {
+              buyerDecision: 'CONSENTED',
+              sellerDecision: 'CHANGES_REQUESTED',
+              sellerChangeRequest: {
+                id: 911,
+                reviewerSide: 'seller',
+                reason: "Corrigir\na cláusula '; -- sem remover texto.",
+                requestedAt: '2026-10-05T10:30:00.000Z',
+                pendingResolution: true,
+              },
+            },
+          }],
+          total: 1,
+        };
+      }
+      return { data: [], total: 0 };
+    });
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Conferir Minuta' }));
+
+    expect(screen.getByText('Correção solicitada')).toBeInTheDocument();
+    expect(screen.getByText((_, node) => node?.textContent === 'Solicitado por: Locador')).toBeInTheDocument();
+    expect(screen.getByText(/Corrigir/)).toHaveTextContent("Corrigir a cláusula '; -- sem remover texto.");
+    expect(screen.queryByText('Locador com ressalvas')).not.toBeInTheDocument();
+
+    const input = document.querySelector('#draft-pdf') as HTMLInputElement;
+    const pickerClickSpy = vi.spyOn(input, 'click');
+    await fireEvent.click(screen.getByRole('button', { name: 'Substituir minuta' }));
+    expect(screen.getByRole('heading', { name: 'Substituir minuta?' })).toBeInTheDocument();
+    expect(pickerClickSpy).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(pickerClickSpy).not.toHaveBeenCalled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Substituir minuta' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(pickerClickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('mantém a minuta com motivo válido, bloqueia duplicidade e atualiza a resolução', async () => {
+    const pendingContract = {
+      id: 'contract-keep-draft-1',
+      status: 'AWAITING_MINUTE_REVIEW',
+      negotiationId: 'neg-keep-draft-1',
+      propertyId: 618,
+      propertyTitle: 'Casa Venda',
+      propertyPurpose: 'Venda',
+      dealType: 'sale',
+      documents: [{
+        id: 6181,
+        documentType: 'contrato_minuta',
+        originalFileName: 'minuta_venda.pdf',
+        metadata: { contractId: 'contract-keep-draft-1' },
+      }],
+      draftReview: {
+        buyerDecision: 'CHANGES_REQUESTED',
+        sellerDecision: 'CONSENTED',
+        buyerChangeRequest: {
+          id: 912,
+          reviewerSide: 'buyer',
+          reason: 'Revisar o prazo de entrega.',
+          pendingResolution: true,
+        },
+      },
+    };
+    const resolvedContract = {
+      ...pendingContract,
+      draftReview: {
+        ...pendingContract.draftReview,
+        buyerChangeRequest: {
+          ...pendingContract.draftReview.buyerChangeRequest,
+          pendingResolution: false,
+          resolution: {
+            id: 913,
+            resolution: 'KEPT_CURRENT_DRAFT',
+            reason: 'O prazo segue a proposta assinada.',
+          },
+        },
+      },
+    };
+    apiGetMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('status=AWAITING_MINUTE_REVIEW')) {
+        return { data: [pendingContract], total: 1 };
+      }
+      if (endpoint === '/contracts/contract-keep-draft-1') {
+        return { data: { contract: resolvedContract, documents: resolvedContract.documents } };
+      }
+      return { data: [], total: 0 };
+    });
+    let resolveKeepRequest: ((value: { data: Record<string, never> }) => void) | undefined;
+    apiPostMock.mockRejectedValueOnce(new Error('Falha ao manter minuta.')).mockImplementation(
+      () => new Promise((resolve) => { resolveKeepRequest = resolve; })
+    );
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Conferir Minuta' }));
+    expect(screen.getByText((_, node) => node?.textContent === 'Solicitado por: Comprador')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Manter minuta' }));
+    expect(screen.getByRole('heading', { name: 'Manter minuta atual?' })).toBeInTheDocument();
+    const reasonField = screen.getByLabelText('Motivo da administração') as HTMLTextAreaElement;
+    expect(reasonField.maxLength).toBe(5000);
+    await fireEvent.input(reasonField, { target: { value: 'ab' } });
+    expect(screen.getAllByRole('button', { name: 'Manter minuta' }).at(-1)).toBeDisabled();
+    await fireEvent.input(reasonField, { target: { value: 'x'.repeat(5000) } });
+    expect(screen.getByText('5000 / 5000')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Manter minuta' }).at(-1)).not.toBeDisabled();
+    await fireEvent.input(reasonField, { target: { value: 'O prazo segue a proposta assinada.' } });
+    expect(screen.getByText('34 / 5000')).toBeInTheDocument();
+
+    const confirmButton = screen.getAllByRole('button', { name: 'Manter minuta' }).at(-1);
+    if (!confirmButton) throw new Error('Botão de confirmação não encontrado');
+    await fireEvent.click(confirmButton);
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalled();
+    });
+    expect(reasonField).not.toBeDisabled();
+    expect(reasonField.value).toBe('O prazo segue a proposta assinada.');
+
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Manter minuta' }).at(-1)!);
+    await waitFor(() => {
+      expect(apiPostMock).toHaveBeenCalledWith(
+        '/admin/contracts/contract-keep-draft-1/draft-review-requests/912/keep',
+        { reason: 'O prazo segue a proposta assinada.' }
+      );
+    });
+    expect(screen.getByRole('button', { name: 'Mantendo…' })).toBeDisabled();
+    expect(reasonField).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+    expect(apiPostMock).toHaveBeenCalledTimes(2);
+
+    resolveKeepRequest?.({ data: {} });
+    await waitFor(() => {
+      expect(screen.getByText('Solicitação analisada')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Minuta mantida')).toBeInTheDocument();
+    expect(screen.getByText('O prazo segue a proposta assinada.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Manter minuta' })).not.toBeInTheDocument();
+  });
+
   it('permite voltar de IN_DRAFT para a etapa anterior pelo modal', async () => {
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=IN_DRAFT')) {

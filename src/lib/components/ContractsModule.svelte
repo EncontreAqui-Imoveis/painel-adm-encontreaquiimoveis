@@ -42,6 +42,7 @@
     downloadContractDocumentsZip,
     evaluateContractSide as evaluateContractSideRequest,
     finalizeContract,
+    keepCurrentContractDraft,
     reviewContractDocument,
     reopenContractDocumentReview,
     submitContractDraft,
@@ -146,6 +147,7 @@
     ContractApprovalStatus,
     ContractDocument,
     ContractDocumentRejection,
+    ContractDraftChangeRequest,
     ContractItem,
   } from '$lib/components/contracts/types';
 
@@ -177,6 +179,11 @@
   let selectedDraftFile: File | null = null;
   let draftUploadInputEl: HTMLInputElement | null = null;
   let uploadingDraft = false;
+  let draftChangeRequestToKeep: ContractDraftChangeRequest | null = null;
+  let showKeepCurrentDraftDialog = false;
+  let keepingCurrentDraft = false;
+  let keepCurrentDraftReason = '';
+  let showDraftReplacementConfirmation = false;
   let evaluatingSide: 'seller' | 'buyer' | null = null;
   let evaluatingSideAction: ContractApprovalStatus | null = null;
   let isReloadingSelectedContract = false;
@@ -263,6 +270,8 @@
   $: canCurrentAdminDelete = $adminSession?.capabilities?.canDeleteDocuments ?? false;
   $: canCurrentAdminReplace = $adminSession?.capabilities?.canReplaceDocuments ?? false;
   $: canCurrentAdminCreateDocuments = $adminSession?.capabilities?.canCreateDocuments ?? false;
+  $: keepCurrentDraftReasonLength = Array.from(keepCurrentDraftReason.trim()).length;
+  $: canKeepCurrentDraft = isKeepCurrentDraftReasonValid(keepCurrentDraftReason);
 
   let savingPartyData = false;
   let isEditingData = false;
@@ -1885,6 +1894,59 @@
     }
   }
 
+  function isKeepCurrentDraftReasonValid(reason: string): boolean {
+    const normalized = reason.trim();
+    const usefulLength = Array.from(normalized.replace(/\s/g, '')).length;
+    return usefulLength >= 3 && Array.from(normalized).length <= 5000;
+  }
+
+  function openKeepCurrentDraftDialog(changeRequest: ContractDraftChangeRequest): void {
+    if (!changeRequest.id || keepingCurrentDraft) return;
+    draftChangeRequestToKeep = changeRequest;
+    keepCurrentDraftReason = '';
+    showKeepCurrentDraftDialog = true;
+  }
+
+  function closeKeepCurrentDraftDialog(): void {
+    if (keepingCurrentDraft) return;
+    showKeepCurrentDraftDialog = false;
+    draftChangeRequestToKeep = null;
+    keepCurrentDraftReason = '';
+  }
+
+  async function confirmKeepCurrentDraft(): Promise<void> {
+    if (!selected || !draftChangeRequestToKeep?.id || keepingCurrentDraft) return;
+    const reason = keepCurrentDraftReason.trim();
+    if (!isKeepCurrentDraftReasonValid(reason)) return;
+
+    keepingCurrentDraft = true;
+    try {
+      await keepCurrentContractDraft(selected.id, draftChangeRequestToKeep.id, reason);
+      await reloadSelectedContract(selected.id);
+      if (selected) syncSelectedContractInList(selected);
+      toast.success('Solicitação analisada. A minuta atual foi mantida.');
+      showKeepCurrentDraftDialog = false;
+      draftChangeRequestToKeep = null;
+      keepCurrentDraftReason = '';
+    } catch (error) {
+      console.error('Erro ao manter minuta atual:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível analisar a solicitação de correção.'));
+    } finally {
+      keepingCurrentDraft = false;
+    }
+  }
+
+  function requestDraftReplacementConfirmation(): void {
+    if (uploadingDraft || movingToPreviousStage) return;
+    showDraftReplacementConfirmation = true;
+  }
+
+  function confirmDraftReplacement(): void {
+    if (uploadingDraft || movingToPreviousStage) return;
+    showDraftReplacementConfirmation = false;
+    triggerDraftPicker();
+  }
+
   async function submitFinalize() {
     if (!selected) return;
     if (!commissionEditionSaved) {
@@ -2753,6 +2815,8 @@
           draftSubmitLabel={draftSubmitLabel}
           triggerDraftPicker={triggerDraftPicker}
           submitDraft={submitDraft}
+          requestKeepCurrentDraft={openKeepCurrentDraftDialog}
+          requestDraftReplacementConfirmation={requestDraftReplacementConfirmation}
           moveContractToPreviousStage={moveContractToPreviousStage}
           closeModal={closeModal}
           openDocumentPreview={(doc, contract) => openDocumentPreview(doc, contract)}
@@ -3451,6 +3515,74 @@
       <Button variant="destructive" on:click={() => { void confirmReopenDocument(); }} disabled={reviewingDocumentId !== null}>
         {#if reviewingDocumentId !== null}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
         {reviewingDocumentId !== null ? 'Reabrindo…' : 'Reabrir análise'}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showDraftReplacementConfirmation} closeOnOverlay={!uploadingDraft}>
+  <Dialog.Content className="max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>Substituir minuta?</Dialog.Title>
+      <Dialog.Description>
+        Uma nova versão reiniciará a revisão para ambas as partes. Os consentimentos da versão atual deixarão de valer para a nova revisão.
+      </Dialog.Description>
+    </Dialog.Header>
+    <Dialog.Footer className="flex gap-2">
+      <Button
+        variant="outline"
+        on:click={() => (showDraftReplacementConfirmation = false)}
+        disabled={uploadingDraft}
+      >
+        Cancelar
+      </Button>
+      <Button on:click={confirmDraftReplacement} disabled={uploadingDraft}>
+        Continuar
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showKeepCurrentDraftDialog} closeOnOverlay={!keepingCurrentDraft}>
+  <Dialog.Content className="max-w-lg">
+    <Dialog.Header>
+      <Dialog.Title>Manter minuta atual?</Dialog.Title>
+      <Dialog.Description>
+        Informe por que a solicitação de correção não será aplicada. O participante será notificado e poderá revisar novamente esta mesma versão.
+      </Dialog.Description>
+    </Dialog.Header>
+    <div class="space-y-2 px-6 py-4">
+      <label class="block text-sm font-medium text-gray-900 dark:text-gray-100" for="keep-draft-reason">
+        Motivo da administração
+      </label>
+      <textarea
+        id="keep-draft-reason"
+        class="min-h-32 w-full resize-y rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+        bind:value={keepCurrentDraftReason}
+        maxlength="5000"
+        rows="5"
+        disabled={keepingCurrentDraft}
+        aria-describedby="keep-draft-reason-counter"
+      ></textarea>
+      <p id="keep-draft-reason-counter" class="text-right text-xs text-gray-500 dark:text-gray-400">
+        {keepCurrentDraftReasonLength} / 5000
+      </p>
+      {#if keepCurrentDraftReason.trim().length > 0 && !canKeepCurrentDraft}
+        <p class="text-xs text-red-600 dark:text-red-400">
+          Informe ao menos 3 caracteres úteis.
+        </p>
+      {/if}
+    </div>
+    <Dialog.Footer className="flex gap-2">
+      <Button variant="outline" on:click={closeKeepCurrentDraftDialog} disabled={keepingCurrentDraft}>
+        Cancelar
+      </Button>
+      <Button
+        on:click={() => { void confirmKeepCurrentDraft(); }}
+        disabled={keepingCurrentDraft || !canKeepCurrentDraft || !draftChangeRequestToKeep?.id}
+      >
+        {#if keepingCurrentDraft}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
+        {keepingCurrentDraft ? 'Mantendo…' : 'Manter minuta'}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

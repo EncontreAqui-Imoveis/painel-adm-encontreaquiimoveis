@@ -3,7 +3,11 @@
   import { Loader2 } from 'lucide-svelte';
   import { Button } from '$lib/components/ui/button';
   import ContractActorsGrid from '$lib/components/contracts/ContractActorsGrid.svelte';
-  import type { ContractItem, ContractDocument } from '$lib/components/contracts/types';
+  import type {
+    ContractDraftChangeRequest,
+    ContractItem,
+    ContractDocument,
+  } from '$lib/components/contracts/types';
 
   export let contract: ContractItem | null = null;
   export let sellerLabel = 'Parte Vendedora/Locadora';
@@ -31,6 +35,8 @@
   export let draftSubmitLabel: (value: ContractItem | null) => string = () => 'Anexar Minuta';
   export let triggerDraftPicker: () => void = () => {};
   export let submitDraft: (options?: { reuseCurrentDraft?: boolean }) => Promise<void> | void = () => {};
+  export let requestKeepCurrentDraft: (changeRequest: ContractDraftChangeRequest) => void = () => {};
+  export let requestDraftReplacementConfirmation: () => void = () => {};
   export let moveContractToPreviousStage: () => void = () => {};
   export let closeModal: () => void = () => {};
   export let openDocumentPreview: (doc: ContractDocument, contract: ContractItem) => void = () => {};
@@ -40,7 +46,29 @@
   export let draftUploadInputEl: HTMLInputElement | null = null;
 
   let isAwaitingMinuteReview = false;
+  let buyerChangeRequest: ContractDraftChangeRequest | null = null;
+  let sellerChangeRequest: ContractDraftChangeRequest | null = null;
+  let pendingChangeRequests: Array<{
+    side: 'seller' | 'buyer';
+    label: string;
+    request: ContractDraftChangeRequest;
+  }> = [];
+  let resolvedChangeRequests: Array<{
+    side: 'seller' | 'buyer';
+    label: string;
+    request: ContractDraftChangeRequest;
+  }> = [];
   $: isAwaitingMinuteReview = contract?.status === 'AWAITING_MINUTE_REVIEW';
+  $: buyerChangeRequest = contract?.draftReview?.buyerChangeRequest ?? null;
+  $: sellerChangeRequest = contract?.draftReview?.sellerChangeRequest ?? null;
+  $: pendingChangeRequests = [
+    buyerChangeRequest?.pendingResolution ? { side: 'buyer' as const, label: buyerLabel, request: buyerChangeRequest } : null,
+    sellerChangeRequest?.pendingResolution ? { side: 'seller' as const, label: sellerLabel, request: sellerChangeRequest } : null,
+  ].filter((entry): entry is { side: 'seller' | 'buyer'; label: string; request: ContractDraftChangeRequest } => entry !== null);
+  $: resolvedChangeRequests = [
+    buyerChangeRequest?.resolution ? { side: 'buyer' as const, label: buyerLabel, request: buyerChangeRequest } : null,
+    sellerChangeRequest?.resolution ? { side: 'seller' as const, label: sellerLabel, request: sellerChangeRequest } : null,
+  ].filter((entry): entry is { side: 'seller' | 'buyer'; label: string; request: ContractDraftChangeRequest } => entry !== null);
 
   function onPickDraftFile() {
     if (draftUploadInputEl) {
@@ -193,11 +221,6 @@
                 ? 'Solicitou correção'
                 : 'Aguardando'}
           </p>
-          {#if contract.draftReview.buyerDecision === 'CHANGES_REQUESTED' && contract.draftReview.buyerReason}
-            <p class="-mt-1 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-              Motivo do {buyerLabel.toLowerCase()}: {contract.draftReview.buyerReason}
-            </p>
-          {/if}
           <p class="rounded bg-slate-100 px-3 py-2 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">
             {sellerLabel}: {contract.draftReview.sellerDecision === 'CONSENTED'
               ? 'De acordo'
@@ -205,12 +228,49 @@
                 ? 'Solicitou correção'
                 : 'Aguardando'}
           </p>
-          {#if contract.draftReview.sellerDecision === 'CHANGES_REQUESTED' && contract.draftReview.sellerReason}
-            <p class="-mt-1 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-              Motivo do {sellerLabel.toLowerCase()}: {contract.draftReview.sellerReason}
-            </p>
-          {/if}
         </div>
+
+        {#each pendingChangeRequests as changeRequest (changeRequest.request.id)}
+          <section class="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+            <h3 class="font-semibold">Correção solicitada</h3>
+            <p class="mt-2"><span class="font-medium">Solicitado por:</span> {changeRequest.label}</p>
+            {#if changeRequest.request.requestedAt}
+              <p class="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                {formatDate(changeRequest.request.requestedAt)}
+              </p>
+            {/if}
+            <p class="mt-3 font-medium">Motivo</p>
+            <p class="mt-1 max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded bg-white/70 p-2 text-sm dark:bg-black/20">
+              {changeRequest.request.reason ?? 'Motivo não informado.'}
+            </p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                on:click={() => requestKeepCurrentDraft(changeRequest.request)}
+                disabled={uploadingDraft || movingToPreviousStage}
+              >
+                Manter minuta
+              </Button>
+            </div>
+          </section>
+        {/each}
+
+        {#each resolvedChangeRequests as changeRequest (changeRequest.request.id)}
+          <section class="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
+            <h3 class="font-semibold">Solicitação analisada</h3>
+            <p class="mt-2"><span class="font-medium">Solicitado por:</span> {changeRequest.label}</p>
+            <p class="mt-3 font-medium">Motivo da solicitação</p>
+            <p class="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded bg-white/70 p-2 text-sm dark:bg-black/20">
+              {changeRequest.request.reason ?? 'Motivo não informado.'}
+            </p>
+            <p class="mt-3"><span class="font-medium">Decisão:</span> Minuta mantida</p>
+            <p class="mt-3 font-medium">Motivo da administração</p>
+            <p class="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded bg-white/70 p-2 text-sm dark:bg-black/20">
+              {changeRequest.request.resolution?.reason ?? 'Motivo não informado.'}
+            </p>
+          </section>
+        {/each}
       {:else}
         <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
           Aguardando a conferência das partes.
@@ -232,7 +292,15 @@
       <Button
         size="sm"
         variant="outline"
-        on:click={() => selectedDraftFile ? submitDraft() : onPickDraftFile()}
+        on:click={() => {
+          if (selectedDraftFile) {
+            void submitDraft();
+          } else if (pendingChangeRequests.length > 0) {
+            requestDraftReplacementConfirmation();
+          } else {
+            onPickDraftFile();
+          }
+        }}
         disabled={uploadingDraft || movingToPreviousStage}
       >
         {#if uploadingDraft}
