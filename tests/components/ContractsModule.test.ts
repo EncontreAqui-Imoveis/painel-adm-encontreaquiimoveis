@@ -2841,7 +2841,9 @@ describe('ContractsModule', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Finalizados' }));
 
-    expect(await screen.findByText('Vendedor com ressalvas')).toBeInTheDocument();
+    expect(await screen.findByText('Aprovado com ressalvas')).toBeInTheDocument();
+    expect(screen.queryByText('Vendedor com ressalvas')).not.toBeInTheDocument();
+    expect(screen.queryByText('Comprador com ressalvas')).not.toBeInTheDocument();
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
 
@@ -2849,6 +2851,79 @@ describe('ContractsModule', () => {
     expect(
       screen.getByText('Atualizar CPF e reenviar certidão na próxima revisão.')
     ).toBeInTheDocument();
+  });
+
+  it('mostra somente a badge geral quando há ressalvas em qualquer lado', async () => {
+    apiGetMock.mockResolvedValue({
+      data: [
+        {
+          id: 'contract-no-remarks',
+          status: 'FINALIZED',
+          negotiationId: 'neg-no-remarks',
+          propertyId: 712,
+          propertyTitle: 'Sem Ressalvas',
+          propertyPurpose: 'Venda',
+          sellerApprovalStatus: 'APPROVED',
+          buyerApprovalStatus: 'APPROVED',
+          documents: [],
+        },
+        {
+          id: 'contract-seller-remarks',
+          status: 'FINALIZED',
+          negotiationId: 'neg-seller-remarks',
+          propertyId: 713,
+          propertyTitle: 'Ressalva Vendedor',
+          propertyPurpose: 'Venda',
+          sellerApprovalStatus: 'APPROVED_WITH_RES',
+          buyerApprovalStatus: 'APPROVED',
+          sellerApprovalReason: { reason: 'Ajuste do vendedor.' },
+          documents: [],
+        },
+        {
+          id: 'contract-buyer-remarks',
+          status: 'FINALIZED',
+          negotiationId: 'neg-buyer-remarks',
+          propertyId: 714,
+          propertyTitle: 'Ressalva Comprador',
+          propertyPurpose: 'Venda',
+          sellerApprovalStatus: 'APPROVED',
+          buyerApprovalStatus: 'APPROVED_WITH_RES',
+          buyerApprovalReason: { reason: 'Ajuste do comprador.' },
+          documents: [],
+        },
+        {
+          id: 'contract-both-remarks',
+          status: 'FINALIZED',
+          negotiationId: 'neg-both-remarks',
+          propertyId: 715,
+          propertyTitle: 'Ressalvas de Ambos',
+          propertyPurpose: 'Venda',
+          sellerApprovalStatus: 'APPROVED_WITH_RES',
+          buyerApprovalStatus: 'APPROVED_WITH_RES',
+          sellerApprovalReason: { reason: 'Ajuste do vendedor.' },
+          buyerApprovalReason: { reason: 'Ajuste do comprador.' },
+          documents: [],
+        },
+      ],
+      total: 4,
+    });
+
+    render(ContractsModule);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Finalizados' }));
+
+    const rowFor = (propertyTitle: string) => {
+      const row = screen
+        .getAllByRole('row')
+        .find((candidate) => candidate.textContent?.includes(propertyTitle));
+      if (!row) throw new Error(`Row not found for ${propertyTitle}`);
+      return row;
+    };
+
+    expect(within(rowFor('Sem Ressalvas')).queryByText('Aprovado com ressalvas')).not.toBeInTheDocument();
+    expect(within(rowFor('Ressalva Vendedor')).getByText('Aprovado com ressalvas')).toBeInTheDocument();
+    expect(within(rowFor('Ressalva Comprador')).getByText('Aprovado com ressalvas')).toBeInTheDocument();
+    expect(within(rowFor('Ressalvas de Ambos')).getByText('Aprovado com ressalvas')).toBeInTheDocument();
+    expect(screen.queryByText(/(Vendedor|Comprador|Locador|Locatário) com ressalvas/)).not.toBeInTheDocument();
   });
 
   it('libera o imóvel ao excluir o contrato finalizado', async () => {

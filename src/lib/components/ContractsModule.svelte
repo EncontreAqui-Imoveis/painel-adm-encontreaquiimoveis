@@ -2286,15 +2286,6 @@
               <dd class="text-right">{getApprovalProgressLabel(item)}</dd>
             </div>
           </dl>
-          {#if getApprovalRemarkSummaries(item).length > 0}
-            <div class="mt-3 flex flex-wrap gap-2">
-              {#each getApprovalRemarkSummaries(item) as summary (summary.key)}
-                <span class="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                  {summary.label} com ressalvas
-                </span>
-              {/each}
-            </div>
-          {/if}
           <div class="mt-4 flex flex-col gap-2">
             <Button variant="outline" on:click={() => openModal(item)}>
               {tableActionLabel(item.status)}
@@ -2380,15 +2371,6 @@
                     </div>
                   </div>
                 </div>
-                {#if getApprovalRemarkSummaries(item).length > 0}
-                  <div class="mt-2 flex flex-wrap gap-2">
-                    {#each getApprovalRemarkSummaries(item) as summary (summary.key)}
-                      <span class="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                        {summary.label} com ressalvas
-                      </span>
-                    {/each}
-                  </div>
-                {/if}
               </td>
               <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                 {getOwnerDisplayName(item)}
