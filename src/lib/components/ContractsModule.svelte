@@ -2453,7 +2453,9 @@
             {modalMode === 'review_docs'
               ? 'Análise de Documentação'
               : modalMode === 'upload_draft'
-              ? 'Anexar Minuta'
+              ? selected.status === 'AWAITING_MINUTE_REVIEW'
+                ? 'Revisão da Minuta'
+                : 'Anexar Minuta'
               : modalMode === 'finalize'
               ? 'Finalizar Venda/Locação'
               : 'Editar Contrato Finalizado'}

@@ -1685,6 +1685,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Em Confecção' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Anexar Minuta' }));
 
+    expect(screen.getByRole('heading', { name: 'Anexar Minuta' })).toBeInTheDocument();
     expect(
       await screen.findByText('Minuta atual')
     ).toBeInTheDocument();
@@ -1756,7 +1757,9 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Conferir Minuta' }));
 
-    expect(screen.getByText('Minuta em revisão pelas partes')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Revisão da Minuta' })).toBeInTheDocument();
+    expect(screen.getByText('Minuta atual')).toBeInTheDocument();
+    expect(screen.getByText('Revisão pelas partes')).toBeInTheDocument();
     expect(screen.getAllByText('minuta_revisao.pdf').length).toBeGreaterThan(0);
     expect(screen.getByText('Locatário: De acordo')).toBeInTheDocument();
     expect(screen.getByText('Locador: Aguardando')).toBeInTheDocument();
@@ -1766,6 +1769,7 @@ describe('ContractsModule', () => {
     expect(screen.queryByRole('button', { name: 'Prosseguir com a mesma minuta' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Excluir minuta' })).not.toBeInTheDocument();
     expect(screen.queryByText('Minuta anexada')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nenhum arquivo escolhido/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Selecione um arquivo apenas se quiser substituir a minuta atual.')).not.toBeInTheDocument();
   });
 
@@ -1798,13 +1802,25 @@ describe('ContractsModule', () => {
       }
       return { data: [], total: 0 };
     });
-    apiClientPostMock.mockResolvedValue({ data: {} });
+    let resolveDraftUpload: ((value: { data: Record<string, never> }) => void) | undefined;
+    apiClientPostMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDraftUpload = resolve;
+        })
+    );
 
     render(ContractsModule);
     await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Conferir Minuta' }));
 
     const draftFileInput = document.querySelector('#draft-pdf') as HTMLInputElement;
+    const pickerClickSpy = vi.spyOn(draftFileInput, 'click');
+    await fireEvent.click(screen.getByRole('button', { name: 'Substituir minuta' }));
+    expect(pickerClickSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Comprador: Aguardando')).toBeInTheDocument();
+    expect(screen.getByText('Vendedor: Aguardando')).toBeInTheDocument();
+
     await fireEvent.change(draftFileInput, {
       target: {
         files: [new File(['%PDF-1.4 replacement%'], 'minuta_corrigida.pdf', {
@@ -1812,7 +1828,6 @@ describe('ContractsModule', () => {
         })],
       },
     });
-    await fireEvent.click(screen.getByRole('button', { name: 'Substituir minuta' }));
 
     await waitFor(() => {
       expect(apiClientPostMock).toHaveBeenCalledWith(
@@ -1820,9 +1835,13 @@ describe('ContractsModule', () => {
         expect.any(FormData)
       );
     });
+    expect(screen.getByRole('button', { name: 'Substituindo…' })).toBeDisabled();
+    expect(apiClientPostMock).toHaveBeenCalledTimes(1);
+
     const form = apiClientPostMock.mock.calls[0][1] as FormData;
     expect((form.get('file') as File).name).toBe('minuta_corrigida.pdf');
     expect(form.get('reuseCurrentDraft')).toBeNull();
+    resolveDraftUpload?.({ data: {} });
   });
 
   it('permite voltar de IN_DRAFT para a etapa anterior pelo modal', async () => {
