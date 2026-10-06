@@ -1845,6 +1845,7 @@ describe('ContractsModule', () => {
   });
 
   it('destaca correção pendente, preserva o motivo textual e pede confirmação antes de substituir', async () => {
+    const correctionReason = `texto <b>literal</b>\n${'x'.repeat(4979)}`;
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_MINUTE_REVIEW')) {
         return {
@@ -1868,7 +1869,7 @@ describe('ContractsModule', () => {
               sellerChangeRequest: {
                 id: 911,
                 reviewerSide: 'seller',
-                reason: "Corrigir\na cláusula '; -- sem remover texto.",
+                reason: correctionReason,
                 requestedAt: '2026-10-05T10:30:00.000Z',
                 pendingResolution: true,
               },
@@ -1886,19 +1887,36 @@ describe('ContractsModule', () => {
 
     expect(screen.getByText('Correção solicitada')).toBeInTheDocument();
     expect(screen.getByText((_, node) => node?.textContent === 'Solicitado por: Locador')).toBeInTheDocument();
-    expect(screen.getByText(/Corrigir/)).toHaveTextContent("Corrigir a cláusula '; -- sem remover texto.");
+    const reasonPreview = screen.getByText((_, node) => node?.textContent === correctionReason);
+    expect(reasonPreview).toHaveClass('line-clamp-3');
+    expect(reasonPreview).toHaveClass('whitespace-pre-wrap');
+    expect(reasonPreview.parentElement).not.toHaveClass('bg-amber-50');
+    expect(reasonPreview.parentElement).toHaveClass('bg-white');
+    expect(screen.queryByText('literal', { selector: 'b' })).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Ver motivo completo' }));
+    expect(
+      screen.getByRole('heading', { name: 'Motivo da solicitação de correção' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText((_, node) => node?.textContent === correctionReason)
+    ).toHaveLength(2);
     expect(screen.queryByText('Locador com ressalvas')).not.toBeInTheDocument();
 
     const input = document.querySelector('#draft-pdf') as HTMLInputElement;
     const pickerClickSpy = vi.spyOn(input, 'click');
     await fireEvent.click(screen.getByRole('button', { name: 'Substituir minuta' }));
     expect(screen.getByRole('heading', { name: 'Substituir minuta?' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Uma nova versão da minuta será publicada. As decisões atuais de revisão deixam de valer para a nova versão e ambas as partes precisarão conferir novamente.'
+      )
+    ).toBeInTheDocument();
     expect(pickerClickSpy).not.toHaveBeenCalled();
     await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
     expect(pickerClickSpy).not.toHaveBeenCalled();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Substituir minuta' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Continuar e selecionar arquivo' }));
     expect(pickerClickSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -1964,6 +1982,17 @@ describe('ContractsModule', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Manter minuta' }));
     expect(screen.getByRole('heading', { name: 'Manter minuta atual?' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Manter minuta atual?' })).toHaveLength(1);
+    expect(
+      screen.getByText(
+        'A minuta atual será mantida sem substituir o arquivo. Comprador poderá abrir novamente esta mesma minuta e registrar uma nova decisão.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Se a correção solicitada exigir alteração no documento, cancele esta ação e use “Substituir minuta”.'
+      )
+    ).toBeInTheDocument();
     const reasonField = screen.getByLabelText('Motivo da administração') as HTMLTextAreaElement;
     expect(reasonField.maxLength).toBe(5000);
     await fireEvent.input(reasonField, { target: { value: 'ab' } });

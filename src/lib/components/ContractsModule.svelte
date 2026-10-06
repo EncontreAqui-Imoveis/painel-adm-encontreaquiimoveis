@@ -1900,6 +1900,12 @@
     return usefulLength >= 3 && Array.from(normalized).length <= 5000;
   }
 
+  function keepCurrentDraftRequesterLabel(): string {
+    if (draftChangeRequestToKeep?.reviewerSide === 'seller') return selectedSellerLabel;
+    if (draftChangeRequestToKeep?.reviewerSide === 'buyer') return selectedBuyerLabel;
+    return 'A parte solicitante';
+  }
+
   function openKeepCurrentDraftDialog(changeRequest: ContractDraftChangeRequest): void {
     if (!changeRequest.id || keepingCurrentDraft) return;
     draftChangeRequestToKeep = changeRequest;
@@ -3525,7 +3531,7 @@
     <Dialog.Header>
       <Dialog.Title>Substituir minuta?</Dialog.Title>
       <Dialog.Description>
-        Uma nova versão reiniciará a revisão para ambas as partes. Os consentimentos da versão atual deixarão de valer para a nova revisão.
+        Uma nova versão da minuta será publicada. As decisões atuais de revisão deixam de valer para a nova versão e ambas as partes precisarão conferir novamente.
       </Dialog.Description>
     </Dialog.Header>
     <Dialog.Footer className="flex gap-2">
@@ -3537,7 +3543,7 @@
         Cancelar
       </Button>
       <Button on:click={confirmDraftReplacement} disabled={uploadingDraft}>
-        Continuar
+        Continuar e selecionar arquivo
       </Button>
     </Dialog.Footer>
   </Dialog.Content>
@@ -3548,10 +3554,13 @@
     <Dialog.Header>
       <Dialog.Title>Manter minuta atual?</Dialog.Title>
       <Dialog.Description>
-        Informe por que a solicitação de correção não será aplicada. O participante será notificado e poderá revisar novamente esta mesma versão.
+        A minuta atual será mantida sem substituir o arquivo. {keepCurrentDraftRequesterLabel()} poderá abrir novamente esta mesma minuta e registrar uma nova decisão.
       </Dialog.Description>
     </Dialog.Header>
     <div class="space-y-2 px-6 py-4">
+      <p class="text-sm text-gray-600 dark:text-gray-300">
+        Se a correção solicitada exigir alteração no documento, cancele esta ação e use “Substituir minuta”.
+      </p>
       <label class="block text-sm font-medium text-gray-900 dark:text-gray-100" for="keep-draft-reason">
         Motivo da administração
       </label>

@@ -2,6 +2,7 @@
   import { tick } from 'svelte';
   import { Loader2 } from 'lucide-svelte';
   import { Button } from '$lib/components/ui/button';
+  import * as Dialog from '$lib/components/ui/dialog';
   import ContractActorsGrid from '$lib/components/contracts/ContractActorsGrid.svelte';
   import type {
     ContractDraftChangeRequest,
@@ -58,6 +59,8 @@
     label: string;
     request: ContractDraftChangeRequest;
   }> = [];
+  let showChangeRequestReasonDialog = false;
+  let changeRequestReasonToView = '';
   $: isAwaitingMinuteReview = contract?.status === 'AWAITING_MINUTE_REVIEW';
   $: buyerChangeRequest = contract?.draftReview?.buyerChangeRequest ?? null;
   $: sellerChangeRequest = contract?.draftReview?.sellerChangeRequest ?? null;
@@ -85,6 +88,11 @@
     if (selectedDraftFile) {
       await submitDraft();
     }
+  }
+
+  function openChangeRequestReasonDialog(reason: string | null | undefined) {
+    changeRequestReasonToView = reason ?? 'Motivo não informado.';
+    showChangeRequestReasonDialog = true;
   }
 </script>
 
@@ -231,18 +239,26 @@
         </div>
 
         {#each pendingChangeRequests as changeRequest (changeRequest.request.id)}
-          <section class="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+          <section class="mt-3 rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-100">
             <h3 class="font-semibold">Correção solicitada</h3>
             <p class="mt-2"><span class="font-medium">Solicitado por:</span> {changeRequest.label}</p>
             {#if changeRequest.request.requestedAt}
-              <p class="mt-1 text-xs text-amber-800 dark:text-amber-200">
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {formatDate(changeRequest.request.requestedAt)}
               </p>
             {/if}
             <p class="mt-3 font-medium">Motivo</p>
-            <p class="mt-1 max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded bg-white/70 p-2 text-sm dark:bg-black/20">
+            <p class="mt-1 line-clamp-3 whitespace-pre-wrap break-words rounded bg-slate-50 p-2 text-sm text-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
               {changeRequest.request.reason ?? 'Motivo não informado.'}
             </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2 text-slate-700 dark:text-slate-300"
+              on:click={() => openChangeRequestReasonDialog(changeRequest.request.reason)}
+            >
+              Ver motivo completo
+            </Button>
             <div class="mt-3 flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -276,39 +292,55 @@
           Aguardando a conferência das partes.
         </p>
       {/if}
+
+      <div class="mt-3 flex flex-wrap items-center gap-3">
+        <input
+          id="draft-pdf"
+          bind:this={draftUploadInputEl}
+          type="file"
+          accept="application/pdf,.pdf"
+          on:change={handleReviewDraftFileChange}
+          class="sr-only"
+          aria-hidden="true"
+          tabindex="-1"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          on:click={() => {
+            if (selectedDraftFile) {
+              void submitDraft();
+            } else if (pendingChangeRequests.length > 0) {
+              requestDraftReplacementConfirmation();
+            } else {
+              onPickDraftFile();
+            }
+          }}
+          disabled={uploadingDraft || movingToPreviousStage}
+        >
+          {#if uploadingDraft}
+            <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+          {/if}
+          {uploadingDraft ? 'Substituindo…' : 'Substituir minuta'}
+        </Button>
+      </div>
     </div>
 
-    <div class="flex flex-wrap items-center gap-3">
-      <input
-        id="draft-pdf"
-        bind:this={draftUploadInputEl}
-        type="file"
-        accept="application/pdf,.pdf"
-        on:change={handleReviewDraftFileChange}
-        class="sr-only"
-        aria-hidden="true"
-        tabindex="-1"
-      />
-      <Button
-        size="sm"
-        variant="outline"
-        on:click={() => {
-          if (selectedDraftFile) {
-            void submitDraft();
-          } else if (pendingChangeRequests.length > 0) {
-            requestDraftReplacementConfirmation();
-          } else {
-            onPickDraftFile();
-          }
-        }}
-        disabled={uploadingDraft || movingToPreviousStage}
-      >
-        {#if uploadingDraft}
-          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
-        {/if}
-        {uploadingDraft ? 'Substituindo…' : 'Substituir minuta'}
-      </Button>
-    </div>
+    <Dialog.Root bind:open={showChangeRequestReasonDialog}>
+      <Dialog.Content className="max-w-lg">
+        <Dialog.Header>
+          <Dialog.Title>Motivo da solicitação de correção</Dialog.Title>
+        </Dialog.Header>
+        <div class="max-h-[60vh] overflow-y-auto whitespace-pre-wrap break-words px-6 py-4 text-sm text-slate-700 dark:text-slate-200">
+          {changeRequestReasonToView}
+        </div>
+        <Dialog.Footer>
+          <Button variant="outline" on:click={() => (showChangeRequestReasonDialog = false)}>
+            Fechar
+          </Button>
+        </Dialog.Footer>
+      </Dialog.Content>
+    </Dialog.Root>
   {:else}
   <div class="rounded-2xl border border-dashed border-gray-300 bg-white/70 p-4 shadow-sm dark:border-gray-700 dark:bg-gray-950/20">
     <div class="flex flex-wrap items-start justify-between gap-3">
