@@ -100,7 +100,7 @@ export function shouldPollPendingCounts(
 ): boolean {
   return (
     isPageVisible &&
-    (view === 'dashboard' || view === 'verification' || view === 'property_requests')
+    (view === 'dashboard' || view === 'verification' || view === 'property_requests' || view === 'negotiation_contracts')
   );
 }
 

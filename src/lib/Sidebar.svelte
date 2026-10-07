@@ -33,6 +33,7 @@
     propertyRequests: number;
     brokerRequests: number;
     proposalRequests?: number;
+    contractDraftReviewRequests?: number;
   } = { propertyRequests: 0, brokerRequests: 0 };
   export let announcementsBadge = 0;
 
@@ -484,6 +485,13 @@
             >
               <svelte:component this={item.icon} class="mt-0.5 h-5 w-5 shrink-0" />
               <span class="min-w-0 flex-1 text-left [overflow-wrap:anywhere] [word-break:normal] hyphens-none">{item.label}</span>
+              {#if item.view === 'negotiation_contracts' && (pendingCounts.contractDraftReviewRequests ?? 0) > 0}
+                <span
+                  class="ml-auto mt-0.5 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white"
+                >
+                  {pendingCounts.contractDraftReviewRequests}
+                </span>
+              {/if}
             </button>
           {/each}
         </div>

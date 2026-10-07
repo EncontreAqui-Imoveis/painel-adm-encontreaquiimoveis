@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -161,5 +161,27 @@ describe('Sidebar', () => {
     });
 
     expect(screen.getByRole('button', { name: /^Verificação/ })).toHaveTextContent('2');
+  });
+
+  it.each([3, 1, 0])('mostra somente o contador %s de correções no item Contratos', async (total) => {
+    render(Sidebar, {
+      activeView: 'negotiation_contracts',
+      pendingCounts: {
+        propertyRequests: 2, brokerRequests: 4, proposalRequests: 1,
+        contractDraftReviewRequests: total,
+      },
+    });
+    const contracts = await screen.findByRole('button', { name: /^Contratos/ });
+    if (total > 0) {
+      expect(within(contracts).getByText(String(total))).toHaveClass('bg-red-500');
+    } else {
+      expect(contracts.querySelector('.bg-red-500')).toBeNull();
+    }
+    const verification = screen.getByRole('button', { name: /^Verificação/ });
+    expect(within(verification).getByText('7')).toBeInTheDocument();
+    await fireEvent.click(verification);
+    expect(within(screen.getByRole('button', { name: /^Solicitações de Corretores/ })).getByText('4')).toBeInTheDocument();
+    expect(within(screen.getByRole('button', { name: /^Solicitações \(Imóveis\)/ })).getByText('2')).toBeInTheDocument();
+    expect(within(screen.getByRole('button', { name: /^Solicitação de Propostas/ })).getByText('1')).toBeInTheDocument();
   });
 });

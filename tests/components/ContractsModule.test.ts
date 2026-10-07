@@ -1774,6 +1774,7 @@ describe('ContractsModule', () => {
   });
 
   it('substitui a minuta durante a revisão pelo fluxo de upload existente', async () => {
+    const onDraftReviewRequestsChanged = vi.fn();
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_MINUTE_REVIEW')) {
         return {
@@ -1810,7 +1811,7 @@ describe('ContractsModule', () => {
         })
     );
 
-    render(ContractsModule);
+    render(ContractsModule, { events: { draftReviewRequestsChanged: onDraftReviewRequestsChanged } });
     await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Conferir Minuta' }));
 
@@ -1841,7 +1842,9 @@ describe('ContractsModule', () => {
     const form = apiClientPostMock.mock.calls[0][1] as FormData;
     expect((form.get('file') as File).name).toBe('minuta_corrigida.pdf');
     expect(form.get('reuseCurrentDraft')).toBeNull();
+    expect(onDraftReviewRequestsChanged).not.toHaveBeenCalled();
     resolveDraftUpload?.({ data: {} });
+    await waitFor(() => expect(onDraftReviewRequestsChanged).toHaveBeenCalledTimes(1));
   });
 
   it('destaca correção pendente, preserva o motivo textual e pede confirmação antes de substituir', async () => {
@@ -1925,6 +1928,7 @@ ${'x'.repeat(4979)}`;
   });
 
   it('mantém a minuta com motivo válido, bloqueia duplicidade e atualiza a resolução', async () => {
+    const onDraftReviewRequestsChanged = vi.fn();
     const pendingContract = {
       id: 'contract-keep-draft-1',
       status: 'AWAITING_MINUTE_REVIEW',
@@ -1979,7 +1983,7 @@ ${'x'.repeat(4979)}`;
       () => new Promise((resolve) => { resolveKeepRequest = resolve; })
     );
 
-    render(ContractsModule);
+    render(ContractsModule, { events: { draftReviewRequestsChanged: onDraftReviewRequestsChanged } });
     await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Conferir Minuta' }));
     expect(screen.getByText((_, node) => node?.textContent === 'Solicitado por: Comprador')).toBeInTheDocument();
@@ -2015,6 +2019,7 @@ ${'x'.repeat(4979)}`;
     });
     expect(reasonField).not.toBeDisabled();
     expect(reasonField.value).toBe('O prazo segue a proposta assinada.');
+    expect(onDraftReviewRequestsChanged).not.toHaveBeenCalled();
 
     await fireEvent.click(screen.getAllByRole('button', { name: 'Manter minuta' }).at(-1)!);
     await waitFor(() => {
@@ -2035,6 +2040,7 @@ ${'x'.repeat(4979)}`;
     expect(screen.getByText('Minuta mantida')).toBeInTheDocument();
     expect(screen.getByText('O prazo segue a proposta assinada.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Manter minuta' })).not.toBeInTheDocument();
+    expect(onDraftReviewRequestsChanged).toHaveBeenCalledTimes(1);
   });
 
   it('permite voltar de IN_DRAFT para a etapa anterior pelo modal', async () => {

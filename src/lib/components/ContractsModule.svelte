@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
+  const dispatch = createEventDispatcher<{ draftReviewRequestsChanged: void }>();
   import {
     CircleAlert,
     Download,
@@ -1877,6 +1878,7 @@
     uploadingDraft = true;
     try {
       await submitContractDraft(selected.id, selectedDraftFile, reuseCurrentDraft);
+      dispatch('draftReviewRequestsChanged');
       toast.success(
         reuseCurrentDraft
           ? 'Minuta atual reenviada para conferência das partes.'
@@ -1928,6 +1930,7 @@
     keepingCurrentDraft = true;
     try {
       await keepCurrentContractDraft(selected.id, draftChangeRequestToKeep.id, reason);
+      dispatch('draftReviewRequestsChanged');
       await reloadSelectedContract(selected.id);
       if (selected) syncSelectedContractInList(selected);
       toast.success('Solicitação analisada. A minuta atual foi mantida.');

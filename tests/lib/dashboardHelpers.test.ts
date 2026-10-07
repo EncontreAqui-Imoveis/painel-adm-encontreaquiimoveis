@@ -33,6 +33,8 @@ describe('dashboardHelpers', () => {
     expect(shouldPatchDashboardListLocally('dashboard')).toBe(false);
     expect(shouldPollPendingCounts('verification', true)).toBe(true);
     expect(shouldPollPendingCounts('verification', false)).toBe(false);
+    expect(shouldPollPendingCounts('negotiation_contracts', true)).toBe(true);
+    expect(shouldPollPendingCounts('negotiation_contracts', false)).toBe(false);
   });
 
   it('lê payloads paginados e totais', () => {

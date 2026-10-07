@@ -92,14 +92,17 @@
         propertyRequests: number;
         brokerRequests: number;
         proposalRequests: number;
+        contractDraftReviewRequests: number;
     };
     let pendingCounts: PendingCounts = {
         propertyRequests: 0,
         brokerRequests: 0,
         proposalRequests: 0,
+        contractDraftReviewRequests: 0,
     };
     let pendingCountsInterval: ReturnType<typeof setInterval> | null = null;
     let pendingCountsRequestInFlight = false;
+    let pendingCountsRefreshRequested = false;
     let isPageVisible = true;
     let announcementsCountRequestInFlight = false;
 
@@ -740,19 +743,20 @@
             return;
         }
         if (!hasSessionToken()) {
-            pendingCounts = { propertyRequests: 0, brokerRequests: 0, proposalRequests: 0 };
+            pendingCounts = { propertyRequests: 0, brokerRequests: 0, proposalRequests: 0, contractDraftReviewRequests: 0 };
             clearSessionToken();
             return;
         }
         pendingCountsRequestInFlight = true;
 
-        async function fetchCount(endpoint: string): Promise<number | null> {
+        async function fetchCount(endpoint: string, hideOnForbidden = false): Promise<number | null> {
             const response = await fetchPlatformResponse(endpoint);
             if (!response) {
                 clearSessionToken();
                 return null;
             }
             if (!response.ok) {
+                if (hideOnForbidden && response.status === 403) return 0;
                 return null;
             }
             const payload = await response.json();
@@ -760,7 +764,7 @@
         }
 
         try {
-            const [creationRequests, editRequests, brokerRequests, proposalRequests] = await Promise.all([
+            const [creationRequests, editRequests, brokerRequests, proposalRequests, contractDraftReviewRequests] = await Promise.all([
                 fetchCount(
                     "/admin/properties-with-brokers?status=pending_approval&limit=1&page=1",
                 ),
@@ -773,7 +777,15 @@
                 fetchCount(
                     "/admin/negotiations/requests/summary?status=PROPOSAL_SIGNED&limit=1&page=1",
                 ),
+                fetchCount(
+                    "/admin/contracts/draft-review-requests/pending-count",
+                    true,
+                ).catch(() => null),
             ]);
+            pendingCounts = {
+                ...pendingCounts,
+                contractDraftReviewRequests: contractDraftReviewRequests ?? pendingCounts.contractDraftReviewRequests,
+            };
             if (
                 creationRequests === null ||
                 editRequests === null ||
@@ -783,6 +795,7 @@
                 return;
             }
             pendingCounts = {
+                ...pendingCounts,
                 propertyRequests: creationRequests + editRequests,
                 brokerRequests,
                 proposalRequests,
@@ -791,7 +804,19 @@
             console.error("Erro ao buscar contagem de solicitacoes:", error);
         } finally {
             pendingCountsRequestInFlight = false;
+            if (pendingCountsRefreshRequested) {
+                pendingCountsRefreshRequested = false;
+                void fetchPendingCounts();
+            }
         }
+    }
+
+    function handleDraftReviewRequestsChanged() {
+        if (pendingCountsRequestInFlight) {
+            pendingCountsRefreshRequested = true;
+            return;
+        }
+        void fetchPendingCounts();
     }
 
     function syncPendingCountsPolling() {
@@ -2074,7 +2099,7 @@
                 {/if}
             {:else if activeView === "negotiation_contracts"}
                 {#if ContractsModuleComponent}
-                    <svelte:component this={ContractsModuleComponent} />
+                    <svelte:component this={ContractsModuleComponent} on:draftReviewRequestsChanged={handleDraftReviewRequestsChanged} />
                 {:else}
                     <div class="flex justify-center items-center h-64">
                         <div
