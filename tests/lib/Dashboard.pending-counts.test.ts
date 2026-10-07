@@ -52,6 +52,23 @@ describe('Dashboard contract correction count', () => {
     return screen.getByRole('button', { name: /^Contratos/ });
   }
 
+  it.each([0, 1, 3])('shares count %s between sidebar and minute-review tab without another fetch', async (total) => {
+    contractTotal = total;
+    render(Dashboard, { initialView: 'negotiation_contracts' });
+    const tab = await screen.findByRole('button', { name: /^Conferência da Minuta/ });
+    if (total > 0) {
+      await waitFor(() => expect(within(tab).getByText(String(total))).toHaveClass('bg-red-500'));
+      expect(within(contractButton()).getByText(String(total))).toHaveClass('bg-red-500');
+    } else {
+      await waitFor(() => expect(fetchResponseMock).toHaveBeenCalledWith(endpoint));
+      expect(tab.querySelector('.bg-red-500')).toBeNull();
+      expect(contractButton().querySelector('.bg-red-500')).toBeNull();
+    }
+    await fireEvent.click(tab);
+    expect(tab.querySelector('.bg-red-500')?.textContent?.trim() ?? '').toBe(total > 0 ? String(total) : '');
+    expect(fetchResponseMock.mock.calls.filter(([path]) => path === endpoint)).toHaveLength(1);
+  });
+
   it('fetches the endpoint and passes its count to the sidebar', async () => {
     await mountVerification();
     await waitFor(() => expect(within(contractButton()).getByText('3')).toHaveClass('bg-red-500'));
@@ -115,8 +132,12 @@ describe('Dashboard contract correction count', () => {
     apiClientPostMock.mockImplementation(resolveAction);
     render(Dashboard, { initialView: 'negotiation_contracts' });
     await waitFor(() => expect(within(contractButton()).getByText('3')).toBeInTheDocument());
-    await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
+    const reviewTab = await screen.findByRole('button', { name: /^Conferência da Minuta/ });
+    expect(within(reviewTab).getByText('3')).toHaveClass('bg-red-500');
+    await fireEvent.click(reviewTab);
     await fireEvent.click(await screen.findByRole('button', { name: 'Conferir Minuta' }));
+    expect(within(reviewTab).getByText('3')).toBeInTheDocument();
+    expect(fetchResponseMock.mock.calls.filter(([path]) => path === endpoint)).toHaveLength(1);
     if (action === 'keep') {
       await fireEvent.click(screen.getByRole('button', { name: 'Manter minuta' }));
       await fireEvent.input(screen.getByLabelText('Motivo da administração'), { target: { value: 'Minuta correta' } });
@@ -129,6 +150,7 @@ describe('Dashboard contract correction count', () => {
       });
     }
     await waitFor(() => expect(contractButton().querySelector('.bg-red-500')).toBeNull());
+    expect(reviewTab.querySelector('.bg-red-500')).toBeNull();
     expect(fetchResponseMock.mock.calls.filter(([path]) => path === endpoint)).toHaveLength(2);
     expect(action === 'keep' ? apiPostMock : apiClientPostMock).toHaveBeenCalledTimes(1);
   });

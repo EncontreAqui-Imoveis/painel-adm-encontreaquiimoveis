@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   const dispatch = createEventDispatcher<{ draftReviewRequestsChanged: void }>();
+  export let pendingDraftReviewRequests = 0;
   import {
     CircleAlert,
     Download,
@@ -2246,6 +2247,11 @@
         }`}
       >
         {tab.label}
+        {#if tab.key === 'AWAITING_MINUTE_REVIEW' && pendingDraftReviewRequests > 0}
+          <span class="ml-2 inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+            {pendingDraftReviewRequests}
+          </span>
+        {/if}
       </button>
     {/each}
   </div>

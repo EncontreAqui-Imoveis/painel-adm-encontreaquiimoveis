@@ -1850,6 +1850,12 @@ describe('ContractsModule', () => {
   it('destaca correção pendente, preserva o motivo textual e pede confirmação antes de substituir', async () => {
     const correctionReason = `texto <b>literal</b>
 ${'x'.repeat(4979)}`;
+    const scrollHeightSpy = vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockImplementation(function () {
+      return this.textContent === correctionReason ? 512 : 0;
+    });
+    const clientHeightSpy = vi.spyOn(Element.prototype, 'clientHeight', 'get').mockImplementation(function () {
+      return this.textContent === correctionReason ? 128 : 0;
+    });
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_MINUTE_REVIEW')) {
         return {
@@ -1900,7 +1906,7 @@ ${'x'.repeat(4979)}`;
     expect(reasonPreview.parentElement).not.toHaveClass('bg-amber-50');
     expect(reasonPreview.parentElement).toHaveClass('bg-white');
     expect(screen.queryByText('literal', { selector: 'b' })).not.toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Ver motivo completo' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Ver motivo completo' }));
     expect(
       screen.getByRole('heading', { name: 'Motivo da solicitação de correção' })
     ).toBeInTheDocument();
@@ -1925,6 +1931,8 @@ ${'x'.repeat(4979)}`;
     await fireEvent.click(screen.getByRole('button', { name: 'Substituir minuta' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Continuar e selecionar arquivo' }));
     expect(pickerClickSpy).toHaveBeenCalledTimes(1);
+    scrollHeightSpy.mockRestore();
+    clientHeightSpy.mockRestore();
   });
 
   it('mantém a minuta com motivo válido, bloqueia duplicidade e atualiza a resolução', async () => {

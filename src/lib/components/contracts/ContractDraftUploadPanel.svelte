@@ -61,6 +61,8 @@
   }> = [];
   let showChangeRequestReasonDialog = false;
   let changeRequestReasonToView = '';
+  let changeRequestReasonDialogTitle = 'Motivo da solicitação de correção';
+  let overflowingPreviews: Record<string, boolean> = {};
   $: isAwaitingMinuteReview = contract?.status === 'AWAITING_MINUTE_REVIEW';
   $: buyerChangeRequest = contract?.draftReview?.buyerChangeRequest ?? null;
   $: sellerChangeRequest = contract?.draftReview?.sellerChangeRequest ?? null;
@@ -90,8 +92,48 @@
     }
   }
 
-  function openChangeRequestReasonDialog(reason: string | null | undefined) {
+  type PreviewMeasurement = { key: string; text: string | null | undefined };
+
+  function measurePreviewOverflow(node: HTMLElement, options: PreviewMeasurement) {
+    let current = options;
+    let destroyed = false;
+
+    function measure() {
+      if (destroyed) return;
+      const overflowing = node.scrollHeight > node.clientHeight;
+      if (overflowingPreviews[current.key] !== overflowing) {
+        overflowingPreviews = { ...overflowingPreviews, [current.key]: overflowing };
+      }
+    }
+
+    async function measureAfterRender() {
+      await tick();
+      measure();
+    }
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    void measureAfterRender();
+    void document.fonts?.ready.then(measure, () => {});
+
+    return {
+      update(next: PreviewMeasurement) {
+        if (next.key === current.key && next.text === current.text) return;
+        current = next;
+        void measureAfterRender();
+      },
+      destroy() {
+        destroyed = true;
+        observer.disconnect();
+        const { [current.key]: removed, ...remaining } = overflowingPreviews;
+        overflowingPreviews = remaining;
+      },
+    };
+  }
+
+  function openChangeRequestReasonDialog(reason: string | null | undefined, title = 'Motivo da solicitação de correção') {
     changeRequestReasonToView = reason ?? 'Motivo não informado.';
+    changeRequestReasonDialogTitle = title;
     showChangeRequestReasonDialog = true;
   }
 </script>
@@ -248,9 +290,10 @@
               </p>
             {/if}
             <p class="mt-3 font-medium">Motivo</p>
-            <p class="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-2 text-sm text-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
+            <p use:measurePreviewOverflow={{ key: `pending:${changeRequest.side}:${changeRequest.request.id}`, text: changeRequest.request.reason }} class="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-2 text-sm text-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
               {changeRequest.request.reason ?? 'Motivo não informado.'}
             </p>
+            {#if overflowingPreviews[`pending:${changeRequest.side}:${changeRequest.request.id}`]}
             <Button
               size="sm"
               variant="outline"
@@ -259,6 +302,7 @@
             >
               Ver motivo completo
             </Button>
+            {/if}
             <div class="mt-3 flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -277,14 +321,24 @@
             <h3 class="font-semibold">Solicitação analisada</h3>
             <p class="mt-2"><span class="font-medium">Solicitado por:</span> {changeRequest.label}</p>
             <p class="mt-3 font-medium">Motivo da solicitação</p>
-            <p class="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded bg-white/70 p-2 text-sm dark:bg-black/20">
+            <p use:measurePreviewOverflow={{ key: `resolved-request:${changeRequest.side}:${changeRequest.request.id}`, text: changeRequest.request.reason }} class="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded bg-white/70 p-2 text-sm dark:bg-black/20">
               {changeRequest.request.reason ?? 'Motivo não informado.'}
             </p>
+            {#if overflowingPreviews[`resolved-request:${changeRequest.side}:${changeRequest.request.id}`]}
+              <Button size="sm" variant="outline" className="mt-2" on:click={() => openChangeRequestReasonDialog(changeRequest.request.reason)}>
+                Ver motivo completo
+              </Button>
+            {/if}
             <p class="mt-3"><span class="font-medium">Decisão:</span> Minuta mantida</p>
             <p class="mt-3 font-medium">Motivo da administração</p>
-            <p class="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded bg-white/70 p-2 text-sm dark:bg-black/20">
+            <p use:measurePreviewOverflow={{ key: `resolved-response:${changeRequest.side}:${changeRequest.request.id}`, text: changeRequest.request.resolution?.reason }} class="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded bg-white/70 p-2 text-sm dark:bg-black/20">
               {changeRequest.request.resolution?.reason ?? 'Motivo não informado.'}
             </p>
+            {#if overflowingPreviews[`resolved-response:${changeRequest.side}:${changeRequest.request.id}`]}
+              <Button size="sm" variant="outline" className="mt-2" on:click={() => openChangeRequestReasonDialog(changeRequest.request.resolution?.reason, 'Resposta da imobiliária')}>
+                Ver motivo completo
+              </Button>
+            {/if}
           </section>
         {/each}
       {:else}
@@ -329,7 +383,7 @@
     <Dialog.Root bind:open={showChangeRequestReasonDialog}>
       <Dialog.Content className="max-w-lg">
         <Dialog.Header>
-          <Dialog.Title>Motivo da solicitação de correção</Dialog.Title>
+          <Dialog.Title>{changeRequestReasonDialogTitle}</Dialog.Title>
         </Dialog.Header>
         <div class="max-h-[60vh] overflow-y-auto whitespace-pre-wrap break-words px-6 py-4 text-sm text-slate-700 dark:text-slate-200">
           {changeRequestReasonToView}

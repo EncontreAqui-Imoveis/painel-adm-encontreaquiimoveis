@@ -2099,7 +2099,7 @@
                 {/if}
             {:else if activeView === "negotiation_contracts"}
                 {#if ContractsModuleComponent}
-                    <svelte:component this={ContractsModuleComponent} on:draftReviewRequestsChanged={handleDraftReviewRequestsChanged} />
+                    <svelte:component this={ContractsModuleComponent} pendingDraftReviewRequests={pendingCounts.contractDraftReviewRequests} on:draftReviewRequestsChanged={handleDraftReviewRequestsChanged} />
                 {:else}
                     <div class="flex justify-center items-center h-64">
                         <div
