@@ -248,7 +248,7 @@
               </p>
             {/if}
             <p class="mt-3 font-medium">Motivo</p>
-            <p class="mt-1 line-clamp-3 whitespace-pre-wrap break-words rounded bg-slate-50 p-2 text-sm text-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
+            <p class="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-2 text-sm text-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
               {changeRequest.request.reason ?? 'Motivo não informado.'}
             </p>
             <Button

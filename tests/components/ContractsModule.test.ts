@@ -1845,7 +1845,8 @@ describe('ContractsModule', () => {
   });
 
   it('destaca correção pendente, preserva o motivo textual e pede confirmação antes de substituir', async () => {
-    const correctionReason = `texto <b>literal</b>\n${'x'.repeat(4979)}`;
+    const correctionReason = `texto <b>literal</b>
+${'x'.repeat(4979)}`;
     apiGetMock.mockImplementation(async (endpoint: string) => {
       if (endpoint.includes('status=AWAITING_MINUTE_REVIEW')) {
         return {
@@ -1888,8 +1889,11 @@ describe('ContractsModule', () => {
     expect(screen.getByText('Correção solicitada')).toBeInTheDocument();
     expect(screen.getByText((_, node) => node?.textContent === 'Solicitado por: Locador')).toBeInTheDocument();
     const reasonPreview = screen.getByText((_, node) => node?.textContent === correctionReason);
-    expect(reasonPreview).toHaveClass('line-clamp-3');
+    expect(reasonPreview).not.toHaveClass('line-clamp-3');
+    expect(reasonPreview).toHaveClass('max-h-32');
+    expect(reasonPreview).toHaveClass('overflow-y-auto');
     expect(reasonPreview).toHaveClass('whitespace-pre-wrap');
+    expect(reasonPreview).toHaveClass('break-words');
     expect(reasonPreview.parentElement).not.toHaveClass('bg-amber-50');
     expect(reasonPreview.parentElement).toHaveClass('bg-white');
     expect(screen.queryByText('literal', { selector: 'b' })).not.toBeInTheDocument();
