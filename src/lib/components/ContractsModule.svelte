@@ -29,6 +29,7 @@
   import ContractDraftUploadPanel from '$lib/components/contracts/ContractDraftUploadPanel.svelte';
   import ContractActorsGrid from '$lib/components/contracts/ContractActorsGrid.svelte';
   import ContractFinalizedEditorPanel from '$lib/components/contracts/ContractFinalizedEditorPanel.svelte';
+  import ContractSignatureStatusPanel from '$lib/components/contracts/ContractSignatureStatusPanel.svelte';
   import {
     type ContractStatus,
     getContractDetails,
@@ -243,6 +244,8 @@
   let viewportScrollLockCount = 0;
   let previousModalBodyOverflow = '';
   let finalizingContract = false;
+  let signatureDetailsState: 'loading' | 'ready' | 'error' = 'loading';
+  let signatureDetailsRequestId = 0;
   let reopeningContract = false;
   let deletingContract = false;
   let deletingDraftDocumentId: number | null = null;
@@ -321,8 +324,10 @@
           !doc.metadata?.contractId
       ) ?? null
     : null;
-  $: selectedSellerLabel = contractSideLabel(selected, 'seller');
-  $: selectedBuyerLabel = contractSideLabel(selected, 'buyer');
+  $: hasUndeterminedSignatureModality = selected?.status === 'AWAITING_SIGNATURES'
+    && selected.dealType !== 'sale' && selected.dealType !== 'rent';
+  $: selectedSellerLabel = hasUndeterminedSignatureModality ? 'Parte seller' : contractSideLabel(selected, 'seller');
+  $: selectedBuyerLabel = hasUndeterminedSignatureModality ? 'Parte buyer' : contractSideLabel(selected, 'buyer');
 
   function lockViewportGestureScroll() {
     if (typeof document === 'undefined') return;
@@ -916,6 +921,14 @@
     );
   }
 
+  function signedDocumentVersionLabel(doc: ContractDocument): string | null {
+    if (selected?.status !== 'AWAITING_SIGNATURES' || signatureDetailsState !== 'ready'
+      || !selected.signatures || doc.documentType !== 'contrato_assinado') return null;
+    const version = selected.signatures.currentVersion;
+    if (!version) return 'Sem versão corrente';
+    return doc.id === version.documentId ? 'PDF corrente' : 'Fora da versão corrente';
+  }
+
   function hasPaymentProofForFinalize(contract: ContractItem | null | undefined): boolean {
     if (!contract) return false;
     return getDocumentsForFinalize(contract).some(
@@ -1043,28 +1056,42 @@
   }
 
   async function reloadSelectedContract(contractId: string): Promise<void> {
-    const [payload, rejections] = await Promise.all([
-      getContractDetails<ContractItem>(contractId),
-      listContractDocumentRejections(contractId).catch((error) => {
-        console.error('Falha ao carregar histórico de rejeições:', error);
-        return [] as ContractDocumentRejection[];
-      }),
-    ]);
-    if (!payload?.contract || !selected || selected.id !== contractId) {
-      return;
-    }
+    const requestId = ++signatureDetailsRequestId;
+    signatureDetailsState = 'loading';
+    try {
+      const [payload, rejections] = await Promise.all([
+        getContractDetails<ContractItem>(contractId),
+        listContractDocumentRejections(contractId).catch((error) => {
+          console.error('Falha ao carregar histórico de rejeições:', error);
+          return [] as ContractDocumentRejection[];
+        }),
+      ]);
+      if (!selected || selected.id !== contractId || requestId !== signatureDetailsRequestId) {
+        return;
+      }
+      if (!payload?.contract) {
+        signatureDetailsState = 'error';
+        return;
+      }
 
-    documentRejections = rejections;
+      documentRejections = rejections;
 
-    selected = {
-      ...selected,
-      ...payload.contract,
-      documents: Array.isArray(payload.documents)
-        ? (payload.documents as ContractDocument[])
-        : selected.documents ?? [],
-    };
-    if (showModal) {
-      hydratePartyInfoFormsFromSelected();
+      selected = {
+        ...selected,
+        ...payload.contract,
+        // A missing DTO on refresh must not retain previously displayed confirmations.
+        signatures: payload.contract.signatures ?? null,
+        documents: Array.isArray(payload.documents)
+          ? (payload.documents as ContractDocument[])
+          : selected.documents ?? [],
+      };
+      signatureDetailsState = 'ready';
+      if (showModal) {
+        hydratePartyInfoFormsFromSelected();
+      }
+    } catch (error) {
+      if (selected?.id === contractId && requestId === signatureDetailsRequestId) signatureDetailsState = 'error';
+      throw error;
     }
   }
 
@@ -1393,6 +1420,8 @@
       return;
     }
     showModal = false;
+    ++signatureDetailsRequestId;
+    signatureDetailsState = 'loading';
     selected = null;
     selectedDraftFile = null;
     selectedSignedFile = null;
@@ -2849,9 +2878,13 @@
             sellerName={contractActorName(selected, 'seller')}
             buyerLabel={selectedBuyerLabel}
             sellerLabel={selectedSellerLabel}
-            buyerDescription={contractSideDocumentDescription(selected, 'buyer')}
-            sellerDescription={contractSideDocumentDescription(selected, 'seller')}
+            buyerDescription={hasUndeterminedSignatureModality ? 'Participante do lado buyer' : contractSideDocumentDescription(selected, 'buyer')}
+            sellerDescription={hasUndeterminedSignatureModality ? 'Participante do lado seller' : contractSideDocumentDescription(selected, 'seller')}
           />
+          {#if selected.status === 'AWAITING_SIGNATURES'}
+            <ContractSignatureStatusPanel contract={selected}
+              loading={signatureDetailsState === 'loading'} error={signatureDetailsState === 'error'} />
+          {/if}
           {#if canCurrentAdminCreateDocuments || pendingReplacementDocumentId}
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -3241,6 +3274,11 @@
                       >
                         {documentLabel(doc.documentType)}
                       </button>
+                      {#if signedDocumentVersionLabel(doc)}
+                        <span class="ml-2 rounded bg-slate-100 px-2 py-1 text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                          {signedDocumentVersionLabel(doc)}
+                        </span>
+                      {/if}
                       <p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(doc.createdAt)}</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -3304,6 +3342,11 @@
                         <p class="font-medium text-gray-900 dark:text-gray-100">
                           {documentLabel(doc.documentType)}
                         </p>
+                        {#if signedDocumentVersionLabel(doc)}
+                          <span class="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                            {signedDocumentVersionLabel(doc)}
+                          </span>
+                        {/if}
                         {#if documentSideLabel(doc)}
                           <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                             {documentSideLabel(doc)}

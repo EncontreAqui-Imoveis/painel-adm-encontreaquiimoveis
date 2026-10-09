@@ -44,6 +44,33 @@ export type ContractDocument = {
   createdAt?: string | null;
 };
 
+/** Administrative signature DTO. Dates are serialized as strings by the backend. */
+export type ContractSignatureStatus = {
+  status: 'PENDING' | 'CONFIRMED' | 'PRESERVED';
+  eventId: number | null;
+  confirmedByAdminId: number | null;
+  confirmedAt: string | null;
+  sourceEventId: number | null;
+  originalEventId: number | null;
+  originalSignedVersionId: number | null;
+  preservation: { performedByAdminId: number; performedAt: string; reason: string } | null;
+};
+
+export type ContractSignatureState = {
+  currentVersion: {
+    id: number;
+    documentId: number;
+    draftRevisionId: number;
+    uploadedByAdminId: number;
+    uploadedAt: string;
+    previousVersionId: number | null;
+    replacementReason: string | null;
+    equivalence: { declaredByAdminId: number; declaredAt: string; reason: string } | null;
+  } | null;
+  seller: ContractSignatureStatus;
+  buyer: ContractSignatureStatus;
+};
+
 export type ContractItem = {
   id: string;
   /** Modalidade imutavel resolvida pelo backend a partir da negociacao aprovada. */
@@ -93,6 +120,7 @@ export type ContractItem = {
     nextStep?: string | null;
   } | null;
   commissionData?: Record<string, unknown> | null;
+  signatures?: ContractSignatureState | null;
   workflowMetadata?: (Record<string, unknown> & {
     awaiting_document_resubmission?: {
       seller?: ContractDocumentResubmissionRequest | null;
