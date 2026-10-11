@@ -118,7 +118,8 @@ export async function uploadFinalizedContractDocument(
 export async function submitContractDraft(
   contractId: string,
   file: File | null,
-  reuseCurrentDraft: boolean
+  reuseCurrentDraft: boolean,
+  options?: Pick<ExtendedAxiosConfig, 'skipErrorToast'>
 ): Promise<void> {
   const form = new FormData();
   if (file) {
@@ -127,7 +128,10 @@ export async function submitContractDraft(
   if (reuseCurrentDraft) {
     form.append('reuseCurrentDraft', 'true');
   }
-  await apiClient.post(`/admin/contracts/${contractId}/draft`, form);
+  if (options) {
+    const config: ExtendedAxiosConfig = options;
+    await apiClient.post(`/admin/contracts/${contractId}/draft`, form, config);
+  } else await apiClient.post(`/admin/contracts/${contractId}/draft`, form);
 }
 
 export async function keepCurrentContractDraft(

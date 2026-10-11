@@ -8,6 +8,7 @@ import type { ContractItem, ContractSignatureStatus } from '../../src/lib/compon
 const { get, post, put, patch, remove, clientPost, clientGet, pdfGetDocument, pageRender, pdfDestroy, handlers, toastError, toastSuccess } = vi.hoisted(() => ({
   clientGet: vi.fn(), pdfGetDocument: vi.fn(), pageRender: vi.fn(), pdfDestroy: vi.fn(),
   handlers: { confirm: null as null | ((side: 'seller' | 'buyer', version: number, checked: boolean) => Promise<void>),
+    publish: null as null | (() => Promise<void>),
     replace: null as null | ((declaration: SignedReplacementDeclaration) => Promise<void>) },
   get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), remove: vi.fn(), clientPost: vi.fn(), toastError: vi.fn(), toastSuccess: vi.fn(),
 }));
@@ -56,7 +57,7 @@ describe('ContractsModule signature presentation', () => {
   let loadDetail: () => Promise<Detail>;
   beforeEach(() => {
     vi.resetAllMocks();
-    handlers.confirm = null; handlers.replace = null;
+    handlers.confirm = null; handlers.replace = null; handlers.publish = null;
     pageRender.mockReturnValue({ promise: Promise.resolve() });
     pdfDestroy.mockResolvedValue(undefined);
     pdfGetDocument.mockImplementation(() => ({ promise: Promise.resolve({ numPages: 1,
@@ -705,6 +706,271 @@ describe('ContractsModule signature presentation', () => {
     await panel.findByText('PDF corrente: versao-32.pdf'); expectLocked(panel);
     expect(toastError).toHaveBeenCalledOnce(); expect(toastSuccess).not.toHaveBeenCalled();
     expect(screen.queryByRole('region', { name: 'Substituição do PDF assinado' })).not.toBeInTheDocument();
+  });
+
+  describe('new draft revision during signatures', () => {
+    const initialDraft = () => {
+      const item = confirmable();
+      item.draftReview = { revisionId: 11, revisionNumber: 1, documentId: 20,
+        buyerDecision: 'CONSENTED', sellerDecision: 'CONSENTED', allConsented: true };
+      item.documents!.push({ id: 20, documentType: 'contrato_minuta', originalFileName: 'minuta-original.pdf',
+        downloadUrl: '/draft/20', metadata: { contractId: item.id, isActiveContractDraft: true } });
+      return item;
+    };
+    const review = (): ContractItem => {
+      const item = initialDraft(); item.status = 'AWAITING_MINUTE_REVIEW';
+      item.signatures = { currentVersion: null, seller: pending(), buyer: pending() };
+      item.draftReview = { revisionId: 12, revisionNumber: 2, documentId: 50,
+        buyerDecision: null, sellerDecision: null, allConsented: false };
+      item.documents![1].metadata!.isActiveContractDraft = false;
+      item.documents!.push({ id: 50, documentType: 'contrato_minuta', originalFileName: 'nova-minuta.pdf',
+        downloadUrl: '/draft/50', metadata: { contractId: item.id, isActiveContractDraft: true } });
+      return item;
+    };
+    const pdf = () => new File(['%PDF-1.4'], 'nova-minuta.pdf', { type: 'application/pdf' });
+    const newForm = async () => {
+      await fireEvent.click(await screen.findByRole('button', { name: 'Publicar nova revisão da minuta' }));
+      const form = within(await screen.findByRole('region', { name: 'Nova revisão da minuta' }));
+      const button = form.getByRole('button', { name: 'Publicar nova revisão' }) as HTMLButtonElement;
+      // Bypass disabled at the DOM boundary to exercise the real parent guards.
+      handlers.publish = async () => {
+        const disabled = button.disabled; button.disabled = false;
+        await fireEvent.click(button); await tick();
+        if (disabled && button.isConnected) button.disabled = true;
+      };
+      return form;
+    };
+    const chooseAndConfirm = async () => {
+      const form = await newForm();
+      await fireEvent.change(form.getByLabelText('Novo PDF da minuta'), { target: { files: [pdf()] } });
+      await fireEvent.click(form.getByRole('checkbox'));
+      return form;
+    };
+    beforeEach(() => { loadDetail = async () => detail(initialDraft()); });
+
+    it.each(['admin', 'operational_assistant'] as const)('allows %s with the actual workflow capability', async (role) => {
+      adminSession.set({ role, capabilities: getDefaultAdminCapabilities(role) });
+      await open();
+      expect(await screen.findByRole('button', { name: 'Publicar nova revisão da minuta' })).toBeEnabled();
+      const form = await newForm();
+      expect(form.getByRole('checkbox')).not.toBeChecked();
+      expect(form.getByText(/consentimentos e as confirmações de assinatura anteriores não serão reaproveitados/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Voltar para a etapa anterior' })).not.toBeInTheDocument();
+      noMutations();
+    });
+    it('does not expose publication to a document operator or an admin without workflow capability', async () => {
+      adminSession.set({ role: 'document_operator', capabilities: getDefaultAdminCapabilities('document_operator') });
+      await open(); await screen.findByText('PDF corrente: versao-31.pdf');
+      expect(screen.queryByRole('button', { name: 'Publicar nova revisão da minuta' })).not.toBeInTheDocument();
+      adminSession.set({ role: 'admin', capabilities: { ...getDefaultAdminCapabilities(), canManageContractWorkflow: false } });
+      await tick();
+      expect(screen.queryByRole('button', { name: 'Publicar nova revisão da minuta' })).not.toBeInTheDocument(); noMutations();
+    });
+    it('blocks while details are loading or failed', async () => {
+      const request = deferred<Detail>(); loadDetail = () => request.promise;
+      await open();
+      const button = screen.getByRole('button', { name: 'Publicar nova revisão da minuta' });
+      expect(button).toBeDisabled(); await fireEvent.click(button);
+      expect(screen.queryByRole('region', { name: 'Nova revisão da minuta' })).not.toBeInTheDocument();
+      request.reject(new Error('details unavailable'));
+      await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+      expect(button).toBeDisabled(); noMutations();
+    });
+    it('requires a new PDF and explicit confirmation in the handler too', async () => {
+      await open(); const form = await newForm();
+      const button = form.getByRole('button', { name: 'Publicar nova revisão' });
+      expect(button).toBeDisabled();
+      await fireEvent.click(form.getByRole('checkbox'));
+      await handlers.publish!(); expect(clientPost).not.toHaveBeenCalled();
+      await fireEvent.change(form.getByLabelText('Novo PDF da minuta'), { target: { files: [pdf()] } });
+      expect(form.getByRole('checkbox')).not.toBeChecked();
+      await handlers.publish!(); expect(clientPost).not.toHaveBeenCalled();
+      await fireEvent.click(form.getByRole('checkbox')); expect(button).toBeEnabled();
+    });
+    it.each(['image', 'empty', 'octet-stream'])('rejects an incompatible PDF before any request (%s)', async (kind) => {
+      const file = kind === 'image' ? new File(['image'], 'imagem.png', { type: 'image/png' })
+        : new File(kind === 'empty' ? [] : ['pdf'], 'minuta.pdf', { type: kind === 'empty' ? 'application/pdf' : 'application/octet-stream' });
+      await open(); const form = await newForm();
+      await fireEvent.change(form.getByLabelText('Novo PDF da minuta'), { target: { files: [file] } });
+      await fireEvent.click(form.getByRole('checkbox')); await handlers.publish!();
+      expect(clientPost).not.toHaveBeenCalled(); expect(toastError).toHaveBeenCalled();
+      expect(form.getByRole('button', { name: 'Publicar nova revisão' })).toBeDisabled();
+    });
+    it('publishes the real multipart and renders only the authoritative new revision, preserving history', async () => {
+      await open(); const form = await chooseAndConfirm();
+      const response = deferred<unknown>(); clientPost.mockReturnValue(response.promise);
+      await fireEvent.click(form.getByRole('button', { name: 'Publicar nova revisão' }));
+      const multipart = clientPost.mock.calls[0][1] as FormData;
+      expect(clientPost).toHaveBeenCalledExactlyOnceWith('/admin/contracts/contract-signatures-1/draft',
+        expect.any(FormData), { skipErrorToast: true });
+      expect([...multipart.keys()]).toEqual(['file']); expect((multipart.get('file') as File).name).toBe('nova-minuta.pdf');
+      expect(screen.queryByText('Revisão ativa #12')).not.toBeInTheDocument();
+      loadDetail = async () => detail(review()); response.resolve({ contract: { status: 'IGNORED' } });
+      await screen.findByRole('heading', { name: 'Revisão da Minuta' });
+      expect(screen.getByText('Revisão ativa #12')).toBeInTheDocument();
+      expect(screen.getByText('Locatário: Aguardando')).toBeInTheDocument();
+      expect(screen.getByText('Locador: Aguardando')).toBeInTheDocument();
+      expect(screen.queryByText(/De acordo/)).not.toBeInTheDocument();
+      expect(screen.getAllByText('nova-minuta.pdf').length).toBeGreaterThan(0);
+      expect(screen.getByText('minuta-original.pdf')).toBeInTheDocument();
+      expect(screen.getByText('versao-31.pdf')).toBeInTheDocument();
+      expect(screen.getByText('PDF assinado histórico — sem validade para a revisão ativa')).toBeInTheDocument();
+      expect(screen.getByText('Minuta histórica')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Assinaturas presenciais' })).not.toBeInTheDocument();
+      expect(screen.queryByText('PDF corrente: versao-31.pdf')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Confirmar assinatura/ })).not.toBeInTheDocument();
+      expect(post).not.toHaveBeenCalled(); expect(remove).not.toHaveBeenCalled(); expect(patch).not.toHaveBeenCalled();
+      expect(get).toHaveBeenCalledWith('/contracts/contract-signatures-1', { skipErrorToast: true });
+    });
+    it.each([409, 422, 500])('reconciles error %s once, clears the form and never retries automatically', async (status) => {
+      await open(); const form = await chooseAndConfirm();
+      clientPost.mockRejectedValue({ response: { status, data: { error: 'Revise a revisão corrente.' } } });
+      await fireEvent.click(form.getByRole('button', { name: 'Publicar nova revisão' }));
+      await waitFor(() => expect(screen.queryByRole('region', { name: 'Nova revisão da minuta' })).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Publicar nova revisão da minuta' })).toBeEnabled());
+      expect(clientPost).toHaveBeenCalledTimes(1); expect(toastError).toHaveBeenCalledExactlyOnceWith('Revise a revisão corrente.');
+      expect(get).toHaveBeenCalledWith('/contracts/contract-signatures-1', { skipErrorToast: true });
+      const retry = await newForm(); expect(retry.getByRole('checkbox')).not.toBeChecked();
+      expect((retry.getByLabelText('Novo PDF da minuta') as HTMLInputElement).value).toBe('');
+    });
+    it('reconciles a lost response with a successful server publication', async () => {
+      await open(); const form = await chooseAndConfirm();
+      clientPost.mockImplementation(async () => { loadDetail = async () => detail(review()); throw new Error('network lost'); });
+      await fireEvent.click(form.getByRole('button', { name: 'Publicar nova revisão' }));
+      await screen.findByText('Revisão ativa #12'); expect(toastError).toHaveBeenCalledOnce();
+      expect(toastSuccess).not.toHaveBeenCalled(); expect(clientPost).toHaveBeenCalledOnce();
+    });
+    it('uses the existing details error state when reconciliation fails, without duplicate toasts', async () => {
+      await open(); const form = await chooseAndConfirm();
+      clientPost.mockImplementation(async () => {
+        loadDetail = async () => { throw new Error('refresh failed'); };
+        throw { response: { status: 409, data: { error: 'Estado desatualizado.' } } };
+      });
+      await fireEvent.click(form.getByRole('button', { name: 'Publicar nova revisão' }));
+      await screen.findByRole('alert');
+      expect(screen.getByRole('button', { name: 'Publicar nova revisão da minuta' })).toBeDisabled();
+      expect(toastError).toHaveBeenCalledExactlyOnceWith('Estado desatualizado.');
+    });
+    it('prevents duplicate handler submissions and does not allow modal closing during submission', async () => {
+      await open(); const form = await chooseAndConfirm(); const request = deferred<unknown>(); clientPost.mockReturnValue(request.promise);
+      const first = handlers.publish!(); await handlers.publish!();
+      expect(clientPost).toHaveBeenCalledOnce();
+      await fireEvent.click(screen.getByRole('button', { name: 'Fechar modal' }));
+      expect(form.getByRole('button', { name: 'Publicando…' })).toBeDisabled();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      request.resolve({}); await first;
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Publicar nova revisão da minuta' })).toBeEnabled());
+    });
+    it.each(['revision', 'version', 'document'] as const)('invalidates a selected form when the %s changes', async (field) => {
+      await open(); await chooseAndConfirm(); const handler = handlers.publish!;
+      const next = initialDraft();
+      if (field === 'revision') next.draftReview!.revisionId = 12;
+      if (field === 'version') next.signatures!.currentVersion!.id = 32;
+      if (field === 'document') next.draftReview!.documentId = 51;
+      loadDetail = async () => detail(next);
+      await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Atualizar' }));
+      await waitFor(() => expect(screen.queryByRole('region', { name: 'Nova revisão da minuta' })).not.toBeInTheDocument());
+      await handler(); expect(clientPost).not.toHaveBeenCalled();
+      const fresh = await newForm(); expect(fresh.getByRole('checkbox')).not.toBeChecked();
+      expect(fresh.getByRole('button', { name: 'Publicar nova revisão' })).toBeDisabled();
+    });
+    it('retains the same-PDF form across a compatible refresh but blocks its handler while loading', async () => {
+      await open(); const form = await chooseAndConfirm(); const request = deferred<Detail>(); loadDetail = () => request.promise;
+      await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Atualizar' }));
+      await handlers.publish!(); expect(clientPost).not.toHaveBeenCalled();
+      expect(form.getByRole('button', { name: 'Publicar nova revisão' })).toBeDisabled();
+      request.resolve(detail(initialDraft()));
+      await waitFor(() => expect(form.getByRole('button', { name: 'Publicar nova revisão' })).toBeEnabled());
+      expect(form.getByRole('checkbox')).toBeChecked();
+    });
+    it('rejects the captured handler if the administrative permission is withdrawn', async () => {
+      await open(); await chooseAndConfirm();
+      adminSession.set({ role: 'document_operator', capabilities: getDefaultAdminCapabilities('document_operator') }); await tick();
+      await handlers.publish!(); expect(clientPost).not.toHaveBeenCalled();
+    });
+    it('invalidates the previously rendered signature evidence even when publication fails', async () => {
+      const panel = within(await open()); await viewCurrent(panel);
+      const form = await chooseAndConfirm(); clientPost.mockRejectedValue(new Error('failed'));
+      await fireEvent.click(form.getByRole('button', { name: 'Publicar nova revisão' }));
+      const current = within(await screen.findByRole('region', { name: 'Assinaturas presenciais' }));
+      await current.findByText('PDF corrente: versao-31.pdf'); expectLocked(current);
+      expect(current.queryByText(/PDF corrente visualizado/)).not.toBeInTheDocument();
+      await viewCurrent(current); expect(current.getByRole('checkbox', { name: /Locador/ })).toBeEnabled();
+      expect(post).not.toHaveBeenCalled();
+    });
+    it('does not let late publication or reconciliation responses overwrite a newer revision', async () => {
+      await open(); const form = await chooseAndConfirm(); const upload = deferred<unknown>(); clientPost.mockReturnValue(upload.promise);
+      await fireEvent.click(form.getByRole('button', { name: 'Publicar nova revisão' }));
+      loadDetail = async () => detail(review());
+      await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Atualizar' }));
+      await screen.findByText('Revisão ativa #12');
+      const reads = get.mock.calls.filter(([url]) => url === '/contracts/contract-signatures-1').length;
+      upload.resolve({ contract: initialDraft() }); await upload.promise; await tick();
+      await waitFor(() => expect(get.mock.calls.filter(([url]) => url === '/contracts/contract-signatures-1')).toHaveLength(reads + 1));
+      expect(screen.getByText('Revisão ativa #12')).toBeInTheDocument();
+      expect(toastSuccess).not.toHaveBeenCalled();
+    });
+    it('ignores the old POST response but reconciles the server after reopening the same contract', async () => {
+      await open(); const form = await chooseAndConfirm(); const upload = deferred<unknown>(); clientPost.mockReturnValue(upload.promise);
+      await fireEvent.click(form.getByRole('button', { name: 'Publicar nova revisão' }));
+      await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
+      await fireEvent.click(await screen.findByRole('button', { name: 'Aguardando Assinaturas' }));
+      await fireEvent.click((await screen.findAllByRole('button', { name: 'Finalizar Venda/Locação' }))[0]);
+      await screen.findByText(/Publicação em andamento/);
+      const reads = get.mock.calls.filter(([url]) => url === '/contracts/contract-signatures-1').length;
+      loadDetail = async () => detail(review());
+      upload.resolve({ contract: initialDraft() }); await upload.promise;
+      await screen.findByText('Revisão ativa #12');
+      expect(screen.queryByText('PDF corrente: versao-31.pdf')).not.toBeInTheDocument();
+      expect(toastSuccess).not.toHaveBeenCalled();
+      expect(get.mock.calls.filter(([url]) => url === '/contracts/contract-signatures-1')).toHaveLength(reads + 1);
+      expect(screen.getByText('Revisão ativa #12')).toBeInTheDocument();
+    });
+    it('never applies a late result or starts its reconciliation against a different contract', async () => {
+      await open(); const form = await chooseAndConfirm(); const upload = deferred<unknown>(); clientPost.mockReturnValue(upload.promise);
+      await fireEvent.click(form.getByRole('button', { name: 'Publicar nova revisão' }));
+      await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
+      const other = initialDraft(); other.id = 'contract-other'; other.propertyTitle = 'Outro imóvel';
+      other.documents!.forEach((doc) => { doc.metadata!.contractId = other.id; });
+      get.mockImplementation(async (url: string) => {
+        if (url.includes('/admin/contracts?status=AWAITING_SIGNATURES')) return { data: [other], total: 1 };
+        if (url === '/contracts/contract-other') return detail(other);
+        return { data: [], total: 0 };
+      });
+      await fireEvent.click(await screen.findByRole('button', { name: 'Aguardando Assinaturas' }));
+      await screen.findAllByText('Outro imóvel');
+      await fireEvent.click((await screen.findAllByRole('button', { name: 'Finalizar Venda/Locação' }))[0]);
+      await screen.findByText(/Publicação em andamento/);
+      const reads = get.mock.calls.filter(([url]) => url === '/contracts/contract-other').length;
+      upload.resolve({ contract: review() }); await upload.promise;
+      await screen.findByText('PDF corrente: versao-31.pdf');
+      expect(get.mock.calls.filter(([url]) => url === '/contracts/contract-other')).toHaveLength(reads);
+      expect(screen.queryByText('Revisão ativa #12')).not.toBeInTheDocument();
+      expect(toastSuccess).not.toHaveBeenCalled();
+    });
+    it('does not let an old reconciliation response overwrite a more recent details query', async () => {
+      await open(); const form = await chooseAndConfirm(); const old = deferred<Detail>();
+      clientPost.mockImplementation(async () => { loadDetail = () => old.promise; return {}; });
+      await fireEvent.click(form.getByRole('button', { name: 'Publicar nova revisão' }));
+      await waitFor(() => expect(get.mock.calls.filter(([url]) => url === '/contracts/contract-signatures-1')).toHaveLength(2));
+      const next = review(); next.draftReview!.revisionId = 13;
+      loadDetail = async () => detail(next);
+      await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Atualizar' }));
+      await screen.findByText('Revisão ativa #13');
+      old.resolve(detail(review())); await old.promise; await tick();
+      expect(screen.getByText('Revisão ativa #13')).toBeInTheDocument();
+      expect(screen.queryByText('Revisão ativa #12')).not.toBeInTheDocument();
+    });
+    it('invalidates form selections on a contract switch and ignores the old handler', async () => {
+      await open(); await chooseAndConfirm(); const handler = handlers.publish!;
+      await fireEvent.click(await screen.findByRole('button', { name: 'Conferência da Minuta' }));
+      await handler(); expect(clientPost).not.toHaveBeenCalled();
+      await fireEvent.click(await screen.findByRole('button', { name: 'Aguardando Assinaturas' }));
+      await fireEvent.click((await screen.findAllByRole('button', { name: 'Finalizar Venda/Locação' }))[0]);
+      await screen.findByText('PDF corrente: versao-31.pdf');
+      const form = await newForm(); expect(form.getByRole('checkbox')).not.toBeChecked();
+      expect(form.getByRole('button', { name: 'Publicar nova revisão' })).toBeDisabled();
+    });
   });
 
 });

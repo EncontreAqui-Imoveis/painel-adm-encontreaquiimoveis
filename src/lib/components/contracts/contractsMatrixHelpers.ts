@@ -284,6 +284,11 @@ export function getAllContractDocuments(contract: ContractItem): ContractDocumen
 
 export function getCurrentDraftDocument(contract: ContractItem | null): ContractDocument | null {
   if (!contract) return null;
+  const activeDocumentId = contract.draftReview?.documentId;
+  if (activeDocumentId != null) {
+    return getAllContractDocuments(contract).find((doc) => doc.id === activeDocumentId
+      && doc.documentType === 'contrato_minuta') ?? null;
+  }
   return (
     getAllContractDocuments(contract).find(
       (doc) => String(doc.documentType ?? '').trim().toLowerCase() === 'contrato_minuta'

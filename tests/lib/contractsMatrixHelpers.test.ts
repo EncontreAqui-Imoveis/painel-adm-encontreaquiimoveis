@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   computeApprovalLockReasonsForSide,
+  getCurrentDraftDocument,
   getDocumentsForMatrixCell,
   getMatrixRows,
   isOptionalMatrixDocumentType,
@@ -268,5 +269,23 @@ describe('contractsMatrixHelpers', () => {
     expect(computeApprovalLockReasonsForSide(rentalWithMissingInsurance, 'seller')).toContain(
       'Documentos (Locador) faltando: Seguro Incêndio'
     );
+  });
+});
+
+
+describe('current draft identity', () => {
+  it('uses the document of the active revision even if a historical document sorts first', () => {
+    const value: ContractItem = { ...contract, draftReview: { revisionId: 12, documentId: 8 }, documents: [
+      { id: 99, documentType: 'contrato_minuta', metadata: { contractId: contract.id, isActiveContractDraft: false } },
+      { id: 8, documentType: 'contrato_minuta', metadata: { contractId: contract.id, isActiveContractDraft: true } },
+    ] };
+    expect(getCurrentDraftDocument(value)?.id).toBe(8);
+    value.draftReview!.documentId = 100;
+    expect(getCurrentDraftDocument(value)).toBeNull();
+  });
+  it('preserves the legacy fallback when there is no active revision DTO', () => {
+    expect(getCurrentDraftDocument({ ...contract, documents: [
+      { id: 8, documentType: 'contrato_minuta', metadata: { contractId: contract.id } },
+    ] })?.id).toBe(8);
   });
 });

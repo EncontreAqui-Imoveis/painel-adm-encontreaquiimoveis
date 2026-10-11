@@ -27,6 +27,7 @@
   import ContractDocumentMatrix from '$lib/components/contracts/ContractDocumentMatrix.svelte';
   import ContractApprovalActions from '$lib/components/contracts/ContractApprovalActions.svelte';
   import ContractDraftUploadPanel from '$lib/components/contracts/ContractDraftUploadPanel.svelte';
+  import { draftPublicationContext, newDraftPdfError } from '$lib/components/contracts/contractDraftPublication';
   import ContractActorsGrid from '$lib/components/contracts/ContractActorsGrid.svelte';
   import ContractFinalizedEditorPanel from '$lib/components/contracts/ContractFinalizedEditorPanel.svelte';
   import ContractSignedReplacementPanel from '$lib/components/contracts/ContractSignedReplacementPanel.svelte';
@@ -184,6 +185,10 @@
   let contractSearchDebounce: ReturnType<typeof setTimeout> | null = null;
   let downloadingDocumentId: number | null = null;
   let selectedDraftFile: File | null = null;
+  let newDraftRevisionContext: string | null = null;
+  let newDraftRevisionConfirmed = false;
+  let publishingNewDraftRevision = false;
+  let draftPublicationModalGeneration = 0;
   let draftUploadInputEl: HTMLInputElement | null = null;
   let uploadingDraft = false;
   let draftChangeRequestToKeep: ContractDraftChangeRequest | null = null;
@@ -285,6 +290,10 @@
   $: canCurrentAdminReplace = $adminSession?.capabilities?.canReplaceDocuments ?? false;
   $: canCurrentAdminCreateDocuments = $adminSession?.capabilities?.canCreateDocuments ?? false;
   $: canCurrentAdminConfirmSignatures = $adminSession?.role === 'admin';
+  $: canCurrentAdminPublishDraft = ($adminSession?.role === 'admin' || $adminSession?.role === 'operational_assistant')
+    && ($adminSession?.capabilities?.canManageContractWorkflow ?? false);
+  $: newDraftPublicationDisabled = signatureDetailsState !== 'ready' || !canCurrentAdminPublishDraft
+    || uploadingDraft || uploadingSignedDoc || confirmingSignatureSide !== null || finalizingContract || movingToPreviousStage;
   $: keepCurrentDraftReasonLength = Array.from(keepCurrentDraftReason.trim()).length;
   $: canKeepCurrentDraft = isKeepCurrentDraftReasonValid(keepCurrentDraftReason);
 
@@ -350,6 +359,65 @@
 
   $: if (signedReplacementContext && !matchesSignedReplacementContext(selected, signedReplacementContext)) {
     cancelSignedDocumentReplacement();
+  }
+  $: if (newDraftRevisionContext && newDraftRevisionContext !== draftPublicationContext(selected)) {
+    cancelNewDraftRevision();
+  }
+
+  function cancelNewDraftRevision(): void {
+    newDraftRevisionContext = null;
+    newDraftRevisionConfirmed = false;
+    selectedDraftFile = null;
+    if (draftUploadInputEl) draftUploadInputEl.value = '';
+  }
+
+  function openNewDraftRevision(): void {
+    if (newDraftPublicationDisabled || publishingNewDraftRevision) return;
+    cancelNewDraftRevision();
+    newDraftRevisionContext = draftPublicationContext(selected);
+  }
+
+  async function publishNewDraftRevision(): Promise<void> {
+    const contractId = selected?.id;
+    const context = newDraftRevisionContext;
+    const file = selectedDraftFile;
+    const modalGeneration = draftPublicationModalGeneration;
+    if (!contractId || !context || context !== draftPublicationContext(selected)
+      || newDraftPublicationDisabled || publishingNewDraftRevision || newDraftRevisionConfirmed !== true) return;
+    const fileError = newDraftPdfError(file);
+    if (fileError) { toast.error(fileError); return; }
+    publishingNewDraftRevision = true;
+    invalidateSignatureViewing();
+    const isCurrent = () => showModal && modalGeneration === draftPublicationModalGeneration
+      && selected?.id === contractId && context === draftPublicationContext(selected);
+    try {
+      await submitContractDraft(contractId, file, false, { skipErrorToast: true });
+      dispatch('draftReviewRequestsChanged');
+      if (isCurrent()) toast.success('Nova revisão publicada para conferência das partes.');
+    } catch (error) {
+      if (isCurrent()) toast.error(resolveApiErrorMessage(error,
+        'Não foi possível confirmar a publicação. Atualize e confira a revisão antes de tentar novamente.'));
+    } finally {
+      // Successes, conflicts and uncertain outcomes all require authoritative reconciliation.
+      if (showModal && selected?.id === contractId) {
+        if (isCurrent()) {
+          cancelNewDraftRevision();
+          invalidateSignatureViewing();
+        }
+        const reconciliationModalGeneration = draftPublicationModalGeneration;
+        try {
+          await reloadSelectedContract(contractId, true);
+          if (showModal && selected?.id === contractId && reconciliationModalGeneration === draftPublicationModalGeneration) {
+            modalMode = resolveModalMode(selected);
+            syncSelectedContractInList(selected);
+          }
+        } catch (error) {
+          console.error('Erro ao consultar revisão após publicação:', error);
+        }
+      }
+      publishingNewDraftRevision = false;
+      refresh();
+    }
   }
 
   function invalidateSignatureViewing(): void {
@@ -1141,6 +1209,7 @@
           : selected.documents ?? [],
       };
       signatureDetailsState = 'ready';
+      if (showModal && (newDraftRevisionContext || publishingNewDraftRevision)) modalMode = resolveModalMode(selected);
       if (showModal) {
         hydratePartyInfoFormsFromSelected();
       }
@@ -1454,6 +1523,7 @@
   }
 
   function openModal(item: ContractItem) {
+    ++draftPublicationModalGeneration;
     if (typeof document !== 'undefined' && !showModal) {
       previousModalBodyOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
@@ -1499,7 +1569,7 @@
   function closeModal(force = false) {
     if (
       !force &&
-      (uploadingDraft ||
+      (publishingNewDraftRevision || uploadingDraft ||
         uploadingSignedDoc ||
         reopeningContract ||
         deletingContract ||
@@ -1511,6 +1581,7 @@
       return;
     }
     showModal = false;
+    ++draftPublicationModalGeneration;
     invalidateSignatureViewing();
     ++signatureDetailsRequestId;
     signatureDetailsState = 'loading';
@@ -1660,6 +1731,13 @@
   function handleDraftFileChange(event: Event) {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0] ?? null;
+    if (newDraftRevisionContext) {
+      newDraftRevisionConfirmed = false;
+      const error = newDraftPdfError(file);
+      selectedDraftFile = error ? null : file;
+      if (error) { target.value = ''; toast.error(error); }
+      return;
+    }
     if (!file) {
       selectedDraftFile = null;
       return;
@@ -2046,7 +2124,7 @@
   }
 
   async function submitDraft(options: { reuseCurrentDraft?: boolean } = {}) {
-    if (!selected) return;
+    if (!selected || publishingNewDraftRevision) return;
     const reuseCurrentDraft = options.reuseCurrentDraft === true;
 
     if (!reuseCurrentDraft && !selectedDraftFile) {
@@ -3002,7 +3080,7 @@
           currentDraftDocument={getCurrentDraftDocument(selected)}
           documents={selected ? getAllContractDocuments(selected) : []}
           selectedDraftFile={selectedDraftFile}
-          uploadingDraft={uploadingDraft}
+          uploadingDraft={uploadingDraft || publishingNewDraftRevision}
           movingToPreviousStage={movingToPreviousStage}
           deletingDraftDocumentId={deletingDraftDocumentId}
           canDeleteDocuments={canCurrentAdminDelete}
@@ -3028,6 +3106,23 @@
         />
         {:else if modalMode === 'finalize'}
         <div class="space-y-4">
+          {#if newDraftRevisionContext}
+            {#key newDraftRevisionContext}
+              <ContractDraftUploadPanel contract={selected} selectedDraftFile={selectedDraftFile}
+                uploadingDraft={publishingNewDraftRevision} publicationDisabled={newDraftPublicationDisabled}
+                bind:newRevisionConfirmed={newDraftRevisionConfirmed} bind:draftUploadInputEl
+                handleDraftFileChange={handleDraftFileChange} submitDraft={publishNewDraftRevision}
+                cancelNewRevision={cancelNewDraftRevision} />
+            {/key}
+          {:else if publishingNewDraftRevision}
+            <p role="status" class="text-sm">Publicação em andamento. Aguarde a consulta da revisão pelo servidor.</p>
+          {:else}
+          {#if selected.status === 'AWAITING_SIGNATURES' && canCurrentAdminPublishDraft}
+            <Button variant="outline" on:click={openNewDraftRevision}
+              disabled={newDraftPublicationDisabled || publishingNewDraftRevision}>
+              Publicar nova revisão da minuta
+            </Button>
+          {/if}
           <ContractActorsGrid
             proposerName={contractActorName(selected, 'proposer')}
             buyerName={contractActorName(selected, 'buyer')}
@@ -3636,6 +3731,7 @@
               Finalizar Venda/Locação
             </Button>
           </div>
+          {/if}
         </div>
         {:else if modalMode === 'edit_finalized'}
         <ContractFinalizedEditorPanel

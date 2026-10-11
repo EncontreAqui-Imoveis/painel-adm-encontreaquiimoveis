@@ -23,6 +23,9 @@
   export let documents: ContractDocument[] = [];
   export let selectedDraftFile: File | null = null;
   export let uploadingDraft = false;
+  export let publicationDisabled = false;
+  export let newRevisionConfirmed = false;
+  export let cancelNewRevision: () => void = () => {};
   export let movingToPreviousStage = false;
   export let deletingDraftDocumentId: number | null = null;
   export let canDeleteDocuments = true;
@@ -139,6 +142,32 @@
 </script>
 
 <div class="space-y-4">
+  {#if contract?.status === 'AWAITING_SIGNATURES'}
+    <section aria-label="Nova revisão da minuta" class="rounded-md border border-gray-200 p-3 dark:border-gray-700">
+      <h3 class="text-sm font-semibold">Publicar nova revisão da minuta</h3>
+      <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+        O novo conteúdo contratual será submetido novamente à conferência das partes.
+        Os consentimentos e as confirmações de assinatura anteriores não serão reaproveitados.
+        As revisões e os PDFs anteriores permanecerão no histórico.
+      </p>
+      <label class="mt-3 block text-sm" for="new-draft-pdf">Novo PDF da minuta</label>
+      <input id="new-draft-pdf" type="file" accept="application/pdf,.pdf"
+        bind:this={draftUploadInputEl} on:change={handleDraftFileChange}
+        disabled={uploadingDraft || publicationDisabled} class="mt-1 block w-full text-sm" />
+      {#if selectedDraftFile}<p class="mt-2 text-sm">{selectedDraftFile.name}</p>{/if}
+      <label class="mt-3 flex items-start gap-2 text-sm">
+        <input type="checkbox" bind:checked={newRevisionConfirmed} disabled={uploadingDraft || publicationDisabled} />
+        <span>Confirmo a publicação de uma nova revisão, com nova conferência das partes e sem reaproveitar consentimentos ou confirmações de assinatura anteriores.</span>
+      </label>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <Button on:click={() => submitDraft()} disabled={uploadingDraft || publicationDisabled || !selectedDraftFile || !newRevisionConfirmed}>
+          {#if uploadingDraft}<Loader2 class="mr-2 h-4 w-4 animate-spin" />{/if}
+          {uploadingDraft ? 'Publicando…' : 'Publicar nova revisão'}
+        </Button>
+        <Button variant="outline" on:click={cancelNewRevision} disabled={uploadingDraft}>Cancelar nova revisão</Button>
+      </div>
+    </section>
+  {:else}
   {#if contract}
     <ContractActorsGrid
       {proposerName}
@@ -256,6 +285,9 @@
       <p class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
         Revisão pelas partes
       </p>
+      {#if contract?.draftReview?.revisionId}
+        <p class="mt-2 text-sm">Revisão ativa #{contract.draftReview.revisionId}</p>
+      {/if}
       {#if !currentDraftDocument}
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
           A minuta atual não está disponível.
@@ -486,6 +518,11 @@
                     {documentSideLabel(doc)}
                   </span>
                 {/if}
+                {#if isAwaitingMinuteReview && doc.documentType === 'contrato_assinado' && !contract?.signatures?.currentVersion}
+                  <span class="text-xs text-gray-500 dark:text-gray-400">PDF assinado histórico — sem validade para a revisão ativa</span>
+                {:else if doc.documentType === 'contrato_minuta' && doc.metadata?.isActiveContractDraft === false}
+                  <span class="text-xs text-gray-500 dark:text-gray-400">Minuta histórica</span>
+                {/if}
               </div>
               <button
                 type="button"
@@ -589,4 +626,5 @@
       </Button>
     {/if}
   </div>
+  {/if}
 </div>

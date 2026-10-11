@@ -7,7 +7,7 @@ vi.mock('$lib/apiClient', () => ({
   apiClient: { post, get: vi.fn() },
 }));
 
-import { confirmContractSignature, uploadMatrixDocument, uploadSignedDocument } from '../../src/lib/components/contracts/contractsActions';
+import { confirmContractSignature, submitContractDraft, uploadMatrixDocument, uploadSignedDocument } from '../../src/lib/components/contracts/contractsActions';
 
 describe('uploadMatrixDocument', () => {
   it('sends replaceDocumentId only for an explicit replacement', async () => {
@@ -102,5 +102,24 @@ describe('signed document replacement multipart', () => {
       new File(['image'], 'signed.png', { type: 'image/png' }), 42,
       { replacementReason: 'test', contractContentUnchanged: true })).rejects.toThrow(/PDF/);
     expect(post).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('draft publication multipart', () => {
+  it('sends a new PDF without reuse or invented revision fields, with optional quiet errors', async () => {
+    post.mockClear();
+    const file = new File(['%PDF'], 'minuta.pdf', { type: 'application/pdf' });
+    await submitContractDraft('contract-1', file, false, { skipErrorToast: true });
+    expect(post).toHaveBeenCalledExactlyOnceWith('/admin/contracts/contract-1/draft', expect.any(FormData), { skipErrorToast: true });
+    const form = post.mock.calls[0][1] as FormData;
+    expect([...form.keys()]).toEqual(['file']); expect(form.get('file')).toBe(file);
+  });
+  it('preserves existing publication and KEEP-reuse request behavior by default', async () => {
+    post.mockClear();
+    await submitContractDraft('contract-1', null, true);
+    expect(post).toHaveBeenCalledExactlyOnceWith('/admin/contracts/contract-1/draft', expect.any(FormData));
+    const form = post.mock.calls[0][1] as FormData;
+    expect([...form.entries()]).toEqual([['reuseCurrentDraft', 'true']]);
   });
 });
