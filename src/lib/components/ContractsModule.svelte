@@ -30,6 +30,7 @@
   import ContractActorsGrid from '$lib/components/contracts/ContractActorsGrid.svelte';
   import ContractFinalizedEditorPanel from '$lib/components/contracts/ContractFinalizedEditorPanel.svelte';
   import ContractSignatureStatusPanel from '$lib/components/contracts/ContractSignatureStatusPanel.svelte';
+  import { matchesSignatureViewingContext, type ContractSignatureViewingEvidence } from '$lib/components/contracts/contractSignatureViewing';
   import {
     type ContractStatus,
     getContractDetails,
@@ -45,6 +46,7 @@
     downloadContractDocumentsZip,
     evaluateContractSide as evaluateContractSideRequest,
     finalizeContract,
+    confirmContractSignature,
     keepCurrentContractDraft,
     reviewContractDocument,
     reopenContractDocumentReview,
@@ -246,6 +248,10 @@
   let finalizingContract = false;
   let signatureDetailsState: 'loading' | 'ready' | 'error' = 'loading';
   let signatureDetailsRequestId = 0;
+  let confirmingSignatureSide: 'seller' | 'buyer' | null = null;
+  let signatureViewingEvidence: ContractSignatureViewingEvidence | null = null;
+  let signatureViewingGeneration = 0;
+  let lastSignatureViewingContext = '';
   let reopeningContract = false;
   let deletingContract = false;
   let deletingDraftDocumentId: number | null = null;
@@ -275,6 +281,7 @@
   $: canCurrentAdminDelete = $adminSession?.capabilities?.canDeleteDocuments ?? false;
   $: canCurrentAdminReplace = $adminSession?.capabilities?.canReplaceDocuments ?? false;
   $: canCurrentAdminCreateDocuments = $adminSession?.capabilities?.canCreateDocuments ?? false;
+  $: canCurrentAdminConfirmSignatures = $adminSession?.role === 'admin';
   $: keepCurrentDraftReasonLength = Array.from(keepCurrentDraftReason.trim()).length;
   $: canKeepCurrentDraft = isKeepCurrentDraftReasonValid(keepCurrentDraftReason);
 
@@ -328,6 +335,20 @@
     && selected.dealType !== 'sale' && selected.dealType !== 'rent';
   $: selectedSellerLabel = hasUndeterminedSignatureModality ? 'Parte seller' : contractSideLabel(selected, 'seller');
   $: selectedBuyerLabel = hasUndeterminedSignatureModality ? 'Parte buyer' : contractSideLabel(selected, 'buyer');
+  $: {
+    const version = selected?.signatures?.currentVersion;
+    const doc = selected?.documents?.find((document) => document.id === version?.documentId);
+    const context = `${selected?.id}:${selected?.status}:${version?.id}:${version?.documentId}:${version?.draftRevisionId}:${doc?.documentType}:${doc?.metadata?.contractId}:${!!doc?.downloadUrl}`;
+    if (context !== lastSignatureViewingContext) {
+      lastSignatureViewingContext = context;
+      invalidateSignatureViewing();
+    }
+  }
+
+  function invalidateSignatureViewing(): void {
+    signatureViewingEvidence = null;
+    ++signatureViewingGeneration;
+  }
 
   function lockViewportGestureScroll() {
     if (typeof document === 'undefined') return;
@@ -347,6 +368,8 @@
   }
 
   function closeDocumentPreview() {
+    // Closing an unfinished attempt cancels it. Closing a completed PDF preserves valid evidence.
+    if (documentPreviewLoading || documentPreviewAbortController) invalidateSignatureViewing();
     documentPreviewAbortController?.abort();
     documentPreviewAbortController = null;
     if (documentPreviewOwnsObjectUrl && documentPreviewObjectUrl) {
@@ -430,12 +453,18 @@
   }
 
   async function openDocumentPreview(doc: ContractDocument, contract: ContractItem) {
+    invalidateSignatureViewing();
     if (!doc.downloadUrl) {
       toast.error('Documento sem URL de visualização.');
       return;
     }
 
     closeDocumentPreview();
+    const viewingGeneration = signatureViewingGeneration;
+    const version = contract.signatures?.currentVersion;
+    const viewingContext: ContractSignatureViewingEvidence | null = version && doc.id === version.documentId
+      && doc.documentType === 'contrato_assinado' && doc.metadata?.contractId === contract.id
+      ? { contractId: contract.id, signedVersionId: version.id, documentId: doc.id, draftRevisionId: version.draftRevisionId } : null;
     documentPreviewLoading = true;
     documentPreviewError = '';
     const renderToken = ++documentPreviewRenderToken;
@@ -451,12 +480,12 @@
       const preview = await loadContractDocumentPreview(doc.downloadUrl, resolvedName, {
         signal: abortController.signal,
         onPdfPage: (pages, text) => {
-          if (renderToken !== documentPreviewRenderToken) return;
+          if (renderToken !== documentPreviewRenderToken || abortController.signal.aborted) return;
           documentPreviewPdfPages = pages;
           if (text) documentPreviewPdfText = text;
         },
       });
-      if (renderToken !== documentPreviewRenderToken) {
+      if (renderToken !== documentPreviewRenderToken || abortController.signal.aborted) {
         return;
       }
       const objectUrl = URL.createObjectURL(preview.blob);
@@ -473,12 +502,25 @@
         documentPreviewPdfPages = [];
         documentPreviewPdfText = '';
       }
+      // Pages must have been rendered and published to the viewer, not merely downloaded or opened.
+      await tick();
+      if (viewingContext && viewingGeneration === signatureViewingGeneration
+        && renderToken === documentPreviewRenderToken && !abortController.signal.aborted && documentPreviewOpen
+        && documentPreviewDoc?.id === viewingContext.documentId && documentPreviewContract?.id === viewingContext.contractId
+        && preview.kind === 'pdf' && !preview.pdfFallbackUsed
+        && preview.pdfPages.some((page) => Number.isInteger(page.pageNumber) && page.pageNumber > 0
+          && /^data:image\/png;base64,.+/.test(page.dataUrl))
+        && matchesSignatureViewingContext(selected, viewingContext)) {
+        signatureViewingEvidence = viewingContext;
+      }
     } catch (error) {
-      if (abortController.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+      if (renderToken !== documentPreviewRenderToken || abortController.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
         return;
       }
+      invalidateSignatureViewing();
       console.error('Erro ao carregar visualização do documento:', error);
-      documentPreviewError = await resolveContractPreviewErrorMessage(error);
+      const message = await resolveContractPreviewErrorMessage(error);
+      if (renderToken === documentPreviewRenderToken && !abortController.signal.aborted) documentPreviewError = message;
     } finally {
       if (renderToken === documentPreviewRenderToken) {
         documentPreviewLoading = false;
@@ -1070,6 +1112,7 @@
         return;
       }
       if (!payload?.contract) {
+        invalidateSignatureViewing();
         signatureDetailsState = 'error';
         return;
       }
@@ -1090,7 +1133,10 @@
         hydratePartyInfoFormsFromSelected();
       }
     } catch (error) {
-      if (selected?.id === contractId && requestId === signatureDetailsRequestId) signatureDetailsState = 'error';
+      if (selected?.id === contractId && requestId === signatureDetailsRequestId) {
+        signatureDetailsState = 'error';
+        invalidateSignatureViewing();
+      }
       throw error;
     }
   }
@@ -1107,6 +1153,38 @@
       toast.error('Não foi possível atualizar o contrato.');
     } finally {
       isReloadingSelectedContract = false;
+    }
+  }
+
+  async function confirmSignature(side: 'seller' | 'buyer', versionId: number, checked: boolean): Promise<void> {
+    const contract = selected;
+    if (!contract || !canCurrentAdminConfirmSignatures || checked !== true || confirmingSignatureSide
+      || !matchesSignatureViewingContext(contract, signatureViewingEvidence)
+      || signatureDetailsState !== 'ready' || contract.status !== 'AWAITING_SIGNATURES'
+      || contract.signatures?.currentVersion?.id !== versionId || contract.signatures[side].status !== 'PENDING'
+      || uploadingSignedDoc || finalizingContract || movingToPreviousStage) return;
+    confirmingSignatureSide = side;
+    let saved = false;
+    try {
+      const result = await confirmContractSignature(contract.id, side, versionId, checked);
+      saved = true;
+      toast.success(result.idempotent ? 'Assinatura já estava confirmada.' : 'Assinatura confirmada com sucesso.');
+    } catch (error) {
+      console.error('Erro ao confirmar assinatura:', error);
+      toast.error(resolveApiErrorMessage(error, 'Não foi possível confirmar a assinatura.'));
+    } finally {
+      // Reconcile successes, stale versions and uncertain network outcomes with authoritative details.
+      if (selected?.id === contract.id) {
+        try {
+          await reloadSelectedContract(contract.id);
+          if (selected?.id === contract.id) syncSelectedContractInList(selected);
+        } catch (error) {
+          console.error('Erro ao atualizar assinaturas após confirmação:', error);
+          toast.error(saved ? 'Confirmação registrada, mas não foi possível atualizar os detalhes. Use Atualizar.'
+            : 'Não foi possível atualizar o estado das assinaturas. Use Atualizar.');
+        }
+      }
+      confirmingSignatureSide = null;
     }
   }
 
@@ -1414,12 +1492,14 @@
         reopeningContract ||
         deletingContract ||
         finalizingContract ||
+        confirmingSignatureSide !== null ||
         evaluatingSide !== null ||
         savingPartyData)
     ) {
       return;
     }
     showModal = false;
+    invalidateSignatureViewing();
     ++signatureDetailsRequestId;
     signatureDetailsState = 'loading';
     selected = null;
@@ -2205,6 +2285,9 @@
   });
 
   onDestroy(() => {
+    invalidateSignatureViewing();
+    documentPreviewAbortController?.abort();
+    ++documentPreviewRenderToken;
     if (contractSearchDebounce) {
       clearTimeout(contractSearchDebounce);
     }
@@ -2883,7 +2966,12 @@
           />
           {#if selected.status === 'AWAITING_SIGNATURES'}
             <ContractSignatureStatusPanel contract={selected}
-              loading={signatureDetailsState === 'loading'} error={signatureDetailsState === 'error'} />
+              loading={signatureDetailsState === 'loading'} error={signatureDetailsState === 'error'}
+              canConfirm={canCurrentAdminConfirmSignatures} confirmingSide={confirmingSignatureSide}
+              viewingEvidence={signatureViewingEvidence}
+              actionsDisabled={uploadingSignedDoc || finalizingContract || movingToPreviousStage}
+              onViewDocument={(doc) => selected && void openDocumentPreview(doc, selected)}
+              onConfirmSignature={confirmSignature} />
           {/if}
           {#if canCurrentAdminCreateDocuments || pendingReplacementDocumentId}
           <div class="rounded-md border border-gray-200 p-3 dark:border-gray-700">

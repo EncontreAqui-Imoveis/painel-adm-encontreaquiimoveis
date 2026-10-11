@@ -1,17 +1,49 @@
 <script lang="ts">
-  import type { ContractItem } from './types';
+  import type { ContractDocument, ContractItem } from './types';
   import { contractSideLabel } from './contractsDisplayHelpers';
+  import { Button } from '$lib/components/ui/button';
+  import { matchesSignatureViewingContext, type ContractSignatureViewingEvidence } from './contractSignatureViewing';
 
   export let contract: ContractItem;
   export let loading = false;
   export let error = false;
+  export let canConfirm = false;
+  export let confirmingSide: 'seller' | 'buyer' | null = null;
+  export let actionsDisabled = false;
+  export let viewingEvidence: ContractSignatureViewingEvidence | null = null;
+  export let onViewDocument: (doc: ContractDocument) => void = () => {};
+  export let onConfirmSignature: (side: 'seller' | 'buyer', versionId: number, checked: boolean) => Promise<void> = async () => {};
+
+  let checkedSides = { seller: false, buyer: false };
+  let checkedContext = '';
+  let checkedEvidence: ContractSignatureViewingEvidence | null = null;
 
   const sides = ['seller', 'buyer'] as const;
   $: signatures = contract.signatures;
   $: version = signatures?.currentVersion;
+  $: hasViewedCurrentPdf = matchesSignatureViewingContext(contract, viewingEvidence);
   // Document identity comes from the current-version DTO, never from list order or upload metadata.
   $: currentDocument = version ? contract.documents?.find((doc) => doc.id === version.documentId
     && doc.documentType === 'contrato_assinado' && doc.metadata?.contractId === contract.id) : undefined;
+  // Keep declarations across a same-PDF refresh; a different context or viewing attempt resets them.
+  $: {
+    const context = `${contract.id}:${version?.id}:${version?.documentId}:${version?.draftRevisionId}:${contract.status}:${error}:${canConfirm}`;
+    if (context !== checkedContext || viewingEvidence !== checkedEvidence) {
+      checkedContext = context;
+      checkedEvidence = viewingEvidence;
+      checkedSides = { seller: false, buyer: false };
+    }
+  }
+
+  function confirmSide(side: 'seller' | 'buyer'): void {
+    if (!canConfirm || loading || error || actionsDisabled || confirmingSide || !version
+      || !matchesSignatureViewingContext(contract, viewingEvidence)
+      || contract.status !== 'AWAITING_SIGNATURES' || !currentDocument?.downloadUrl
+      || !checkedSides[side] || signatures?.[side].status !== 'PENDING') return;
+    const versionId = version.id;
+    checkedSides = { ...checkedSides, [side]: false };
+    void onConfirmSignature(side, versionId, true);
+  }
 
   function sideLabel(side: 'seller' | 'buyer'): string {
     return contract.dealType === 'sale' || contract.dealType === 'rent'
@@ -51,6 +83,10 @@
       {#if !currentDocument}
         <p class="text-xs">O documento corrente não está disponível nesta listagem.</p>
       {/if}
+      {#if currentDocument?.downloadUrl}
+        <Button size="sm" variant="outline" disabled={actionsDisabled || confirmingSide !== null}
+          on:click={() => currentDocument && onViewDocument(currentDocument)}>Visualizar PDF corrente</Button>
+      {/if}
       {#if version.previousVersionId != null}
         <p class="text-xs">Versão anterior: #{version.previousVersionId}</p>
       {/if}
@@ -62,6 +98,12 @@
         <p class="break-words whitespace-pre-wrap text-xs">Justificativa da equivalência: {version.equivalence.reason}</p>
       {/if}
     </div>
+    {#if canConfirm && contract.status === 'AWAITING_SIGNATURES' && currentDocument?.downloadUrl}
+      <p role="status" class="mt-3 text-xs text-gray-600 dark:text-gray-300">
+        {hasViewedCurrentPdf ? 'PDF corrente visualizado. Declare a conferência de cada assinatura antes de confirmar.'
+          : 'Visualize o PDF corrente com sucesso antes de declarar a conferência das assinaturas.'}
+      </p>
+    {/if}
     <div class="mt-3 grid gap-3 sm:grid-cols-2">
       {#each sides as side}
         {@const evidence = signatures[side]}
@@ -89,6 +131,24 @@
                 {/if}
               {/if}
             </div>
+          {/if}
+          {#if canConfirm && contract.status === 'AWAITING_SIGNATURES' && evidence.status === 'PENDING'}
+            {#if currentDocument?.downloadUrl}
+              <div class="mt-3 space-y-3">
+                <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
+                  <input type="checkbox" bind:checked={checkedSides[side]}
+                    disabled={!hasViewedCurrentPdf || actionsDisabled || confirmingSide !== null}
+                    class="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 accent-emerald-600" />
+                  <span>Declaro que conferi a assinatura de {sideLabel(side)} no PDF corrente, versão #{version.id}.</span>
+                </label>
+                <Button size="sm" disabled={!hasViewedCurrentPdf || !checkedSides[side] || actionsDisabled || confirmingSide !== null}
+                  on:click={() => confirmSide(side)}>
+                  {confirmingSide === side ? 'Confirmando…' : `Confirmar assinatura (${sideLabel(side)})`}
+                </Button>
+              </div>
+            {:else}
+              <p class="mt-3 text-xs text-gray-600 dark:text-gray-300">Atualize os detalhes para disponibilizar o PDF corrente antes de confirmar.</p>
+            {/if}
           {/if}
         </div>
       {/each}

@@ -1,4 +1,20 @@
 import { api, apiClient } from '$lib/apiClient';
+import type { ContractSignatureState } from './types';
+
+export async function confirmContractSignature(
+  contractId: string,
+  side: 'seller' | 'buyer',
+  signedVersionId: number,
+  signatureChecked: boolean
+): Promise<{ idempotent: boolean; signatures: ContractSignatureState }> {
+  if ((side !== 'seller' && side !== 'buyer') || !Number.isSafeInteger(signedVersionId)
+    || signedVersionId <= 0 || signatureChecked !== true) {
+    throw new Error('Informe a versão e declare explicitamente a conferência da assinatura.');
+  }
+  return readPayload(await api.post(`/admin/contracts/${contractId}/signatures/${side}/confirm`, {
+    signedVersionId, signatureChecked: true,
+  }));
+}
 
 export type MatrixUploadContext = {
   documentType: string;

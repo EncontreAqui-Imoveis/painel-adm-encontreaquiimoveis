@@ -1,8 +1,10 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import axe from 'axe-core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import ContractSignatureStatusPanel from '../../src/lib/components/contracts/ContractSignatureStatusPanel.svelte';
 import type { ContractItem, ContractSignatureState, ContractSignatureStatus } from '../../src/lib/components/contracts/types';
+
+const viewed = () => ({ contractId: 'contract-1', signedVersionId: 31, documentId: 42, draftRevisionId: 11 });
 
 const timestamp = '2026-10-09T12:34:56.000Z';
 const pending = (): ContractSignatureStatus => ({ status: 'PENDING', eventId: null, confirmedByAdminId: null,
@@ -15,6 +17,88 @@ const preserved = (): ContractSignatureStatus => ({ ...confirmed(), status: 'PRE
 const signatures = (): ContractSignatureState => ({
   currentVersion: { id: 31, documentId: 42, draftRevisionId: 11, uploadedByAdminId: 8, uploadedAt: timestamp,
     previousVersionId: null, replacementReason: null, equivalence: null }, seller: pending(), buyer: pending(),
+});
+
+describe('individual signature controls', () => {
+  const current = () => {
+    const item = contract(); item.documents![1].downloadUrl = '/negotiations/neg-1/documents/42/download'; return item;
+  };
+  it.each(['seller', 'buyer'] as const)('requires an explicit declaration for %s and sends the exact version', async (side) => {
+    const onConfirmSignature = vi.fn().mockResolvedValue(undefined);
+    render(ContractSignatureStatusPanel, { contract: current(), viewingEvidence: viewed(), canConfirm: true, onConfirmSignature });
+    const label = side === 'seller' ? 'Locador' : 'Locatário';
+    const button = screen.getByRole('button', { name: `Confirmar assinatura (${label})` });
+    expect(button).toBeDisabled();
+    expect(onConfirmSignature).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('checkbox', { name: `Declaro que conferi a assinatura de ${label} no PDF corrente, versão #31.` }));
+    expect(button).toBeEnabled();
+    await fireEvent.click(button);
+    expect(onConfirmSignature).toHaveBeenCalledExactlyOnceWith(side, 31, true);
+    expect(screen.getAllByRole('checkbox').every((element) => !(element as HTMLInputElement).checked)).toBe(true);
+  });
+  it('opens only the current PDF in the existing viewer callback', async () => {
+    const item = current(); const onViewDocument = vi.fn();
+    render(ContractSignatureStatusPanel, { contract: item, onViewDocument });
+    await fireEvent.click(screen.getByRole('button', { name: 'Visualizar PDF corrente' }));
+    expect(onViewDocument).toHaveBeenCalledExactlyOnceWith(item.documents![1]);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+  it.each(['contract', 'version', 'document', 'revision', 'cancel'] as const)(
+    'clears declarations when viewing evidence is incompatible: %s', async (change) => {
+      const item = current(); const proof = viewed();
+      const { rerender } = render(ContractSignatureStatusPanel, { contract: item, canConfirm: true, viewingEvidence: proof });
+      for (const input of screen.getAllByRole('checkbox')) await fireEvent.click(input);
+      expect(screen.getAllByRole('checkbox').every((input) => (input as HTMLInputElement).checked)).toBe(true);
+      const next = current();
+      if (change === 'contract') next.id = 'another';
+      if (change === 'version') next.signatures!.currentVersion!.id = 32;
+      if (change === 'document') { next.signatures!.currentVersion!.documentId = 44; next.documents![1].id = 44; }
+      if (change === 'revision') next.signatures!.currentVersion!.draftRevisionId = 12;
+      await rerender({ contract: next, canConfirm: true, viewingEvidence: change === 'cancel' ? null : proof });
+      for (const input of screen.queryAllByRole('checkbox')) { expect(input).not.toBeChecked(); expect(input).toBeDisabled(); }
+    },
+  );
+  it('retains declarations during a normal same-PDF detail refresh', async () => {
+    const proof = viewed();
+    const { rerender } = render(ContractSignatureStatusPanel, { contract: current(), canConfirm: true, viewingEvidence: proof });
+    await fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    await rerender({ contract: current(), canConfirm: true, viewingEvidence: proof, loading: true });
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    await rerender({ contract: current(), canConfirm: true, viewingEvidence: proof, loading: false });
+    expect(screen.getAllByRole('checkbox')[1]).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Confirmar assinatura (Locatário)' })).toBeEnabled();
+  });
+  it('does not grant viewing evidence from the open callback or a forced click', async () => {
+    const onConfirmSignature = vi.fn(); const onViewDocument = vi.fn();
+    render(ContractSignatureStatusPanel, { contract: current(), canConfirm: true, onConfirmSignature, onViewDocument });
+    await fireEvent.click(screen.getByRole('button', { name: 'Visualizar PDF corrente' }));
+    expect(onViewDocument).toHaveBeenCalledOnce();
+    for (const input of screen.getAllByRole('checkbox')) expect(input).toBeDisabled();
+    const input = screen.getAllByRole('checkbox')[0] as HTMLInputElement;
+    input.disabled = false; await fireEvent.click(input);
+    const button = screen.getByRole('button', { name: 'Confirmar assinatura (Locador)' }) as HTMLButtonElement;
+    button.disabled = false; await fireEvent.click(button);
+    expect(onConfirmSignature).not.toHaveBeenCalled();
+  });
+  it('blocks both sides while an operation is pending and never reconfirms effective signatures', async () => {
+    const item = current();
+    const { rerender } = render(ContractSignatureStatusPanel, { contract: item, canConfirm: true, confirmingSide: 'seller' });
+    for (const input of screen.getAllByRole('checkbox')) expect(input).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirmando…' })).toBeDisabled();
+    item.signatures!.seller = confirmed(); item.signatures!.buyer = preserved();
+    await rerender({ contract: item, canConfirm: true, confirmingSide: null });
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+  it('does not allow confirmation of an unavailable document', () => {
+    render(ContractSignatureStatusPanel, { contract: contract(), canConfirm: true });
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Atualize os detalhes para disponibilizar/)).toHaveLength(2);
+  });
+  it('provides accessible labels for declarations and actions', async () => {
+    const { container } = render(ContractSignatureStatusPanel, { contract: current(), canConfirm: true });
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    expect((await axe.run(container, { rules: { 'color-contrast': { enabled: false } } })).violations).toEqual([]);
+  });
 });
 const contract = (): ContractItem => ({ id: 'contract-1', status: 'AWAITING_SIGNATURES', negotiationId: 'neg-1',
   propertyId: 1, dealType: 'rent', signatures: signatures(), documents: [
