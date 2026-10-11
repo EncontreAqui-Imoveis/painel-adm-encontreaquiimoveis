@@ -1,4 +1,4 @@
-import { api } from '$lib/apiClient';
+import { api, type ExtendedAxiosConfig } from '$lib/apiClient';
 
 export type ContractStatus =
   | 'AWAITING_DOCS'
@@ -87,9 +87,10 @@ export async function listContracts<TContract extends ContractListItem>(
 }
 
 export async function getContractDetails<TContract>(
-  contractId: string
+  contractId: string,
+  options?: Pick<ExtendedAxiosConfig, 'skipErrorToast'>
 ): Promise<ContractDetailResponse<TContract>> {
-  const response = await api.get(`/contracts/${contractId}`);
+  const response = options ? await api.get(`/contracts/${contractId}`, options) : await api.get(`/contracts/${contractId}`);
   if (response && typeof response === 'object' && 'data' in response) {
     const maybeAxios = response as { data?: unknown };
     const raw = maybeAxios.data ?? response;
@@ -101,9 +102,11 @@ export async function getContractDetails<TContract>(
 }
 
 export async function listContractDocumentRejections(
-  contractId: string
+  contractId: string,
+  options?: Pick<ExtendedAxiosConfig, 'skipErrorToast'>
 ): Promise<ContractDocumentRejection[]> {
-  const response = await api.get(`/admin/contracts/${contractId}/document-rejections`);
+  const response = options ? await api.get(`/admin/contracts/${contractId}/document-rejections`, options)
+    : await api.get(`/admin/contracts/${contractId}/document-rejections`);
   const payload = readPayload<{ rejections?: ContractDocumentRejection[] }>(response);
   return Array.isArray(payload.rejections) ? payload.rejections : [];
 }

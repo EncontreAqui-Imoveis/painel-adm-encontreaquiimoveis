@@ -29,6 +29,8 @@
   import ContractDraftUploadPanel from '$lib/components/contracts/ContractDraftUploadPanel.svelte';
   import ContractActorsGrid from '$lib/components/contracts/ContractActorsGrid.svelte';
   import ContractFinalizedEditorPanel from '$lib/components/contracts/ContractFinalizedEditorPanel.svelte';
+  import ContractSignedReplacementPanel from '$lib/components/contracts/ContractSignedReplacementPanel.svelte';
+  import { currentSignedReplacementContext, matchesSignedReplacementContext, signedReplacementError, type SignedReplacementDeclaration, type SignedReplacementContext } from '$lib/components/contracts/contractSignedReplacement';
   import ContractSignatureStatusPanel from '$lib/components/contracts/ContractSignatureStatusPanel.svelte';
   import { matchesSignatureViewingContext, type ContractSignatureViewingEvidence } from '$lib/components/contracts/contractSignatureViewing';
   import {
@@ -198,6 +200,7 @@
   let selectedSignedDocSide: 'seller' | 'buyer' = 'seller';
   let signedUploadInputEl: HTMLInputElement | null = null;
   let pendingReplacementDocumentId: number | null = null;
+  let signedReplacementContext: SignedReplacementContext | null = null;
   let documentRejections: ContractDocumentRejection[] = [];
   let loadingDocumentRejections = false;
   let matrixUploadInputEl: HTMLInputElement | null = null;
@@ -343,6 +346,10 @@
       lastSignatureViewingContext = context;
       invalidateSignatureViewing();
     }
+  }
+
+  $: if (signedReplacementContext && !matchesSignedReplacementContext(selected, signedReplacementContext)) {
+    cancelSignedDocumentReplacement();
   }
 
   function invalidateSignatureViewing(): void {
@@ -575,9 +582,14 @@
     const normalizedType = documentType.toLowerCase();
     if (signedReviewDocTypes.has(normalizedType)) {
       const contract = documentPreviewContract;
+      if (normalizedType === 'contrato_assinado' && contract.status === 'AWAITING_SIGNATURES'
+        && (selected?.id !== contract.id || selected.signatures?.currentVersion?.documentId !== previewDoc.id)) {
+        toast.error('Este PDF não é a versão corrente. Atualize os detalhes antes de substituir.');
+        return;
+      }
       closeDocumentPreview();
       prepareSignedDocumentReplacement(previewDoc);
-      selected = contract;
+      if (!(normalizedType === 'contrato_assinado' && contract.status === 'AWAITING_SIGNATURES')) selected = contract;
       return;
     }
     if (!documentType || !side) {
@@ -1097,13 +1109,13 @@
     scheduleContractSearch();
   }
 
-  async function reloadSelectedContract(contractId: string): Promise<void> {
+  async function reloadSelectedContract(contractId: string, suppressErrorToast = false): Promise<void> {
     const requestId = ++signatureDetailsRequestId;
     signatureDetailsState = 'loading';
     try {
       const [payload, rejections] = await Promise.all([
-        getContractDetails<ContractItem>(contractId),
-        listContractDocumentRejections(contractId).catch((error) => {
+        getContractDetails<ContractItem>(contractId, suppressErrorToast ? { skipErrorToast: true } : undefined),
+        listContractDocumentRejections(contractId, suppressErrorToast ? { skipErrorToast: true } : undefined).catch((error) => {
           console.error('Falha ao carregar histórico de rejeições:', error);
           return [] as ContractDocumentRejection[];
         }),
@@ -1509,6 +1521,7 @@
     isEditingData = false;
     isDataSectionExpanded = false;
     pendingReplacementDocumentId = null;
+    signedReplacementContext = null;
     documentRejections = [];
     loadingDocumentRejections = false;
     modalMode = 'review_docs';
@@ -1849,6 +1862,15 @@
       return;
     }
 
+    if (uploadingSignedDoc || confirmingSignatureSide) return;
+    if (documentType === 'contrato_assinado' && selected?.status === 'AWAITING_SIGNATURES') {
+      const context = currentSignedReplacementContext(selected);
+      if (!canCurrentAdminReplace || signatureDetailsState !== 'ready' || !context || context.documentId !== doc.id) {
+        toast.error('Só é possível substituir o PDF corrente com os detalhes atualizados e permissão documental.');
+        return;
+      }
+      signedReplacementContext = context;
+    } else signedReplacementContext = null;
     signedDocType = documentType;
     if (finalizedDocumentRequiresSide(documentType)) {
       selectedSignedDocSide = doc.side ?? selectedSignedDocSide;
@@ -1861,10 +1883,19 @@
         block: 'center',
       });
     }
-    signedUploadInputEl?.click();
+    if (signedReplacementContext) {
+      const context = signedReplacementContext;
+      if (signedUploadInputEl) signedUploadInputEl.value = '';
+      // Publish the PDF-only accept filter before opening the native picker.
+      void tick().then(() => {
+        if (signedReplacementContext === context && matchesSignedReplacementContext(selected, context)) signedUploadInputEl?.click();
+      });
+    } else signedUploadInputEl?.click();
   }
 
   function cancelSignedDocumentReplacement() {
+    signedReplacementContext = null;
+    if (signedUploadInputEl) signedUploadInputEl.value = '';
     pendingReplacementDocumentId = null;
     selectedSignedFile = null;
   }
@@ -1927,6 +1958,49 @@
       console.error('Erro ao anexar documento físico:', error);
       toast.error('Não foi possível anexar o documento físico.');
     } finally {
+      uploadingSignedDoc = false;
+    }
+  }
+
+  async function replaceSignedPdfByAdmin(declaration: SignedReplacementDeclaration) {
+    if (!selected || uploadingSignedDoc) return;
+    const contractId = selected.id;
+    const context = signedReplacementContext;
+    const file = selectedSignedFile;
+    if (!context || !matchesSignedReplacementContext(selected, context) || !canCurrentAdminReplace
+      || signatureDetailsState !== 'ready' || confirmingSignatureSide || finalizingContract || movingToPreviousStage) return;
+    if (declaration.equivalenceDeclared && !canCurrentAdminConfirmSignatures) return;
+    const error = signedReplacementError(file, declaration);
+    if (error || !file) { toast.error(error ?? 'Selecione um PDF válido.'); return; }
+    uploadingSignedDoc = true;
+    let reconcile = false;
+    try {
+      await uploadSignedDocument(contractId, 'contrato_assinado', file, context.documentId, declaration);
+      reconcile = true;
+      if (selected?.id === contractId) {
+        toast.success('PDF substituído com histórico preservado.');
+        invalidateSignatureViewing();
+        cancelSignedDocumentReplacement();
+      }
+    } catch (error) {
+      console.error('Erro ao anexar documento físico:', error);
+      if (selected?.id === contractId) {
+        toast.error(resolveApiErrorMessage(error, 'Não foi possível substituir o PDF. Atualize e revise os dados antes de tentar novamente.'));
+        // Reconcile uncertain network outcomes too; never retain a stale declaration for retry.
+        reconcile = true;
+        cancelSignedDocumentReplacement();
+        invalidateSignatureViewing();
+      }
+    } finally {
+      if (reconcile && selected?.id === contractId) {
+        try {
+          await reloadSelectedContract(contractId, true);
+          if (selected?.id === contractId) syncSelectedContractInList(selected);
+        } catch (error) {
+          // The existing details error state gives one recovery path without duplicate error toasts.
+          console.error('Erro ao atualizar detalhes após upload:', error);
+        }
+      }
       uploadingSignedDoc = false;
     }
   }
@@ -3261,6 +3335,7 @@
                 Tipo do Documento
                 <select
                   bind:value={signedDocType}
+                  disabled={!!signedReplacementContext || uploadingSignedDoc}
                   class="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
                 >
                   <option value="contrato_assinado">Contrato Assinado</option>
@@ -3274,7 +3349,8 @@
                 <input
                   bind:this={signedUploadInputEl}
                   type="file"
-                  accept="application/pdf,image/png,image/jpeg,image/webp"
+                  accept={signedReplacementContext ? "application/pdf,.pdf" : "application/pdf,image/png,image/jpeg,image/webp"}
+                  disabled={uploadingSignedDoc}
                   on:change={handleSignedFileChange}
                   class="sr-only"
                   aria-hidden="true"
@@ -3284,6 +3360,7 @@
                   type="button"
                   class="flex min-h-[42px] w-full items-center justify-between gap-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 text-left text-sm transition hover:border-emerald-500 hover:bg-emerald-50 dark:border-slate-700 dark:bg-slate-900/50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/20"
                   on:click={triggerSignedPicker}
+                  disabled={uploadingSignedDoc}
                 >
                   <span class="truncate font-medium text-slate-800 dark:text-slate-100">
                     {selectedSignedFile ? selectedSignedFile.name : 'Escolher arquivo'}
@@ -3306,6 +3383,15 @@
                 </label>
               {/if}
             </div>
+            {#if signedReplacementContext}
+              {#key signedReplacementContext}
+                <ContractSignedReplacementPanel file={selectedSignedFile}
+                  canDeclareEquivalence={canCurrentAdminConfirmSignatures}
+                  disabled={uploadingSignedDoc || signatureDetailsState !== 'ready' || confirmingSignatureSide !== null
+                    || finalizingContract || movingToPreviousStage || !canCurrentAdminReplace}
+                  onSubmit={replaceSignedPdfByAdmin} />
+              {/key}
+            {/if}
             <div class="mt-3 flex flex-wrap items-center gap-3">
               {#if pendingReplacementDocumentId}
                 <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
@@ -3315,11 +3401,12 @@
                   size="sm"
                   variant="outline"
                   on:click={cancelSignedDocumentReplacement}
+                  disabled={uploadingSignedDoc}
                 >
                   Cancelar substituição
                 </Button>
               {/if}
-              {#if selectedSignedFile}
+              {#if selectedSignedFile && !signedReplacementContext}
               <div class="ml-auto flex flex-wrap gap-2">
                 <Button
                   size="sm"
@@ -3388,13 +3475,13 @@
                         {/if}
                         Baixar
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        on:click={() => prepareSignedDocumentReplacement(doc)}
-                      >
-                        Substituir
-                      </Button>
+                      {#if canCurrentAdminReplace && (doc.documentType !== 'contrato_assinado'
+                        || (signatureDetailsState === 'ready' && selected.signatures?.currentVersion?.documentId === doc.id))}
+                        <Button size="sm" variant="outline" on:click={() => prepareSignedDocumentReplacement(doc)}
+                          disabled={uploadingSignedDoc || confirmingSignatureSide !== null}>
+                          Substituir
+                        </Button>
+                      {/if}
                       <Button
                         size="sm"
                         variant="destructive"

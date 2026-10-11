@@ -107,6 +107,7 @@ function extractRequestId(error: RequestIdAwareError): string | undefined {
 type RequestOptions = {
   token?: string | null;
   skipAuth?: boolean;
+  skipErrorToast?: boolean;
   headers?: Record<string, string>;
   signal?: AbortSignal;
   params?: Record<string, unknown>;
@@ -114,7 +115,7 @@ type RequestOptions = {
 
 type TokenOrOptions = string | null | RequestOptions | undefined;
 
-type ExtendedAxiosConfig = AxiosRequestConfig & {
+export type ExtendedAxiosConfig = AxiosRequestConfig & {
   token?: string | null;
   skipAuth?: boolean;
   skipErrorToast?: boolean;
@@ -139,6 +140,7 @@ function buildConfig(tokenOrOptions?: TokenOrOptions): ExtendedAxiosConfig {
     params: options.params,
     token: options.token,
     skipAuth: options.skipAuth,
+    skipErrorToast: options.skipErrorToast,
   };
   return config;
 }

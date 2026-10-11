@@ -2,11 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { tick } from 'svelte';
 import { adminSession, getDefaultAdminCapabilities } from '$lib/sessionState';
+import type { SignedReplacementDeclaration } from '../../src/lib/components/contracts/contractSignedReplacement';
 import type { ContractItem, ContractSignatureStatus } from '../../src/lib/components/contracts/types';
 
 const { get, post, put, patch, remove, clientPost, clientGet, pdfGetDocument, pageRender, pdfDestroy, handlers, toastError, toastSuccess } = vi.hoisted(() => ({
   clientGet: vi.fn(), pdfGetDocument: vi.fn(), pageRender: vi.fn(), pdfDestroy: vi.fn(),
-  handlers: { confirm: null as null | ((side: 'seller' | 'buyer', version: number, checked: boolean) => Promise<void>) },
+  handlers: { confirm: null as null | ((side: 'seller' | 'buyer', version: number, checked: boolean) => Promise<void>),
+    replace: null as null | ((declaration: SignedReplacementDeclaration) => Promise<void>) },
   get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), remove: vi.fn(), clientPost: vi.fn(), toastError: vi.fn(), toastSuccess: vi.fn(),
 }));
 vi.mock('$lib/apiClient', () => ({ api: { get, post, put, patch, delete: remove }, apiClient: { get: clientGet, post: clientPost } }));
@@ -18,6 +20,13 @@ vi.mock('../../src/lib/components/contracts/ContractSignatureStatusPanel.svelte'
   const actual = await importOriginal<typeof import('../../src/lib/components/contracts/ContractSignatureStatusPanel.svelte')>();
   return { ...actual, default: (anchor: unknown, props: { onConfirmSignature: typeof handlers.confirm }) => {
     handlers.confirm = props.onConfirmSignature;
+    return (actual.default as unknown as (anchor: unknown, props: unknown) => unknown)(anchor, props);
+  } };
+});
+vi.mock('../../src/lib/components/contracts/ContractSignedReplacementPanel.svelte', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/components/contracts/ContractSignedReplacementPanel.svelte')>();
+  return { ...actual, default: (anchor: unknown, props: { onSubmit: typeof handlers.replace }) => {
+    handlers.replace = props.onSubmit;
     return (actual.default as unknown as (anchor: unknown, props: unknown) => unknown)(anchor, props);
   } };
 });
@@ -47,7 +56,7 @@ describe('ContractsModule signature presentation', () => {
   let loadDetail: () => Promise<Detail>;
   beforeEach(() => {
     vi.resetAllMocks();
-    handlers.confirm = null;
+    handlers.confirm = null; handlers.replace = null;
     pageRender.mockReturnValue({ promise: Promise.resolve() });
     pdfDestroy.mockResolvedValue(undefined);
     pdfGetDocument.mockImplementation(() => ({ promise: Promise.resolve({ numPages: 1,
@@ -518,6 +527,184 @@ describe('ContractsModule signature presentation', () => {
     await panel.findByText('PDF corrente: versao-31.pdf');
     expectLocked(panel); expect(panel.getByRole('checkbox', { name: /Locador/ })).not.toBeChecked();
     await handlers.confirm!('seller', 31, true); noMutations();
+  });
+
+  const pdfFile = () => new File(['%PDF-test'], 'nova-digitalizacao.pdf', { type: 'application/pdf' });
+  const replacement = async (equivalent = false) => {
+    const list = screen.getByText('Documentos para conferência').closest('div')!;
+    await fireEvent.click(within(list).getByRole('button', { name: 'Substituir' }));
+    const form = within(await screen.findByRole('region', { name: 'Substituição do PDF assinado' }));
+    const input = document.querySelector('input[type="file"][accept="application/pdf,.pdf"]') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    await fireEvent.change(input, { target: { files: [pdfFile()] } });
+    await fireEvent.input(form.getByRole('textbox'), { target: { value: 'Nova digitalização' } });
+    await fireEvent.click(form.getByRole('radio', { name: equivalent ? /Declaro equivalência:/ : /sem equivalência/ }));
+    return form;
+  };
+  const nextVersion = (previous: ContractItem, equivalent = false) => {
+    const next = fixture(32); next.documents![0].downloadUrl = '/negotiations/neg-1/documents/42/download';
+    next.documents!.unshift(...previous.documents!);
+    next.signatures!.currentVersion!.previousVersionId = 31;
+    next.signatures!.currentVersion!.replacementReason = 'Nova digitalização';
+    for (const side of ['seller', 'buyer'] as const) next.signatures![side] = equivalent
+      ? { ...fixture().signatures!.seller, status: 'PRESERVED', eventId: side === 'seller' ? 110 : 111,
+        sourceEventId: side === 'seller' ? 91 : 92, preservation: { performedByAdminId: 7,
+          performedAt: '2026-10-10T15:00:00Z', reason: 'Nova digitalização' } }
+      : pending();
+    return next;
+  };
+  it.each([true, false])('replaces the current PDF, preserves history and reloads authoritative equivalence=%s', async (equivalent) => {
+    const initial = confirmable(); initial.signatures!.seller = fixture().signatures!.seller;
+    initial.signatures!.buyer = { ...initial.signatures!.seller, eventId: 92 };
+    loadDetail = async () => detail(initial);
+    const panel = within(await open()); await viewCurrent(panel);
+    const form = await replacement(equivalent);
+    const next = nextVersion(initial, equivalent);
+    clientPost.mockImplementation(async () => { loadDetail = async () => detail(next); return { data: { signedVersion: { id: 999 } } }; });
+    await fireEvent.click(form.getByRole('button', { name: 'Substituir PDF assinado' }));
+    expect(clientPost).toHaveBeenCalledOnce();
+    const multipart = clientPost.mock.calls[0][1] as FormData;
+    expect(clientPost.mock.calls[0][0]).toBe('/admin/contracts/contract-signatures-1/signed-docs');
+    expect(multipart.get('replaceDocumentId')).toBe('41'); expect(multipart.get('replacementReason')).toBe('Nova digitalização');
+    expect(multipart.get('equivalenceDeclared')).toBe(equivalent ? 'true' : null);
+    expect(multipart.get('contractContentUnchanged')).toBe(equivalent ? null : 'true');
+    await panel.findByText('PDF corrente: versao-32.pdf');
+    expect(panel.getAllByText(equivalent ? 'Preservada por equivalência' : 'Pendente')).toHaveLength(2);
+    expect(panel.queryByText(/PDF corrente visualizado/)).not.toBeInTheDocument();
+    const list = within(screen.getByText('Documentos para conferência').closest('div')!);
+    expect(list.getByText('Fora da versão corrente')).toBeInTheDocument();
+    expect(list.getByText('PDF corrente')).toBeInTheDocument();
+    expect(list.getAllByRole('button', { name: 'Substituir' })).toHaveLength(1);
+    expect(screen.queryByRole('region', { name: 'Substituição do PDF assinado' })).not.toBeInTheDocument();
+    // Historical PDFs remain viewable, but the real viewer's replacement action must reject them.
+    const historicalRow = list.getByText('Fora da versão corrente').parentElement!.parentElement!;
+    await fireEvent.click(within(historicalRow).getByRole('button', { name: 'Visualizar' }));
+    await screen.findByAltText('versao-31.pdf - página 1');
+    await fireEvent.click(screen.getByRole('button', { name: 'Substituir documento' }));
+    await fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Substituir documento' }));
+    expect(screen.queryByRole('region', { name: 'Substituição do PDF assinado' })).not.toBeInTheDocument();
+    expect(panel.getByText('PDF corrente: versao-32.pdf')).toBeInTheDocument();
+    expect(clientPost).toHaveBeenCalledOnce();
+    await fireEvent.click(screen.getByRole('button', { name: 'Fechar visualização' }));
+    if (!equivalent) {
+      expectLocked(panel); await handlers.confirm!('seller', 32, true); expect(post).not.toHaveBeenCalled();
+      await fireEvent.click(panel.getByRole('button', { name: 'Visualizar PDF corrente' }));
+      await screen.findByAltText('versao-32.pdf - página 1'); await panel.findByText(/PDF corrente visualizado/);
+      await fireEvent.click(screen.getByRole('button', { name: 'Fechar visualização' }));
+      await fireEvent.click(panel.getByRole('checkbox', { name: /Locador/ }));
+      post.mockResolvedValue({ idempotent: false, signatures: next.signatures });
+      await fireEvent.click(panel.getByRole('button', { name: 'Confirmar assinatura (Locador)' }));
+      expect(post).toHaveBeenCalledWith('/admin/contracts/contract-signatures-1/signatures/seller/confirm', { signedVersionId: 32, signatureChecked: true });
+    } else expect(post).not.toHaveBeenCalled();
+  });
+  it.each(['operational_assistant', 'document_operator'] as const)('allows only ordinary replacement for %s using actual permissions', async (role) => {
+    adminSession.set({ role, capabilities: getDefaultAdminCapabilities(role) });
+    const initial = confirmable(); loadDetail = async () => detail(initial);
+    const panel = within(await open()); await panel.findByText('PDF corrente: versao-31.pdf');
+    const form = await replacement();
+    expect(form.queryByRole('radio', { name: /Declaro equivalência:/ })).not.toBeInTheDocument();
+    await handlers.replace!({ replacementReason: 'Bypass', equivalenceDeclared: true }); expect(clientPost).not.toHaveBeenCalled();
+    clientPost.mockImplementation(async () => { loadDetail = async () => detail(nextVersion(initial)); return {}; });
+    await fireEvent.click(form.getByRole('button', { name: 'Substituir PDF assinado' }));
+    await panel.findByText('PDF corrente: versao-32.pdf');
+    expect((clientPost.mock.calls[0][1] as FormData).get('contractContentUnchanged')).toBe('true');
+    expect((clientPost.mock.calls[0][1] as FormData).get('equivalenceDeclared')).toBeNull();
+  });
+  it('denies replacement controls when the session has no replace permission', async () => {
+    adminSession.set({ role: 'admin', capabilities: { ...getDefaultAdminCapabilities(), canReplaceDocuments: false } });
+    loadDetail = async () => detail(confirmable()); const panel = within(await open()); await panel.findByText('PDF corrente: versao-31.pdf');
+    const list = within(screen.getByText('Documentos para conferência').closest('div')!);
+    expect(list.queryByRole('button', { name: 'Substituir' })).not.toBeInTheDocument(); expect(clientPost).not.toHaveBeenCalled();
+  });
+  it.each(['contract', 'version', 'document', 'revision'] as const)('invalidates a replacement form on %s changes', async (change) => {
+    const initial = confirmable(); loadDetail = async () => detail(initial);
+    const panel = within(await open()); await panel.findByText('PDF corrente: versao-31.pdf');
+    await replacement(); const handler = handlers.replace!;
+    const next = confirmable();
+    if (change === 'contract') next.id = 'other-contract';
+    if (change === 'version') next.signatures!.currentVersion!.id = 33;
+    if (change === 'document') { next.signatures!.currentVersion!.documentId = 44; next.documents![0].id = 44; }
+    if (change === 'revision') next.signatures!.currentVersion!.draftRevisionId = 12;
+    loadDetail = async () => detail(next); await refreshDetails(); await panel.findByText(/Versão #/);
+    expect(screen.queryByRole('region', { name: 'Substituição do PDF assinado' })).not.toBeInTheDocument();
+    await handler({ replacementReason: 'stale', contractContentUnchanged: true }); expect(clientPost).not.toHaveBeenCalled();
+  });
+  it('shows a 409 once, reloads details and requires a fresh form and declarations', async () => {
+    const initial = confirmable(); loadDetail = async () => detail(initial);
+    const panel = within(await open()); await viewCurrent(panel); const form = await replacement(true);
+    clientPost.mockImplementation(async () => {
+      loadDetail = async () => detail(nextVersion(initial));
+      throw { response: { status: 409, data: { code: 'CONTRACT_SIGNED_REPLACEMENT_STALE', error: 'O PDF corrente mudou. Revise os detalhes.' } } };
+    });
+    await fireEvent.click(form.getByRole('button', { name: 'Substituir PDF assinado' }));
+    await panel.findByText('PDF corrente: versao-32.pdf'); expectLocked(panel);
+    expect(toastError).toHaveBeenCalledExactlyOnceWith('O PDF corrente mudou. Revise os detalhes.');
+    expect(screen.queryByRole('region', { name: 'Substituição do PDF assinado' })).not.toBeInTheDocument();
+    await fireEvent.click(within(screen.getByText('Documentos para conferência').closest('div')!).getByRole('button', { name: 'Substituir' }));
+    const retry = within(await screen.findByRole('region', { name: 'Substituição do PDF assinado' }));
+    expect(retry.getByRole('textbox')).toHaveValue('');
+    expect(retry.getAllByRole('radio').every((input) => !(input as HTMLInputElement).checked)).toBe(true);
+    expect(retry.getByRole('button', { name: 'Substituir PDF assinado' })).toBeDisabled();
+  });
+  it('blocks duplicate submissions and ignores older detail responses after replacement', async () => {
+    const initial = confirmable(); loadDetail = async () => detail(initial);
+    const panel = within(await open()); await panel.findByText('PDF corrente: versao-31.pdf');
+    const form = await replacement(); const sent = deferred<unknown>(); clientPost.mockReturnValue(sent.promise);
+    await fireEvent.click(form.getByRole('button', { name: 'Substituir PDF assinado' }));
+    expect(form.getByRole('textbox')).toBeDisabled();
+    await handlers.replace!({ replacementReason: 'Duplicate', contractContentUnchanged: true }); expect(clientPost).toHaveBeenCalledOnce();
+    const old = deferred<Detail>(); loadDetail = () => old.promise; await refreshDetails();
+    loadDetail = async () => detail(nextVersion(initial)); sent.resolve({});
+    await panel.findByText('PDF corrente: versao-32.pdf');
+    old.resolve(detail(initial)); await old.promise; await tick();
+    expect(panel.getByText('PDF corrente: versao-32.pdf')).toBeInTheDocument(); expectLocked(panel);
+    expect(clientPost).toHaveBeenCalledOnce();
+  });
+  it('blocks a content change and forced submission without declarations', async () => {
+    loadDetail = async () => detail(confirmable()); const panel = within(await open()); await panel.findByText('PDF corrente: versao-31.pdf');
+    const form = await replacement();
+    await fireEvent.click(form.getByRole('radio', { name: 'O conteúdo contratual mudou.' }));
+    expect(form.getByRole('alert')).toHaveTextContent('nova revisão da minuta');
+    expect(form.getByRole('button', { name: 'Substituir PDF assinado' })).toBeDisabled();
+    await handlers.replace!({ replacementReason: 'Missing' } as SignedReplacementDeclaration);
+    expect(clientPost).not.toHaveBeenCalled();
+  });
+
+  it('does not invent preservation for a pending side when the backend preserves only one confirmation', async () => {
+    const initial = confirmable(); initial.signatures!.seller = fixture().signatures!.seller;
+    loadDetail = async () => detail(initial);
+    const panel = within(await open()); await panel.findByText('PDF corrente: versao-31.pdf');
+    const form = await replacement(true); const next = nextVersion(initial, true); next.signatures!.buyer = pending();
+    clientPost.mockImplementation(async () => { loadDetail = async () => detail(next); return {}; });
+    await fireEvent.click(form.getByRole('button', { name: 'Substituir PDF assinado' }));
+    await panel.findByText('PDF corrente: versao-32.pdf');
+    expect(panel.getByText('Preservada por equivalência')).toBeInTheDocument();
+    expect(panel.getByText('Pendente')).toBeInTheDocument();
+    expect(panel.getByRole('checkbox', { name: /Locatário/ })).toBeDisabled(); expect(post).not.toHaveBeenCalled();
+  });
+  it('uses the details error state without duplicating a conflict toast if reload fails', async () => {
+    loadDetail = async () => detail(confirmable()); const panel = within(await open()); await panel.findByText('PDF corrente: versao-31.pdf');
+    const form = await replacement();
+    clientPost.mockImplementation(async () => {
+      loadDetail = async () => { throw new Error('Refresh failed'); };
+      throw { response: { status: 409, data: { error: 'O PDF corrente mudou.' } } };
+    });
+    await fireEvent.click(form.getByRole('button', { name: 'Substituir PDF assinado' }));
+    expect(await panel.findByRole('alert')).toHaveTextContent('Não foi possível consultar');
+    expect(toastError).toHaveBeenCalledExactlyOnceWith('O PDF corrente mudou.');
+    expect(get).toHaveBeenCalledWith('/contracts/contract-signatures-1', { skipErrorToast: true });
+    expect(get).toHaveBeenCalledWith('/admin/contracts/contract-signatures-1/document-rejections', { skipErrorToast: true });
+    expect(clientPost.mock.calls[0][2]).toEqual({ skipErrorToast: true });
+    expect(post).not.toHaveBeenCalled();
+  });
+  it('invalidates a lost-network replacement and reconciles a possible server success', async () => {
+    const initial = confirmable(); loadDetail = async () => detail(initial);
+    const panel = within(await open()); await viewCurrent(panel); const form = await replacement();
+    clientPost.mockImplementation(async () => { loadDetail = async () => detail(nextVersion(initial)); throw new Error('Connection interrupted'); });
+    await fireEvent.click(form.getByRole('button', { name: 'Substituir PDF assinado' }));
+    await panel.findByText('PDF corrente: versao-32.pdf'); expectLocked(panel);
+    expect(toastError).toHaveBeenCalledOnce(); expect(toastSuccess).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Substituição do PDF assinado' })).not.toBeInTheDocument();
   });
 
 });

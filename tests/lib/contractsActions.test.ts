@@ -7,7 +7,7 @@ vi.mock('$lib/apiClient', () => ({
   apiClient: { post, get: vi.fn() },
 }));
 
-import { confirmContractSignature, uploadMatrixDocument } from '../../src/lib/components/contracts/contractsActions';
+import { confirmContractSignature, uploadMatrixDocument, uploadSignedDocument } from '../../src/lib/components/contracts/contractsActions';
 
 describe('uploadMatrixDocument', () => {
   it('sends replaceDocumentId only for an explicit replacement', async () => {
@@ -56,5 +56,51 @@ describe('confirmContractSignature', () => {
     apiPost.mockClear();
     await expect(confirmContractSignature('contract-1', 'buyer', 84, false)).rejects.toThrow();
     expect(apiPost).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('signed document replacement multipart', () => {
+  const pdf = () => new File(['%PDF-test'], 'signed.pdf', { type: 'application/pdf' });
+  it('keeps initial signed upload unchanged without any declarations', async () => {
+    post.mockClear(); await uploadSignedDocument('contract-1', 'contrato_assinado', pdf());
+    const form = post.mock.calls[0][1] as FormData;
+    expect([...form.keys()]).toEqual(['documentType', 'file']);
+  });
+  it.each(['comprovante_pagamento', 'boleto_vistoria', 'outro'])('keeps initial and replacement fields unchanged for %s', async (type) => {
+    for (const id of [undefined, 42]) {
+      post.mockClear(); await uploadSignedDocument('contract-1', type, pdf(), id);
+      const form = post.mock.calls[0][1] as FormData;
+      expect(form.get('replaceDocumentId')).toBe(id ? '42' : null);
+      for (const key of ['replacementReason', 'equivalenceDeclared', 'contractContentUnchanged']) expect(form.get(key)).toBeNull();
+    }
+  });
+  it.each(['equivalent', 'unchanged'] as const)('sends only the explicit %s declaration as a multipart string', async (mode) => {
+    post.mockClear();
+    await uploadSignedDocument('contract-1', 'contrato_assinado', pdf(), 42, mode === 'equivalent'
+      ? { replacementReason: '  Nova digitalização  ', equivalenceDeclared: true }
+      : { replacementReason: '  Nova digitalização  ', contractContentUnchanged: true });
+    const form = post.mock.calls[0][1] as FormData;
+    expect(form.get('replaceDocumentId')).toBe('42'); expect(form.get('replacementReason')).toBe('Nova digitalização');
+    expect(post.mock.calls[0][2]).toEqual({ skipErrorToast: true });
+    expect(form.get('equivalenceDeclared')).toBe(mode === 'equivalent' ? 'true' : null);
+    expect(form.get('contractContentUnchanged')).toBe(mode === 'unchanged' ? 'true' : null);
+  });
+  it('rejects missing reason, absent or conflicting declarations and coerced booleans', async () => {
+    const invalid: unknown[] = [undefined, { replacementReason: ' ', equivalenceDeclared: true },
+      { replacementReason: 'test' }, { replacementReason: 'test', equivalenceDeclared: 'false' },
+      { replacementReason: 'test', equivalenceDeclared: true, contractContentUnchanged: true },
+      { replacementReason: 'test', contractContentUnchanged: false }];
+    for (const declaration of invalid) {
+      post.mockClear(); await expect(uploadSignedDocument('contract-1', 'contrato_assinado', pdf(), 42,
+        declaration as Parameters<typeof uploadSignedDocument>[4])).rejects.toThrow();
+      expect(post).not.toHaveBeenCalled();
+    }
+  });
+  it('rejects a non-PDF replacement without a request', async () => {
+    post.mockClear(); await expect(uploadSignedDocument('contract-1', 'contrato_assinado',
+      new File(['image'], 'signed.png', { type: 'image/png' }), 42,
+      { replacementReason: 'test', contractContentUnchanged: true })).rejects.toThrow(/PDF/);
+    expect(post).not.toHaveBeenCalled();
   });
 });

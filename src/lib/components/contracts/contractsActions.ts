@@ -1,5 +1,6 @@
-import { api, apiClient } from '$lib/apiClient';
+import { api, apiClient, type ExtendedAxiosConfig } from '$lib/apiClient';
 import type { ContractSignatureState } from './types';
+import { signedReplacementError, type SignedReplacementDeclaration } from './contractSignedReplacement';
 
 export async function confirmContractSignature(
   contractId: string,
@@ -74,13 +75,27 @@ export async function uploadSignedDocument(
   contractId: string,
   documentType: string,
   file: File,
-  replaceDocumentId?: number
+  replaceDocumentId?: number,
+  declaration?: SignedReplacementDeclaration
 ): Promise<void> {
+  if (documentType === 'contrato_assinado' && replaceDocumentId !== undefined) {
+    const error = signedReplacementError(file, declaration);
+    if (error) throw new Error(error);
+    if (!Number.isSafeInteger(replaceDocumentId) || replaceDocumentId <= 0) throw new Error('Documento corrente inválido.');
+  } else if (declaration !== undefined) throw new Error('A declaração só é permitida ao substituir o contrato assinado.');
   const form = new FormData();
   form.append('documentType', documentType);
   if (replaceDocumentId) form.append('replaceDocumentId', String(replaceDocumentId));
+  if (declaration) {
+    form.append('replacementReason', declaration.replacementReason.trim());
+    if (declaration.equivalenceDeclared === true) form.append('equivalenceDeclared', 'true');
+    else form.append('contractContentUnchanged', 'true');
+  }
   form.append('file', file);
-  await apiClient.post(`/admin/contracts/${contractId}/signed-docs`, form);
+  if (declaration) {
+    const config: ExtendedAxiosConfig = { skipErrorToast: true };
+    await apiClient.post(`/admin/contracts/${contractId}/signed-docs`, form, config);
+  } else await apiClient.post(`/admin/contracts/${contractId}/signed-docs`, form);
 }
 
 export async function uploadFinalizedContractDocument(

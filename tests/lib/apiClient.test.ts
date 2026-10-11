@@ -158,4 +158,27 @@ describe('api client', () => {
       }),
     );
   });
+  it.each([true, false])('keeps per-request toast policy in the real GET interceptor: quiet=%s', async (quiet) => {
+    const { api, apiClient } = await import('../../src/lib/apiClient');
+    apiClient.defaults.adapter = async (config) => {
+      throw { message: 'Conflict', config, response: { status: 409, data: { error: 'O PDF corrente mudou.' }, headers: {} } };
+    };
+    await expect(api.get('/contracts/contract-1', { skipErrorToast: quiet })).rejects.toMatchObject({ response: { status: 409 } });
+    expect(toastErrorMock).toHaveBeenCalledTimes(quiet ? 0 : 1);
+  });
+  it('lets the signed replacement form own its error toast through the real POST interceptor', async () => {
+    const { apiClient } = await import('../../src/lib/apiClient');
+    const { uploadSignedDocument } = await import('../../src/lib/components/contracts/contractsActions');
+    let seenConfig: Record<string, unknown> | null = null;
+    apiClient.defaults.adapter = async (config) => {
+      seenConfig = config;
+      throw { message: 'Conflict', config, response: { status: 409, data: { error: 'O PDF corrente mudou.' }, headers: {} } };
+    };
+    await expect(uploadSignedDocument('contract-1', 'contrato_assinado',
+      new File(['%PDF-test'], 'signed.pdf', { type: 'application/pdf' }), 42,
+      { replacementReason: 'Nova digitalização', contractContentUnchanged: true })).rejects.toMatchObject({ response: { status: 409 } });
+    expect(seenConfig).toMatchObject({ skipErrorToast: true });
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
 });
