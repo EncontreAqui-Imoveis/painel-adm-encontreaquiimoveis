@@ -571,6 +571,10 @@ describe('ContractsModule signature presentation', () => {
     expect(multipart.get('contractContentUnchanged')).toBe(equivalent ? null : 'true');
     await panel.findByText('PDF corrente: versao-32.pdf');
     expect(panel.getAllByText(equivalent ? 'Preservada por equivalência' : 'Pendente')).toHaveLength(2);
+    const requirements = within(screen.getByRole('region', { name: 'Requisitos de assinatura para finalização' }));
+    expect(requirements.getByText('PDF corrente: versão #32.')).toBeInTheDocument();
+    expect(requirements.getAllByText(equivalent ? /preservada por equivalência/ : /confirmação pendente/)).toHaveLength(2);
+    expect(requirements.getByText(equivalent ? /Requisitos de assinatura atendidos/ : /finalização fica bloqueada/)).toBeInTheDocument();
     expect(panel.queryByText(/PDF corrente visualizado/)).not.toBeInTheDocument();
     const list = within(screen.getByText('Documentos para conferência').closest('div')!);
     expect(list.getByText('Fora da versão corrente')).toBeInTheDocument();
@@ -773,7 +777,7 @@ describe('ContractsModule signature presentation', () => {
       expect(button).toBeDisabled(); await fireEvent.click(button);
       expect(screen.queryByRole('region', { name: 'Nova revisão da minuta' })).not.toBeInTheDocument();
       request.reject(new Error('details unavailable'));
-      await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0));
       expect(button).toBeDisabled(); noMutations();
     });
     it('requires a new PDF and explicit confirmation in the handler too', async () => {
@@ -847,7 +851,7 @@ describe('ContractsModule signature presentation', () => {
         throw { response: { status: 409, data: { error: 'Estado desatualizado.' } } };
       });
       await fireEvent.click(form.getByRole('button', { name: 'Publicar nova revisão' }));
-      await screen.findByRole('alert');
+      await screen.findAllByRole('alert');
       expect(screen.getByRole('button', { name: 'Publicar nova revisão da minuta' })).toBeDisabled();
       expect(toastError).toHaveBeenCalledExactlyOnceWith('Estado desatualizado.');
     });
@@ -970,6 +974,190 @@ describe('ContractsModule signature presentation', () => {
       await screen.findByText('PDF corrente: versao-31.pdf');
       const form = await newForm(); expect(form.getByRole('checkbox')).not.toBeChecked();
       expect(form.getByRole('button', { name: 'Publicar nova revisão' })).toBeDisabled();
+    });
+  });
+
+  describe('signature requirements at finalization', () => {
+    const completed = (seller: 'CONFIRMED' | 'PRESERVED' = 'CONFIRMED', buyer: 'CONFIRMED' | 'PRESERVED' = 'CONFIRMED') => {
+      const item = confirmable();
+      item.signatures!.seller = { ...fixture().signatures!.seller, status: seller };
+      item.signatures!.buyer = { ...fixture().signatures!.seller, status: buyer, eventId: 92 };
+      return item;
+    };
+    const readiness = () => within(screen.getByRole('region', { name: 'Requisitos de assinatura para finalização' }));
+    const finalizeButton = () => within(screen.getByRole('dialog')).getByRole('button', { name: 'Finalizar Venda/Locação' }) as HTMLButtonElement;
+    const saveFinancialForm = async () => {
+      await fireEvent.click(screen.getByRole('button', { name: 'Editar comissões' }));
+      await fireEvent.input(screen.getByLabelText(/base da comissão/), { target: { value: '1000' } });
+      await fireEvent.input(screen.getByLabelText('Comissão Captador'), { target: { value: '50' } });
+      await fireEvent.input(screen.getByLabelText('Comissão do vendedor'), { target: { value: '30' } });
+      await fireEvent.input(screen.getByLabelText('Taxa Encontre Aqui'), { target: { value: '20' } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Salvar edição' }));
+    };
+    const refresh = async () => {
+      await fireEvent.click(readiness().getByRole('button', { name: 'Atualizar estado das assinaturas' }));
+    };
+    it.each(['none', 'seller', 'buyer'])('blocks with %s confirmed while preserving entered commissions', async (confirmed) => {
+      const item = confirmable();
+      if (confirmed === 'seller' || confirmed === 'buyer') item.signatures![confirmed] = fixture().signatures!.seller;
+      loadDetail = async () => detail(item);
+      await open(); await saveFinancialForm();
+      expect(finalizeButton()).toBeDisabled();
+      expect(readiness().getAllByText(/confirmação pendente/)).toHaveLength(confirmed === 'none' ? 2 : 1);
+      const values = [screen.getByLabelText(/base da comissão/), screen.getByLabelText('Comissão Captador'),
+        screen.getByLabelText('Comissão do vendedor'), screen.getByLabelText('Taxa Encontre Aqui')].map((input) => (input as HTMLInputElement).value);
+      // Deliberately bypass the visual guard; the parent must still reject the attempt.
+      finalizeButton().disabled = false; await fireEvent.click(finalizeButton());
+      expect(post).not.toHaveBeenCalled();
+      await refresh(); await readiness().findByText(/finalização fica bloqueada/);
+      expect([screen.getByLabelText(/base da comissão/), screen.getByLabelText('Comissão Captador'),
+        screen.getByLabelText('Comissão do vendedor'), screen.getByLabelText('Taxa Encontre Aqui')].map((input) => (input as HTMLInputElement).value)).toEqual(values);
+    });
+    it.each([['CONFIRMED', 'CONFIRMED'], ['PRESERVED', 'PRESERVED'], ['CONFIRMED', 'PRESERVED']] as const)(
+      'accepts %s/%s only after existing financial validation', async (seller, buyer) => {
+        loadDetail = async () => detail(completed(seller, buyer)); await open();
+        await readiness().findByText(/Requisitos de assinatura atendidos/);
+        expect(finalizeButton()).toBeDisabled();
+        expect(readiness().getByText(/demais validações/)).toBeInTheDocument();
+        await saveFinancialForm(); expect(finalizeButton()).toBeEnabled();
+        post.mockResolvedValue({}); await fireEvent.click(finalizeButton());
+        expect(post).toHaveBeenCalledExactlyOnceWith('/admin/contracts/contract-signatures-1/finalize', { commission_data: {
+          valorBaseComissao: 1000, comissaoCaptador: 500, comissaoVendedor: 300, taxaPlataforma: 200,
+        } }, { skipErrorToast: true });
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      });
+    it('does not let complete signatures bypass an invalid commission split', async () => {
+      loadDetail = async () => detail(completed()); await open(); await saveFinancialForm();
+      await fireEvent.click(screen.getByRole('button', { name: 'Editar comissões' }));
+      await fireEvent.input(screen.getByLabelText('Taxa Encontre Aqui'), { target: { value: '99' } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Salvar edição' }));
+      expect(finalizeButton()).toBeDisabled(); expect(post).not.toHaveBeenCalled();
+      expect(toastError).toHaveBeenCalledWith(expect.stringContaining('exatamente 100%'));
+    });
+    it('blocks a legacy contract without current PDF despite listed historical confirmations', async () => {
+      const item = completed(); item.signatures!.currentVersion = null; item.dealType = null;
+      item.propertyPurpose = 'Aluguel'; loadDetail = async () => detail(item);
+      await open(); await saveFinancialForm();
+      expect(readiness().getByText(/Falta o PDF assinado corrente/)).toBeInTheDocument();
+      expect(readiness().getByText('Parte seller: confirmação pendente.')).toBeInTheDocument();
+      expect(readiness().queryByText(/confirmada diretamente/)).not.toBeInTheDocument();
+      expect(finalizeButton()).toBeDisabled(); expect(post).not.toHaveBeenCalled();
+    });
+    it('treats absent legacy signatures as unavailable rather than approved or proven pending', async () => {
+      const item = completed(); delete item.signatures; loadDetail = async () => detail(item);
+      await open(); await saveFinancialForm();
+      expect(readiness().getByRole('alert')).toHaveTextContent('indisponível');
+      expect(readiness().queryByText(/confirmação pendente/)).not.toBeInTheDocument();
+      expect(finalizeButton()).toBeDisabled();
+      loadDetail = async () => detail(completed()); await refresh();
+      await readiness().findByText(/Requisitos de assinatura atendidos/);
+      expect(finalizeButton()).toBeEnabled();
+    });
+    it('never authorizes finalization from complete cached list data before the initial details query', async () => {
+      listing = completed(); const request = deferred<Detail>(); loadDetail = () => request.promise;
+      await open(); await saveFinancialForm();
+      expect(readiness().getByRole('status')).toHaveTextContent('Consultando');
+      expect(finalizeButton()).toBeDisabled();
+      request.resolve(detail(completed()));
+      await readiness().findByText(/Requisitos de assinatura atendidos/); expect(finalizeButton()).toBeEnabled();
+    });
+    it('blocks while refreshing complete data and after a failed detail request', async () => {
+      loadDetail = async () => detail(completed()); await open(); await saveFinancialForm();
+      const request = deferred<Detail>(); loadDetail = () => request.promise; await refresh();
+      expect(readiness().getByRole('status')).toHaveTextContent('Consultando'); expect(finalizeButton()).toBeDisabled();
+      finalizeButton().disabled = false; await fireEvent.click(finalizeButton()); expect(post).not.toHaveBeenCalled();
+      finalizeButton().disabled = true;
+      request.reject(new Error('failed query')); await readiness().findByRole('alert');
+      expect(finalizeButton()).toBeDisabled();
+    });
+    it('updates after a non-equivalent PDF replacement, retaining financial values', async () => {
+      const initial = completed(); loadDetail = async () => detail(initial); await open(); await saveFinancialForm();
+      expect(finalizeButton()).toBeEnabled();
+      const next = fixture(32); next.signatures!.seller = pending();
+      loadDetail = async () => detail(next); await refresh();
+      await readiness().findByText('PDF corrente: versão #32.');
+      expect(readiness().getAllByText(/confirmação pendente/)).toHaveLength(2); expect(finalizeButton()).toBeDisabled();
+      expect((screen.getByLabelText(/base da comissão/) as HTMLInputElement).value).toBe('1000');
+    });
+    it('updates readiness after a real individual confirmation handler reconciles the API', async () => {
+      const initial = completed(); initial.signatures!.buyer = pending();
+      loadDetail = async () => detail(initial); const signatures = within(await open()); await saveFinancialForm();
+      expect(finalizeButton()).toBeDisabled(); await viewCurrent(signatures);
+      post.mockImplementation(async () => { loadDetail = async () => detail(completed()); return { idempotent: false, signatures: completed().signatures }; });
+      await fireEvent.click(signatures.getByRole('checkbox', { name: /Locatário/ }));
+      await fireEvent.click(signatures.getByRole('button', { name: 'Confirmar assinatura (Locatário)' }));
+      await readiness().findByText(/Requisitos de assinatura atendidos/); expect(finalizeButton()).toBeEnabled();
+    });
+    it.each(['CONTRACT_SIGNATURE_CONFIRMATIONS_REQUIRED', 'CONTRACT_CURRENT_SIGNED_VERSION_REQUIRED',
+      'CONTRACT_BILATERAL_CONSENT_REQUIRED', 'CONTRACT_CURRENT_SIGNED_VERSION_INCOMPATIBLE', 'CONTRACT_APPROVED_REVISION_REQUIRED'])(
+      'reconciles real error %s once and retains the financial form', async (code) => {
+        loadDetail = async () => detail(completed()); await open(); await saveFinancialForm();
+        post.mockImplementation(async () => {
+          const next = fixture(32); next.signatures!.seller = pending(); loadDetail = async () => detail(next);
+          throw { response: { status: 409, data: { code, error: 'Revisão incompatível.', pendingSides: ['buyer'] } } };
+        });
+        await fireEvent.click(finalizeButton()); await readiness().findByText('PDF corrente: versão #32.');
+        expect(finalizeButton()).toBeDisabled(); expect(post).toHaveBeenCalledOnce(); expect(toastError).toHaveBeenCalledOnce();
+        if (code === 'CONTRACT_SIGNATURE_CONFIRMATIONS_REQUIRED') expect(toastError).toHaveBeenCalledWith('Confirme as assinaturas pendentes: Locatário.');
+        expect(get).toHaveBeenCalledWith('/contracts/contract-signatures-1', { skipErrorToast: true });
+        expect((screen.getByLabelText(/base da comissão/) as HTMLInputElement).value).toBe('1000');
+      });
+    it('reconciles a possible finalization after losing the HTTP response without automatic retry', async () => {
+      loadDetail = async () => detail(completed()); await open(); await saveFinancialForm();
+      post.mockImplementation(async () => { const item = completed(); item.status = 'FINALIZED'; loadDetail = async () => detail(item); throw new Error('lost response'); });
+      await fireEvent.click(finalizeButton());
+      await screen.findByRole('heading', { name: 'Editar Contrato Finalizado' });
+      expect(post).toHaveBeenCalledOnce(); expect(toastError).toHaveBeenCalledOnce();
+    });
+    it('prevents duplicate sends and ignores a late success after changing contract context', async () => {
+      loadDetail = async () => detail(completed()); await open(); await saveFinancialForm();
+      const request = deferred<unknown>(); post.mockReturnValue(request.promise); const button = finalizeButton();
+      await fireEvent.click(button); button.disabled = false; await fireEvent.click(button); expect(post).toHaveBeenCalledOnce();
+      await fireEvent.click(screen.getByRole('button', { name: 'Conferência da Minuta' }));
+      await fireEvent.click(screen.getByRole('button', { name: 'Aguardando Assinaturas' }));
+      await fireEvent.click((await screen.findAllByRole('button', { name: 'Finalizar Venda/Locação' }))[0]);
+      await readiness().findByText(/Requisitos de assinatura atendidos/);
+      request.resolve({}); await request.promise; await tick();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(toastSuccess).not.toHaveBeenCalledWith('Contrato finalizado com sucesso.');
+    });
+    it('rejects a late reconciliation snapshot after a newer query reveals another PDF', async () => {
+      loadDetail = async () => detail(completed()); await open(); await saveFinancialForm();
+      const old = deferred<Detail>();
+      post.mockImplementation(async () => { loadDetail = () => old.promise; throw { response: { status: 409, data: { error: 'Versão desatualizada.' } } }; });
+      await fireEvent.click(finalizeButton());
+      await waitFor(() => expect(get.mock.calls.filter(([url]) => url === '/contracts/contract-signatures-1')).toHaveLength(2));
+      const next = fixture(32); next.signatures!.seller = pending(); loadDetail = async () => detail(next);
+      await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Atualizar' }));
+      await readiness().findByText('PDF corrente: versão #32.');
+      old.resolve(detail(completed())); await old.promise; await tick();
+      expect(readiness().getByText('PDF corrente: versão #32.')).toBeInTheDocument();
+      expect(finalizeButton()).toBeDisabled(); expect(post).toHaveBeenCalledOnce();
+    });
+    it('leaves the finalization view when a manual query reveals a newly published draft', async () => {
+      loadDetail = async () => detail(completed()); await open(); await saveFinancialForm();
+      const next = completed(); next.status = 'AWAITING_MINUTE_REVIEW'; next.signatures!.currentVersion = null;
+      next.draftReview = { revisionId: 12, documentId: 50, buyerDecision: null, sellerDecision: null };
+      loadDetail = async () => detail(next); await refresh();
+      await screen.findByRole('heading', { name: 'Revisão da Minuta' });
+      expect(screen.getByText(/PDF assinado histórico/)).toBeInTheDocument();
+      expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Finalizar Venda/Locação' })).not.toBeInTheDocument();
+      expect(post).not.toHaveBeenCalled();
+    });
+    it('shows the new review and historical PDF after a finalization conflict reveals new draft publication', async () => {
+      loadDetail = async () => detail(completed()); await open(); await saveFinancialForm();
+      post.mockImplementation(async () => {
+        const next = completed(); next.status = 'AWAITING_MINUTE_REVIEW'; next.signatures!.currentVersion = null;
+        next.draftReview = { revisionId: 12, documentId: 50, buyerDecision: null, sellerDecision: null };
+        loadDetail = async () => detail(next);
+        throw { response: { status: 409, data: { code: 'CONTRACT_APPROVED_REVISION_REQUIRED', error: 'A minuta precisa de nova conferência.' } } };
+      });
+      await fireEvent.click(finalizeButton());
+      await screen.findByRole('heading', { name: 'Revisão da Minuta' });
+      expect(screen.getByText('Revisão ativa #12')).toBeInTheDocument();
+      expect(screen.getByText(/PDF assinado histórico/)).toBeInTheDocument();
+      expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Finalizar Venda/Locação' })).not.toBeInTheDocument();
+      expect(post).toHaveBeenCalledOnce();
     });
   });
 

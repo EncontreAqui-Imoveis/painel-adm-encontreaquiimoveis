@@ -32,6 +32,8 @@
   import ContractFinalizedEditorPanel from '$lib/components/contracts/ContractFinalizedEditorPanel.svelte';
   import ContractSignedReplacementPanel from '$lib/components/contracts/ContractSignedReplacementPanel.svelte';
   import { currentSignedReplacementContext, matchesSignedReplacementContext, signedReplacementError, type SignedReplacementDeclaration, type SignedReplacementContext } from '$lib/components/contracts/contractSignedReplacement';
+  import ContractFinalizationSignatures from '$lib/components/contracts/ContractFinalizationSignatures.svelte';
+  import { signatureFinalizationState, finalizationErrorMessage } from '$lib/components/contracts/contractSignatureFinalization';
   import ContractSignatureStatusPanel from '$lib/components/contracts/ContractSignatureStatusPanel.svelte';
   import { matchesSignatureViewingContext, type ContractSignatureViewingEvidence } from '$lib/components/contracts/contractSignatureViewing';
   import {
@@ -188,7 +190,7 @@
   let newDraftRevisionContext: string | null = null;
   let newDraftRevisionConfirmed = false;
   let publishingNewDraftRevision = false;
-  let draftPublicationModalGeneration = 0;
+  let contractModalGeneration = 0;
   let draftUploadInputEl: HTMLInputElement | null = null;
   let uploadingDraft = false;
   let draftChangeRequestToKeep: ContractDraftChangeRequest | null = null;
@@ -289,6 +291,7 @@
   $: canCurrentAdminDelete = $adminSession?.capabilities?.canDeleteDocuments ?? false;
   $: canCurrentAdminReplace = $adminSession?.capabilities?.canReplaceDocuments ?? false;
   $: canCurrentAdminCreateDocuments = $adminSession?.capabilities?.canCreateDocuments ?? false;
+  $: finalizationSignatures = signatureFinalizationState(selected, signatureDetailsState);
   $: canCurrentAdminConfirmSignatures = $adminSession?.role === 'admin';
   $: canCurrentAdminPublishDraft = ($adminSession?.role === 'admin' || $adminSession?.role === 'operational_assistant')
     && ($adminSession?.capabilities?.canManageContractWorkflow ?? false);
@@ -381,14 +384,14 @@
     const contractId = selected?.id;
     const context = newDraftRevisionContext;
     const file = selectedDraftFile;
-    const modalGeneration = draftPublicationModalGeneration;
+    const modalGeneration = contractModalGeneration;
     if (!contractId || !context || context !== draftPublicationContext(selected)
       || newDraftPublicationDisabled || publishingNewDraftRevision || newDraftRevisionConfirmed !== true) return;
     const fileError = newDraftPdfError(file);
     if (fileError) { toast.error(fileError); return; }
     publishingNewDraftRevision = true;
     invalidateSignatureViewing();
-    const isCurrent = () => showModal && modalGeneration === draftPublicationModalGeneration
+    const isCurrent = () => showModal && modalGeneration === contractModalGeneration
       && selected?.id === contractId && context === draftPublicationContext(selected);
     try {
       await submitContractDraft(contractId, file, false, { skipErrorToast: true });
@@ -404,10 +407,10 @@
           cancelNewDraftRevision();
           invalidateSignatureViewing();
         }
-        const reconciliationModalGeneration = draftPublicationModalGeneration;
+        const reconciliationModalGeneration = contractModalGeneration;
         try {
           await reloadSelectedContract(contractId, true);
-          if (showModal && selected?.id === contractId && reconciliationModalGeneration === draftPublicationModalGeneration) {
+          if (showModal && selected?.id === contractId && reconciliationModalGeneration === contractModalGeneration) {
             modalMode = resolveModalMode(selected);
             syncSelectedContractInList(selected);
           }
@@ -1227,8 +1230,11 @@
 
     isReloadingSelectedContract = true;
     try {
-      await reloadSelectedContract(selected.id);
-      if (selected) syncSelectedContractInList(selected);
+      await reloadSelectedContract(selected.id, true);
+      if (selected) {
+        if (modalMode === 'finalize') modalMode = resolveModalMode(selected);
+        syncSelectedContractInList(selected);
+      }
     } catch (error) {
       console.error('Erro ao atualizar contrato selecionado:', error);
       toast.error('Não foi possível atualizar o contrato.');
@@ -1523,7 +1529,7 @@
   }
 
   function openModal(item: ContractItem) {
-    ++draftPublicationModalGeneration;
+    ++contractModalGeneration;
     if (typeof document !== 'undefined' && !showModal) {
       previousModalBodyOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
@@ -1546,7 +1552,6 @@
     downloadingAllDocuments = false;
     evaluatingSide = null;
     evaluatingSideAction = null;
-    finalizingContract = false;
     savingPartyData = false;
     isEditingData = false;
     isDataSectionExpanded = false;
@@ -1581,7 +1586,7 @@
       return;
     }
     showModal = false;
-    ++draftPublicationModalGeneration;
+    ++contractModalGeneration;
     invalidateSignatureViewing();
     ++signatureDetailsRequestId;
     signatureDetailsState = 'loading';
@@ -2219,7 +2224,14 @@
   }
 
   async function submitFinalize() {
-    if (!selected) return;
+    const contract = selected;
+    if (!contract || finalizingContract || uploadingSignedDoc || confirmingSignatureSide || movingToPreviousStage
+      || uploadingDraft || publishingNewDraftRevision) return;
+    if (signatureFinalizationState(contract, signatureDetailsState).status !== 'complete') return;
+    const modalGeneration = contractModalGeneration;
+    const context = draftPublicationContext(contract);
+    const isCurrent = () => showModal && selected?.id === contract.id && contractModalGeneration === modalGeneration
+      && draftPublicationContext(selected) === context;
     if (!commissionEditionSaved) {
       toast.error('Edite e salve as comissões antes de finalizar o contrato.');
       return;
@@ -2247,18 +2259,34 @@
 
     finalizingContract = true;
     try {
-      await finalizeContract(selected.id, {
+      await finalizeContract(contract.id, {
         valorBaseComissao,
         comissaoCaptador,
         comissaoVendedor,
         taxaPlataforma,
-      });
-      toast.success('Contrato finalizado com sucesso.');
-      closeModal(true);
+      }, { skipErrorToast: true });
+      if (isCurrent()) {
+        toast.success('Contrato finalizado com sucesso.');
+        closeModal(true);
+      } else if (showModal && selected?.id === contract.id) {
+        await reloadSelectedContract(contract.id, true);
+        if (selected?.id === contract.id) modalMode = resolveModalMode(selected);
+      }
       refresh();
     } catch (error) {
       console.error('Erro ao finalizar contrato:', error);
-      toast.error(resolveApiErrorMessage(error, 'Não foi possível finalizar o contrato.'));
+      if (isCurrent()) toast.error(finalizationErrorMessage(error, contract));
+      if (showModal && selected?.id === contract.id) {
+        try {
+          await reloadSelectedContract(contract.id, true);
+          if (showModal && selected?.id === contract.id) {
+            modalMode = resolveModalMode(selected);
+            syncSelectedContractInList(selected);
+          }
+        } catch (reloadError) {
+          console.error('Erro ao reconciliar detalhes após finalização:', reloadError);
+        }
+      }
     } finally {
       finalizingContract = false;
     }
@@ -3702,6 +3730,9 @@
             {/if}
           </div>
 
+          <ContractFinalizationSignatures contract={selected} state={finalizationSignatures}
+            refreshing={isReloadingSelectedContract || signatureDetailsState === 'loading' || finalizingContract}
+            onRefresh={() => void refreshSelectedContract()} />
           <div class="flex justify-end gap-2">
             <Button
               variant="outline"
@@ -3723,7 +3754,8 @@
             <Button
               className="!bg-emerald-600 !text-white hover:!bg-emerald-700"
               on:click={submitFinalize}
-              disabled={!commissionEditionSaved || finalizingContract || uploadingSignedDoc || movingToPreviousStage}
+              disabled={finalizationSignatures.status !== 'complete' || !commissionEditionSaved || finalizingContract
+                || uploadingSignedDoc || confirmingSignatureSide !== null || movingToPreviousStage}
             >
               {#if finalizingContract}
                 <Loader2 class="mr-2 h-4 w-4 animate-spin" />

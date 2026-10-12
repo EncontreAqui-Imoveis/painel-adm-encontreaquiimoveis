@@ -72,6 +72,25 @@ vi.mock('pdfjs-dist/build/pdf.mjs', () => ({
 
 import ContractsModule from '../../src/lib/components/ContractsModule.svelte';
 
+// Financial regression tests now load effective signatures through the real detail contract.
+function loadConfirmedSignatureDetails() {
+  const previous = apiGetMock.getMockImplementation()!;
+  apiGetMock.mockImplementation(async (url: string) => {
+    if (url.startsWith('/contracts/')) {
+      const listing = await previous('/admin/contracts?status=AWAITING_SIGNATURES');
+      const item = listing.data[0];
+      const signature = { status: 'CONFIRMED', eventId: 1, confirmedByAdminId: 1,
+        confirmedAt: '2026-10-11T12:00:00Z', sourceEventId: null, originalEventId: 1,
+        originalSignedVersionId: 31, preservation: null };
+      return { contract: { ...item, signatures: { currentVersion: { id: 31,
+        documentId: item.documents?.find((doc: { documentType: string }) => doc.documentType === 'contrato_assinado')?.id ?? 41,
+        draftRevisionId: 11, uploadedByAdminId: 1, uploadedAt: '2026-10-11T12:00:00Z',
+        previousVersionId: null, replacementReason: null, equivalence: null }, seller: signature, buyer: signature } }, documents: item.documents };
+    }
+    return previous(url);
+  });
+}
+
 describe('ContractsModule', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -2461,6 +2480,7 @@ ${'x'.repeat(4979)}`;
     });
     apiPostMock.mockResolvedValue({});
 
+    loadConfirmedSignatureDetails();
     render(ContractsModule);
 
     const signaturesTab = await screen.findByRole('button', {
@@ -2507,7 +2527,7 @@ ${'x'.repeat(4979)}`;
           comissaoVendedor: 500,
           taxaPlataforma: 234.56,
         },
-      });
+      }, { skipErrorToast: true });
     });
   });
 
@@ -2611,6 +2631,7 @@ ${'x'.repeat(4979)}`;
     });
     apiPostMock.mockResolvedValue({});
 
+    loadConfirmedSignatureDetails();
     render(ContractsModule);
 
     const signaturesTab = await screen.findByRole('button', {
@@ -2689,6 +2710,7 @@ ${'x'.repeat(4979)}`;
     });
     apiPostMock.mockResolvedValue({});
 
+    loadConfirmedSignatureDetails();
     render(ContractsModule);
 
     const signaturesTab = await screen.findByRole('button', {
@@ -2738,7 +2760,7 @@ ${'x'.repeat(4979)}`;
           comissaoVendedor: 250,
           taxaPlataforma: 250,
         },
-      });
+      }, { skipErrorToast: true });
     });
   });
 
@@ -2783,6 +2805,7 @@ ${'x'.repeat(4979)}`;
     });
     apiPostMock.mockResolvedValue({});
 
+    loadConfirmedSignatureDetails();
     render(ContractsModule);
 
     const signaturesTab = await screen.findByRole('button', {
@@ -2828,7 +2851,7 @@ ${'x'.repeat(4979)}`;
           comissaoVendedor: 250,
           taxaPlataforma: 250,
         },
-      });
+      }, { skipErrorToast: true });
     });
   });
 
@@ -2881,6 +2904,7 @@ ${'x'.repeat(4979)}`;
       requestId: 'req-finalize-123',
     });
 
+    loadConfirmedSignatureDetails();
     render(ContractsModule);
 
     const signaturesTab = await screen.findByRole('button', {

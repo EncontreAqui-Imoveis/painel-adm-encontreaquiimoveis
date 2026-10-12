@@ -147,11 +147,12 @@ export async function keepCurrentContractDraft(
 
 export async function finalizeContract(
   contractId: string,
-  commissionData: Record<string, unknown>
+  commissionData: Record<string, unknown>,
+  options?: Pick<ExtendedAxiosConfig, 'skipErrorToast'>
 ): Promise<void> {
-  await api.post(`/admin/contracts/${contractId}/finalize`, {
-    commission_data: commissionData,
-  });
+  const body = { commission_data: commissionData };
+  if (options) await api.post(`/admin/contracts/${contractId}/finalize`, body, options);
+  else await api.post(`/admin/contracts/${contractId}/finalize`, body);
 }
 
 export async function deleteFinalizedContractById(contractId: string): Promise<void> {

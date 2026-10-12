@@ -7,7 +7,7 @@ vi.mock('$lib/apiClient', () => ({
   apiClient: { post, get: vi.fn() },
 }));
 
-import { confirmContractSignature, submitContractDraft, uploadMatrixDocument, uploadSignedDocument } from '../../src/lib/components/contracts/contractsActions';
+import { confirmContractSignature, finalizeContract, submitContractDraft, uploadMatrixDocument, uploadSignedDocument } from '../../src/lib/components/contracts/contractsActions';
 
 describe('uploadMatrixDocument', () => {
   it('sends replaceDocumentId only for an explicit replacement', async () => {
@@ -121,5 +121,18 @@ describe('draft publication multipart', () => {
     expect(post).toHaveBeenCalledExactlyOnceWith('/admin/contracts/contract-1/draft', expect.any(FormData));
     const form = post.mock.calls[0][1] as FormData;
     expect([...form.entries()]).toEqual([['reuseCurrentDraft', 'true']]);
+  });
+});
+
+
+describe('finalization request', () => {
+  it('keeps commission_data unchanged and makes toast suppression optional', async () => {
+    apiPost.mockClear();
+    const data = { valorBaseComissao: 1000, comissaoCaptador: 500, comissaoVendedor: 300, taxaPlataforma: 200 };
+    await finalizeContract('contract-1', data);
+    expect(apiPost).toHaveBeenLastCalledWith('/admin/contracts/contract-1/finalize', { commission_data: data });
+    await finalizeContract('contract-1', data, { skipErrorToast: true });
+    expect(apiPost).toHaveBeenLastCalledWith('/admin/contracts/contract-1/finalize', { commission_data: data }, { skipErrorToast: true });
+    expect(data).toEqual({ valorBaseComissao: 1000, comissaoCaptador: 500, comissaoVendedor: 300, taxaPlataforma: 200 });
   });
 });
