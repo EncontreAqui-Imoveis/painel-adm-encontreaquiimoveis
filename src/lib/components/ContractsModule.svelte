@@ -204,6 +204,7 @@
   let uploadingSignedDoc = false;
   let signedDocType = 'contrato_assinado';
   let selectedSignedFile: File | null = null;
+  let signedUploadContext: Pick<SignedReplacementContext, 'contractId' | 'draftRevisionId'> | null = null;
   let selectedSignedDocSide: 'seller' | 'buyer' = 'seller';
   let signedUploadInputEl: HTMLInputElement | null = null;
   let pendingReplacementDocumentId: number | null = null;
@@ -362,6 +363,13 @@
 
   $: if (signedReplacementContext && !matchesSignedReplacementContext(selected, signedReplacementContext)) {
     cancelSignedDocumentReplacement();
+  }
+  $: if (signedUploadContext && (selected?.id !== signedUploadContext.contractId
+    || selected?.status !== 'AWAITING_SIGNATURES' || signedDocType !== 'contrato_assinado'
+    || selected?.draftReview?.revisionId !== signedUploadContext.draftRevisionId)) {
+    signedUploadContext = null;
+    selectedSignedFile = null;
+    if (signedUploadInputEl) signedUploadInputEl.value = '';
   }
   $: if (newDraftRevisionContext && newDraftRevisionContext !== draftPublicationContext(selected)) {
     cancelNewDraftRevision();
@@ -1207,6 +1215,7 @@
         ...payload.contract,
         // A missing DTO on refresh must not retain previously displayed confirmations.
         signatures: payload.contract.signatures ?? null,
+        draftReview: payload.contract.draftReview ?? null,
         documents: Array.isArray(payload.documents)
           ? (payload.documents as ContractDocument[])
           : selected.documents ?? [],
@@ -1540,6 +1549,7 @@
     showModal = true;
     selectedDraftFile = null;
     selectedSignedFile = null;
+    signedUploadContext = null;
     signedDocType = 'contrato_assinado';
     selectedSignedDocSide = 'seller';
     documentRejections = [];
@@ -1593,6 +1603,7 @@
     selected = null;
     selectedDraftFile = null;
     selectedSignedFile = null;
+    signedUploadContext = null;
     selectedSignedDocSide = 'seller';
     isEditingData = false;
     isDataSectionExpanded = false;
@@ -1770,6 +1781,16 @@
   }
 
   function triggerSignedPicker() {
+    if (signedDocType === 'contrato_assinado' && !signedReplacementContext) {
+      const revisionId = selected?.draftReview?.revisionId;
+      if (!selected || selected.status !== 'AWAITING_SIGNATURES' || signatureDetailsState !== 'ready'
+        || !canCurrentAdminReplace || !Number.isSafeInteger(revisionId) || !revisionId || revisionId <= 0) {
+        toast.error('A revisão da minuta está indisponível. Atualize os detalhes antes de selecionar o PDF assinado.');
+        return;
+      }
+      // Bind the native file picker to the revision actually displayed, before it opens.
+      signedUploadContext = { contractId: selected.id, draftRevisionId: revisionId };
+    }
     if (signedUploadInputEl) {
       signedUploadInputEl.value = '';
       signedUploadInputEl.click();
@@ -1778,6 +1799,14 @@
 
   function handleSignedFileChange(event: Event) {
     const target = event.target as HTMLInputElement;
+    if (signedDocType === 'contrato_assinado' && !signedReplacementContext
+      && (!signedUploadContext || signedUploadContext.contractId !== selected?.id
+        || signedUploadContext.draftRevisionId !== selected?.draftReview?.revisionId)) {
+      selectedSignedFile = null;
+      target.value = '';
+      toast.error('A revisão da minuta mudou ou está indisponível. Atualize e selecione novamente o PDF assinado.');
+      return;
+    }
     selectedSignedFile = target.files?.[0] ?? null;
   }
 
@@ -1978,6 +2007,7 @@
 
   function cancelSignedDocumentReplacement() {
     signedReplacementContext = null;
+    signedUploadContext = null;
     if (signedUploadInputEl) signedUploadInputEl.value = '';
     pendingReplacementDocumentId = null;
     selectedSignedFile = null;
@@ -2016,31 +2046,56 @@
   }
 
   async function uploadSignedDocsByAdmin() {
-    if (!selected) return;
+    if (!selected || uploadingSignedDoc || !canCurrentAdminReplace || signatureDetailsState !== 'ready') return;
     if (!selectedSignedFile) {
       toast.error('Selecione um arquivo para enviar.');
       return;
     }
 
+    const contractId = selected.id;
+    const context = signedUploadContext;
+    const isSignedPdf = signedDocType === 'contrato_assinado';
+    if (isSignedPdf && (!context || context.contractId !== contractId
+      || context.draftRevisionId !== selected.draftReview?.revisionId)) {
+      toast.error('A revisão da minuta mudou ou está indisponível. Atualize e selecione novamente o PDF assinado.');
+      return;
+    }
     uploadingSignedDoc = true;
+    let uploaded = false;
     try {
       await uploadSignedDocument(
-        selected.id,
+        contractId,
         signedDocType,
         selectedSignedFile,
-        pendingReplacementDocumentId ?? undefined
+        pendingReplacementDocumentId ?? undefined,
+        undefined,
+        context?.draftRevisionId
       );
-      toast.success('Documento físico anexado com sucesso.');
-      pendingReplacementDocumentId = null;
-      await reloadSelectedContract(selected.id);
-      if (selected) {
-        syncSelectedContractInList(selected);
+      uploaded = true;
+      if (selected?.id === contractId && (!isSignedPdf || selected.draftReview?.revisionId === context?.draftRevisionId)) {
+        toast.success('Documento físico anexado com sucesso.');
       }
       // Mantém o operador na mesma etapa após o upload físico.
     } catch (error) {
       console.error('Erro ao anexar documento físico:', error);
-      toast.error('Não foi possível anexar o documento físico.');
+      if (selected?.id === contractId) {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        toast.error(status === 409
+          ? 'A revisão ou o documento corrente mudou. Atualize e confira os detalhes antes de selecionar novamente o PDF.'
+          : resolveApiErrorMessage(error, 'Não foi possível anexar o documento físico. Atualize para verificar o estado antes de tentar novamente.'));
+      }
     } finally {
+      if (selected?.id === contractId && (isSignedPdf || uploaded)) {
+        // A lost response can follow a committed upload. Reconcile without retrying or confirming signatures.
+        if (isSignedPdf) {
+          cancelSignedDocumentReplacement();
+          invalidateSignatureViewing();
+        } else pendingReplacementDocumentId = null;
+        try {
+          await reloadSelectedContract(contractId, true);
+          if (selected?.id === contractId) syncSelectedContractInList(selected);
+        } catch (error) { console.error('Erro ao atualizar detalhes após upload:', error); }
+      }
       uploadingSignedDoc = false;
     }
   }
@@ -2058,7 +2113,7 @@
     uploadingSignedDoc = true;
     let reconcile = false;
     try {
-      await uploadSignedDocument(contractId, 'contrato_assinado', file, context.documentId, declaration);
+      await uploadSignedDocument(contractId, 'contrato_assinado', file, context.documentId, declaration, context.draftRevisionId);
       reconcile = true;
       if (selected?.id === contractId) {
         toast.success('PDF substituído com histórico preservado.');
@@ -3448,6 +3503,15 @@
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
                   Anexe o documento assinado ou comprovantes físicos sem sair desta etapa.
                 </p>
+                {#if signedDocType === 'contrato_assinado'}
+                  <p class="mt-1 text-sm">
+                    {#if signatureDetailsState === 'ready' && Number.isSafeInteger(selected.draftReview?.revisionId) && (selected.draftReview?.revisionId ?? 0) > 0}
+                      Revisão da minuta: #{selected.draftReview?.revisionId}
+                    {:else}
+                      Revisão da minuta indisponível. Atualize os detalhes antes de enviar o PDF assinado.
+                    {/if}
+                  </p>
+                {/if}
               </div>
               <span class="text-xs text-gray-500 dark:text-gray-400">
                 Upload administrativo em Aguardando Assinaturas
@@ -3483,7 +3547,7 @@
                   type="button"
                   class="flex min-h-[42px] w-full items-center justify-between gap-3 rounded border border-dashed border-slate-300 bg-slate-50 px-3 text-left text-sm transition hover:border-emerald-500 hover:bg-emerald-50 dark:border-slate-700 dark:bg-slate-900/50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/20"
                   on:click={triggerSignedPicker}
-                  disabled={uploadingSignedDoc}
+                  disabled={uploadingSignedDoc || !canCurrentAdminReplace || signatureDetailsState !== 'ready'}
                 >
                   <span class="truncate font-medium text-slate-800 dark:text-slate-100">
                     {selectedSignedFile ? selectedSignedFile.name : 'Escolher arquivo'}
@@ -3535,7 +3599,8 @@
                   size="sm"
                   className="bg-green-600 text-white hover:bg-green-700"
                   on:click={uploadSignedDocsByAdmin}
-                  disabled={uploadingSignedDoc}
+                  disabled={uploadingSignedDoc || !canCurrentAdminReplace || signatureDetailsState !== 'ready'
+                    || (signedDocType === 'contrato_assinado' && !signedUploadContext)}
                 >
                   {#if uploadingSignedDoc}
                     <Loader2 class="mr-2 h-4 w-4 animate-spin" />

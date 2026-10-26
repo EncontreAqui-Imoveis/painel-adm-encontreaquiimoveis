@@ -176,7 +176,7 @@ describe('api client', () => {
     };
     await expect(uploadSignedDocument('contract-1', 'contrato_assinado',
       new File(['%PDF-test'], 'signed.pdf', { type: 'application/pdf' }), 42,
-      { replacementReason: 'Nova digitalização', contractContentUnchanged: true })).rejects.toMatchObject({ response: { status: 409 } });
+      { replacementReason: 'Nova digitalização', contractContentUnchanged: true }, 11)).rejects.toMatchObject({ response: { status: 409 } });
     expect(seenConfig).toMatchObject({ skipErrorToast: true });
     expect(toastErrorMock).not.toHaveBeenCalled();
   });

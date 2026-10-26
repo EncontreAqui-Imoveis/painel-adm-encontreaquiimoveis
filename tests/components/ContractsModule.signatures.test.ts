@@ -566,6 +566,7 @@ describe('ContractsModule signature presentation', () => {
     expect(clientPost).toHaveBeenCalledOnce();
     const multipart = clientPost.mock.calls[0][1] as FormData;
     expect(clientPost.mock.calls[0][0]).toBe('/admin/contracts/contract-signatures-1/signed-docs');
+    expect(multipart.get('draftRevisionId')).toBe('11');
     expect(multipart.get('replaceDocumentId')).toBe('41'); expect(multipart.get('replacementReason')).toBe('Nova digitalização');
     expect(multipart.get('equivalenceDeclared')).toBe(equivalent ? 'true' : null);
     expect(multipart.get('contractContentUnchanged')).toBe(equivalent ? null : 'true');

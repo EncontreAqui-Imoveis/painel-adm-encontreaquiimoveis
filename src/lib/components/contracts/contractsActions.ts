@@ -76,8 +76,12 @@ export async function uploadSignedDocument(
   documentType: string,
   file: File,
   replaceDocumentId?: number,
-  declaration?: SignedReplacementDeclaration
+  declaration?: SignedReplacementDeclaration,
+  draftRevisionId?: number
 ): Promise<void> {
+  if (documentType === 'contrato_assinado' && (!Number.isSafeInteger(draftRevisionId) || !draftRevisionId || draftRevisionId <= 0)) {
+    throw new Error('A revisão da minuta está indisponível. Atualize e selecione novamente o PDF assinado.');
+  }
   if (documentType === 'contrato_assinado' && replaceDocumentId !== undefined) {
     const error = signedReplacementError(file, declaration);
     if (error) throw new Error(error);
@@ -85,6 +89,7 @@ export async function uploadSignedDocument(
   } else if (declaration !== undefined) throw new Error('A declaração só é permitida ao substituir o contrato assinado.');
   const form = new FormData();
   form.append('documentType', documentType);
+  if (documentType === 'contrato_assinado') form.append('draftRevisionId', String(draftRevisionId));
   if (replaceDocumentId) form.append('replaceDocumentId', String(replaceDocumentId));
   if (declaration) {
     form.append('replacementReason', declaration.replacementReason.trim());
@@ -92,7 +97,7 @@ export async function uploadSignedDocument(
     else form.append('contractContentUnchanged', 'true');
   }
   form.append('file', file);
-  if (declaration) {
+  if (declaration || documentType === 'contrato_assinado') {
     const config: ExtendedAxiosConfig = { skipErrorToast: true };
     await apiClient.post(`/admin/contracts/${contractId}/signed-docs`, form, config);
   } else await apiClient.post(`/admin/contracts/${contractId}/signed-docs`, form);

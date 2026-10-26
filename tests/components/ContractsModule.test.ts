@@ -1316,6 +1316,7 @@ describe('ContractsModule', () => {
         capturingBrokerName: 'Captador',
         sellingBrokerName: 'Vendedor',
         documents: [],
+        draftReview: { revisionId: 51, documentId: 61 },
         createdAt: '2026-03-01T10:00:00.000Z',
         updatedAt: '2026-03-01T10:00:00.000Z',
       };
@@ -1347,6 +1348,7 @@ describe('ContractsModule', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Aguardando Assinaturas' }));
     await fireEvent.click(await screen.findByRole('button', { name: 'Finalizar Venda/Locação' }));
 
+    await screen.findByText('Revisão da minuta: #51');
     await fireEvent.click(screen.getByRole('button', { name: /Escolher arquivo/i }));
     expect(clickSpy).toHaveBeenCalled();
 
@@ -1369,12 +1371,14 @@ describe('ContractsModule', () => {
     await waitFor(() => {
       expect(apiClientPostMock).toHaveBeenCalledWith(
         '/admin/contracts/contract-test-sign-upload-1/signed-docs',
-        expect.any(FormData)
+        expect.any(FormData),
+        { skipErrorToast: true }
       );
     });
 
     const form = apiClientPostMock.mock.calls[0][1] as FormData;
     expect(form.get('documentType')).toBe('contrato_assinado');
+    expect(form.get('draftRevisionId')).toBe('51');
     expect(form.get('file')).toBeInstanceOf(File);
     expect((form.get('file') as File).name).toBe('contrato_assinado.pdf');
     clickSpy.mockRestore();

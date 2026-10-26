@@ -12,6 +12,7 @@ export type SignedReplacementDeclaration = { replacementReason: string } & (
 export function currentSignedReplacementContext(contract: ContractItem | null): SignedReplacementContext | null {
   const version = contract?.signatures?.currentVersion;
   if (!contract || contract.status !== 'AWAITING_SIGNATURES' || !version
+    || (contract.draftReview?.revisionId != null && contract.draftReview.revisionId !== version.draftRevisionId)
     || !contract.documents?.some((doc) => doc.id === version.documentId
       && doc.documentType === 'contrato_assinado' && doc.metadata?.contractId === contract.id)) return null;
   return { contractId: contract.id, signedVersionId: version.id, documentId: version.documentId,
