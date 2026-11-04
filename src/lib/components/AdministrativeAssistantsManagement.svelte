@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { KeyRound, Pencil, Plus, Power, RefreshCw, UserRoundCog } from 'lucide-svelte';
   import { api } from '$lib/apiClient';
   import { toast } from 'svelte-sonner';
+  import AdminPasswordConfirmDialog from './AdminPasswordConfirmDialog.svelte';
 
   type Assistant = {
     id: number;
@@ -20,6 +21,24 @@
   let editing: Assistant | null = null;
   let form = { name: '', email: '', password: '' };
   let resetPassword = '';
+  type PasswordAction = Readonly<{ id: number; name: string; email: string } & (
+    { kind: 'reset'; password: string } | { kind: 'deactivate' }
+  )>;
+  let passwordAction: PasswordAction | null = null;
+  let passwordDialogOpen = false;
+  let confirmationError: string | null = null;
+  let disposed = false;
+  $: editorLocked = isSaving || passwordDialogOpen;
+  $: if (!passwordDialogOpen) {
+    passwordAction = null;
+    confirmationError = null;
+  }
+
+  function cancelPasswordAction() {
+    passwordDialogOpen = false;
+    passwordAction = null;
+    confirmationError = null;
+  }
 
   async function load() {
     isLoading = true;
@@ -33,18 +52,27 @@
     }
   }
 
-  function startCreate() {
+  function clearEditor() {
     editing = null;
     form = { name: '', email: '', password: '' };
   }
 
+  function startCreate() {
+    if (isSaving) return;
+    cancelPasswordAction();
+    clearEditor();
+  }
+
   function startEdit(assistant: Assistant) {
+    if (isSaving) return;
+    cancelPasswordAction();
     editing = assistant;
     form = { name: assistant.name, email: assistant.email, password: '' };
     resetPassword = '';
   }
 
   async function save() {
+    if (editorLocked) return;
     isSaving = true;
     try {
       if (editing) {
@@ -54,7 +82,7 @@
         await api.post('/admin/assistants', form);
         toast.success('Auxiliar administrativo criado.');
       }
-      startCreate();
+      clearEditor();
       await load();
     } catch (error: any) {
       toast.error(error?.response?.data?.error ?? 'Não foi possível salvar o auxiliar.');
@@ -64,42 +92,69 @@
   }
 
   async function toggleActive(assistant: Assistant) {
-    const action = assistant.isActive ? 'desativar' : 'reativar';
-    if (!confirm(`Deseja ${action} a conta de ${assistant.name}?`)) return;
+    if (editorLocked) return;
+    if (assistant.isActive) {
+      passwordAction = Object.freeze({ kind: 'deactivate', id: assistant.id, name: assistant.name, email: assistant.email });
+      passwordDialogOpen = true;
+      return;
+    }
+    if (!confirm(`Deseja reativar a conta de ${assistant.name}?`)) return;
+    isSaving = true;
     try {
-      if (assistant.isActive) {
-        const password = prompt('Confirme sua senha administrativa para desativar esta conta.');
-        if (!password) return;
-        const reauth = await api.post<{ reauthToken: string }>('/admin/reauth', { password });
-        await api.delete(`/admin/assistants/${assistant.id}`, { headers: { 'x-admin-reauth': reauth.reauthToken } });
-      } else {
-        await api.post(`/admin/assistants/${assistant.id}/reactivate`, {});
-      }
-      toast.success(`Conta ${assistant.isActive ? 'desativada' : 'reativada'}.`);
+      await api.post(`/admin/assistants/${assistant.id}/reactivate`, {});
+      toast.success('Conta reativada.');
       await load();
     } catch (error: any) {
-      toast.error(error?.response?.data?.error ?? `Não foi possível ${action} a conta.`);
+      toast.error(error?.response?.data?.error ?? 'Não foi possível reativar a conta.');
+    } finally {
+      isSaving = false;
     }
   }
 
   async function saveResetPassword() {
-    if (!editing || !resetPassword) return;
-    const currentPassword = prompt('Confirme sua senha administrativa para redefinir esta senha.');
-    if (!currentPassword) return;
+    if (editorLocked || !editing || !resetPassword) return;
+    passwordAction = Object.freeze({ kind: 'reset', id: editing.id, name: editing.name, email: editing.email, password: resetPassword });
+    passwordDialogOpen = true;
+  }
+
+  async function confirmPasswordAction(event: CustomEvent<{ password: string }>) {
+    const action = passwordAction;
+    if (!action || isSaving || disposed) return;
     isSaving = true;
+    confirmationError = null;
     try {
-      const reauth = await api.post<{ reauthToken: string }>('/admin/reauth', { password: currentPassword });
-      await api.put(`/admin/assistants/${editing.id}/password`, { password: resetPassword }, { headers: { 'x-admin-reauth': reauth.reauthToken } });
-      resetPassword = '';
-      toast.success('Senha redefinida. As sessões anteriores foram encerradas.');
+      const reauth = await api.post<{ reauthToken: string }>('/admin/reauth', {
+        password: event.detail.password,
+        ...(action.kind === 'reset' ? { action: 'reset_assistant_password', targetAdminId: action.id } : {}),
+      }, { skipErrorToast: true });
+      if (disposed || passwordAction !== action || (action.kind === 'reset' && editing?.id !== action.id)) {
+        cancelPasswordAction();
+        return;
+      }
+      const options = { headers: { 'x-admin-reauth': reauth.reauthToken }, skipErrorToast: true };
+      if (action.kind === 'reset') {
+        await api.put(`/admin/assistants/${action.id}/password`, { password: action.password }, options);
+      } else {
+        await api.delete(`/admin/assistants/${action.id}`, options);
+      }
+      if (disposed) return;
+      cancelPasswordAction();
+      if (action.kind === 'reset') {
+        resetPassword = '';
+        toast.success('Senha redefinida. As sessões anteriores foram encerradas.');
+      } else {
+        toast.success('Conta desativada.');
+        await load();
+      }
     } catch (error: any) {
-      toast.error(error?.response?.data?.error ?? 'Não foi possível redefinir a senha.');
+      if (!disposed) confirmationError = error?.response?.data?.error ?? 'Não foi possível concluir a confirmação administrativa.';
     } finally {
       isSaving = false;
     }
   }
 
   onMount(load);
+  onDestroy(() => { disposed = true; passwordAction = null; });
 </script>
 
 <section class="mx-auto max-w-6xl space-y-6">
@@ -109,7 +164,7 @@
         <h2 class="flex items-center gap-2 text-xl font-semibold text-slate-900 dark:text-white"><UserRoundCog class="h-5 w-5 text-emerald-600" /> Auxiliares administrativos</h2>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Podem revisar, rejeitar e substituir documentos. Não podem excluir entidades ou alterar etapas do contrato.</p>
       </div>
-      <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" bind:checked={showInactive} on:change={load} /> Mostrar desativados</label>
+      <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-600 dark:text-slate-300"><input type="checkbox" disabled={editorLocked} bind:checked={showInactive} on:change={load} /> Mostrar desativados</label>
     </div>
   </header>
 
@@ -128,8 +183,8 @@
                 <p class="truncate text-sm text-slate-500">{assistant.email}</p>
               </div>
               <div class="flex items-center gap-2">
-                <button class="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="Editar auxiliar" title="Editar" on:click={() => startEdit(assistant)}><Pencil class="h-4 w-4" /></button>
-                <button class="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label={assistant.isActive ? 'Desativar auxiliar' : 'Reativar auxiliar'} title={assistant.isActive ? 'Desativar' : 'Reativar'} on:click={() => toggleActive(assistant)}><Power class="h-4 w-4" /></button>
+                <button disabled={editorLocked} class="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="Editar auxiliar" title="Editar" on:click={() => startEdit(assistant)}><Pencil class="h-4 w-4" /></button>
+                <button disabled={editorLocked} class="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label={assistant.isActive ? 'Desativar auxiliar' : 'Reativar auxiliar'} title={assistant.isActive ? 'Desativar' : 'Reativar'} on:click={() => toggleActive(assistant)}><Power class="h-4 w-4" /></button>
               </div>
             </article>
           {/each}
@@ -138,6 +193,7 @@
     </div>
 
     <form class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900" on:submit|preventDefault={save}>
+      <fieldset disabled={editorLocked} class="contents">
       <div class="flex items-center justify-between"><h3 class="font-semibold text-slate-900 dark:text-white">{editing ? 'Editar auxiliar' : 'Novo auxiliar'}</h3>{#if editing}<button type="button" class="text-sm text-slate-600 underline dark:text-slate-300" on:click={startCreate}>Cancelar</button>{/if}</div>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">Nome<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white" bind:value={form.name} required maxlength="160" /></label>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">E-mail<input type="email" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white" bind:value={form.email} required maxlength="254" /></label>
@@ -146,6 +202,17 @@
       {#if editing}
         <div class="border-t border-slate-200 pt-4 dark:border-slate-700"><label class="block text-sm font-medium text-slate-700 dark:text-slate-200">Nova senha<input type="password" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white" bind:value={resetPassword} minlength="14" maxlength="128" /></label><button type="button" class="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" disabled={!resetPassword || isSaving} on:click={saveResetPassword}><KeyRound class="h-4 w-4" />Redefinir senha</button></div>
       {/if}
+      </fieldset>
     </form>
   </div>
 </section>
+
+<AdminPasswordConfirmDialog
+  bind:open={passwordDialogOpen}
+  title={passwordAction?.kind === 'deactivate' ? 'Desativar auxiliar' : 'Redefinir senha do auxiliar'}
+  description={passwordAction ? `${passwordAction.name} — ${passwordAction.email} (ID ${passwordAction.id}). Confirme com sua senha administrativa.` : ''}
+  confirmLabel={passwordAction?.kind === 'deactivate' ? 'Desativar conta' : 'Confirmar redefinição'}
+  isSubmitting={isSaving}
+  error={confirmationError}
+  on:confirm={confirmPasswordAction}
+/>

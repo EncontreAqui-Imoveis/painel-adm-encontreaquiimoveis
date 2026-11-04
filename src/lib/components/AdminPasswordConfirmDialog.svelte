@@ -24,19 +24,36 @@
   }
 
   function handleConfirm() {
-    const trimmedPassword = password.trim();
-    if (!trimmedPassword) {
+    if (isSubmitting) return;
+    if (!password.trim()) {
       localError = 'Informe a senha atual do administrador.';
       return;
     }
 
     localError = null;
-    dispatch('confirm', { password: trimmedPassword });
+    dispatch('confirm', { password });
+  }
+
+  function focusPassword(node: HTMLInputElement) {
+    const previous = document.activeElement as HTMLElement | null;
+    node.focus();
+    return { destroy: () => previous?.focus() };
+  }
+
+  function trapFocus(event: KeyboardEvent) {
+    if (event.key !== 'Tab') return;
+    const dialog = (event.target as HTMLElement).closest('[role="dialog"]');
+    const controls = dialog?.querySelectorAll<HTMLElement>('input:not(:disabled), button:not(:disabled)');
+    if (!controls?.length) { event.preventDefault(); return; }
+    const first = controls[0], last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 </script>
 
-<Dialog.Root bind:open={open}>
-  <Dialog.Content className="max-w-md">
+<div on:keydown={trapFocus} role="presentation">
+<Dialog.Root bind:open={open} dismissible={!isSubmitting}>
+  <Dialog.Content className="max-w-md" ariaLabel={title}>
     <Dialog.Header>
       <Dialog.Title>{title}</Dialog.Title>
       {#if description}
@@ -49,6 +66,7 @@
         <span>Senha do administrador</span>
         <input
           type="password"
+          use:focusPassword
           bind:value={password}
           class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
           placeholder="Digite sua senha atual"
@@ -56,6 +74,7 @@
           disabled={isSubmitting}
           on:keydown={(event) => {
             if (event.key === 'Enter') {
+              event.preventDefault();
               handleConfirm();
             }
           }}
@@ -63,13 +82,13 @@
       </label>
 
       {#if localError}
-        <div class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+        <div role="alert" class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
           {localError}
         </div>
       {/if}
 
       {#if error}
-        <div class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+        <div role="alert" class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
           {error}
         </div>
       {/if}
@@ -88,3 +107,4 @@
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>
+</div>

@@ -181,4 +181,40 @@ describe('api client', () => {
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['post', '/admin/reauth', 'ADMIN_REAUTH_PASSWORD_INVALID'],
+    ['put', '/admin/assistants/2/password', 'ADMIN_REAUTH_INVALID'],
+    ['put', '/admin/assistants/2/password', 'ADMIN_REAUTH_REQUIRED'],
+  ])('BUG-003 keeps the session on a secondary confirmation failure: %s %s %s', async (method, url, code) => {
+    const { get } = await import('svelte/store');
+    const { authToken } = await import('../../src/lib/store');
+    const { apiClient } = await import('../../src/lib/apiClient');
+    authToken.set('synthetic-session');
+    const rejected = (apiClient.interceptors.response as any).handlers[0].rejected;
+    const error = { config: { method, url, skipErrorToast: true }, response: { status: 401, data: { code, error: 'Confirme novamente.' } } };
+    await expect(rejected(error)).rejects.toBe(error);
+    expect(get(authToken)).toBe('synthetic-session');
+    expect(sessionStorage.getItem('authToken')).toBe('synthetic-session');
+  });
+
+  it.each([
+    ['/admin/reauth', undefined],
+    ['/admin/assistants/2/password', undefined],
+    ['/admin/me', 'ADMIN_SESSION_INVALID'],
+    ['/users/me', 'ADMIN_REAUTH_PASSWORD_INVALID'],
+  ])('BUG-003 still clears expired/revoked sessions; no general 401 bypass: %s', async (url, code) => {
+    const { get } = await import('svelte/store');
+    const { authToken } = await import('../../src/lib/store');
+    const { apiClient } = await import('../../src/lib/apiClient');
+    authToken.set('synthetic-session');
+    const rejected = (apiClient.interceptors.response as any).handlers[0].rejected;
+    // Avoid jsdom navigation; store cleanup is the production implementation.
+    vi.stubGlobal('window', undefined);
+    const error = { config: { method: 'post', url }, response: { status: 401, data: { code, error: 'Sessão inválida.' } } };
+    try { await expect(rejected(error)).rejects.toBe(error); }
+    finally { vi.unstubAllGlobals(); }
+    expect(get(authToken)).toBeNull();
+    expect(sessionStorage.getItem('authToken')).toBeNull();
+  });
+
 });

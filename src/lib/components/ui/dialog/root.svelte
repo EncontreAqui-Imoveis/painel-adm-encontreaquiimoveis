@@ -5,6 +5,7 @@
 
   export let open = false;
   export let closeOnOverlay = true;
+  export let dismissible = true;
 
   const dispatch = createEventDispatcher<{ openChange: boolean }>();
   const openStore = writable(open);
@@ -19,7 +20,7 @@
   $: openStore.set(open);
 
   function close() {
-    if (!open) return;
+    if (!open || !dismissible) return;
     setOpen(false);
   }
 

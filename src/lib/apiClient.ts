@@ -245,7 +245,16 @@ apiClient.interceptors.response.use(
       message: typeof safeResponseData?.message === 'string' ? safeResponseData.message : error.message,
     });
 
-    if (handleUnauthorizedResponse(error.response?.status)) {
+    // Only secondary confirmation errors preserve the session. Authentication
+    // middleware still returns an ordinary 401 for an expired/revoked JWT.
+    const reauthCode = error.response?.data?.code;
+    const requestPath = new URL(String(error.config?.url ?? ''), baseURL).pathname;
+    const isConfirmationFailure = responseStatus === 401 && (
+      (reauthCode === 'ADMIN_REAUTH_PASSWORD_INVALID' && requestPath === '/admin/reauth' &&
+        String(error.config?.method).toLowerCase() === 'post') ||
+      (['ADMIN_REAUTH_REQUIRED', 'ADMIN_REAUTH_INVALID'].includes(reauthCode) && requestPath.startsWith('/admin/'))
+    );
+    if (!isConfirmationFailure && handleUnauthorizedResponse(error.response?.status)) {
       return Promise.reject(error);
     }
 

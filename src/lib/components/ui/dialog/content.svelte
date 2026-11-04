@@ -4,6 +4,7 @@
   import { DIALOG_CONTEXT_KEY, type DialogContextValue } from './context';
 
   export let className = '';
+  export let ariaLabel: string | undefined = undefined;
 
   const fallbackContext: DialogContextValue = {
     open: writable(false),
@@ -34,6 +35,7 @@
       class={`relative w-full max-w-3xl rounded-lg border border-gray-200 bg-white shadow-xl transition-all dark:border-gray-800 dark:bg-gray-900 ${className}`}
       role="dialog"
       aria-modal="true"
+      aria-label={ariaLabel}
       tabindex="-1"
       on:click|stopPropagation
       on:keydown={(event) => {
