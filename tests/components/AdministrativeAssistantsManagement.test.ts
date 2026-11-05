@@ -6,6 +6,7 @@ const { api, success } = vi.hoisted(() => ({
 vi.mock('$lib/apiClient', () => ({ api }));
 vi.mock('svelte-sonner', () => ({ toast: { success, error: vi.fn() } }));
 import Assistants from '../../src/lib/components/AdministrativeAssistantsManagement.svelte';
+import { adminSession, getDefaultAdminCapabilities } from '../../src/lib/sessionState';
 
 const fixtures = [
   { id: 2, name: 'Auxiliar A sintético', email: 'aux-a@example.test', isActive: true },
@@ -23,7 +24,7 @@ async function edit(id = 2) {
 async function openReset() { await fireEvent.click(screen.getByRole('button', { name: 'Redefinir senha', exact: true })); return screen.getByRole('dialog', { name: 'Redefinir senha do auxiliar' }); }
 async function confirm() { await fireEvent.input(screen.getByLabelText('Senha do administrador'), { target: { value: adminPassword } }); await fireEvent.click(screen.getByRole('button', { name: 'Confirmar redefinição' })); }
 beforeEach(() => {
-  vi.clearAllMocks(); api.get.mockResolvedValue({ data: fixtures }); api.post.mockResolvedValue({ reauthToken: 'synthetic-reauth' }); api.put.mockResolvedValue({ message: 'ok' }); api.delete.mockResolvedValue({ message: 'ok' });
+  vi.clearAllMocks(); adminSession.set({id:1, role:'admin', capabilities:getDefaultAdminCapabilities()}); api.get.mockResolvedValue({ data: fixtures }); api.post.mockResolvedValue({ reauthToken: 'synthetic-reauth' }); api.put.mockResolvedValue({ message: 'ok' }); api.delete.mockResolvedValue({ message: 'ok' });
 });
 
 describe('BUG-001/002/004 — assistant confirmation', () => {
@@ -109,10 +110,10 @@ describe('BUG-001/002/004 — assistant confirmation', () => {
 
   it('uses the same masked dialog for assistant deactivation without a native password prompt', async () => {
     render(Assistants); await screen.findByText(fixtures[0].email);
-    await fireEvent.click(within(row(2)).getByRole('button', { name: 'Desativar auxiliar' }));
-    expect(screen.getByRole('dialog', { name: 'Desativar auxiliar' })).toHaveTextContent('ID 2');
+    await fireEvent.click(within(row(2)).getByRole('button', { name: 'Excluir auxiliar Auxiliar A sintético' }));
+    expect(screen.getByRole('dialog', { name: 'Excluir acesso do auxiliar' })).toHaveTextContent('ID 2');
     await fireEvent.input(screen.getByLabelText('Senha do administrador'), { target: { value: adminPassword } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Desativar conta' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Excluir acesso' }));
     await waitFor(() => expect(api.delete).toHaveBeenCalledTimes(1));
     expect(api.post.mock.calls[0][1]).toEqual({ password: adminPassword }); expect(api.delete.mock.calls[0][0]).toBe('/admin/assistants/2');
   });

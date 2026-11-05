@@ -217,4 +217,28 @@ describe('api client', () => {
     expect(sessionStorage.getItem('authToken')).toBeNull();
   });
 
+  it.each(['/admin/assistants', '/admin/assistants/2/password', '/admin/reauth'])(
+    'redacts serialized passwords before observing failed requests to %s', async endpoint => {
+      const { api, apiClient } = await import('../../src/lib/apiClient');
+      const secret = 'Segredo sintético sem exposição!';
+      let observedError: { config: Record<string, unknown> } | undefined;
+      apiClient.defaults.adapter = async config => {
+        // Exercita a transformação real do Axios, incluindo config.data em string.
+        expect(typeof config.data).toBe('string');
+        expect(JSON.parse(config.data).password).toBe(secret);
+        observedError = { message: 'Operação recusada', config,
+          response: { status: 403, data: { error: 'Operação recusada' }, headers: {} } } as unknown as { config: Record<string, unknown> };
+        throw observedError;
+      };
+      await expect(api.post(endpoint, { password: secret }, { skipErrorToast: true })).rejects.toMatchObject({
+        response: { status: 403 },
+      });
+      expect(JSON.stringify(observedError?.config)).not.toContain(secret);
+      expect(JSON.parse(String(observedError?.config.data)).password).toBe('***');
+      expect(JSON.stringify(sentryCaptureMock.mock.calls)).not.toContain(secret);
+      expect(JSON.stringify(consoleInfoMock.mock.calls)).not.toContain(secret);
+      expect(JSON.stringify(toastErrorMock.mock.calls)).not.toContain(secret);
+    },
+  );
+
 });

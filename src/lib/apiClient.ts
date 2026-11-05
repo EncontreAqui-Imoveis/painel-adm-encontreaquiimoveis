@@ -45,7 +45,18 @@ function redactString(value: string): string {
 
 function redactValue(value: unknown, depth = 0): unknown {
   if (depth > 5) return '[redacted-depth]';
-  if (typeof value === 'string') return redactString(value);
+  if (typeof value === 'string') {
+    // Axios serializa corpos JSON antes de entregar o erro ao interceptor.
+    const trimmed = value.trimStart();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        return JSON.stringify(redactValue(JSON.parse(value), depth + 1));
+      } catch {
+        // Texto que não é JSON mantém a sanitização habitual.
+      }
+    }
+    return redactString(value);
+  }
   if (Array.isArray(value)) return value.map((entry) => redactValue(entry, depth + 1));
   if (!value || typeof value !== 'object') return value;
 
