@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { Loader2 } from 'lucide-svelte';
+  import { Eye, EyeOff, Loader2 } from 'lucide-svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import { Button } from '$lib/components/ui/button';
 
@@ -12,6 +12,7 @@
   export let error: string | null = null;
 
   let password = '';
+  let showPassword = false;
   let localError: string | null = null;
 
   const dispatch = createEventDispatcher<{
@@ -20,6 +21,7 @@
 
   $: if (!open) {
     password = '';
+    showPassword = false;
     localError = null;
   }
 
@@ -62,13 +64,14 @@
     </Dialog.Header>
 
     <div class="space-y-4 py-4">
+      <div class="relative">
       <label class="block space-y-2 text-sm font-medium text-gray-700 dark:text-gray-300">
         <span>Senha do administrador</span>
         <input
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           use:focusPassword
           bind:value={password}
-          class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+          class="min-h-11 w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-12 text-sm text-gray-900 shadow-sm transition focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
           placeholder="Digite sua senha atual"
           autocomplete="current-password"
           disabled={isSubmitting}
@@ -80,6 +83,22 @@
           }}
         />
       </label>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="absolute bottom-0 right-0 h-11 w-11 border-0! p-0!"
+        ariaLabel={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+        disabled={isSubmitting}
+        on:click={() => (showPassword = !showPassword)}
+      >
+        {#if showPassword}
+          <EyeOff class="h-5 w-5" aria-hidden="true" />
+        {:else}
+          <Eye class="h-5 w-5" aria-hidden="true" />
+        {/if}
+      </Button>
+      </div>
 
       {#if localError}
         <div role="alert" class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
