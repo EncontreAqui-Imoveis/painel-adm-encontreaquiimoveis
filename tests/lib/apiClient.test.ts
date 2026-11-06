@@ -241,4 +241,42 @@ describe('api client', () => {
     },
   );
 
+
+  it.each([
+    ['ADMIN_CURRENT_PASSWORD_INVALID', '/admin/me/password', 'put', 'sessao-inicial', 'sessao-inicial', true],
+    [undefined, '/admin/dashboard/stats', 'get', 'sessao-antiga', 'sessao-renovada', true],
+    [undefined, '/admin/me', 'get', 'sessao-renovada', 'sessao-renovada', false],
+    ['ADMIN_CURRENT_PASSWORD_INVALID', '/users/me', 'get', 'sessao-inicial', 'sessao-inicial', false],
+  ])('preserva apenas confirmacao secundaria ou resposta de sessao anterior: %s %s', async (code, url, method, sent, current, keep) => {
+    const { get } = await import('svelte/store');
+    const { authToken } = await import('../../src/lib/store');
+    const { apiClient } = await import('../../src/lib/apiClient');
+    authToken.set(current as string);
+    const rejected = (apiClient.interceptors.response as any).handlers[0].rejected;
+    const error = { config: { method, url, skipErrorToast: true, headers: { Authorization: 'Bearer ' + sent } }, response: { status: 401, data: { code, error: 'Resposta sintetica de teste.' } } };
+    vi.stubGlobal('window', undefined);
+    try { await expect(rejected(error)).rejects.toBe(error); }
+    finally { vi.unstubAllGlobals(); }
+    expect(get(authToken)).toBe(keep ? current : null);
+  });
+
+
+  it('preserva o payload da propria senha no envio e remove ambos os campos da observabilidade', async () => {
+    const { api, apiClient } = await import('../../src/lib/apiClient');
+    const currentPassword = '  Confirmacao sintetica!  ';
+    const newPassword = '  Nova senha sintetica 2026!  ';
+    let observed: any;
+    apiClient.defaults.adapter = async config => {
+      expect(JSON.parse(String(config.data))).toEqual({ currentPassword, newPassword });
+      observed = { config, response: { status: 500, data: { error: 'Falha sintetica' }, headers: {} }, message: 'Falha sintetica' };
+      throw observed;
+    };
+    await expect(api.put('/admin/me/password', { currentPassword, newPassword }, { skipErrorToast: true })).rejects.toMatchObject({ response: { status: 500 } });
+    for (const value of [currentPassword, newPassword]) {
+      expect(JSON.stringify(observed.config)).not.toContain(value);
+      expect(JSON.stringify(sentryCaptureMock.mock.calls)).not.toContain(value);
+      expect(JSON.stringify(consoleInfoMock.mock.calls)).not.toContain(value);
+    }
+  });
+
 });

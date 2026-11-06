@@ -216,6 +216,14 @@ apiClient.interceptors.response.use(
     }
 
     const responseStatus = (error as RequestIdAwareError).response?.status;
+    const sentAuthorization = error.config?.headers
+      ? AxiosHeaders.from(error.config.headers).get('Authorization')
+      : undefined;
+    const activeToken = get(authToken);
+    // Uma resposta atrasada da sessao anterior nao invalida o token ja renovado.
+    const isPreviousSessionResponse = responseStatus === 401 &&
+      typeof sentAuthorization === 'string' && sentAuthorization.startsWith('Bearer ') &&
+      !!activeToken && sentAuthorization !== `Bearer ${activeToken}`;
     if (responseStatus === 429) {
       const rateLimitKey = getRateLimitKey(
         String((error as RequestIdAwareError).config?.method ?? 'GET'),
@@ -263,9 +271,11 @@ apiClient.interceptors.response.use(
     const isConfirmationFailure = responseStatus === 401 && (
       (reauthCode === 'ADMIN_REAUTH_PASSWORD_INVALID' && requestPath === '/admin/reauth' &&
         String(error.config?.method).toLowerCase() === 'post') ||
+      (reauthCode === 'ADMIN_CURRENT_PASSWORD_INVALID' && requestPath === '/admin/me/password' &&
+        String(error.config?.method).toLowerCase() === 'put') ||
       (['ADMIN_REAUTH_REQUIRED', 'ADMIN_REAUTH_INVALID'].includes(reauthCode) && requestPath.startsWith('/admin/'))
     );
-    if (!isConfirmationFailure && handleUnauthorizedResponse(error.response?.status)) {
+    if (!isConfirmationFailure && !isPreviousSessionResponse && handleUnauthorizedResponse(error.response?.status)) {
       return Promise.reject(error);
     }
 
