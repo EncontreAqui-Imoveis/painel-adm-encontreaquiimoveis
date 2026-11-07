@@ -3,7 +3,7 @@
     import { api } from './apiClient';
     import { adminSession, setSessionToken } from './sessionState';
     import { toast } from 'svelte-sonner';
-    import { ADMIN_PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH, isAdminPasswordPolicyError, validateNewAdminPassword } from './adminPasswordPolicy';
+    import { ADMIN_PASSWORD_MIN_LENGTH, ADMIN_PASSWORD_MAX_BYTES, isAdminPasswordPolicyError, validateNewAdminPassword } from './adminPasswordPolicy';
 
     export let pageTitle: string;
     export let onToggleSidebar: () => void = () => {};
@@ -179,8 +179,8 @@
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Alterar minha senha</h2>
             <label class="mt-4 block text-sm font-medium text-slate-700 dark:text-slate-200">Senha atual<input type="password" autocomplete="current-password" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" bind:value={currentPassword} required disabled={isChangingPassword} aria-invalid={currentPasswordError ? 'true' : undefined} aria-describedby={currentPasswordError ? 'own-current-password-feedback' : undefined} on:input={() => (currentPasswordError = null)} /></label>
             {#if currentPasswordError}<p id="own-current-password-feedback" role="alert" class="mt-1 text-xs text-red-600">{currentPasswordError}</p>{/if}
-            <label class="mt-3 block text-sm font-medium text-slate-700 dark:text-slate-200">Nova senha<input type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" bind:value={newPassword} minlength={ADMIN_PASSWORD_MIN_LENGTH} maxlength={PASSWORD_MAX_LENGTH} required disabled={isChangingPassword} aria-invalid={showNewPasswordError ? 'true' : undefined} aria-describedby="own-new-password-feedback" on:input={() => (newPasswordServerError = null)} /></label>
-            <p id="own-new-password-feedback" role={showNewPasswordError ? 'alert' : undefined} class="mt-1 text-xs" class:text-red-600={showNewPasswordError} class:text-slate-500={!showNewPasswordError}>{showNewPasswordError ? newPasswordError : `Use entre ${ADMIN_PASSWORD_MIN_LENGTH} e ${PASSWORD_MAX_LENGTH} caracteres.`}</p>
+            <label class="mt-3 block text-sm font-medium text-slate-700 dark:text-slate-200">Nova senha<input type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" bind:value={newPassword} minlength={ADMIN_PASSWORD_MIN_LENGTH} required disabled={isChangingPassword} aria-invalid={showNewPasswordError ? 'true' : undefined} aria-describedby="own-new-password-feedback" on:input={() => (newPasswordServerError = null)} /></label>
+            <p id="own-new-password-feedback" role={showNewPasswordError ? 'alert' : undefined} class="mt-1 text-xs" class:text-red-600={showNewPasswordError} class:text-slate-500={!showNewPasswordError}>{showNewPasswordError ? newPasswordError : `Use pelo menos ${ADMIN_PASSWORD_MIN_LENGTH} caracteres e no máximo ${ADMIN_PASSWORD_MAX_BYTES} bytes UTF-8. Acentos e emojis podem ocupar mais de um byte.`}</p>
             {#if passwordOperationError}<p role="alert" class="mt-3 text-sm text-red-600">{passwordOperationError}</p>{/if}
             <div class="mt-5 flex justify-end gap-2"><button type="button" class="rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700" on:click={closePasswordDialog} disabled={isChangingPassword}>Cancelar</button><button class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60" disabled={isChangingPassword}>{isChangingPassword ? 'Salvando...' : 'Salvar senha'}</button></div>
         </form>

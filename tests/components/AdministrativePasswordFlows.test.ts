@@ -37,7 +37,7 @@ function fieldHasMessage(input: HTMLElement, text: RegExp) {
 }
 
 describe('validacao antes da confirmacao administrativa', () => {
-  it.each(['curta', ' '.repeat(14)])('impede abrir reauth e associa o erro a NOVA SENHA', async password => {
+  it.each([{ label: 'curta', password: 'curta' }, { label: 'em branco', password: ' '.repeat(14) }])('impede abrir reauth e associa o erro a NOVA SENHA: $label', async ({ password }) => {
     const input = await assistantEditor();
     await fireEvent.input(input, { target: { value: password } });
     await fireEvent.click(screen.getByRole('button', { name: 'Redefinir senha', exact: true }));
@@ -120,5 +120,95 @@ describe('alteracao da propria senha', () => {
     await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
     expect(success).not.toHaveBeenCalled();
     expect(get(authToken)).toBe('sessao-sintetica-inicial');
+  });
+});
+
+
+describe('limite UTF-8 antes de qualquer operacao administrativa', () => {
+  it.each([
+    { label: 'ASCII 73', password: 'a'.repeat(73) },
+    { label: 'acentos 74', password: 'á'.repeat(37) },
+    { label: 'emoji 76', password: '🔐'.repeat(19) },
+  ])('reset rejeita $label no campo sem abrir confirmacao nem truncar', async ({ password }) => {
+    const input = await assistantEditor();
+    await fireEvent.input(input, { target: { value: password } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Redefinir senha', exact: true }));
+    fieldHasMessage(input, /72 bytes UTF-8/);
+    expect(input).toHaveValue(password);
+    expect(input).not.toHaveAttribute('maxlength');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled(); expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it('alteracao propria rejeita bytes excedentes sem limitar senha atual legada', async () => {
+    const form = await ownDialog();
+    const current = screen.getByLabelText('Senha atual'), next = screen.getByLabelText('Nova senha');
+    await fireEvent.input(current, { target: { value: 'a'.repeat(100) } });
+    await fireEvent.input(next, { target: { value: '🔐'.repeat(19) } });
+    await fireEvent.submit(form);
+    fieldHasMessage(next, /72 bytes UTF-8/);
+    expect(current).not.toHaveAttribute('maxlength'); expect(next).not.toHaveAttribute('maxlength');
+    expect(api.put).not.toHaveBeenCalled();
+    const password = '🔐'.repeat(18);
+    api.put.mockResolvedValue({ token: 'sessao-sintetica-renovada' });
+    await fireEvent.input(next, { target: { value: password } });
+    await fireEvent.submit(form);
+    await waitFor(() => expect(success).toHaveBeenCalledTimes(1));
+    expect(api.put.mock.calls[0][1]).toEqual({ currentPassword: 'a'.repeat(100), newPassword: password });
+  });
+
+  it('cadastro valida no proprio campo e envia exatamente 72 bytes com espacos', async () => {
+    render(Assistants);
+    await screen.findByText(target.email);
+    await fireEvent.input(screen.getByLabelText('Nome'), { target: { value: 'Novo sintetico' } });
+    await fireEvent.input(screen.getByLabelText('E-mail'), { target: { value: 'novo@example.test' } });
+    const initial = screen.getByLabelText('Senha inicial');
+    const form = initial.closest('form')!;
+    await fireEvent.input(initial, { target: { value: 'á'.repeat(37) } });
+    await fireEvent.submit(form);
+    fieldHasMessage(initial, /72 bytes UTF-8/);
+    expect(initial).not.toHaveAttribute('maxlength'); expect(api.post).not.toHaveBeenCalled();
+    const password = ' ' + 'a'.repeat(70) + ' ';
+    api.post.mockResolvedValue({});
+    await fireEvent.input(initial, { target: { value: password } });
+    await fireEvent.submit(form);
+    await waitFor(() => expect(success).toHaveBeenCalledTimes(1));
+    expect(api.post.mock.calls[0][1].password).toBe(password);
+  });
+
+  it.each(['PASSWORD_TOO_LONG_BYTES', 'PASSWORD_NOT_DIFFERENT'])('reset associa erro do servidor a nova senha: %s', async code => {
+    const input = await assistantEditor();
+    await fireEvent.input(input, { target: { value: 'Nova senha sintetica 2026!' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Redefinir senha', exact: true }));
+    api.post.mockResolvedValue({ reauthToken: 'confirmacao-sintetica' });
+    api.put.mockRejectedValue({ response: { status: 400, data: { code, error: 'Nova senha recusada pelo servidor.' } } });
+    await fireEvent.input(screen.getByLabelText('Senha do administrador'), { target: { value: 'curta' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirmar redefinição' }));
+    await waitFor(() => fieldHasMessage(input, /recusada pelo servidor/));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(success).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('erros de politica devolvidos pela API', () => {
+  it.each(['PASSWORD_TOO_LONG_BYTES', 'PASSWORD_NOT_DIFFERENT'])('alteracao propria: %s no campo novo, sem sucesso ou perda de sessao', async code => {
+    const form = await ownDialog();
+    await fireEvent.input(screen.getByLabelText('Senha atual'), { target: { value: 'legada' } });
+    const next = screen.getByLabelText('Nova senha');
+    await fireEvent.input(next, { target: { value: 'Nova senha sintetica 2026!' } });
+    api.put.mockRejectedValue({ response: { status: 400, data: { code, error: 'Nova senha recusada.' } } });
+    await fireEvent.submit(form);
+    await waitFor(() => fieldHasMessage(next, /recusada/));
+    expect(success).not.toHaveBeenCalled(); expect(get(authToken)).toBe('sessao-sintetica-inicial');
+  });
+
+  it('cadastro: erro de politica no campo inicial', async () => {
+    render(Assistants); await screen.findByText(target.email);
+    const input = screen.getByLabelText('Senha inicial');
+    await fireEvent.input(input, { target: { value: 'Nova senha sintetica 2026!' } });
+    api.post.mockRejectedValue({ response: { status: 400, data: { code: 'PASSWORD_TOO_LONG_BYTES', error: 'Nova senha recusada.' } } });
+    await fireEvent.submit(input.closest('form')!);
+    await waitFor(() => fieldHasMessage(input, /recusada/));
+    expect(success).not.toHaveBeenCalled();
   });
 });
