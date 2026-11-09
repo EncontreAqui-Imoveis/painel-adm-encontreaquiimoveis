@@ -98,6 +98,10 @@
 
   async function save() {
     if (editorLocked || !canManage) return;
+    if (editing && resetPassword) {
+      toast.error('Para alterar a senha, use Redefinir senha e confirme a operação com sua senha administrativa.');
+      return;
+    }
     if (!editing) {
       creationValidationAttempted = true;
       if (validateNewAdminPassword(form.password)) return;

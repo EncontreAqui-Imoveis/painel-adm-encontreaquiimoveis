@@ -6,11 +6,11 @@ import Assistants from '../../src/lib/components/AdministrativeAssistantsManagem
 import { adminSession, getDefaultAdminCapabilities } from '../../src/lib/sessionState';
 import { authToken } from '../../src/lib/store';
 
-const { api, success } = vi.hoisted(() => ({
-  api: { get: vi.fn(), post: vi.fn(), put: vi.fn() }, success: vi.fn(),
+const { api, success, error } = vi.hoisted(() => ({
+  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn() }, success: vi.fn(), error: vi.fn(),
 }));
 vi.mock('$lib/apiClient', () => ({ api }));
-vi.mock('svelte-sonner', () => ({ toast: { success, error: vi.fn() } }));
+vi.mock('svelte-sonner', () => ({ toast: { success, error } }));
 const target = { id: 2, name: 'Auxiliar sintetico', email: 'aux@example.test', isActive: true };
 beforeEach(() => {
   vi.resetAllMocks();
@@ -37,6 +37,20 @@ function fieldHasMessage(input: HTMLElement, text: RegExp) {
 }
 
 describe('validacao antes da confirmacao administrativa', () => {
+  it('preserva a nova senha e impede salvar edicao sem redefinicao confirmada', async () => {
+    const input = await assistantEditor();
+    const password = 'Nova senha sintetica 2026!';
+    await fireEvent.input(input, { target: { value: password } });
+    await fireEvent.submit(input.closest('form')!);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('use Redefinir senha'));
+    expect(api.patch).not.toHaveBeenCalled();
+    expect(api.put).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(input).toHaveValue(password);
+    expect(input).toHaveAttribute('type', 'password');
+    expect(error.mock.calls.flat().join(' ')).not.toContain(password);
+  });
+
   it.each([{ label: 'curta', password: 'curta' }, { label: 'em branco', password: ' '.repeat(14) }])('impede abrir reauth e associa o erro a NOVA SENHA: $label', async ({ password }) => {
     const input = await assistantEditor();
     await fireEvent.input(input, { target: { value: password } });

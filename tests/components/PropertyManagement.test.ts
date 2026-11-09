@@ -64,6 +64,8 @@ type PropertyMockState = {
   sem_lote: number | boolean | null;
   quadra: string | null;
   lote: string | null;
+  owner_id?: number | null;
+  broker_id?: number | null;
   owner_name: string | null;
   owner_phone: string | null;
   broker_name: string | null;
@@ -116,6 +118,8 @@ const basePropertyState: PropertyMockState = {
   sem_lote: 0,
   quadra: 'Q1',
   lote: '10',
+  owner_id: 701,
+  broker_id: 902,
   owner_name: 'João da Casa',
   owner_phone: '62999990000',
   broker_name: 'Corretora Teste',
@@ -203,6 +207,8 @@ function buildPropertySummary(property: PropertyMockState): Record<string, unkno
     numero: property.numero,
     bairro_optional: null,
     cep: property.cep,
+    owner_id: property.owner_id,
+    broker_id: property.broker_id,
     owner_name: property.owner_name,
     owner_phone: property.owner_phone,
     broker_name: property.broker_name,
@@ -234,6 +240,10 @@ function buildPropertySummary(property: PropertyMockState): Record<string, unkno
 }
 
 function applyServerPatch(property: PropertyMockState, payload: SavePayload): void {
+  for (const key of ['owner_id', 'owner_name', 'owner_phone', 'broker_id'] as const) {
+    if (key in payload) Object.assign(property, { [key]: payload[key] });
+  }
+
   if (typeof payload.title === 'string') {
     property.title = payload.title;
   }
@@ -277,6 +287,14 @@ function applyServerPatch(property: PropertyMockState, payload: SavePayload): vo
   if (Array.isArray(payload.amenities)) {
     property.amenities = payload.amenities;
   }
+  for (const prefix of ['area_construida', 'area_terreno'] as const) {
+    if (`${prefix}_valor` in payload || `${prefix}_unidade` in payload) {
+      const unit = property[`${prefix}_unidade`];
+      const factor = unit === 'hectare' ? 10000 : unit === 'alqueire' ? 48400 : 1;
+      const value = property[`${prefix}_valor`];
+      property[`${prefix}_m2`] = value == null ? null : value * factor;
+    }
+  }
   if (typeof payload.area_construida === 'number' && Number.isFinite(payload.area_construida)) {
     property.area_construida_m2 = Number(payload.area_construida);
   }
@@ -288,9 +306,11 @@ function applyServerPatch(property: PropertyMockState, payload: SavePayload): vo
 function mockPropertyManagementRequests({
   initialProperty,
   initialProperties,
+  advertisers = [],
 }: {
   initialProperty?: PropertyMockState;
   initialProperties?: PropertyMockState[];
+  advertisers?: Array<{ id: number; name: string; email: string; phone?: string; role: string }>;
 }) {
   const properties = (initialProperties && initialProperties.length > 0
     ? initialProperties
@@ -370,7 +390,7 @@ function mockPropertyManagementRequests({
     }
 
     if (endpoint.startsWith('/admin/users')) {
-      return [];
+      return advertisers;
     }
 
     throw new Error(`Endpoint não esperado no teste: ${endpoint}`);
@@ -379,6 +399,11 @@ function mockPropertyManagementRequests({
   apiPutMock.mockImplementation(async (endpoint: string, payload: SavePayload) => {
     const property = resolvePropertyById(endpoint);
     applyServerPatch(property, payload);
+    if ('broker_id' in payload) {
+      const advertiser = advertisers.find(item => item.id === payload.broker_id);
+      property.broker_name = advertiser?.name ?? null;
+      property.broker_phone = advertiser?.phone ?? null;
+    }
     return {};
   });
 
@@ -549,9 +574,9 @@ describe('PropertyManagement', () => {
     });
     expect(putPayload).toMatchObject({ status: 'approved' });
     expect(putPayload).toHaveProperty('area_construida_valor', 2332);
-    expect(putPayload).toHaveProperty('area_construida', 2332);
+    expect(putPayload).not.toHaveProperty('area_construida');
     expect(putPayload).toHaveProperty('area_terreno_valor', 1500);
-    expect(putPayload).toHaveProperty('area_terreno', 1500);
+    expect(putPayload).not.toHaveProperty('area_terreno');
     expect(putPayload).toHaveProperty('area_construida_unidade', 'hectare');
     expect(putPayload).toHaveProperty('area_terreno_unidade', 'm2');
     expect(putPayload.amenities).toEqual(expect.arrayContaining(['Mobiliada', 'Academia']));
@@ -1637,7 +1662,7 @@ describe('PropertyManagement', () => {
     expect((terrainUnit as HTMLSelectElement).value).toBe('hectare');
   });
 
-  it('salva sem alterar campos de área e preserva 2332 ha no payload', async () => {
+  it('salva sem reenviar campos de área e preserva 2332 ha no servidor', async () => {
     mockPropertyManagementRequests({
       initialProperty: {
         ...basePropertyState,
@@ -1664,10 +1689,8 @@ describe('PropertyManagement', () => {
       expect(apiPutMock).toHaveBeenCalledTimes(1);
     });
     const [, payload] = apiPutMock.mock.calls[0] as [string, SavePayload];
-    expect(payload).toMatchObject({
-      area_terreno_valor: 2332,
-      area_terreno_unidade: 'hectare',
-    });
+    expect(payload).not.toHaveProperty('area_terreno_valor');
+    expect(payload).not.toHaveProperty('area_terreno_unidade');
   });
 
   it('altera unidade do terreno para alqueire e envia 10 no payload', async () => {
@@ -1987,4 +2010,62 @@ describe('PropertyManagement', () => {
     });
     expect(within(dialog).getAllByRole('button', { name: 'Remover' })).toHaveLength(1);
   });
+  it('adiciona corretor, troca anunciante e recarrega sem mudar proprietário ou apagar áreas legadas', async () => {
+    mockPropertyManagementRequests({ initialProperty: makePropertyState({ broker_id: null, broker_name: null, broker_phone: null,
+      area_construida_valor: null, area_terreno_valor: null, area_construida_m2: 84.75, area_terreno_m2: 210.5 }),
+      advertisers: [ { id: 902, name: 'Corretor Técnico A', email: 'corretor-a@example.test', role: 'broker' },
+        { id: 903, name: 'Corretor Técnico B', email: 'corretor-b@example.test', role: 'broker' } ] });
+    let view = render(PropertyManagement);
+    for (const [index, name] of ['Corretor Técnico A', 'Corretor Técnico B'].entries()) {
+      await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+      await fireEvent.click(getRevisarButtons()[0]); const dialog = await screen.findByRole('dialog');
+      await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+      const query = dialog.querySelector('input[name="advertiser_query"]')!;
+      await fireEvent.input(query, { target: { value: 'Corretor Técnico' } });
+      const option = await within(dialog).findByRole('button', { name: new RegExp(name) });
+      await fireEvent.mouseDown(option);
+      expect(dialog.querySelector('input[name="owner_name"]')).toHaveValue('João da Casa');
+      expect(dialog.querySelector('input[name="owner_phone"]')).toHaveValue('62999990000');
+      expect(dialog.querySelector('input[name="area_construida_valor"]')).toHaveValue('84.75');
+      expect(dialog.querySelector('input[name="area_terreno_valor"]')).toHaveValue('210.5');
+      await fireEvent.click(within(dialog).getAllByRole('button', { name: 'Salvar' })[0]);
+      await waitFor(() => expect(apiPutMock).toHaveBeenCalledTimes(index + 1));
+      const patch = apiPutMock.mock.calls[index][1] as SavePayload;
+      expect(patch.broker_id).toBe(index === 0 ? 902 : 903);
+      for (const key of ['owner_id','owner_name','owner_phone','area_construida_valor','area_terreno_valor']) expect(patch).not.toHaveProperty(key);
+      view.unmount(); view = render(PropertyManagement);
+    }
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]); const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    expect(dialog.querySelector('input[name="owner_name"]')).toHaveValue('João da Casa');
+    expect(dialog.querySelector('input[name="area_construida_valor"]')).toHaveValue('84.75');
+    expect(dialog.querySelector('input[name="area_terreno_valor"]')).toHaveValue('210.5');
+    expect(dialog.querySelector('input[name="advertiser_query"]')).toHaveValue('Corretor Técnico B');
+  });
+
+  it.each([
+    { id: 704, name: 'Cliente independente', expectedBroker: 902, rejected: true },
+    { id: 701, name: 'Conta proprietária', expectedBroker: null, rejected: false },
+  ])('preserva proprietário ao selecionar $name', async ({ id, name, expectedBroker, rejected }) => {
+    mockPropertyManagementRequests({ initialProperty: makePropertyState(), advertisers: [{ id, name, email: 'cliente@example.test', role: 'client' }] });
+    render(PropertyManagement);
+    await waitFor(() => expect(getRevisarButtons().length).toBeGreaterThan(0));
+    await fireEvent.click(getRevisarButtons()[0]);
+    const dialog = await screen.findByRole('dialog');
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Editar dados' }));
+    await fireEvent.input(dialog.querySelector('input[name="advertiser_query"]')!, { target: { value: name } });
+    await fireEvent.mouseDown(await within(dialog).findByRole('button', { name: new RegExp(name) }));
+    expect(dialog.querySelector('input[name="owner_name"]')).toHaveValue('João da Casa');
+    expect(dialog.querySelector('input[name="owner_phone"]')).toHaveValue('62999990000');
+    if (rejected) expect(within(dialog).getByText(/seleção não foi aplicada para preservar/)).toBeVisible();
+    await fireEvent.input(within(dialog).getByPlaceholderText('Descricao do imóvel'), { target: { value: 'Descrição explicitamente editada' } });
+    await fireEvent.click(within(dialog).getAllByRole('button', { name: 'Salvar' })[0]);
+    await waitFor(() => expect(apiPutMock).toHaveBeenCalledTimes(1));
+    const patch = apiPutMock.mock.calls[0][1] as SavePayload;
+    for (const key of ['owner_id', 'owner_name', 'owner_phone']) expect(patch).not.toHaveProperty(key);
+    if (rejected) expect(patch).not.toHaveProperty('broker_id');
+    else expect(patch.broker_id).toBe(expectedBroker);
+  });
+
 });

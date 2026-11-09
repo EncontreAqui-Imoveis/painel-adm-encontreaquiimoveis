@@ -41,6 +41,8 @@
   } from '$lib/components/property/propertyEditHelpers';
   import {
     formatAreaWithUnit,
+    parsePropertyAreaNumber,
+    resolvePropertyAreaValues,
     formatCurrency,
     formatNumeroDisplay,
     getPurposeFlags,
@@ -87,17 +89,6 @@
     normalizeAmenityList,
     type PropertyAmenity,
   } from '$lib/propertyAmenities';
-function parseNullableNumber(value: unknown): number | null {
-  if (value == null || value === '') return null;
-  const normalized = String(value)
-    .trim()
-    .replace(/\s+/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  const numeric = Number(normalized);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
   interface PropertySummary {
     id: number;
     title: string;
@@ -627,10 +618,10 @@ function parseNullableNumber(value: unknown): number | null {
             record['area_terreno_unidade'] ?? record['area_terreno_medida'];
           const areaTerrenoUnidade =
             normalizeAreaUnit(areaTerrenoUnidadeRaw) ?? 'm2';
-          const areaConstruidaValor = parseNullableNumber(areaConstruidaValorRaw);
-          const areaTerrenoValor = parseNullableNumber(areaTerrenoValorRaw);
-          const areaConstruidaM2 = parseNullableNumber(areaConstruidaM2Raw);
-          const areaTerrenoM2 = parseNullableNumber(areaTerrenoM2Raw);
+          const areaConstruidaValor = parsePropertyAreaNumber(areaConstruidaValorRaw);
+          const areaTerrenoValor = parsePropertyAreaNumber(areaTerrenoValorRaw);
+          const areaConstruidaM2 = parsePropertyAreaNumber(areaConstruidaM2Raw);
+          const areaTerrenoM2 = parsePropertyAreaNumber(areaTerrenoM2Raw);
 
           return {
             id,
@@ -644,12 +635,12 @@ function parseNullableNumber(value: unknown): number | null {
             price_rent: priceRentValue != null ? Number(priceRentValue) : null,
             area_construida_valor: areaConstruidaValor,
             area_terreno_valor: areaTerrenoValor,
-            area_construida_m2: areaConstruidaM2 ?? parseNullableNumber(record['area_construida']),
-            area_terreno_m2: areaTerrenoM2 ?? parseNullableNumber(record['area_terreno']),
-            area_construida: areaConstruidaM2 ?? parseNullableNumber(record['area_construida']),
+            area_construida_m2: areaConstruidaM2 ?? parsePropertyAreaNumber(record['area_construida']),
+            area_terreno_m2: areaTerrenoM2 ?? parsePropertyAreaNumber(record['area_terreno']),
+            area_construida: areaConstruidaM2 ?? parsePropertyAreaNumber(record['area_construida']),
             area_construida_unidade: areaConstruidaUnidade,
             area_terreno_unidade: areaTerrenoUnidade,
-            area_terreno: areaTerrenoM2 ?? parseNullableNumber(record['area_terreno']),
+            area_terreno: areaTerrenoM2 ?? parsePropertyAreaNumber(record['area_terreno']),
             public_id: publicIdValue != null ? Number(publicIdValue) : null,
             public_code: normalizePublicCode(publicCodeValue),
             market_stage:
@@ -1101,22 +1092,7 @@ function parseNullableNumber(value: unknown): number | null {
   }
 
   function sanitizeEditable(data: Partial<PropertyDetails>): PropertyDetails {
-    const coerced: Record<string, unknown> = { ...data };
-    const areaConstruidaUnidade = normalizeAreaUnit(data.area_construida_unidade) ?? 'm2';
-    const areaTerrenoUnidade =
-      normalizeAreaUnit(data.area_terreno_unidade) ?? 'm2';
-    const areaConstruidaValor = data.area_construida_valor;
-    const areaTerrenoValor = data.area_terreno_valor;
-
-    const parsedAreaConstruidaValor = parseNullableNumber(areaConstruidaValor);
-    const parsedAreaTerrenoValor = parseNullableNumber(areaTerrenoValor);
-
-    coerced.area_construida_unidade = areaConstruidaUnidade;
-    coerced.area_terreno_unidade = areaTerrenoUnidade;
-    coerced.area_construida_valor = parsedAreaConstruidaValor;
-    coerced.area_terreno_valor = parsedAreaTerrenoValor;
-    coerced.area_construida = parseNullableNumber(data.area_construida_m2 ?? areaConstruidaValor);
-    coerced.area_terreno = parseNullableNumber(data.area_terreno_m2 ?? areaTerrenoValor);
+    const coerced: Record<string, unknown> = { ...data, ...resolvePropertyAreaValues(data) };
     const amenitiesFromPayload = normalizeAmenityList(data);
     coerced.amenities = amenitiesFromPayload;
     return coerced as unknown as PropertyDetails;
@@ -2083,15 +2059,19 @@ function parseNullableNumber(value: unknown): number | null {
   }
 
   function selectAdvertiser(adv: AdvertiserResult) {
+    if (!editableProperty) return;
+    if (adv.role !== 'broker' && adv.id !== editableProperty.owner_id) {
+      advertiserDropdownOpen = false;
+      editError = 'Esta pessoa não é corretor nem o proprietário vinculado. A seleção não foi aplicada para preservar o proprietário atual.';
+      return;
+    }
+    editError = null;
     selectedAdvertiser = adv;
     advertiserQuery = adv.name ?? '';
     advertiserDropdownOpen = false;
     if (editableProperty) {
-      editableProperty.broker_id = adv.id;
+      editableProperty.broker_id = adv.role === 'broker' ? adv.id : null;
       editableProperty.broker_creci = adv.creci ?? null;
-      editableProperty.owner_id = adv.id;
-      editableProperty.owner_name = adv.name;
-      editableProperty.owner_phone = adv.phone ?? null;
       editableProperty.broker_name = adv.name;
       editableProperty.broker_phone = adv.phone ?? null;
     }
@@ -2104,7 +2084,6 @@ function parseNullableNumber(value: unknown): number | null {
     advertiserDropdownOpen = false;
     if (editableProperty) {
       editableProperty.broker_id = null;
-      editableProperty.owner_id = null;
     }
   }
 

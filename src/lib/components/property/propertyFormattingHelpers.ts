@@ -97,3 +97,45 @@ export function resolvePriceLines(property: {
   }
   return lines;
 }
+
+/** Números da API usam ponto decimal; entradas pt-BR podem usar vírgula. */
+export function parsePropertyAreaNumber(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const raw = String(value).trim().replace(/\s+/g, '');
+  if (!raw) return null;
+  const normalized = raw.includes(',') ? raw.replace(/\./g, '').replace(',', '.') : raw;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export type PropertyAreaValues = {
+  area_construida?: unknown;
+  area_construida_m2?: unknown;
+  area_construida_valor?: unknown;
+  area_construida_unidade?: unknown;
+  area_terreno?: unknown;
+  area_terreno_m2?: unknown;
+  area_terreno_valor?: unknown;
+  area_terreno_unidade?: unknown;
+};
+
+function resolveAreaValue(value: unknown, canonical: unknown, legacy: unknown, unitRaw: unknown) {
+  const unit = normalizeAreaUnit(unitRaw) ?? 'm2';
+  // Mesma conversão canônica do backend: alqueire goiano = 48.400 m².
+  const factor = unit === 'hectare' ? 10000 : unit === 'alqueire' ? 48400 : 1;
+  const input = parsePropertyAreaNumber(value);
+  const m2 = parsePropertyAreaNumber(canonical) ?? parsePropertyAreaNumber(legacy);
+  return { value: input ?? (m2 == null ? null : m2 / factor), unit, m2: m2 ?? (input == null ? null : input * factor) };
+}
+
+export function resolvePropertyAreaValues(property: PropertyAreaValues) {
+  const built = resolveAreaValue(property.area_construida_valor, property.area_construida_m2, property.area_construida, property.area_construida_unidade);
+  const land = resolveAreaValue(property.area_terreno_valor, property.area_terreno_m2, property.area_terreno, property.area_terreno_unidade);
+  return {
+    area_construida_valor: built.value, area_construida_unidade: built.unit,
+    area_construida: built.m2, area_construida_m2: built.m2,
+    area_terreno_valor: land.value, area_terreno_unidade: land.unit,
+    area_terreno: land.m2, area_terreno_m2: land.m2,
+  };
+}

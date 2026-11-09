@@ -1,8 +1,9 @@
+import { normalizeAreaUnit, parsePropertyAreaNumber, resolvePropertyAreaValues, type PropertyAreaValues } from './propertyFormattingHelpers';
 import { parsePromotionPercentage } from '$lib/components/create-property-helpers';
 
 export type PropertyStatus = 'approved' | 'sold' | 'rented' | 'rejected' | string;
 
-export type PropertyEditLike = {
+export type PropertyEditLike = PropertyAreaValues & {
   id?: number;
   status?: PropertyStatus;
   purpose?: string | null;
@@ -32,9 +33,9 @@ export type PropertyEditLike = {
   bedrooms?: number | null;
   bathrooms?: number | null;
   garage_spots?: number | null;
-  area_construida_valor?: number | null;
+  area_construida_valor?: number | string | null;
   area_construida_unidade?: string | null;
-  area_terreno_valor?: number | null;
+  area_terreno_valor?: number | string | null;
   area_terreno_unidade?: string | null;
   type?: string | null;
   owner_name?: string | null;
@@ -161,6 +162,7 @@ export function shouldRefreshPropertyListAfterEdit(
     'state',
     'bairro',
     'public_code',
+    'broker_id',
   ];
   return listSensitiveKeys.some((key) => {
     if (!Object.prototype.hasOwnProperty.call(patch, key)) return false;
@@ -334,12 +336,6 @@ export function buildPropertyEditPayload(
     bedrooms: editableProperty.bedrooms,
     bathrooms: editableProperty.bathrooms,
     garage_spots: editableProperty.garage_spots,
-    area_construida: editableProperty.area_construida_valor,
-    area_construida_valor: editableProperty.area_construida_valor,
-    area_construida_unidade: editableProperty.area_construida_unidade ?? 'm2',
-    area_terreno: editableProperty.area_terreno_valor,
-    area_terreno_valor: editableProperty.area_terreno_valor,
-    area_terreno_unidade: editableProperty.area_terreno_unidade ?? 'm2',
     amenities: state.editSelectedAmenities,
     video_url: editableProperty.video_url,
     type: editableProperty.type,
@@ -350,6 +346,28 @@ export function buildPropertyEditPayload(
     broker_id: editableProperty.broker_id,
     owner_id: editableProperty.owner_id,
   };
+
+  // Somente uma edição explícita de área deve escrever nessas colunas.
+  const originalAreas = resolvePropertyAreaValues(originalProperty);
+  for (const prefix of ['area_construida', 'area_terreno'] as const) {
+    const valueKey = `${prefix}_valor` as const;
+    const unitKey = `${prefix}_unidade` as const;
+    const rawValue = editableProperty[valueKey];
+    const value = rawValue === undefined ? originalAreas[valueKey] : parsePropertyAreaNumber(rawValue);
+    const unit = normalizeAreaUnit(editableProperty[unitKey]) ?? originalAreas[unitKey];
+    if (rawValue != null && rawValue !== '' && (value == null || value < 0)) {
+      return { ok: false, error: prefix === 'area_construida' ? 'Informe uma área construída válida.' : 'Informe uma área do terreno válida.' };
+    }
+    if (value !== originalAreas[valueKey] || unit !== originalAreas[unitKey]) {
+      basePayload[valueKey] = value;
+      basePayload[unitKey] = unit;
+    }
+  }
+
+  // Trocar o anunciante não reenvia dados de proprietário que não foram editados.
+  for (const key of ['owner_id', 'owner_name', 'owner_phone', 'broker_id'] as const) {
+    if (sanitizeValue(key, basePayload[key]) === sanitizeValue(key, originalProperty[key])) delete basePayload[key];
+  }
 
   if (requestedStatus) {
     basePayload.status = requestedStatus;
