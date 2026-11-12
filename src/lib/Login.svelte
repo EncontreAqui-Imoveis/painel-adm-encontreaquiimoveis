@@ -4,6 +4,7 @@
     import { readErrorContext } from './httpError';
     import { setAdminSession } from './sessionState';
     import Logo from './Logo.svelte';
+    import PasswordInput from './components/PasswordInput.svelte';
     
     let email = '';
     let password = '';
@@ -11,6 +12,7 @@
     let isLoading = false;
 
     async function handleLogin() {
+        if (isLoading) return;
         isLoading = true;
         error = '';
 
@@ -70,11 +72,6 @@
         }
     }
 
-    function handleKeypress(event: KeyboardEvent) {
-        if (event.key === 'Enter') {
-            handleLogin();
-        }
-    }
 </script>
 
 <div class="relative flex min-h-screen items-center justify-center p-4 overflow-hidden bg-gradient-to-br from-green-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
@@ -102,21 +99,19 @@
                         maxlength="120"
                         placeholder="Email"
                         bind:value={email}
-                        on:keypress={handleKeypress}
                         class="w-full px-4 py-3 text-gray-800 bg-gray-100/80 border-2 border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700/80 dark:text-white transition-all placeholder-gray-500 dark:placeholder-gray-400"
                     />
                 </div>
                 <div>
                     <label class="sr-only" for="password">Senha</label>
-                    <input 
-                        type="password" 
+                    <PasswordInput
+                        visibilityLabel="senha"
                         id="password" 
                         required 
-                        maxlength="256"
+                        maxlength={256}
                         placeholder="Senha"
                         bind:value={password}
-                        on:keypress={handleKeypress}
-                        class="w-full px-4 py-3 text-gray-800 bg-gray-100/80 border-2 border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700/80 dark:text-white transition-all placeholder-gray-500 dark:placeholder-gray-400"
+                        className="w-full px-4 py-3 text-gray-800 bg-gray-100/80 border-2 border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-gray-700/80 dark:text-white transition-all placeholder-gray-500 dark:placeholder-gray-400"
                     />
                 </div>
                 {#if error}

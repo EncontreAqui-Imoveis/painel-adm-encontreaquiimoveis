@@ -226,3 +226,38 @@ describe('erros de politica devolvidos pela API', () => {
     expect(success).not.toHaveBeenCalled();
   });
 });
+
+describe('confirmacao conclusiva do reset', () => {
+  it('nao afirma sucesso quando a API devolve resposta incompleta', async () => {
+    const input = await assistantEditor();
+    await fireEvent.input(input, { target: { value: 'Nova senha sintetica 2026!' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Redefinir senha', exact: true }));
+    api.post.mockResolvedValue({ reauthToken: 'confirmacao-sintetica' });
+    api.put.mockResolvedValue({});
+    await fireEvent.input(screen.getByLabelText('Senha do administrador'), { target: { value: 'legada' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirmar redefinição' }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+    expect(success).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole('dialog').getAttribute('aria-label')).toBeTruthy());
+    expect(screen.getByRole('alert')).toHaveTextContent(/não confirmou|não foi possível confirmar/i);
+  });
+});
+
+describe('campos e mensagem persistente da propria senha', () => {
+  it('cada olho atua somente no seu campo e sucesso depende da resposta concluida', async () => {
+    const form = await ownDialog();
+    const current = screen.getByLabelText('Senha atual'), next = screen.getByLabelText('Nova senha');
+    await fireEvent.input(current, { target: { value: '  legada sintetica  ' } });
+    await fireEvent.input(next, { target: { value: '  Nova senha sintetica!  ' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Mostrar senha atual' }));
+    expect(current).toHaveAttribute('type', 'text'); expect(next).toHaveAttribute('type', 'password');
+    expect(api.put).not.toHaveBeenCalled();
+    let complete!: (value: unknown) => void;
+    api.put.mockReturnValue(new Promise(resolve => { complete = resolve; }));
+    await fireEvent.submit(form);
+    expect(screen.queryByText(/Senha alterada com sucesso/)).not.toBeInTheDocument();
+    complete({ token: 'sessao-sintetica-renovada' });
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Senha alterada com sucesso/));
+    expect(screen.queryByLabelText('Senha atual')).not.toBeInTheDocument();
+  });
+});

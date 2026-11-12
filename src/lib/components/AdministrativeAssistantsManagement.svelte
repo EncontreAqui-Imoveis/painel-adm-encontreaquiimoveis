@@ -5,6 +5,7 @@
   import { toast } from 'svelte-sonner';
   import { adminSession } from '$lib/sessionState';
   import { ADMIN_PASSWORD_MIN_LENGTH, ADMIN_PASSWORD_MAX_BYTES, isAdminPasswordPolicyError, validateNewAdminPassword } from '$lib/adminPasswordPolicy';
+  import PasswordInput from './PasswordInput.svelte';
   import AdminPasswordConfirmDialog from './AdminPasswordConfirmDialog.svelte';
 
   type Assistant = {
@@ -30,6 +31,7 @@
   let creationPasswordServerError: string | null = null;
   $: creationPasswordError = creationPasswordServerError ?? validateNewAdminPassword(form.password);
   $: showCreationPasswordError = (creationValidationAttempted || form.password.length > 0) && !!creationPasswordError;
+  let resetPasswordSuccess = '';
   let resetPassword = '';
   let resetValidationAttempted = false;
   let resetPasswordServerError: string | null = null;
@@ -76,6 +78,7 @@
     creationValidationAttempted = false;
     creationPasswordServerError = null;
     resetPassword = '';
+    resetPasswordSuccess = '';
     resetValidationAttempted = false;
     resetPasswordServerError = null;
   }
@@ -92,6 +95,7 @@
     editing = assistant;
     form = { name: assistant.name, email: assistant.email, password: '' };
     resetPassword = '';
+    resetPasswordSuccess = '';
     resetValidationAttempted = false;
     resetPasswordServerError = null;
   }
@@ -154,6 +158,7 @@
 
   async function saveResetPassword() {
     if (editorLocked || !canManage || !editing) return;
+    resetPasswordSuccess = '';
     resetValidationAttempted = true;
     if (validateNewAdminPassword(resetPassword)) return;
     passwordAction = Object.freeze({ kind: 'reset', id: editing.id, name: editing.name, email: editing.email, password: resetPassword });
@@ -176,7 +181,11 @@
       }
       const options = { headers: { 'x-admin-reauth': reauth.reauthToken }, skipErrorToast: true };
       if (action.kind === 'reset') {
-        await api.put(`/admin/assistants/${action.id}/password`, { password: action.password }, options);
+        const response = await api.put<{ message: string }>(`/admin/assistants/${action.id}/password`, { password: action.password }, options);
+        if (typeof response?.message !== 'string' || !response.message.trim()) {
+          confirmationError = 'A resposta não confirmou a alteração. A senha pode ter sido alterada; verifique um novo login antes de tentar novamente.';
+          return;
+        }
       } else {
         await api.delete(`/admin/assistants/${action.id}`, options);
       }
@@ -186,6 +195,7 @@
         resetPassword = '';
         resetValidationAttempted = false;
         resetPasswordServerError = null;
+        resetPasswordSuccess = 'Senha do auxiliar alterada com sucesso. Use a nova senha no próximo login; as sessões anteriores foram encerradas.';
         toast.success('Senha redefinida. As sessões anteriores foram encerradas.');
       } else {
         if (editing?.id === action.id) clearEditor();
@@ -255,14 +265,15 @@
       <div class="flex items-center justify-between"><h3 class="font-semibold text-slate-900 dark:text-white">{editing ? 'Editar auxiliar' : 'Novo auxiliar'}</h3>{#if editing}<button type="button" class="text-sm text-slate-600 underline dark:text-slate-300" on:click={startCreate}>Cancelar</button>{/if}</div>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">Nome<input class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white" bind:value={form.name} required maxlength="160" /></label>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">E-mail<input type="email" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white" bind:value={form.email} required maxlength="254" /></label>
-      {#if !editing}<label class="block text-sm font-medium text-slate-700 dark:text-slate-200">Senha inicial<input type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white" bind:value={form.password} required minlength={ADMIN_PASSWORD_MIN_LENGTH} aria-describedby="assistant-initial-password-feedback" aria-invalid={showCreationPasswordError ? 'true' : undefined} on:input={() => (creationPasswordServerError = null)} /></label>
+      {#if !editing}<label class="block text-sm font-medium text-slate-700 dark:text-slate-200">Senha inicial<PasswordInput autocomplete="new-password" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white" id="assistant-initial-password" visibilityLabel="senha inicial" bind:value={form.password} required minlength={ADMIN_PASSWORD_MIN_LENGTH} aria-describedby="assistant-initial-password-feedback" aria-invalid={showCreationPasswordError ? 'true' : undefined} on:input={() => (creationPasswordServerError = null)} /></label>
         <p id="assistant-initial-password-feedback" role={showCreationPasswordError ? 'alert' : undefined} class="mt-1 text-xs" class:text-red-600={showCreationPasswordError} class:text-slate-500={!showCreationPasswordError}>{showCreationPasswordError ? creationPasswordError : `Use pelo menos ${ADMIN_PASSWORD_MIN_LENGTH} caracteres e no máximo ${ADMIN_PASSWORD_MAX_BYTES} bytes UTF-8. Acentos e emojis podem ocupar mais de um byte.`}</p>{/if}
       <button class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-60" disabled={isSaving}><Plus class="h-4 w-4" />{editing ? 'Salvar edição' : 'Criar auxiliar'}</button>
       {#if editing}
         <div class="border-t border-slate-200 pt-4 dark:border-slate-700">
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">Nova senha<input type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white" bind:value={resetPassword} minlength={ADMIN_PASSWORD_MIN_LENGTH} aria-describedby="assistant-new-password-feedback" aria-invalid={showResetPasswordError ? 'true' : undefined} on:input={() => (resetPasswordServerError = null)} /></label>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">Nova senha<PasswordInput autocomplete="new-password" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-white" id="assistant-reset-password" visibilityLabel="nova senha" bind:value={resetPassword} minlength={ADMIN_PASSWORD_MIN_LENGTH} aria-describedby="assistant-new-password-feedback" aria-invalid={showResetPasswordError ? 'true' : undefined} on:input={() => { resetPasswordServerError = null; resetPasswordSuccess = ''; }} /></label>
           <p id="assistant-new-password-feedback" role={showResetPasswordError ? 'alert' : undefined} class="mt-1 text-xs" class:text-red-600={showResetPasswordError} class:text-slate-500={!showResetPasswordError}>{showResetPasswordError ? resetPasswordError : `Use pelo menos ${ADMIN_PASSWORD_MIN_LENGTH} caracteres e no máximo ${ADMIN_PASSWORD_MAX_BYTES} bytes UTF-8. Acentos e emojis podem ocupar mais de um byte.`}</p>
           <button type="button" class="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800" disabled={isSaving} on:click={saveResetPassword}><KeyRound class="h-4 w-4" />Redefinir senha</button>
+          {#if resetPasswordSuccess}<p role="status" aria-live="polite" class="mt-2 text-sm text-emerald-800 dark:text-emerald-200">{resetPasswordSuccess}</p>{/if}
         </div>
       {/if}
       </fieldset>

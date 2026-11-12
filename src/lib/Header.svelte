@@ -1,4 +1,5 @@
 <script lang="ts">
+    import PasswordInput from './components/PasswordInput.svelte';
     import { KeyRound, LogOut, ShieldCheck } from 'lucide-svelte';
     import { api } from './apiClient';
     import { adminSession, setSessionToken } from './sessionState';
@@ -20,6 +21,7 @@
     let currentPasswordError: string | null = null;
     let newPasswordServerError: string | null = null;
     let passwordOperationError: string | null = null;
+    let passwordSuccess = '';
     $: newPasswordError = newPasswordServerError ?? validateNewAdminPassword(newPassword);
     $: showNewPasswordError = (passwordValidationAttempted || newPassword.length > 0) && !!newPasswordError;
 
@@ -70,6 +72,7 @@
 
     async function changePassword() {
         if (isChangingPassword) return;
+        passwordSuccess = '';
         passwordValidationAttempted = true;
         currentPasswordError = currentPassword.length ? null : 'Informe sua senha atual.';
         newPasswordServerError = null;
@@ -84,6 +87,7 @@
             }
             setSessionToken(response.token);
             closePasswordDialog();
+            passwordSuccess = 'Senha alterada com sucesso. Use a nova senha no próximo login.';
             toast.success('Senha atualizada.');
         } catch (error: any) {
             const data = error?.response?.data;
@@ -158,7 +162,7 @@
                         </div>
                     {/if}
 
-                    <button type="button" role="menuitem" class="mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-slate-200 dark:hover:bg-slate-700" on:click={() => { closeProfileMenu(); isPasswordDialogOpen = true; }}>
+                    <button type="button" role="menuitem" class="mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-slate-200 dark:hover:bg-slate-700" on:click={() => { closeProfileMenu(); passwordSuccess = ''; isPasswordDialogOpen = true; }}>
                         <KeyRound class="h-4 w-4" />
                         Alterar minha senha
                     </button>
@@ -171,15 +175,16 @@
             {/if}
         </div>
     </div>
+    {#if passwordSuccess}<p role="status" aria-live="polite" class="container mx-auto px-4 pb-4 text-sm text-emerald-800 dark:text-emerald-200">{passwordSuccess}</p>{/if}
 </header>
 
 {#if isPasswordDialogOpen}
     <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4" role="presentation">
         <form class="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl dark:bg-slate-800" novalidate on:submit|preventDefault={changePassword}>
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Alterar minha senha</h2>
-            <label class="mt-4 block text-sm font-medium text-slate-700 dark:text-slate-200">Senha atual<input type="password" autocomplete="current-password" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" bind:value={currentPassword} required disabled={isChangingPassword} aria-invalid={currentPasswordError ? 'true' : undefined} aria-describedby={currentPasswordError ? 'own-current-password-feedback' : undefined} on:input={() => (currentPasswordError = null)} /></label>
+            <label class="mt-4 block text-sm font-medium text-slate-700 dark:text-slate-200">Senha atual<PasswordInput id="own-current-password" visibilityLabel="senha atual" autocomplete="current-password" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" bind:value={currentPassword} required disabled={isChangingPassword} aria-invalid={currentPasswordError ? 'true' : undefined} aria-describedby={currentPasswordError ? 'own-current-password-feedback' : undefined} on:input={() => (currentPasswordError = null)} /></label>
             {#if currentPasswordError}<p id="own-current-password-feedback" role="alert" class="mt-1 text-xs text-red-600">{currentPasswordError}</p>{/if}
-            <label class="mt-3 block text-sm font-medium text-slate-700 dark:text-slate-200">Nova senha<input type="password" autocomplete="new-password" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" bind:value={newPassword} minlength={ADMIN_PASSWORD_MIN_LENGTH} required disabled={isChangingPassword} aria-invalid={showNewPasswordError ? 'true' : undefined} aria-describedby="own-new-password-feedback" on:input={() => (newPasswordServerError = null)} /></label>
+            <label class="mt-3 block text-sm font-medium text-slate-700 dark:text-slate-200">Nova senha<PasswordInput id="own-new-password" visibilityLabel="nova senha" autocomplete="new-password" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-950 dark:text-white" bind:value={newPassword} minlength={ADMIN_PASSWORD_MIN_LENGTH} required disabled={isChangingPassword} aria-invalid={showNewPasswordError ? 'true' : undefined} aria-describedby="own-new-password-feedback" on:input={() => (newPasswordServerError = null)} /></label>
             <p id="own-new-password-feedback" role={showNewPasswordError ? 'alert' : undefined} class="mt-1 text-xs" class:text-red-600={showNewPasswordError} class:text-slate-500={!showNewPasswordError}>{showNewPasswordError ? newPasswordError : `Use pelo menos ${ADMIN_PASSWORD_MIN_LENGTH} caracteres e no máximo ${ADMIN_PASSWORD_MAX_BYTES} bytes UTF-8. Acentos e emojis podem ocupar mais de um byte.`}</p>
             {#if passwordOperationError}<p role="alert" class="mt-3 text-sm text-red-600">{passwordOperationError}</p>{/if}
             <div class="mt-5 flex justify-end gap-2"><button type="button" class="rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700" on:click={closePasswordDialog} disabled={isChangingPassword}>Cancelar</button><button class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60" disabled={isChangingPassword}>{isChangingPassword ? 'Salvando...' : 'Salvar senha'}</button></div>

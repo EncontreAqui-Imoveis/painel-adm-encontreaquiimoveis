@@ -1,6 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
+  import PasswordInput from './PasswordInput.svelte';
   import { onMount } from 'svelte';
   import { toast } from 'svelte-sonner';
   import { api } from '$lib/apiClient';
@@ -32,7 +33,6 @@
   let email = $state('');
   let phone = $state('');
   let password = $state('');
-  let showPassword = $state(false);
   let creci = $state('');
 
   let street = $state('');
@@ -60,7 +60,6 @@
     email = '';
     phone = '';
     password = '';
-    showPassword = false;
     creci = '';
     street = '';
     number = '';
@@ -312,24 +311,15 @@
     <label class="flex flex-col gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
       Senha *
       <div class="relative">
-        <input
+        <PasswordInput
           id="create-user-password"
           name="password"
-          minlength="12"
-          maxlength="128"
-          class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          type={showPassword ? 'text' : 'password'}
+          minlength={12}
+          maxlength={128}
+          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           bind:value={password}
           placeholder="Senha inicial"
         />
-        <button
-          type="button"
-          class="absolute inset-y-0 right-0 inline-flex items-center px-3 text-xs font-semibold text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
-          onclick={() => (showPassword = !showPassword)}
-          aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-        >
-          {showPassword ? 'Ocultar' : 'Mostrar'}
-        </button>
       </div>
       <p class:text-red-600={password.length > 0 && password.length < 12} class="text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
         {password.length > 0 && password.length < 12
