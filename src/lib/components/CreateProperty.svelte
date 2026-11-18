@@ -11,7 +11,6 @@
   import { uploadMultipartWithProgress } from '$lib/mediaUploadService';
   import type { Broker } from '$lib/types';
   import {
-    formatCep,
     extractApiErrorMessage,
     formatPromotionPercentageInput,
     formatPhoneBr,
@@ -46,35 +45,6 @@
   const BLOCKED_IMAGE_MIME_TYPES = new Set(['image/gif', 'image/svg+xml']);
   const ALLOWED_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
   const BLOCKED_IMAGE_EXTENSIONS = new Set(['gif', 'svg', 'svgz']);
-  const states = [
-    'AC',
-    'AL',
-    'AP',
-    'AM',
-    'BA',
-    'CE',
-    'DF',
-    'ES',
-    'GO',
-    'MA',
-    'MT',
-    'MS',
-    'MG',
-    'PA',
-    'PB',
-    'PR',
-    'PE',
-    'PI',
-    'RJ',
-    'RN',
-    'RS',
-    'RO',
-    'RR',
-    'SC',
-    'SP',
-    'SE',
-    'TO'
-  ];
   const dispatch = createEventDispatcher<{
     created: { propertyId: number };
   }>();
@@ -150,24 +120,6 @@
   const SALE_PRICE_MAX_LENGTH = getPropertyPriceInputMaxLength(SALE_PROPERTY_PRICE_MAX);
   const RENT_PRICE_MAX_LENGTH = getPropertyPriceInputMaxLength(RENT_PROPERTY_PRICE_MAX);
 
-  type LocationPage<T> = { data?: T[] };
-  type LocationCity = { id: number; name: string; state?: string | null };
-  type LocationNeighborhood = { id: number; cityId?: number; city_id?: number; name: string };
-  const cityCache: Record<string, LocationCity[]> = {};
-  const bairroCache: Record<string, string[]> = {};
-  const cityIdsByName: Record<string, number> = {};
-  let cities: string[] = [];
-  let bairros: string[] = [];
-  let citiesLoading = false;
-  let bairrosLoading = false;
-  let bairrosError: string | null = null;
-  let citiesError: string | null = null;
-  let selectedCityId: number | null = null;
-  let lastBairroLookupCity = '';
-  let citySearchTimer: ReturnType<typeof setTimeout> | null = null;
-  let bairroSearchTimer: ReturnType<typeof setTimeout> | null = null;
-  let cepLookupError: string | null = null;
-  let lastCepLookup = '';
   const optionalBairroPropertyTypes = new Set(['Área rural', 'Chácara', 'Rancho']);
   $: bairroOptional = optionalBairroPropertyTypes.has(type);
 
@@ -290,132 +242,6 @@
     brokerSearchTimer = setTimeout(() => {
       fetchBrokers(value);
     }, 300);
-  }
-
-  async function fetchCitiesForState(uf: string) {
-    selectedCityId = null;
-    city = '';
-    bairro = '';
-    bairros = [];
-    lastBairroLookupCity = '';
-    await fetchCitiesBySearch('');
-  }
-
-  async function fetchCitiesBySearch(searchTerm: string) {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    if (cityCache[normalizedSearch]) {
-      cities = cityCache[normalizedSearch].map((item) => item.name);
-      return;
-    }
-    citiesLoading = true;
-    citiesError = null;
-    try {
-      const payload = await api.get<LocationPage<LocationCity> | LocationCity[]>(
-        `/locations/cities?search=${encodeURIComponent(normalizedSearch)}&limit=15`
-      );
-      const records = Array.isArray(payload) ? payload : payload?.data ?? [];
-      cityCache[normalizedSearch] = records;
-      for (const item of records) {
-        cityIdsByName[item.name.trim().toLowerCase()] = Number(item.id);
-      }
-      cities = records.map((item) => item.name);
-      const currentCity = city.trim().toLowerCase();
-      const matchingCity = records.find((item) => item.name.trim().toLowerCase() === currentCity);
-      if (matchingCity) {
-        selectedCityId = Number(matchingCity.id);
-        scheduleBairroSearch('');
-      }
-    } catch (error) {
-      console.error('Erro ao carregar cidades do catálogo:', error);
-      citiesError = 'Não foi possível carregar cidades.';
-      cities = [];
-    } finally {
-      citiesLoading = false;
-    }
-  }
-
-  async function fetchBairrosForCity(cityName: string, searchTerm = '') {
-    const normalizedCity = cityName.trim();
-    if (!normalizedCity) {
-      bairros = [];
-      bairrosError = null;
-      return;
-    }
-    const cityId = cityIdsByName[normalizedCity.toLowerCase()];
-    if (!cityId) {
-      bairros = [];
-      return;
-    }
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    const cacheKey = `${cityId}:${normalizedSearch}`;
-    if (bairroCache[cacheKey]) {
-      bairros = bairroCache[cacheKey];
-      bairrosError = null;
-      return;
-    }
-    bairrosLoading = true;
-    bairrosError = null;
-    try {
-      const payload = await api.get<LocationPage<LocationNeighborhood> | LocationNeighborhood[]>(
-        `/locations/neighborhoods?cityId=${cityId}&search=${encodeURIComponent(normalizedSearch)}&limit=15`
-      );
-      const records = Array.isArray(payload) ? payload : payload?.data ?? [];
-      const names = records.map((item) => String(item.name ?? '').trim()).filter(Boolean);
-      bairros = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-      bairroCache[cacheKey] = bairros;
-    } catch (error) {
-      console.error('Erro ao carregar bairros:', error);
-      bairros = [];
-      bairrosError = 'Não foi possível carregar bairros para esta cidade.';
-    } finally {
-      bairrosLoading = false;
-    }
-  }
-
-  function scheduleCitySearch(searchTerm: string) {
-    const normalizedCity = searchTerm.trim().toLowerCase();
-    selectedCityId = cityIdsByName[normalizedCity] ?? null;
-    bairro = '';
-    bairros = [];
-    bairrosError = null;
-    lastBairroLookupCity = '';
-    if (citySearchTimer) clearTimeout(citySearchTimer);
-    citySearchTimer = setTimeout(() => void fetchCitiesBySearch(searchTerm), 300);
-  }
-
-  function scheduleBairroSearch(searchTerm: string) {
-    if (bairroSearchTimer) clearTimeout(bairroSearchTimer);
-    bairroSearchTimer = setTimeout(() => void fetchBairrosForCity(city, searchTerm), 300);
-  }
-
-  async function lookupCep(value: string) {
-    const digits = onlyDigits(value);
-    if (digits.length !== 8) return;
-    if (digits === lastCepLookup) return;
-    lastCepLookup = digits;
-    cepLookupError = null;
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
-      if (!response.ok) throw new Error('Falha ao consultar CEP.');
-      const data = await response.json();
-      if (data?.erro) return;
-      if (data?.uf) {
-        state = String(data.uf);
-        await fetchCitiesForState(state);
-      }
-      if (data?.logradouro) {
-        address = String(data.logradouro);
-      }
-      if (data?.bairro) {
-        bairro = String(data.bairro);
-      }
-      if (data?.localidade) {
-        city = String(data.localidade);
-      }
-    } catch (error) {
-      console.error('Erro ao consultar CEP:', error);
-      cepLookupError = 'CEP não encontrado.';
-    }
   }
 
   function revokeImagePreviews() {
@@ -1059,33 +885,12 @@
 
   onMount(() => {
     fetchBrokers('');
-    fetchCitiesForState(state);
   });
-
-  $: {
-    const normalizedCity = city.trim().toLowerCase();
-    if (normalizedCity.length > 0 && normalizedCity !== lastBairroLookupCity) {
-      lastBairroLookupCity = normalizedCity;
-      if (selectedCityId) scheduleBairroSearch('');
-    } else if (normalizedCity.length === 0) {
-      selectedCityId = null;
-      bairro = '';
-      lastBairroLookupCity = '';
-      bairros = [];
-      bairrosError = null;
-    }
-  }
-  $: if (!city.trim().length) {
-    bairros = [];
-    bairrosError = null;
-  }
 
   onDestroy(() => {
     if (brokerSearchTimer) {
       clearTimeout(brokerSearchTimer);
     }
-    if (citySearchTimer) clearTimeout(citySearchTimer);
-    if (bairroSearchTimer) clearTimeout(bairroSearchTimer);
     revokeImagePreviews();
     revokeVideoPreview();
   });
@@ -1161,18 +966,6 @@
       bind:lote
       bind:semLote
       bind:complemento
-      {cities}
-      bind:citiesLoading
-      bind:citiesError
-      {bairros}
-      bind:bairrosLoading
-      bind:bairrosError
-      bairroDisabled={!selectedCityId}
-      bind:cepLookupError
-      onStateChange={fetchCitiesForState}
-      onCityInput={scheduleCitySearch}
-      onBairroInput={scheduleBairroSearch}
-      onCepLookup={lookupCep}
     />
 
       <PropertyAmenitiesFields bind:selectedAmenities />

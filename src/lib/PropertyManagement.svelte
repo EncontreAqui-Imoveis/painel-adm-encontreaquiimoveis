@@ -2728,15 +2728,6 @@
                 bind:lote={editableProperty.lote}
                 bind:semLote={editSemLote}
                 bind:complemento={editableProperty.complemento}
-                {cities}
-                citiesLoading={false}
-                citiesError={null}
-                bairros={[]}
-                bairrosLoading={false}
-                bairrosError={null}
-                cepLookupError={null}
-                onStateChange={() => {}}
-                onCepLookup={() => {}}
               />
               <PropertyStructureFields
                 idPrefix="edit-property"

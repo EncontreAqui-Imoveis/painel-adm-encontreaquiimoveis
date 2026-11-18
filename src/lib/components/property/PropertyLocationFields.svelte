@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
+  import { api } from '$lib/apiClient';
   import { formatCep, onlyDigits, sanitizeDigitsInput } from '$lib/components/create-property-helpers';
 
   const states = [
@@ -46,18 +48,170 @@
   export let lote: string | null | undefined = '';
   export let semLote = false;
   export let complemento: string | null | undefined = '';
-  export let cities: string[] = [];
-  export let citiesLoading = false;
-  export let citiesError: string | null = null;
-  export let bairros: string[] = [];
-  export let bairrosLoading = false;
-  export let bairrosError: string | null = null;
-  export let bairroDisabled = false;
-  export let cepLookupError: string | null = null;
-  export let onStateChange: (nextState: string) => void = () => {};
-  export let onCityInput: (nextCity: string) => void = () => {};
-  export let onBairroInput: (nextBairro: string) => void = () => {};
-  export let onCepLookup: (cepValue: string) => void = () => {};
+  type LocationCity = { id: number; name: string; state?: string | null };
+  type LocationNeighborhood = { name: string };
+  type LocationPage<T> = { data?: T[] };
+  const cityCache = new Map<string, LocationCity[]>();
+  const bairroCache = new Map<string, string[]>();
+  let cities: string[] = [];
+  let bairros: string[] = [];
+  let citiesLoading = false;
+  let bairrosLoading = false;
+  let citiesError: string | null = null;
+  let bairrosError: string | null = null;
+  let cepLookupError: string | null = null;
+  let selectedCityId: number | null = null;
+  let cityRequest = 0;
+  let bairroRequest = 0;
+  let cepRequest = 0;
+  let cityTimer: ReturnType<typeof setTimeout> | undefined;
+  let bairroTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // The persisted address uses city/state/bairro text. Catalog IDs are only for
+  // suggestions, never IBGE codes or a prerequisite for typing a neighborhood.
+  $: bairroDisabled = !String(city ?? '').trim() || !states.includes(String(state ?? ''));
+
+  function normalizeName(value: string): string {
+    return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .trim().replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  function resetSuggestions() {
+    ++cityRequest;
+    ++bairroRequest;
+    clearTimeout(cityTimer);
+    clearTimeout(bairroTimer);
+    selectedCityId = null;
+    cities = [];
+    bairros = [];
+    citiesLoading = false;
+    bairrosLoading = false;
+    citiesError = null;
+    bairrosError = null;
+  }
+
+  function scheduleBairroSearch(search: string) {
+    clearTimeout(bairroTimer);
+    const request = ++bairroRequest;
+    const cityId = selectedCityId;
+    bairrosLoading = false;
+    bairrosError = null;
+    if (!cityId) { bairros = []; return; }
+    bairroTimer = setTimeout(() => void fetchBairros(cityId, search, request), 300);
+  }
+
+  async function fetchBairros(cityId: number, search: string, request: number) {
+    const normalizedSearch = normalizeName(search);
+    const key = `${cityId}:${normalizedSearch}`;
+    bairrosLoading = true;
+    try {
+      let names = bairroCache.get(key);
+      if (!names) {
+        const payload = await api.get<LocationPage<LocationNeighborhood> | LocationNeighborhood[]>(
+          `/locations/neighborhoods?cityId=${cityId}&search=${encodeURIComponent(normalizedSearch)}&limit=15`
+        );
+        const records = Array.isArray(payload) ? payload : payload?.data ?? [];
+        names = [...new Set(records.map(item => String(item.name ?? '').trim()).filter(Boolean))]
+          .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        bairroCache.set(key, names);
+      }
+      if (request === bairroRequest) bairros = names;
+    } catch {
+      if (request !== bairroRequest) return;
+      bairros = [];
+      bairrosError = 'Não foi possível carregar sugestões de bairros. Você pode informar o bairro manualmente.';
+    } finally {
+      if (request === bairroRequest) bairrosLoading = false;
+    }
+  }
+
+  function scheduleCitySearch(search: string, immediate = false) {
+    resetSuggestions();
+    const request = cityRequest;
+    const uf = String(state ?? '');
+    if (!states.includes(uf)) return;
+    if (immediate) void fetchCities(uf, search, request);
+    else cityTimer = setTimeout(() => void fetchCities(uf, search, request), 300);
+  }
+
+  async function fetchCities(uf: string, search: string, request: number) {
+    const normalizedSearch = normalizeName(search);
+    const key = `${uf}:${normalizedSearch}`;
+    citiesLoading = true;
+    try {
+      let records = cityCache.get(key);
+      if (!records) {
+        const payload = await api.get<LocationPage<LocationCity> | LocationCity[]>(
+          `/locations/cities?state=${encodeURIComponent(uf)}&search=${encodeURIComponent(normalizedSearch)}&limit=15`
+        );
+        records = (Array.isArray(payload) ? payload : payload?.data ?? [])
+          .filter(item => !item.state || item.state === uf);
+        cityCache.set(key, records);
+      }
+      if (request !== cityRequest || uf !== state || normalizedSearch !== normalizeName(String(city ?? ''))) return;
+      cities = records.map(item => item.name);
+      const matching = records.find(item => normalizeName(item.name) === normalizeName(String(city ?? '')));
+      selectedCityId = matching && Number.isSafeInteger(Number(matching.id)) && Number(matching.id) > 0
+        ? Number(matching.id) : null;
+      scheduleBairroSearch('');
+    } catch {
+      if (request !== cityRequest) return;
+      citiesError = 'Não foi possível carregar sugestões de cidades.';
+    } finally {
+      if (request === cityRequest) citiesLoading = false;
+    }
+  }
+
+  function onStateChange() {
+    ++cepRequest;
+    cepLookupError = null;
+    city = '';
+    bairro = '';
+    scheduleCitySearch('', true);
+  }
+
+  function onCityInput(nextCity: string) {
+    ++cepRequest;
+    cepLookupError = null;
+    bairro = '';
+    scheduleCitySearch(nextCity);
+  }
+
+  function onBairroInput(nextBairro: string) {
+    // A pending CEP must not overwrite a manually edited neighborhood.
+    ++cepRequest;
+    scheduleBairroSearch(nextBairro);
+  }
+
+  async function onCepLookup(value: string) {
+    const request = ++cepRequest;
+    const digits = onlyDigits(value);
+    cepLookupError = null;
+    if (semCep || digits.length !== 8) return;
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      if (!response.ok) throw new Error('CEP indisponível');
+      const data = await response.json();
+      if (request !== cepRequest || semCep || onlyDigits(String(cep ?? '')) !== digits) return;
+      if (data?.erro || !states.includes(String(data?.uf ?? '')) || !String(data?.localidade ?? '').trim()) {
+        cepLookupError = 'CEP não encontrado.';
+        return;
+      }
+      state = String(data.uf);
+      city = String(data.localidade);
+      bairro = String(data.bairro ?? '');
+      address = String(data.logradouro ?? '');
+      scheduleCitySearch(String(city), true);
+    } catch {
+      if (request === cepRequest && !semCep && onlyDigits(String(cep ?? '')) === digits) cepLookupError = 'Não foi possível consultar o CEP. Confira o número ou preencha o endereço manualmente.';
+    }
+  }
+
+  onMount(() => scheduleCitySearch(String(city ?? ''), true));
+  onDestroy(() => {
+    ++cepRequest;
+    resetSuggestions();
+  });
 </script>
 
 <div class="space-y-6">
@@ -75,9 +229,7 @@
         on:input={(event) => {
           const target = event.target as HTMLInputElement;
           cep = formatCep(target.value);
-          if (!semCep && onlyDigits(cep).length === 8) {
-            onCepLookup(cep);
-          }
+          onCepLookup(cep);
         }}
       />
       <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
@@ -87,6 +239,7 @@
           bind:checked={semCep}
           on:change={() => {
             if (semCep) cep = '';
+            onCepLookup(String(cep ?? ''));
           }}
         />
         Sem CEP
@@ -102,7 +255,7 @@
         name="state"
         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         bind:value={state}
-        on:change={() => onStateChange(String(state ?? ''))}
+        on:change={() => onStateChange()}
       >
         {#each states as uf}
           <option value={uf}>{uf}</option>
